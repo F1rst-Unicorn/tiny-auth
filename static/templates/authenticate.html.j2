@@ -1,0 +1,21 @@
+{% extends "base.html.j2" %}
+{% block content %}
+<form action="{{ url(name="authenticate") }}" method="post">
+    <div class="form-group">
+        <label class="control-label"
+               for="id_username">{{ translate(term="Username") }}</label>
+        <input id="id_username" class="form-control" autofocus=""
+               autocapitalize="none" autocomplete="username" maxlength="150"
+               required="" type="text" name="username"/>
+    </div>
+    <div class="form-group">
+        <label class="control-label"
+               for="id_password">{{ translate(term="Password") }}</label>
+        <input id="id_password" class="form-control"
+               autocomplete="current-password" required="" type="password"
+               name="password"/>
+    </div>
+    <input class="btn btn-success" type="submit" id="id_submit"
+           value="{{ translate(term="Login") }}">
+</form>
+{% endblock %}

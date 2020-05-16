@@ -1,0 +1,4 @@
+---
+http: {}
+web:
+  static_files: static
