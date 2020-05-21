@@ -27,6 +27,8 @@ use actix_web::HttpResponse;
 
 use url::Url;
 
+use serde_derive::Serialize;
+
 pub fn missing_parameter(redirect_uri: &str, error: ProtocolError, description: &str, state: &Option<String>) -> HttpResponse {
     let mut url = Url::parse(redirect_uri).expect("should have been validated upon registration");
 
@@ -44,10 +46,34 @@ pub fn missing_parameter(redirect_uri: &str, error: ProtocolError, description: 
         .finish()
 }
 
+#[derive(Serialize)]
+struct ErrorResponse {
+    error: ProtocolError,
+
+    #[serde(skip_serializing_if = "Option::is_none")] 
+    error_description: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")] 
+    error_uri: Option<String>,
+}
+
+pub fn render_missing_paramter_with_response(error: ProtocolError, description: &str) -> HttpResponse {
+    match error {
+        ProtocolError::InvalidClient => HttpResponse::Unauthorized(),
+        _ => HttpResponse::BadRequest(),
+    }.json(ErrorResponse {
+        error: error,
+        error_description: Some(description.to_string()),
+        error_uri: None,
+    })
+}
+
 pub fn server_error(tera: &tera::Tera) -> HttpResponse {
     let body = tera.render("500.html.j2", &tera::Context::new());
     match body {
-        Ok(body) => HttpResponse::InternalServerError().body(body),
+        Ok(body) => HttpResponse::InternalServerError()
+            .set_header("Content-Type", "text/html")
+            .body(body),
         Err(e) => {
             log::warn!("{}", e);
             HttpResponse::InternalServerError().finish()

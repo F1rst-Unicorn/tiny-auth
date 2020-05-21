@@ -18,6 +18,7 @@
 use crate::protocol::oauth2::ResponseType;
 use crate::protocol::oauth2::ProtocolError;
 use crate::http::endpoints::missing_parameter;
+use crate::http::endpoints::server_error;
 use crate::http::state;
 
 use actix_web::HttpResponse;
@@ -46,7 +47,7 @@ pub struct Request {
     response_type: Option<ResponseType>,
 
     #[serde(skip_serializing_if = "Option::is_none")] 
-    client_id: Option<String>,
+    pub client_id: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")] 
     pub redirect_uri: Option<String>,
@@ -185,10 +186,12 @@ pub async fn post(mut query: web::Query<Request>, state: web::Data<state::State>
 pub fn render_invalid_client_id_error(tera: &Tera) -> HttpResponse {
     let body = tera.render("invalid_client_id.html.j2", &Context::new());
     match body {
-        Ok(body) => HttpResponse::BadRequest().body(body),
+        Ok(body) => HttpResponse::BadRequest()
+            .set_header("Content-Type", "text/html")
+            .body(body),
         Err(e) => {
             log::warn!("{}", e);
-            HttpResponse::InternalServerError().finish()
+            server_error(tera)
         }
     }
 }
@@ -196,10 +199,12 @@ pub fn render_invalid_client_id_error(tera: &Tera) -> HttpResponse {
 pub fn render_invalid_redirect_uri_error(tera: &Tera) -> HttpResponse {
     let body = tera.render("invalid_redirect_uri.html.j2", &Context::new());
     match body {
-        Ok(body) => HttpResponse::BadRequest().body(body),
+        Ok(body) => HttpResponse::BadRequest()
+            .set_header("Content-Type", "text/html")
+            .body(body),
         Err(e) => {
             log::warn!("{}", e);
-            HttpResponse::InternalServerError().finish()
+            server_error(tera)
         }
     }
 }

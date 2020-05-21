@@ -22,6 +22,8 @@ use actix_session::Session;
 
 use url::Url;
 
+use chrono::offset::Local;
+
 use tera::Context;
 
 use log::error;
@@ -79,8 +81,9 @@ pub async fn post(session: Session, state: web::Data<State>) -> HttpResponse {
     let redirect_uri = first_request.redirect_uri.unwrap();
     let mut url = Url::parse(&redirect_uri).expect("should have been validated upon registration");
 
-    url.query_pairs_mut()
-        .append_pair("code", "dummy_code");
+    let code = state.auth_code_store.get_authorization_code(first_request.client_id.as_ref().unwrap(), &redirect_uri, Local::now());
+
+    url.query_pairs_mut().append_pair("code", &code);
 
     if let Some(state) = first_request.state {
         url.query_pairs_mut()
@@ -95,10 +98,12 @@ pub async fn post(session: Session, state: web::Data<State>) -> HttpResponse {
 pub fn render_invalid_consent_request(tera: &tera::Tera) -> HttpResponse {
     let body = tera.render("invalid_consent_request.html.j2", &tera::Context::new());
     match body {
-        Ok(body) => HttpResponse::BadRequest().body(body),
+        Ok(body) => HttpResponse::BadRequest()
+            .set_header("Content-Type", "text/html")
+            .body(body),
         Err(e) => {
             log::warn!("{}", e);
-            HttpResponse::InternalServerError().finish()
+            server_error(tera)
         }
     }
 }

@@ -20,10 +20,20 @@ pub mod memory;
 use crate::domain::user::User;
 use crate::domain::client::Client;
 
-pub trait UserStore {
+use chrono::DateTime;
+use chrono::Local;
+use chrono::Duration;
+
+pub trait UserStore: Send + Sync {
     fn get(&self, key: &str) -> Option<User>;
 }
 
-pub trait ClientStore {
+pub trait ClientStore: Send + Sync {
     fn get(&self, key: &str) -> Option<Client>;
+}
+
+pub trait AuthorizationCodeStore: Send + Sync {
+    fn get_authorization_code(&self, client_id: &str, redirect_uri: &str, now: DateTime<Local>) -> String;
+
+    fn validate(&self, client_id: &str, authorization_code: &str, now: DateTime<Local>) -> Option<(String, Duration)>;
 }

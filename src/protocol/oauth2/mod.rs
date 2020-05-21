@@ -31,15 +31,24 @@ pub struct ErrorResponse {
     state: Option<String>,
 }
 
+#[derive(PartialEq, Eq)]
 pub enum ClientType {
     Public,
     Confidential,
 }
 
+#[derive(Deserialize, PartialEq, Eq)]
 pub enum GrantType {
+    #[serde(rename = "authorization_code")]
     AuthorizationCode,
+
+    #[serde(rename = "password")]
     Password,
+
+    #[serde(rename = "client_credentials")]
     ClientCredentials,
+
+    #[serde(rename = "refresh_token")]
     RefreshToken,
 }
 
@@ -55,13 +64,39 @@ pub enum ResponseType {
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum ProtocolError {
+    // https://tools.ietf.org/html/rfc6749#section-4.1.2.1
+
+    #[serde(rename = "invalid_request")]
     InvalidRequest,
+    
+    #[serde(rename = "unauthorized_client")]
     UnauthorizedClient,
+
+    #[serde(rename = "access_denied")]
     AccessDenied,
+
+    #[serde(rename = "unsupported_response_type")]
     UnsupportedResponseType,
+
+    #[serde(rename = "invalid_scope")]
     InvalidScope,
+
+    #[serde(rename = "server_error")]
     ServerError,
-    TemporaryUnavailable,
+
+    #[serde(rename = "temporarily_unavailable")]
+    TemporarilyUnavailable,
+
+    // https://tools.ietf.org/html/rfc6749#section-5.2
+
+    #[serde(rename = "invalid_client")]
+    InvalidClient,
+
+    #[serde(rename = "invalid_grant")]
+    InvalidGrant,
+    
+    #[serde(rename = "unsupported_grant_type")]
+    UnsupportedGrantType,
 }
 
 impl Display for ProtocolError {
@@ -74,7 +109,10 @@ impl Display for ProtocolError {
             ProtocolError::UnsupportedResponseType=> "unsupported_response_type",
             ProtocolError::InvalidScope=> "invalid_scope",
             ProtocolError::ServerError=> "server_error",
-            ProtocolError::TemporaryUnavailable=> "temporary_unavailable",
+            ProtocolError::TemporarilyUnavailable=> "temporary_unavailable",
+            ProtocolError::InvalidClient => "invalid_client",
+            ProtocolError::InvalidGrant => "invalid_grant",
+            ProtocolError::UnsupportedGrantType=> "unsupported_grant_type",
         };
         write!(f, "{}", value)
     }

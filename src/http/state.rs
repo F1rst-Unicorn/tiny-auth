@@ -15,11 +15,11 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::boxed::Box;
 use tera::Tera;
 
 use crate::store::ClientStore;
 use crate::store::UserStore;
+use crate::store::AuthorizationCodeStore;
 
 pub struct State {
     pub tera: Tera,
@@ -27,4 +27,6 @@ pub struct State {
     pub client_store: Box<dyn ClientStore>,
 
     pub user_store: Box<dyn UserStore>,
+
+    pub auth_code_store: Box<dyn AuthorizationCodeStore>,
 }

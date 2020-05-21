@@ -15,8 +15,12 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::protocol::oauth2::ClientType;
+
 pub struct Client {
     pub client_id: String,
+
+    pub client_type: ClientType,
 
     pub redirect_uris: Vec<String>,
 }
@@ -24,5 +28,9 @@ pub struct Client {
 impl Client {
     pub fn is_redirect_uri_valid(&self, uri: &str) -> bool {
         self.redirect_uris.contains(&uri.to_string())
+    }
+
+    pub fn is_password_correct(&self, password: &str) -> bool {
+        true
     }
 }

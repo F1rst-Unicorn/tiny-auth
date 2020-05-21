@@ -73,11 +73,13 @@ pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
     match body {
         Ok(body) => {
             session.renew();
-            HttpResponse::Ok().body(body)
+            HttpResponse::Ok()
+                .set_header("Content-Type", "text/html")
+                .body(body)
         }
         Err(e) => {
             log::warn!("{}", e);
-            HttpResponse::InternalServerError().finish()
+            server_error(&state.tera)
         }
     }
 }
@@ -155,10 +157,12 @@ pub async fn post(mut query: web::Form<Request>, state: web::Data<State>, sessio
 pub fn render_invalid_authentication_request(tera: &Tera) -> HttpResponse {
     let body = tera.render("invalid_authentication_request.html.j2", &Context::new());
     match body {
-        Ok(body) => HttpResponse::BadRequest().body(body),
+        Ok(body) => HttpResponse::BadRequest()
+            .set_header("Content-Type", "text/html") 
+            .body(body),
         Err(e) => {
             log::warn!("{}", e);
-            HttpResponse::InternalServerError().finish()
+            server_error(tera)
         }
     }
 }

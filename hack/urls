@@ -1,0 +1,3 @@
+localhost:8088/authorize?client_id=fdsa&redirect_uri=http%3A%2F%2Flocalhost%2Fclient&state=state&scope=code&response_type=token
+
+curl --data-urlencode grant_type=authorization_code --data-urlencode code=dummy_code --data-urlencode redirect_uri=http://localhost/client --data-urlencode client_id=fdsa --basic --user fdsa:fdsa
