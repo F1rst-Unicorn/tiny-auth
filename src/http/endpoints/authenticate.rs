@@ -28,9 +28,13 @@ use log::error;
 
 use crate::http::state::State;
 use crate::http::endpoints::server_error;
+use crate::http::endpoints::authorize;
 
 use serde_derive::Serialize;
 use serde_derive::Deserialize;
+
+pub const SESSION_KEY: &str = "b";
+const ERROR_CODE_SESSION_KEY: &str = "e";
 
 #[derive(Serialize, Deserialize)]
 pub struct Request {
@@ -55,14 +59,14 @@ impl Request {
 }
 
 pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
-    let first_request = session.get::<String>("a");
+    let first_request = session.get::<String>(authorize::SESSION_KEY);
     if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
         debug!("Unsolicited authentication request. {:?}", first_request);
         return render_invalid_authentication_request(&state.tera);
     }
 
     let mut context = Context::new();
-    if let Some(error_code) = session.get::<u64>("e").expect("failed to deserialize") {
+    if let Some(error_code) = session.get::<u64>(ERROR_CODE_SESSION_KEY).expect("failed to deserialize") {
         context.insert("error", &error_code);
     }
     let body = state.tera.render("authenticate.html.j2", &context);
@@ -81,9 +85,9 @@ pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
 pub async fn post(mut query: web::Form<Request>, state: web::Data<State>, session: Session) -> HttpResponse {
     query.normalise();
 
-    session.remove("e");
+    session.remove(ERROR_CODE_SESSION_KEY);
     
-    let first_request = session.get::<String>("a");
+    let first_request = session.get::<String>(authorize::SESSION_KEY);
     if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
         debug!("Unsolicited authentication request. {:?}", first_request);
         return render_invalid_authentication_request(&state.tera);
@@ -91,7 +95,7 @@ pub async fn post(mut query: web::Form<Request>, state: web::Data<State>, sessio
 
     if query.username.is_none() {
         debug!("missing username");
-        if let Err(e) = session.set("e", 1) {
+        if let Err(e) = session.set(ERROR_CODE_SESSION_KEY, 1) {
             error!("Failed to serialise session: {}", e);
             return server_error(&state.tera);
         }
@@ -102,7 +106,7 @@ pub async fn post(mut query: web::Form<Request>, state: web::Data<State>, sessio
 
     if query.password.is_none() {
         debug!("missing password");
-        if let Err(e) = session.set("e", 2) {
+        if let Err(e) = session.set(ERROR_CODE_SESSION_KEY, 2) {
             error!("Failed to serialise session: {}", e);
             return server_error(&state.tera);
         }
@@ -116,7 +120,7 @@ pub async fn post(mut query: web::Form<Request>, state: web::Data<State>, sessio
 
     if user.is_none() {
         debug!("user '{}' not found", username);
-        if let Err(e) = session.set("e", 3) {
+        if let Err(e) = session.set(ERROR_CODE_SESSION_KEY, 3) {
             error!("Failed to serialise session: {}", e);
             return server_error(&state.tera);
         }
@@ -138,7 +142,7 @@ pub async fn post(mut query: web::Form<Request>, state: web::Data<State>, sessio
             .finish()
     } else {
         debug!("password of user '{}' wrong", username);
-        if let Err(e) = session.set("e", 3) {
+        if let Err(e) = session.set(ERROR_CODE_SESSION_KEY, 3) {
             error!("Failed to serialise session: {}", e);
             return server_error(&state.tera);
         }

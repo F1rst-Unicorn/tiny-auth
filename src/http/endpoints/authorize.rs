@@ -35,6 +35,8 @@ use log::info;
 use log::error;
 use log::debug;
 
+pub const SESSION_KEY: &str = "a";
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Request {
     #[serde(skip_serializing_if = "Option::is_none")] 
@@ -47,10 +49,10 @@ pub struct Request {
     client_id: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")] 
-    redirect_uri: Option<String>,
+    pub redirect_uri: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")] 
-    state: Option<String>,
+    pub state: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")] 
     response_mode: Option<String>,
@@ -170,7 +172,7 @@ pub async fn post(mut query: web::Query<Request>, state: web::Data<state::State>
         return missing_parameter(&redirect_uri, ProtocolError::InvalidRequest, &format!("Missing required parameter response_type"), &client_state);
     }
 
-    if let Err(e) = session.set("a", serde_urlencoded::to_string(query.0).unwrap()) {
+    if let Err(e) = session.set(SESSION_KEY, serde_urlencoded::to_string(query.0).unwrap()) {
         error!("Failed to serialise session: {}", e);
         return missing_parameter(&redirect_uri, ProtocolError::ServerError, "session serialisation failed", &client_state);
     }

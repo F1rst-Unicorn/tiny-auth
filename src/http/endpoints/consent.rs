@@ -15,16 +15,36 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use actix_web::HttpRequest;
 use actix_web::HttpResponse;
-use actix_web::Responder;
 use actix_web::web;
+
+use actix_session::Session;
+
+use url::Url;
 
 use tera::Context;
 
-use crate::http::state::State;
+use log::error;
+use log::debug;
 
-pub async fn get(request: HttpRequest, state: web::Data<State>) -> impl Responder {
+use crate::http::state::State;
+use crate::http::endpoints::authorize;
+use crate::http::endpoints::authenticate;
+use crate::http::endpoints::server_error;
+
+pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
+    let first_request = session.get::<String>(authorize::SESSION_KEY);
+    if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
+        debug!("Unsolicited consent request. {:?}", first_request);
+        return render_invalid_consent_request(&state.tera);
+    }
+
+    let authenticated = session.get::<i32>(authenticate::SESSION_KEY);
+    if authenticated.is_err() || authenticated.as_ref().unwrap().is_none() {
+        debug!("Unsolicited consent request. {:?}", authenticated);
+        return render_invalid_consent_request(&state.tera);
+    }
+
     let body = state.tera.render("consent.html.j2", &Context::new());
     match body {
         Ok(body) => HttpResponse::Ok().body(body),
@@ -35,8 +55,50 @@ pub async fn get(request: HttpRequest, state: web::Data<State>) -> impl Responde
     }
 }
 
-pub async fn post(request: HttpRequest) -> impl Responder {
+pub async fn post(session: Session, state: web::Data<State>) -> HttpResponse {
+    let first_request = session.get::<String>(authorize::SESSION_KEY);
+    if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
+        debug!("Unsolicited consent request. {:?}", first_request);
+        return render_invalid_consent_request(&state.tera);
+    }
+
+    let authenticated = session.get::<i32>(authenticate::SESSION_KEY);
+    if authenticated.is_err() || authenticated.as_ref().unwrap().is_none() {
+        debug!("Unsolicited consent request. {:?}", authenticated);
+        return render_invalid_consent_request(&state.tera);
+    }
+
+    let first_request_result = serde_urlencoded::from_str::<authorize::Request>(&first_request.unwrap().unwrap());
+
+    if let Err(e) = first_request_result {
+        error!("Failed to deserialize initial request. {}", e);
+        return server_error(&state.tera);
+    }
+
+    let first_request = first_request_result.unwrap();
+    let redirect_uri = first_request.redirect_uri.unwrap();
+    let mut url = Url::parse(&redirect_uri).expect("should have been validated upon registration");
+
+    url.query_pairs_mut()
+        .append_pair("code", "dummy_code");
+
+    if let Some(state) = first_request.state {
+        url.query_pairs_mut()
+            .append_pair("state", &state);
+    }
+
     HttpResponse::SeeOther()
-        .set_header("Location", "./")
+        .set_header("Location", url.as_str())
         .finish()
+}
+
+pub fn render_invalid_consent_request(tera: &tera::Tera) -> HttpResponse {
+    let body = tera.render("invalid_consent_request.html.j2", &tera::Context::new());
+    match body {
+        Ok(body) => HttpResponse::BadRequest().body(body),
+        Err(e) => {
+            log::warn!("{}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
 }
