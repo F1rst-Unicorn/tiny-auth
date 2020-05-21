@@ -1,5 +1,5 @@
 /*  tiny-auth: Tiny OIDC Provider
- *  Copyright (C) 2019 The cinit developers
+ *  Copyright (C) 2019 The tiny-auth developers
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -44,9 +44,11 @@ pub struct Request {
 impl Request {
     fn normalise(&mut self) {
         if self.username.is_some() && self.username.as_ref().unwrap().is_empty() {
+            debug!("normalising empty username to None");
             self.username = None
         }
         if self.password.is_some() && self.password.as_ref().unwrap().is_empty() {
+            debug!("normalising empty password to None");
             self.password = None
         }
     }
@@ -76,7 +78,7 @@ pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
     }
 }
 
-pub async fn post(mut query: web::Query<Request>, state: web::Data<State>, session: Session) -> HttpResponse {
+pub async fn post(mut query: web::Form<Request>, state: web::Data<State>, session: Session) -> HttpResponse {
     query.normalise();
 
     session.remove("e");
