@@ -3,12 +3,13 @@ use crate::store::UserStore;
 use crate::store::ClientStore;
 use crate::domain::client::Client;
 
-struct MemoryUserStore {}
+pub struct MemoryUserStore {}
 
 impl UserStore for MemoryUserStore {
     fn get(&self, key: &str) -> Option<User> {
         Some(User {
             name: key.to_string(),
+            password: "".to_string(),
         })
     }
 }

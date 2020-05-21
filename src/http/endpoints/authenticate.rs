@@ -15,19 +15,60 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use actix_web::HttpRequest;
 use actix_web::HttpResponse;
-use actix_web::Responder;
 use actix_web::web;
 
+use actix_session::Session;
+
 use tera::Context;
+use tera::Tera;
+
+use log::debug;
+use log::error;
 
 use crate::http::state::State;
+use crate::http::endpoints::server_error;
 
-pub async fn get(request: HttpRequest, state: web::Data<State>) -> impl Responder {
-    let body = state.tera.render("authenticate.html.j2", &Context::new());
+use serde_derive::Serialize;
+use serde_derive::Deserialize;
+
+#[derive(Serialize, Deserialize)]
+pub struct Request {
+    #[serde(skip_serializing_if = "Option::is_none")] 
+    username: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")] 
+    password: Option<String>,
+}
+
+impl Request {
+    fn normalise(&mut self) {
+        if self.username.is_some() && self.username.as_ref().unwrap().is_empty() {
+            self.username = None
+        }
+        if self.password.is_some() && self.password.as_ref().unwrap().is_empty() {
+            self.password = None
+        }
+    }
+}
+
+pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
+    let first_request = session.get::<String>("a");
+    if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
+        debug!("Unsolicited authentication request. {:?}", first_request);
+        return render_invalid_authentication_request(&state.tera);
+    }
+
+    let mut context = Context::new();
+    if let Some(error_code) = session.get::<u64>("e").expect("failed to deserialize") {
+        context.insert("error", &error_code);
+    }
+    let body = state.tera.render("authenticate.html.j2", &context);
     match body {
-        Ok(body) => HttpResponse::Ok().body(body),
+        Ok(body) => {
+            session.renew();
+            HttpResponse::Ok().body(body)
+        }
         Err(e) => {
             log::warn!("{}", e);
             HttpResponse::InternalServerError().finish()
@@ -35,6 +76,83 @@ pub async fn get(request: HttpRequest, state: web::Data<State>) -> impl Responde
     }
 }
 
-pub async fn post(request: HttpRequest) -> impl Responder {
-    HttpResponse::Ok().finish()
+pub async fn post(mut query: web::Query<Request>, state: web::Data<State>, session: Session) -> HttpResponse {
+    query.normalise();
+
+    session.remove("e");
+    
+    let first_request = session.get::<String>("a");
+    if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
+        debug!("Unsolicited authentication request. {:?}", first_request);
+        return render_invalid_authentication_request(&state.tera);
+    }
+
+    if query.username.is_none() {
+        debug!("missing username");
+        if let Err(e) = session.set("e", 1) {
+            error!("Failed to serialise session: {}", e);
+            return server_error(&state.tera);
+        }
+        return HttpResponse::SeeOther()
+            .set_header("Location", "authenticate")
+            .finish()
+    }
+
+    if query.password.is_none() {
+        debug!("missing password");
+        if let Err(e) = session.set("e", 2) {
+            error!("Failed to serialise session: {}", e);
+            return server_error(&state.tera);
+        }
+        return HttpResponse::SeeOther()
+            .set_header("Location", "authenticate")
+            .finish()
+    }
+
+    let username = query.username.clone().expect("checked before");
+    let user = state.user_store.get(&username);
+
+    if user.is_none() {
+        debug!("user '{}' not found", username);
+        if let Err(e) = session.set("e", 3) {
+            error!("Failed to serialise session: {}", e);
+            return server_error(&state.tera);
+        }
+        return HttpResponse::SeeOther()
+            .set_header("Location", "authenticate")
+            .finish()
+    }
+
+    let user = user.expect("checked before");
+    let password = query.password.clone().expect("checked before");
+
+    if user.is_password_correct(&password) {
+        if let Err(e) = session.set("b", 1) {
+            error!("Failed to serialise session: {}", e);
+            return server_error(&state.tera);
+        }
+        HttpResponse::SeeOther()
+            .set_header("Location", "consent")
+            .finish()
+    } else {
+        debug!("password of user '{}' wrong", username);
+        if let Err(e) = session.set("e", 3) {
+            error!("Failed to serialise session: {}", e);
+            return server_error(&state.tera);
+        }
+        HttpResponse::SeeOther()
+            .set_header("Location", "authenticate")
+            .finish()
+    }
+}
+
+pub fn render_invalid_authentication_request(tera: &Tera) -> HttpResponse {
+    let body = tera.render("invalid_authentication_request.html.j2", &Context::new());
+    match body {
+        Ok(body) => HttpResponse::BadRequest().body(body),
+        Err(e) => {
+            log::warn!("{}", e);
+            HttpResponse::InternalServerError().finish()
+        }
+    }
 }

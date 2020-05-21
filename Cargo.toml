@@ -22,11 +22,23 @@ serde_json = "1.0.40"
 serde_urlencoded = "0.5.1"
 chrono = "0.4.6"
 systemd = "0.4"
-actix-web = "2.0"
 actix-rt = "1.0"
+actix-session = "0.3"
 url = "2.1.1"
 futures = "0.3"
 tera = "1.2.0"
+
+[dependencies.actix-web]
+version = "2.0"
+features = ["openssl"]
+
+[dependencies.openssl]
+version = "0.10"
+features = ["v110"]
+
+[dependencies.uuid]
+version = "0.8.1"
+features = ["v4", "serde"]
 
 [dependencies.serde]
 version = "1.0.80"

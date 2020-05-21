@@ -10,6 +10,12 @@ appenders:
       pattern: "{level:>5} {file}:{line} {message}{n}"
 
 root:
-  level: trace
+  level: warn
   appenders:
     - stdout
+
+loggers:
+  tiny_auth:
+    level: trace
+  actix_session:
+    level: trace

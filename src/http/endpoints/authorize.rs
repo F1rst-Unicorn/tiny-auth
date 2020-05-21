@@ -17,48 +17,68 @@
 
 use crate::protocol::oauth2::ResponseType;
 use crate::protocol::oauth2::ProtocolError;
+use crate::http::endpoints::missing_parameter;
 use crate::http::state;
 
 use actix_web::HttpResponse;
 use actix_web::web;
 
+use actix_session::Session;
+
 use serde_derive::Deserialize;
+use serde_derive::Serialize;
  
 use tera::Tera;
 use tera::Context;
 
 use url::Url;
 
-use log::trace;
+use log::info;
+use log::error;
+use log::debug;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Request {
+    #[serde(skip_serializing_if = "Option::is_none")] 
     scope: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")] 
     response_type: Option<ResponseType>,
 
+    #[serde(skip_serializing_if = "Option::is_none")] 
     client_id: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")] 
     redirect_uri: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")] 
     state: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")] 
     response_mode: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")] 
     nonce: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")] 
     display: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")] 
     prompt: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")] 
     max_age: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")] 
     ui_locales: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")] 
     id_token_hint: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")] 
     login_hint: Option<String>,
 
+    #[serde(skip_serializing_if = "Option::is_none")] 
     acr_values: Option<String>,
 }
 
@@ -106,61 +126,59 @@ impl Request {
     }
 }
 
-pub async fn get(query: web::Query<Request>, state: web::Data<state::State>) -> HttpResponse {
-    post(query, state).await
+pub async fn get(query: web::Query<Request>, state: web::Data<state::State>, session: Session) -> HttpResponse {
+    post(query, state, session).await
 }
 
-pub async fn post(mut query: web::Query<Request>, state: web::Data<state::State>) -> HttpResponse {
-    trace!("authorize");
+pub async fn post(mut query: web::Query<Request>, state: web::Data<state::State>, session: Session) -> HttpResponse {
     query.normalise();
     
     if query.client_id.is_none() {
+        debug!("missing client_id");
         return render_invalid_client_id_error(&state.tera);
     }
 
     if query.redirect_uri.is_none() {
+        debug!("missing redirect_uri");
         return render_invalid_redirect_uri_error(&state.tera);
     }
 
-    let redirect_uri = query.redirect_uri.as_ref().unwrap();
+    let redirect_uri = query.redirect_uri.clone().unwrap();
     let client_id = query.client_id.as_ref().unwrap();
 
     let client = state.client_store.get(client_id);
 
     if client.is_none() {
+        info!("client '{}' not found", client_id);
         return render_invalid_client_id_error(&state.tera);
     }
     
     let client = client.expect("checked before");
 
     if ! client.is_redirect_uri_valid(&redirect_uri) {
+        info!("invalid redirect_uri '{}' for client '{}'", redirect_uri, client_id);
         return render_invalid_redirect_uri_error(&state.tera);
     }
 
+    let client_state = query.state.clone();
+
     if query.scope.is_none() {
-        return missing_parameter(&redirect_uri, "scope", &query.state);
+        debug!("Missing scope");
+        return missing_parameter(&redirect_uri, ProtocolError::InvalidRequest, &format!("Missing required parameter scope"), &client_state);
     }
 
     if query.response_type.is_none() {
-        return missing_parameter(&redirect_uri, "response_type", &query.state);
+        debug!("Missing response_type");
+        return missing_parameter(&redirect_uri, ProtocolError::InvalidRequest, &format!("Missing required parameter response_type"), &client_state);
     }
 
-    HttpResponse::Ok().finish()
-}
-
-pub fn missing_parameter(redirect_uri: &str, name: &str, state: &Option<String>) -> HttpResponse {
-    let mut url = Url::parse(redirect_uri).expect("should have been validated upon registration");
-    url.query_pairs_mut()
-        .append_pair("error", &serde_urlencoded::to_string(ProtocolError::InvalidRequest).unwrap())
-        .append_pair("error_description", &serde_urlencoded::to_string(format!("Missing required parameter {}", name)).unwrap());
-
-    if let Some(state) = state {
-        url.query_pairs_mut()
-            .append_pair("state", state);
+    if let Err(e) = session.set("a", serde_urlencoded::to_string(query.0).unwrap()) {
+        error!("Failed to serialise session: {}", e);
+        return missing_parameter(&redirect_uri, ProtocolError::ServerError, "session serialisation failed", &client_state);
     }
 
-    HttpResponse::TemporaryRedirect()
-        .set_header("Location", url.as_str())
+    HttpResponse::SeeOther()
+        .set_header("Location", "authenticate")
         .finish()
 }
 

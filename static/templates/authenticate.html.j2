@@ -1,5 +1,17 @@
 {% extends "base.html.j2" %}
 {% block content %}
+{% set error = error | default(value=0) %}
+<h1>{{ translate(term="Login") }}</h1>
+{% if error == 1 %}
+    <div id="error" class="alert alert-danger"
+         role="alert">{{ translate(term="Missing username")}}</div>
+{% elif error == 2 %}
+    <div id="error" class="alert alert-danger"
+         role="alert">{{ translate(term="Missing password")}}</div>
+{% elif error == 3 %}
+    <div id="error" class="alert alert-danger"
+         role="alert">{{ translate(term="Username or password wrong")}}</div>
+{% endif %}
 <form action="{{ url(name="authenticate") }}" method="post">
     <div class="form-group">
         <label class="control-label"

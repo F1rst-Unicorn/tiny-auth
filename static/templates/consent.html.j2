@@ -1,0 +1,8 @@
+{% extends "base.html.j2" %}
+{% block content %}
+<h1>Are you fine with this?</h1>
+<form action="{{ url(name="consent") }}" method="post">
+    <input class="btn btn-success" type="submit" id="id_submit"
+           value="{{ translate(term="Agree") }}">
+</form>
+{% endblock %}

@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-mod endpoints;
+pub mod endpoints;
 mod state;
 
 use std::collections::HashMap;
@@ -25,6 +25,9 @@ use actix_web::App;
 use actix_web::HttpResponse;
 use actix_web::HttpServer;
 use actix_web::Responder;
+use actix_web::cookie::SameSite;
+
+use actix_session::CookieSession;
 
 use tera::Tera;
 use tera::Context;
@@ -33,6 +36,7 @@ use tera::Value;
 
 use crate::config;
 use crate::store::memory::MemoryClientStore;
+use crate::store::memory::MemoryUserStore;
 
 use log::warn;
 
@@ -49,6 +53,7 @@ async fn index(state: web::Data<state::State>) -> impl Responder {
 
 #[actix_rt::main]
 pub async fn run(web: config::Web) -> std::io::Result<()> {
+    let bind = web.bind.clone();
     HttpServer::new(move || {
 
         let template_path = web.static_files.clone() + "/templates/";
@@ -68,19 +73,35 @@ pub async fn run(web: config::Web) -> std::io::Result<()> {
         let state = state::State {
             tera: tera,
             client_store: Box::new(MemoryClientStore{}),
+            user_store: Box::new(MemoryUserStore{}),
         };
 
         App::new()
             .data(state)
-            .route("/", web::get().to(index))
-            .route("/authorize", web::get().to(endpoints::authorize::get))
-            .route("/authorize", web::post().to(endpoints::authorize::post))
-            .route("/token", web::post().to(endpoints::token::post))
-            .route("/userinfo", web::get().to(endpoints::userinfo::get))
-            .route("/authenticate", web::get().to(endpoints::authenticate::get))
-            .route("/authenticate", web::post().to(endpoints::authenticate::post))
+            .wrap(CookieSession::private(&[119; 32])
+                // ^- encryption is only needed to avoid encoding problems
+                .domain(&web.domain)
+                .name("session")
+                .path(web.path.as_ref().expect("no default given"))
+                .secure(web.tls.is_some())
+                .http_only(true)
+                .same_site(SameSite::None)
+                .max_age(web.session_timeout.expect("no default given"))
+            )
+            .service(
+                web::scope(&web.path.as_ref().expect("no default given"))
+                    .route("", web::get().to(index))
+                    .route("/authorize", web::get().to(endpoints::authorize::get))
+                    .route("/authorize", web::post().to(endpoints::authorize::post))
+                    .route("/token", web::post().to(endpoints::token::post))
+                    .route("/userinfo", web::get().to(endpoints::userinfo::get))
+                    .route("/authenticate", web::get().to(endpoints::authenticate::get))
+                    .route("/authenticate", web::post().to(endpoints::authenticate::post))
+                    .route("/consent", web::get().to(endpoints::consent::get))
+                    .route("/consent", web::post().to(endpoints::consent::post))
+            )
     })
-    .bind("127.0.0.1:8088")?
+    .bind(&bind)?
     .run()
     .await
 }

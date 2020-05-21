@@ -41,5 +41,32 @@ pub struct Http {}
 
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Web {
+    pub bind: String,
+
+    pub domain: String,
+
+    #[serde(default = "default_path")]
+    pub path: Option<String>,
+
+    pub tls: Option<Tls>,
+
     pub static_files: String,
+
+    #[serde(default = "default_session_timeout")]
+    pub session_timeout: Option<i64>,
+}
+
+fn default_path() -> Option<String> {
+    Some("/".to_string())
+}
+
+fn default_session_timeout() -> Option<i64> {
+    Some(3600)
+}
+ 
+
+#[derive(Default, Clone, Debug, Deserialize)]
+pub struct Tls {
+    pub key: String,
+    pub certificate: String,
 }

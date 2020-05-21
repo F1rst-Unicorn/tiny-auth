@@ -1,4 +1,7 @@
 ---
 http: {}
 web:
+  bind: localhost:8088
+  domain: localhost
   static_files: static
+  session_timeout: 60000

@@ -15,8 +15,21 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::fmt::Display;
+
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
+
+#[derive(Serialize)]
+pub struct ErrorResponse {
+    error: ProtocolError,
+
+    error_description: Option<String>,
+
+    error_uri: Option<String>,
+
+    state: Option<String>,
+}
 
 pub enum ClientType {
     Public,
@@ -30,7 +43,7 @@ pub enum GrantType {
     RefreshToken,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ResponseType {
     #[serde(rename = "code")] 
     Code,
@@ -40,14 +53,29 @@ pub enum ResponseType {
 }
 
 #[derive(Serialize)]
+#[serde(untagged)]
 pub enum ProtocolError {
-    #[serde(rename = "invalid_request")]
     InvalidRequest,
-
     UnauthorizedClient,
     AccessDenied,
     UnsupportedResponseType,
     InvalidScope,
     ServerError,
     TemporaryUnavailable,
+}
+
+impl Display for ProtocolError {
+
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> { 
+        let value = match self {
+            ProtocolError::InvalidRequest => "invalid_request",
+            ProtocolError::UnauthorizedClient=> "unauthorized_client",
+            ProtocolError::AccessDenied=> "access_denied",
+            ProtocolError::UnsupportedResponseType=> "unsupported_response_type",
+            ProtocolError::InvalidScope=> "invalid_scope",
+            ProtocolError::ServerError=> "server_error",
+            ProtocolError::TemporaryUnavailable=> "temporary_unavailable",
+        };
+        write!(f, "{}", value)
+    }
 }
