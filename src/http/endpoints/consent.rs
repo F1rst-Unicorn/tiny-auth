@@ -111,3 +111,115 @@ pub fn render_invalid_consent_request(tera: &tera::Tera) -> HttpResponse {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use actix_web::http;
+    use actix_web::test;
+    use actix_web::web::Data;
+    use actix_session::UserSession;
+
+    use crate::http::state::tests::build_test_state;
+    use crate::store::tests::PUBLIC_CLIENT;
+
+    #[actix_rt::test]
+    async fn empty_session_gives_error() {
+        let req = test::TestRequest::get().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+
+        let resp = get(state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn missing_authentication_gives_error() {
+        let req = test::TestRequest::get().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        session.set(authorize::SESSION_KEY, "dummy").unwrap();
+
+        let resp = get(state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn valid_request_is_rendered() {
+        let req = test::TestRequest::get().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        session.set(authorize::SESSION_KEY, "dummy").unwrap();
+        session.set(authenticate::SESSION_KEY, 1).unwrap();
+
+        let resp = get(state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::OK);
+    }
+
+    #[actix_rt::test]
+    async fn posting_empty_session_gives_error() {
+        let req = test::TestRequest::post().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+
+        let resp = post(session, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn posting_missing_authentication_gives_error() {
+        let req = test::TestRequest::post().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        session.set(authorize::SESSION_KEY, "dummy").unwrap();
+
+        let resp = post(session, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn successful_request_is_forwarded() {
+        let req = test::TestRequest::post().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        let first_request = authorize::Request{
+            client_id: Some(PUBLIC_CLIENT.to_string()),
+            redirect_uri: Some("http://localhost/".to_string()),
+            state: Some("state".to_string()),
+            acr_values: None,
+            display: None,
+            id_token_hint: None,
+            login_hint: None,
+            nonce: None,
+            max_age: None,
+            prompt: None,
+            response_mode: None,
+            response_type: None,
+            scope: None,
+            ui_locales: None,
+        };
+        session.set(authorize::SESSION_KEY, &serde_urlencoded::to_string(first_request.clone()).unwrap()).unwrap();
+        session.set(authenticate::SESSION_KEY, 1).unwrap();
+
+        let resp = post(session, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let url = Url::parse(url).unwrap();
+        let expected_url = Url::parse(first_request.redirect_uri.as_ref().unwrap()).unwrap();
+
+        assert_eq!(expected_url.scheme(), url.scheme());
+        assert_eq!(expected_url.domain(), url.domain());
+        assert_eq!(expected_url.port(), url.port());
+        assert_eq!(expected_url.path(), url.path());
+        assert!(url.query_pairs().into_owned().any(|param| param.0 == "state".to_string() && &param.1 == first_request.state.as_ref().unwrap()));
+        assert!(url.query_pairs().into_owned().any(|param| param.0 == "code".to_string() && !param.1.is_empty()));
+    }
+}

@@ -41,10 +41,10 @@ pub const SESSION_KEY: &str = "a";
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Request {
     #[serde(skip_serializing_if = "Option::is_none")]
-    scope: Option<String>,
+    pub scope: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    response_type: Option<ResponseType>,
+    pub response_type: Option<ResponseType>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
@@ -56,31 +56,31 @@ pub struct Request {
     pub state: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    response_mode: Option<String>,
+    pub response_mode: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    nonce: Option<String>,
+    pub nonce: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    display: Option<String>,
+    pub display: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    prompt: Option<String>,
+    pub prompt: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    max_age: Option<String>,
+    pub max_age: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    ui_locales: Option<String>,
+    pub ui_locales: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    id_token_hint: Option<String>,
+    pub id_token_hint: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    login_hint: Option<String>,
+    pub login_hint: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    acr_values: Option<String>,
+    pub acr_values: Option<String>,
 }
 
 impl Request {
