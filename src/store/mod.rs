@@ -77,6 +77,10 @@ pub mod tests {
         Box::new(TestUserStore {})
     }
 
+    pub const UNKNOWN_CLIENT_ID: &str = "unknown_client";
+    pub const CONFIDENTIAL_CLIENT: &str = "client1";
+    pub const PUBLIC_CLIENT: &str = "client2";
+
     struct TestClientStore {}
 
     impl ClientStore for TestClientStore {

@@ -35,6 +35,10 @@ use crate::protocol::oauth2::ClientType;
 use crate::protocol::oauth2::GrantType;
 use crate::protocol::oauth2::ProtocolError;
 
+// Recommended lifetime is 10 minutes
+// https://tools.ietf.org/html/rfc6749#section-4.1.2
+pub const AUTH_CODE_LIFE_TIME: i64 = 10;
+
 #[derive(Deserialize)]
 pub struct Request {
     grant_type: Option<GrantType>,
@@ -46,7 +50,7 @@ pub struct Request {
     client_id: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Response {
     access_token: String,
 
@@ -213,6 +217,7 @@ pub async fn post(
     let stored_redirect_uri = state
         .auth_code_store
         .validate(client_id, &code, Local::now());
+
     if stored_redirect_uri.is_none() {
         debug!(
             "No authorization code found for client '{}' with code '{}'",
@@ -227,7 +232,7 @@ pub async fn post(
         return render_missing_paramter_with_response(ProtocolError::InvalidGrant, "Invalid code");
     }
 
-    if stored_redirect_uri.1 < Duration::zero() {
+    if stored_redirect_uri.1 > Duration::minutes(AUTH_CODE_LIFE_TIME) {
         debug!("code has expired");
         return render_missing_paramter_with_response(ProtocolError::InvalidGrant, "Invalid code");
     }
@@ -251,10 +256,15 @@ mod tests {
     use actix_web::web::Data;
     use actix_web::web::Form;
 
+    use chrono::offset::Local;
+
     use crate::http::endpoints::tests::read_response;
     use crate::http::endpoints::ErrorResponse;
     use crate::http::state::tests::build_test_state;
     use crate::protocol::oauth2::ProtocolError;
+    use crate::store::tests::UNKNOWN_CLIENT_ID;
+    use crate::store::tests::PUBLIC_CLIENT;
+    use crate::store::tests::CONFIDENTIAL_CLIENT;
 
     #[actix_rt::test]
     async fn missing_grant_type_is_rejected() {
@@ -266,9 +276,305 @@ mod tests {
             redirect_uri: Some("fdsa".to_string()),
         });
         let state = Data::new(build_test_state());
+
         let resp = post(req, form, state).await;
+
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
         assert_eq!(ProtocolError::InvalidRequest, response.error);
+    }
+
+    #[actix_rt::test]
+    async fn missing_code_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: None,
+            client_id: Some("fdsa".to_string()),
+            redirect_uri: Some("fdsa".to_string()),
+        });
+        let state = Data::new(build_test_state());
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(ProtocolError::InvalidRequest, response.error);
+    }
+
+    #[actix_rt::test]
+    async fn missing_client_id_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some("fdsa".to_string()),
+            client_id: None,
+            redirect_uri: Some("fdsa".to_string()),
+        });
+        let state = Data::new(build_test_state());
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(ProtocolError::InvalidRequest, response.error);
+    }
+
+    #[actix_rt::test]
+    async fn missing_redirect_uri_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some("fdsa".to_string()),
+            client_id: Some("fdsa".to_string()),
+            redirect_uri: None,
+        });
+        let state = Data::new(build_test_state());
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(ProtocolError::InvalidRequest, response.error);
+    }
+
+    #[actix_rt::test]
+    async fn unknown_client_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some("fdsa".to_string()),
+            client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
+            redirect_uri: Some("fdsa".to_string()),
+        });
+        let state = Data::new(build_test_state());
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(ProtocolError::InvalidRequest, response.error);
+    }
+
+    #[actix_rt::test]
+    async fn unknown_auth_code_is_rejected() {
+        // Don't register any auth_code
+        let req = test::TestRequest::post().to_http_request();
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some("fdsa".to_string()),
+            client_id: Some(PUBLIC_CLIENT.to_string()),
+            redirect_uri: Some("fdsa".to_string()),
+        });
+        let state = Data::new(build_test_state());
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(ProtocolError::InvalidGrant, response.error);
+    }
+
+    #[actix_rt::test]
+    async fn wrong_redirect_uri_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let redirect_uri = "fdsa".to_string();
+        let state = Data::new(build_test_state());
+        let auth_code = state.auth_code_store.get_authorization_code(PUBLIC_CLIENT, &redirect_uri, Local::now());
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some(auth_code),
+            client_id: Some(PUBLIC_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri + "/wrong"),
+        });
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(ProtocolError::InvalidGrant, response.error);
+    }
+
+    #[actix_rt::test]
+    async fn expired_code_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let redirect_uri = "fdsa".to_string();
+        let state = Data::new(build_test_state());
+        let creation_time = Local::now() - Duration::minutes(2 * AUTH_CODE_LIFE_TIME);
+        let auth_code = state.auth_code_store.get_authorization_code(PUBLIC_CLIENT, &redirect_uri, creation_time);
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some(auth_code),
+            client_id: Some(PUBLIC_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri),
+        });
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(ProtocolError::InvalidGrant, response.error);
+    }
+
+    #[actix_rt::test]
+    async fn valid_token_is_issued() {
+        let req = test::TestRequest::post().to_http_request();
+        let redirect_uri = "fdsa".to_string();
+        let state = Data::new(build_test_state());
+        let auth_code = state.auth_code_store.get_authorization_code(PUBLIC_CLIENT, &redirect_uri, Local::now());
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some(auth_code),
+            client_id: Some(PUBLIC_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri),
+        });
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::OK);
+        let response = read_response::<Response>(resp).await;
+        assert_eq!("dummy_token".to_string(), response.access_token);
+        assert_eq!("bearer".to_string(), response.token_type);
+        assert_eq!(None, response.expires_in);
+        assert_eq!(None, response.refresh_token);
+        assert_eq!(None, response.scope);
+        assert_eq!(None, response.id_token);
+    }
+
+    #[actix_rt::test]
+    async fn confidential_client_without_basic_auth_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let redirect_uri = "fdsa".to_string();
+        let state = Data::new(build_test_state());
+        let auth_code = state.auth_code_store.get_authorization_code(CONFIDENTIAL_CLIENT, &redirect_uri, Local::now());
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some(auth_code),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri),
+        });
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(ProtocolError::InvalidClient, response.error);
+    }
+
+    #[actix_rt::test]
+    async fn unknown_authorization_is_rejected() {
+        let req = test::TestRequest::post()
+            .header("Authorization", "Invalid")
+            .to_http_request();
+        let redirect_uri = "fdsa".to_string();
+        let state = Data::new(build_test_state());
+        let auth_code = state.auth_code_store.get_authorization_code(CONFIDENTIAL_CLIENT, &redirect_uri, Local::now());
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some(auth_code),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri),
+        });
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(ProtocolError::InvalidClient, response.error);
+    }
+
+    #[actix_rt::test]
+    async fn invalid_base64_password_is_rejected() {
+        let req = test::TestRequest::post()
+            .header("Authorization", "Basic invalid")
+            .to_http_request();
+        let redirect_uri = "fdsa".to_string();
+        let state = Data::new(build_test_state());
+        let auth_code = state.auth_code_store.get_authorization_code(CONFIDENTIAL_CLIENT, &redirect_uri, Local::now());
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some(auth_code),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri),
+        });
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(ProtocolError::InvalidClient, response.error);
+    }
+
+    #[actix_rt::test]
+    async fn invalid_utf8_password_is_rejected() {
+        let req = test::TestRequest::post()
+            .header("Authorization", "Basic changeme")
+            .to_http_request();
+        let redirect_uri = "fdsa".to_string();
+        let state = Data::new(build_test_state());
+        let auth_code = state.auth_code_store.get_authorization_code(CONFIDENTIAL_CLIENT, &redirect_uri, Local::now());
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some(auth_code),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri),
+        });
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(ProtocolError::InvalidClient, response.error);
+    }
+
+    #[actix_rt::test]
+    async fn missing_password_is_rejected() {
+        let req = test::TestRequest::post()
+            .header("Authorization", "Basic ".to_string() + &base64::encode("username".as_bytes()))
+            .to_http_request();
+        let redirect_uri = "fdsa".to_string();
+        let state = Data::new(build_test_state());
+        let auth_code = state.auth_code_store.get_authorization_code(CONFIDENTIAL_CLIENT, &redirect_uri, Local::now());
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some(auth_code),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri),
+        });
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(ProtocolError::InvalidClient, response.error);
+    }
+
+    #[actix_rt::test]
+    async fn issue_valid_token_for_correct_password() {
+        let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
+        let encoded_auth = base64::encode(auth);
+        let req = test::TestRequest::post()
+            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .to_http_request();
+        let redirect_uri = "fdsa".to_string();
+        let state = Data::new(build_test_state());
+        let auth_code = state.auth_code_store.get_authorization_code(CONFIDENTIAL_CLIENT, &redirect_uri, Local::now());
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some(auth_code),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri),
+        });
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::OK);
+        let response = read_response::<Response>(resp).await;
+        assert_eq!("dummy_token".to_string(), response.access_token);
+        assert_eq!("bearer".to_string(), response.token_type);
+        assert_eq!(None, response.expires_in);
+        assert_eq!(None, response.refresh_token);
+        assert_eq!(None, response.scope);
+        assert_eq!(None, response.id_token);
     }
 }
