@@ -17,8 +17,7 @@
 
 pub mod endpoints;
 mod state;
-
-use std::collections::HashMap;
+mod tera;
 
 use actix_web::web;
 use actix_web::App;
@@ -27,34 +26,16 @@ use actix_web::cookie::SameSite;
 
 use actix_session::CookieSession;
 
-use tera::Tera;
-use tera::Result;
-use tera::Value;
-
 use crate::config;
 use crate::store::memory::MemoryClientStore;
 use crate::store::memory::MemoryUserStore;
 use crate::store::memory::MemoryAuthorizationCodeStore;
 
-use log::warn;
-
 #[actix_rt::main]
 pub async fn run(web: config::Web) -> std::io::Result<()> {
     let bind = web.bind.clone();
 
-    let template_path = web.static_files.clone() + "/templates/";
-
-    let mut tera = match Tera::new(&(template_path.clone() + "**/*")) {
-        Ok(t) => t,
-        Err(e) => {
-            warn!("Parsing error(s): {}", e);
-            ::std::process::exit(1);
-        }
-    };
-
-    tera.register_function("url", url_mapper);
-    tera.register_function("translate", translator);
-    tera.register_function("static", static_mapper);
+    let tera = tera::load_template_engine(&web.static_files);
 
     let state = web::Data::new(state::State {
         tera: tera,
@@ -91,25 +72,4 @@ pub async fn run(web: config::Web) -> std::io::Result<()> {
     .bind(&bind)?
     .run()
     .await
-}
-
-fn url_mapper(args: &HashMap<String, Value>) -> Result<Value> {
-    match args.get("name") {
-        Some(val) => Ok(val.clone()),
-        None => Err("oops".into()),
-    }
-}
-
-fn translator(args: &HashMap<String, Value>) -> Result<Value> {
-    match args.get("term") {
-        Some(val) => Ok(val.clone()),
-        None => Err("oops".into()),
-    }
-}
-
-fn static_mapper(args: &HashMap<String, Value>) -> Result<Value> {
-    match args.get("name") {
-        Some(val) => Ok(val.clone()),
-        None => Err("oops".into()),
-    }
 }

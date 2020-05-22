@@ -37,3 +37,84 @@ pub trait AuthorizationCodeStore: Send + Sync {
 
     fn validate(&self, client_id: &str, authorization_code: &str, now: DateTime<Local>) -> Option<(String, Duration)>;
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+
+    use crate::domain::user::User;
+    use crate::domain::client::Client;
+    use crate::protocol::oauth2::ClientType;
+
+    struct TestUserStore {}
+
+    impl UserStore for TestUserStore {
+        fn get(&self, key: &str) -> Option<User> {
+            match key {
+                "user1" | "user2" | "user3" => Some(User {
+                    name: key.to_string(),
+                    password: key.to_string(),
+                }),
+                _ => None
+            }
+        }
+    }
+
+    pub fn build_test_user_store() -> Box<impl UserStore> {
+        Box::new(TestUserStore{})
+    }
+
+    struct TestClientStore {}
+
+    impl ClientStore for TestClientStore {
+        fn get(&self, key: &str) -> Option<Client> {
+            match key {
+                "client1" => Some(Client {
+                    client_id: key.to_string(),
+                    client_type: ClientType::Confidential{
+                        password: "client1".to_string(),
+                    },
+                    redirect_uris: vec!["http://localhost/client1".to_string()],
+                }),
+                "client2" => Some(Client {
+                    client_id: key.to_string(),
+                    client_type: ClientType::Public,
+                    redirect_uris: vec!["http://localhost/client2".to_string()],
+                }),
+                _ => None
+            }
+        }
+    }
+
+    pub fn build_test_client_store() -> Box<impl ClientStore> {
+        Box::new(TestClientStore{})
+    }
+
+    struct TestAuthorizationCodeStore {
+        store: RefCell<HashMap<(String, String), (String, DateTime<Local>)>>,
+    }
+
+    unsafe impl Sync for TestAuthorizationCodeStore {}
+    unsafe impl Send for TestAuthorizationCodeStore {}
+
+    impl AuthorizationCodeStore for TestAuthorizationCodeStore {
+        fn get_authorization_code(&self, client_id: &str, redirect_uri: &str, now: DateTime<Local>) -> String {
+            self.store.borrow_mut().insert((client_id.to_string(), now.to_rfc3339()), (redirect_uri.to_string(), now));
+            now.to_rfc3339()
+        }
+
+        fn validate(&self, client_id: &str, authorization_code: &str, now: DateTime<Local>) -> Option<(String, Duration)> {
+            let (redirect_uri, creation_datetime) = self.store.borrow_mut().remove(&(client_id.to_string(), authorization_code.to_string()))?;
+            Some((redirect_uri, now.signed_duration_since(creation_datetime)))
+        }
+    }
+
+    pub fn build_test_auth_code_store() -> Box<impl AuthorizationCodeStore> {
+        Box::new(TestAuthorizationCodeStore {
+            store: RefCell::new(HashMap::new()),
+        })
+    }
+}

@@ -34,7 +34,9 @@ pub struct ErrorResponse {
 #[derive(PartialEq, Eq)]
 pub enum ClientType {
     Public,
-    Confidential,
+    Confidential{
+        password: String,
+    },
 }
 
 #[derive(Deserialize, PartialEq, Eq)]
@@ -61,8 +63,7 @@ pub enum ResponseType {
     Token,
 }
 
-#[derive(Serialize)]
-#[serde(untagged)]
+#[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ProtocolError {
     // https://tools.ietf.org/html/rfc6749#section-4.1.2.1
 

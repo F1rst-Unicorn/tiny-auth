@@ -112,7 +112,7 @@ pub async fn post(headers: HttpRequest, mut request: web::Form<Request>, state: 
 
     let client = client.unwrap();
 
-    if client.client_type == ClientType::Confidential {
+    if let ClientType::Confidential{..} = client.client_type {
         let (client_name, password) = match headers.headers().get("Authorization") {
             Some(value) => {
                 let value = value.to_str();
@@ -188,4 +188,35 @@ pub async fn post(headers: HttpRequest, mut request: web::Form<Request>, state: 
             scope: None,
             id_token: None,
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use actix_web::test;
+    use actix_web::http;
+    use actix_web::web::Data;
+    use actix_web::web::Form;
+
+    use crate::http::endpoints::ErrorResponse;
+    use crate::http::endpoints::tests::read_response;
+    use crate::http::state::tests::build_test_state;
+    use crate::protocol::oauth2::ProtocolError;
+
+    #[actix_rt::test]
+    async fn missing_grant_type_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let form = Form(Request {
+            grant_type: None,
+            code: Some("fdsa".to_string()),
+            client_id: Some("fdsa".to_string()),
+            redirect_uri: Some("fdsa".to_string()),
+        });
+        let state = Data::new(build_test_state());
+        let resp = post(req, form, state).await;
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(ProtocolError::InvalidRequest, response.error);
+    }
 }

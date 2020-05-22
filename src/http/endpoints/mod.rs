@@ -28,6 +28,7 @@ use actix_web::HttpResponse;
 use url::Url;
 
 use serde_derive::Serialize;
+use serde_derive::Deserialize;
 
 pub fn missing_parameter(redirect_uri: &str, error: ProtocolError, description: &str, state: &Option<String>) -> HttpResponse {
     let mut url = Url::parse(redirect_uri).expect("should have been validated upon registration");
@@ -46,7 +47,7 @@ pub fn missing_parameter(redirect_uri: &str, error: ProtocolError, description: 
         .finish()
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct ErrorResponse {
     error: ProtocolError,
 
@@ -79,4 +80,22 @@ pub fn server_error(tera: &tera::Tera) -> HttpResponse {
             HttpResponse::InternalServerError().finish()
         }
     } 
+}
+
+#[cfg(test)]
+mod tests {
+
+    use actix_web::HttpResponse;
+    use actix_web::web::BytesMut;
+    use serde::de::DeserializeOwned;
+    use futures::stream::StreamExt;
+
+    pub async fn read_response<T: DeserializeOwned>(mut resp: HttpResponse) -> T {
+        let mut body = resp.take_body();
+        let mut bytes = BytesMut::new();
+        while let Some(item) = body.next().await {
+            bytes.extend_from_slice(&item.unwrap());
+        }
+        serde_json::from_slice::<T>(&bytes).expect("Failed to deserialize response")
+    }
 }

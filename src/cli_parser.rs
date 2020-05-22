@@ -18,7 +18,6 @@
 use clap::App;
 use clap::Arg;
 
-pub const FLAG_VERBOSE: &str = "verbose";
 pub const FLAG_CONFIG: &str = "config";
 pub const FLAG_LOG_CONFIG: &str = "log";
 

@@ -30,3 +30,18 @@ pub struct State {
 
     pub auth_code_store: Box<dyn AuthorizationCodeStore>,
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use super::super::tera::load_template_engine;
+
+    pub fn build_test_state() -> State {
+        State {
+            tera: load_template_engine(&(env!("CARGO_MANIFEST_DIR").to_string() + "/static/")),
+            client_store: crate::store::tests::build_test_client_store(),
+            user_store: crate::store::tests::build_test_user_store(),
+            auth_code_store: crate::store::tests::build_test_auth_code_store(),
+        }
+    }
+}

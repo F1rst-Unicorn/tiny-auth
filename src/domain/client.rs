@@ -17,6 +17,8 @@
 
 use crate::protocol::oauth2::ClientType;
 
+use log::error;
+
 pub struct Client {
     pub client_id: String,
 
@@ -31,6 +33,15 @@ impl Client {
     }
 
     pub fn is_password_correct(&self, password: &str) -> bool {
-        true
+        match &self.client_type {
+            ClientType::Public => {
+                error!("verified password on public client '{}'", self.client_id);
+                true
+            },
+
+            ClientType::Confidential{password: stored_password} => {
+                stored_password == password
+            }
+        }
     }
 }
