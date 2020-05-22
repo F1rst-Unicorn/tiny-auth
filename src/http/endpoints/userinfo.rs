@@ -15,10 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use actix_web::HttpRequest;
 use actix_web::HttpResponse;
-use actix_web::Responder;
 
-pub async fn get(request: HttpRequest) -> impl Responder {
+pub async fn get() -> HttpResponse {
     HttpResponse::Ok().finish()
 }

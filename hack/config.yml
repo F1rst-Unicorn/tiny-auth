@@ -21,3 +21,4 @@ web:
   domain: localhost
   static_files: static
   session_timeout: 60000
+  secret_key: jxbvDbbsgJyh1x2HG8V8rqKsD4vW45aIYcNopFuYdPdSvyKSVB54CWmCinCC1iv912AIkEfWB9kVDeliANle5Acc

@@ -31,7 +31,7 @@ impl Config {
         Default::default()
     }
 
-    pub fn merge(self, mut other: Self) -> Config {
+    pub fn merge(self, other: Self) -> Config {
         other
     }
 }
@@ -54,6 +54,8 @@ pub struct Web {
 
     #[serde(default = "default_session_timeout")]
     pub session_timeout: Option<i64>,
+
+    pub secret_key: String,
 }
 
 fn default_path() -> Option<String> {

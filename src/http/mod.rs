@@ -48,7 +48,7 @@ pub async fn run(web: config::Web) -> std::io::Result<()> {
         App::new()
             .app_data(state.clone())
             .wrap(
-                CookieSession::private(&[119; 32])
+                CookieSession::private(web.secret_key.as_bytes())
                     // ^- encryption is only needed to avoid encoding problems
                     .domain(&web.domain)
                     .name("session")
