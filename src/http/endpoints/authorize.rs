@@ -161,7 +161,6 @@ pub async fn post(
         info!("client '{}' not found", client_id);
         return render_invalid_client_id_error(&state.tera);
     }
-
     let client = client.expect("checked before");
 
     if !client.is_redirect_uri_valid(&redirect_uri) {
@@ -209,7 +208,7 @@ pub async fn post(
         .finish()
 }
 
-pub fn render_invalid_client_id_error(tera: &Tera) -> HttpResponse {
+fn render_invalid_client_id_error(tera: &Tera) -> HttpResponse {
     let body = tera.render("invalid_client_id.html.j2", &Context::new());
     match body {
         Ok(body) => HttpResponse::BadRequest()
@@ -222,7 +221,7 @@ pub fn render_invalid_client_id_error(tera: &Tera) -> HttpResponse {
     }
 }
 
-pub fn render_invalid_redirect_uri_error(tera: &Tera) -> HttpResponse {
+fn render_invalid_redirect_uri_error(tera: &Tera) -> HttpResponse {
     let body = tera.render("invalid_redirect_uri.html.j2", &Context::new());
     match body {
         Ok(body) => HttpResponse::BadRequest()
@@ -232,5 +231,244 @@ pub fn render_invalid_redirect_uri_error(tera: &Tera) -> HttpResponse {
             log::warn!("{}", e);
             server_error(tera)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use actix_web::http;
+    use actix_web::test;
+    use actix_web::web::Data;
+    use actix_web::web::Query;
+    use actix_session::UserSession;
+
+    use url::Url;
+
+    use crate::http::state::tests::build_test_state;
+    use crate::store::tests::CONFIDENTIAL_CLIENT;
+    use crate::store::tests::UNKNOWN_CLIENT_ID;
+
+    #[actix_rt::test]
+    async fn missing_client_id_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let session = req.get_session();
+        let query = Query(Request {
+            scope: None,
+            response_type: None,
+            client_id: None,
+            redirect_uri: None,
+            state: None,
+            response_mode: None,
+            nonce: None,
+            display: None,
+            prompt: None,
+            max_age: None,
+            ui_locales: None,
+            id_token_hint: None,
+            login_hint: None,
+            acr_values: None,
+        });
+        let state = Data::new(build_test_state());
+
+        let resp = post(query, state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn missiong_redirect_uri_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let session = req.get_session();
+        let query = Query(Request {
+            scope: None,
+            response_type: None,
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: None,
+            state: None,
+            response_mode: None,
+            nonce: None,
+            display: None,
+            prompt: None,
+            max_age: None,
+            ui_locales: None,
+            id_token_hint: None,
+            login_hint: None,
+            acr_values: None,
+        });
+        let state = Data::new(build_test_state());
+
+        let resp = post(query, state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn unknown_client_id_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let session = req.get_session();
+        let query = Query(Request {
+            scope: None,
+            response_type: None,
+            client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
+            redirect_uri: None,
+            state: None,
+            response_mode: None,
+            nonce: None,
+            display: None,
+            prompt: None,
+            max_age: None,
+            ui_locales: None,
+            id_token_hint: None,
+            login_hint: None,
+            acr_values: None,
+        });
+        let state = Data::new(build_test_state());
+
+        let resp = post(query, state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn unregistered_redirect_uri_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let session = req.get_session();
+        let query = Query(Request {
+            scope: None,
+            response_type: None,
+            client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
+            redirect_uri: Some("invalid".to_string()),
+            state: None,
+            response_mode: None,
+            nonce: None,
+            display: None,
+            prompt: None,
+            max_age: None,
+            ui_locales: None,
+            id_token_hint: None,
+            login_hint: None,
+            acr_values: None,
+        });
+        let state = Data::new(build_test_state());
+
+        let resp = post(query, state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn missing_scope_is_redirected() {
+        let req = test::TestRequest::post().to_http_request();
+        let session = req.get_session();
+        let state = Data::new(build_test_state());
+        let redirect_uri = state.client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let client_state = "somestate".to_string();
+        let query = Query(Request {
+            scope: None,
+            response_type: None,
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri.to_string()),
+            state: Some(client_state.clone()),
+            response_mode: None,
+            nonce: None,
+            display: None,
+            prompt: None,
+            max_age: None,
+            ui_locales: None,
+            id_token_hint: None,
+            login_hint: None,
+            acr_values: None,
+        });
+
+        let resp = post(query, state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
+
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let url = Url::parse(url).unwrap();
+        let expected_url = Url::parse(&redirect_uri).unwrap();
+
+        assert_eq!(expected_url.scheme(), url.scheme());
+        assert_eq!(expected_url.domain(), url.domain());
+        assert_eq!(expected_url.port(), url.port());
+        assert_eq!(expected_url.path(), url.path());
+        let expected_error = format!("{}", ProtocolError::InvalidRequest);
+        assert!(url.query_pairs().into_owned().any(|param| param == ("state".to_string(), client_state.to_string())));
+        assert!(url.query_pairs().into_owned().any(|param| param == ("error".to_string(), expected_error.to_string())));
+    }
+
+    #[actix_rt::test]
+    async fn missing_response_type_is_redirected() {
+        let req = test::TestRequest::post().to_http_request();
+        let session = req.get_session();
+        let state = Data::new(build_test_state());
+        let redirect_uri = state.client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let client_state = "somestate".to_string();
+        let query = Query(Request {
+            scope: Some("email".to_string()),
+            response_type: None,
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri.to_string()),
+            state: Some(client_state.clone()),
+            response_mode: None,
+            nonce: None,
+            display: None,
+            prompt: None,
+            max_age: None,
+            ui_locales: None,
+            id_token_hint: None,
+            login_hint: None,
+            acr_values: None,
+        });
+
+        let resp = post(query, state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
+
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let url = Url::parse(url).unwrap();
+        let expected_url = Url::parse(&redirect_uri).unwrap();
+
+        assert_eq!(expected_url.scheme(), url.scheme());
+        assert_eq!(expected_url.domain(), url.domain());
+        assert_eq!(expected_url.port(), url.port());
+        assert_eq!(expected_url.path(), url.path());
+        let expected_error = format!("{}", ProtocolError::InvalidRequest);
+        assert!(url.query_pairs().into_owned().any(|param| param == ("state".to_string(), client_state.to_string())));
+        assert!(url.query_pairs().into_owned().any(|param| param == ("error".to_string(), expected_error.to_string())));
+    }
+
+    #[actix_rt::test]
+    async fn successful_authorization_is_redirected() {
+        let req = test::TestRequest::post().to_http_request();
+        let session = req.get_session();
+        let state = Data::new(build_test_state());
+        let redirect_uri = state.client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let client_state = "somestate".to_string();
+        let query = Query(Request {
+            scope: Some("email".to_string()),
+            response_type: Some(ResponseType::Code),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri.to_string()),
+            state: Some(client_state.clone()),
+            response_mode: None,
+            nonce: None,
+            display: None,
+            prompt: None,
+            max_age: None,
+            ui_locales: None,
+            id_token_hint: None,
+            login_hint: None,
+            acr_values: None,
+        });
+
+        let resp = post(query, state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        assert_eq!("authenticate", url);
     }
 }
