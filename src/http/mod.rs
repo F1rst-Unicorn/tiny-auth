@@ -19,17 +19,17 @@ pub mod endpoints;
 mod state;
 mod tera;
 
+use actix_web::cookie::SameSite;
 use actix_web::web;
 use actix_web::App;
 use actix_web::HttpServer;
-use actix_web::cookie::SameSite;
 
 use actix_session::CookieSession;
 
 use crate::config;
+use crate::store::memory::MemoryAuthorizationCodeStore;
 use crate::store::memory::MemoryClientStore;
 use crate::store::memory::MemoryUserStore;
-use crate::store::memory::MemoryAuthorizationCodeStore;
 
 #[actix_rt::main]
 pub async fn run(web: config::Web) -> std::io::Result<()> {
@@ -39,23 +39,24 @@ pub async fn run(web: config::Web) -> std::io::Result<()> {
 
     let state = web::Data::new(state::State {
         tera: tera,
-        client_store: Box::new(MemoryClientStore{}),
-        user_store: Box::new(MemoryUserStore{}),
-        auth_code_store: Box::new(MemoryAuthorizationCodeStore{}),
+        client_store: Box::new(MemoryClientStore {}),
+        user_store: Box::new(MemoryUserStore {}),
+        auth_code_store: Box::new(MemoryAuthorizationCodeStore {}),
     });
 
     HttpServer::new(move || {
         App::new()
             .app_data(state.clone())
-            .wrap(CookieSession::private(&[119; 32])
-                // ^- encryption is only needed to avoid encoding problems
-                .domain(&web.domain)
-                .name("session")
-                .path(web.path.as_ref().expect("no default given"))
-                .secure(web.tls.is_some())
-                .http_only(true)
-                .same_site(SameSite::Strict)
-                .max_age(web.session_timeout.expect("no default given"))
+            .wrap(
+                CookieSession::private(&[119; 32])
+                    // ^- encryption is only needed to avoid encoding problems
+                    .domain(&web.domain)
+                    .name("session")
+                    .path(web.path.as_ref().expect("no default given"))
+                    .secure(web.tls.is_some())
+                    .http_only(true)
+                    .same_site(SameSite::Strict)
+                    .max_age(web.session_timeout.expect("no default given")),
             )
             .service(
                 web::scope(&web.path.as_ref().expect("no default given"))
@@ -64,9 +65,12 @@ pub async fn run(web: config::Web) -> std::io::Result<()> {
                     .route("/token", web::post().to(endpoints::token::post))
                     .route("/userinfo", web::get().to(endpoints::userinfo::get))
                     .route("/authenticate", web::get().to(endpoints::authenticate::get))
-                    .route("/authenticate", web::post().to(endpoints::authenticate::post))
+                    .route(
+                        "/authenticate",
+                        web::post().to(endpoints::authenticate::post),
+                    )
                     .route("/consent", web::get().to(endpoints::consent::get))
-                    .route("/consent", web::post().to(endpoints::consent::post))
+                    .route("/consent", web::post().to(endpoints::consent::post)),
             )
     })
     .bind(&bind)?

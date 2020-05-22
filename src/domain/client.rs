@@ -37,11 +37,11 @@ impl Client {
             ClientType::Public => {
                 error!("verified password on public client '{}'", self.client_id);
                 true
-            },
-
-            ClientType::Confidential{password: stored_password} => {
-                stored_password == password
             }
+
+            ClientType::Confidential {
+                password: stored_password,
+            } => stored_password == password,
         }
     }
 }

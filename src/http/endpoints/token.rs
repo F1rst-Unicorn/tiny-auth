@@ -15,9 +15,9 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use actix_web::web;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
-use actix_web::web;
 
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
@@ -29,11 +29,11 @@ use base64;
 
 use log::debug;
 
-use crate::protocol::oauth2::GrantType;
-use crate::protocol::oauth2::ProtocolError;
-use crate::protocol::oauth2::ClientType;
 use crate::http::endpoints::render_missing_paramter_with_response;
 use crate::http::state::State;
+use crate::protocol::oauth2::ClientType;
+use crate::protocol::oauth2::GrantType;
+use crate::protocol::oauth2::ProtocolError;
 
 #[derive(Deserialize)]
 pub struct Request {
@@ -79,27 +79,46 @@ impl Request {
     }
 }
 
-pub async fn post(headers: HttpRequest, mut request: web::Form<Request>, state: web::Data<State>) -> HttpResponse {
+pub async fn post(
+    headers: HttpRequest,
+    mut request: web::Form<Request>,
+    state: web::Data<State>,
+) -> HttpResponse {
     request.normalise();
 
     if request.grant_type.is_none() {
-        return render_missing_paramter_with_response(ProtocolError::InvalidRequest, "Missing parameter grant_type");
+        return render_missing_paramter_with_response(
+            ProtocolError::InvalidRequest,
+            "Missing parameter grant_type",
+        );
     }
 
     if request.grant_type.as_ref().unwrap() != &GrantType::AuthorizationCode {
-        return render_missing_paramter_with_response(ProtocolError::UnsupportedGrantType, "grant_type must be authorization_code");
+        return render_missing_paramter_with_response(
+            ProtocolError::UnsupportedGrantType,
+            "grant_type must be authorization_code",
+        );
     }
 
     if request.code.is_none() {
-        return render_missing_paramter_with_response(ProtocolError::InvalidRequest, "Missing parameter code");
+        return render_missing_paramter_with_response(
+            ProtocolError::InvalidRequest,
+            "Missing parameter code",
+        );
     }
 
     if request.redirect_uri.is_none() {
-        return render_missing_paramter_with_response(ProtocolError::InvalidRequest, "Missing parameter redirect_uri");
+        return render_missing_paramter_with_response(
+            ProtocolError::InvalidRequest,
+            "Missing parameter redirect_uri",
+        );
     }
 
     if request.client_id.is_none() {
-        return render_missing_paramter_with_response(ProtocolError::InvalidRequest, "Missing parameter client_id");
+        return render_missing_paramter_with_response(
+            ProtocolError::InvalidRequest,
+            "Missing parameter client_id",
+        );
     }
 
     let client_id = request.client_id.as_ref().unwrap();
@@ -107,64 +126,98 @@ pub async fn post(headers: HttpRequest, mut request: web::Form<Request>, state: 
 
     if client.is_none() {
         debug!("client '{}' not found", client_id);
-        return render_missing_paramter_with_response(ProtocolError::InvalidRequest, "client id or password wrong");
+        return render_missing_paramter_with_response(
+            ProtocolError::InvalidRequest,
+            "client id or password wrong",
+        );
     }
 
     let client = client.unwrap();
 
-    if let ClientType::Confidential{..} = client.client_type {
+    if let ClientType::Confidential { .. } = client.client_type {
         let (client_name, password) = match headers.headers().get("Authorization") {
             Some(value) => {
                 let value = value.to_str();
                 if let Err(e) = value {
                     debug!("decoding of authorization header failed. {}", e);
-                    return render_missing_paramter_with_response(ProtocolError::InvalidClient, "Invalid authorization header");
+                    return render_missing_paramter_with_response(
+                        ProtocolError::InvalidClient,
+                        "Invalid authorization header",
+                    );
                 }
                 let value = value.unwrap().to_string();
-    
+
                 if !value.starts_with("Basic ") {
                     debug!("Malformed HTTP basic authorization header '{}'", value);
-                    return render_missing_paramter_with_response(ProtocolError::InvalidClient, "Invalid authorization header");
+                    return render_missing_paramter_with_response(
+                        ProtocolError::InvalidClient,
+                        "Invalid authorization header",
+                    );
                 }
                 let value = value.replacen("Basic ", "", 1);
-    
+
                 let credentials = base64::decode(value);
                 if let Err(e) = credentials {
                     debug!("base64 decoding of authorization header failed. {}", e);
-                    return render_missing_paramter_with_response(ProtocolError::InvalidClient, "Invalid authorization header");
+                    return render_missing_paramter_with_response(
+                        ProtocolError::InvalidClient,
+                        "Invalid authorization header",
+                    );
                 }
                 let credentials = credentials.unwrap();
-    
+
                 let credentials = String::from_utf8(credentials);
                 if let Err(e) = credentials {
                     debug!("utf-8 decoding of authorization header failed. {}", e);
-                    return render_missing_paramter_with_response(ProtocolError::InvalidClient, "Invalid authorization header");
+                    return render_missing_paramter_with_response(
+                        ProtocolError::InvalidClient,
+                        "Invalid authorization header",
+                    );
                 }
                 let credentials = credentials.unwrap();
-    
+
                 let split: Vec<String> = credentials.splitn(2, ':').map(str::to_string).collect();
                 if split.len() == 2 {
                     (split[0].clone(), split[1].clone())
                 } else {
-                    return render_missing_paramter_with_response(ProtocolError::InvalidClient, "Invalid authorization header");
+                    return render_missing_paramter_with_response(
+                        ProtocolError::InvalidClient,
+                        "Invalid authorization header",
+                    );
                 }
             }
-            None => return render_missing_paramter_with_response(ProtocolError::InvalidClient, "Missing authorization header")
+            None => {
+                return render_missing_paramter_with_response(
+                    ProtocolError::InvalidClient,
+                    "Missing authorization header",
+                )
+            }
         };
-    
+
         if *client_id != client_name {
-            return render_missing_paramter_with_response(ProtocolError::InvalidClient, "Invalid authorization header");
+            return render_missing_paramter_with_response(
+                ProtocolError::InvalidClient,
+                "Invalid authorization header",
+            );
         }
-    
+
         if !client.is_password_correct(&password) {
-            return render_missing_paramter_with_response(ProtocolError::InvalidClient, "client id or password wrong");
+            return render_missing_paramter_with_response(
+                ProtocolError::InvalidClient,
+                "client id or password wrong",
+            );
         }
     }
 
     let code = request.code.as_ref().unwrap();
-    let stored_redirect_uri = state.auth_code_store.validate(client_id, &code, Local::now());
+    let stored_redirect_uri = state
+        .auth_code_store
+        .validate(client_id, &code, Local::now());
     if stored_redirect_uri.is_none() {
-        debug!("No authorization code found for client '{}' with code '{}'", client_id, code);
+        debug!(
+            "No authorization code found for client '{}' with code '{}'",
+            client_id, code
+        );
         return render_missing_paramter_with_response(ProtocolError::InvalidGrant, "Invalid code");
     }
     let stored_redirect_uri = stored_redirect_uri.unwrap();
@@ -179,28 +232,27 @@ pub async fn post(headers: HttpRequest, mut request: web::Form<Request>, state: 
         return render_missing_paramter_with_response(ProtocolError::InvalidGrant, "Invalid code");
     }
 
-    HttpResponse::Ok()
-        .json(Response {
-            access_token: "dummy_token".to_string(),
-            token_type: "bearer".to_string(),
-            expires_in: None,
-            refresh_token: None,
-            scope: None,
-            id_token: None,
-        })
+    HttpResponse::Ok().json(Response {
+        access_token: "dummy_token".to_string(),
+        token_type: "bearer".to_string(),
+        expires_in: None,
+        refresh_token: None,
+        scope: None,
+        id_token: None,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use actix_web::test;
     use actix_web::http;
+    use actix_web::test;
     use actix_web::web::Data;
     use actix_web::web::Form;
 
-    use crate::http::endpoints::ErrorResponse;
     use crate::http::endpoints::tests::read_response;
+    use crate::http::endpoints::ErrorResponse;
     use crate::http::state::tests::build_test_state;
     use crate::protocol::oauth2::ProtocolError;
 

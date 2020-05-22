@@ -34,9 +34,7 @@ pub struct ErrorResponse {
 #[derive(PartialEq, Eq)]
 pub enum ClientType {
     Public,
-    Confidential{
-        password: String,
-    },
+    Confidential { password: String },
 }
 
 #[derive(Deserialize, PartialEq, Eq)]
@@ -56,20 +54,19 @@ pub enum GrantType {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ResponseType {
-    #[serde(rename = "code")] 
+    #[serde(rename = "code")]
     Code,
 
-    #[serde(rename = "token")] 
+    #[serde(rename = "token")]
     Token,
 }
 
 #[derive(Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ProtocolError {
     // https://tools.ietf.org/html/rfc6749#section-4.1.2.1
-
     #[serde(rename = "invalid_request")]
     InvalidRequest,
-    
+
     #[serde(rename = "unauthorized_client")]
     UnauthorizedClient,
 
@@ -89,31 +86,29 @@ pub enum ProtocolError {
     TemporarilyUnavailable,
 
     // https://tools.ietf.org/html/rfc6749#section-5.2
-
     #[serde(rename = "invalid_client")]
     InvalidClient,
 
     #[serde(rename = "invalid_grant")]
     InvalidGrant,
-    
+
     #[serde(rename = "unsupported_grant_type")]
     UnsupportedGrantType,
 }
 
 impl Display for ProtocolError {
-
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> { 
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         let value = match self {
             ProtocolError::InvalidRequest => "invalid_request",
-            ProtocolError::UnauthorizedClient=> "unauthorized_client",
-            ProtocolError::AccessDenied=> "access_denied",
-            ProtocolError::UnsupportedResponseType=> "unsupported_response_type",
-            ProtocolError::InvalidScope=> "invalid_scope",
-            ProtocolError::ServerError=> "server_error",
-            ProtocolError::TemporarilyUnavailable=> "temporary_unavailable",
+            ProtocolError::UnauthorizedClient => "unauthorized_client",
+            ProtocolError::AccessDenied => "access_denied",
+            ProtocolError::UnsupportedResponseType => "unsupported_response_type",
+            ProtocolError::InvalidScope => "invalid_scope",
+            ProtocolError::ServerError => "server_error",
+            ProtocolError::TemporarilyUnavailable => "temporary_unavailable",
             ProtocolError::InvalidClient => "invalid_client",
             ProtocolError::InvalidGrant => "invalid_grant",
-            ProtocolError::UnsupportedGrantType=> "unsupported_grant_type",
+            ProtocolError::UnsupportedGrantType => "unsupported_grant_type",
         };
         write!(f, "{}", value)
     }

@@ -15,8 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use actix_web::HttpResponse;
 use actix_web::web;
+use actix_web::HttpResponse;
 
 use actix_session::Session;
 
@@ -26,13 +26,13 @@ use chrono::offset::Local;
 
 use tera::Context;
 
-use log::error;
 use log::debug;
+use log::error;
 
-use crate::http::state::State;
-use crate::http::endpoints::authorize;
 use crate::http::endpoints::authenticate;
+use crate::http::endpoints::authorize;
 use crate::http::endpoints::server_error;
+use crate::http::state::State;
 
 pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
     let first_request = session.get::<String>(authorize::SESSION_KEY);
@@ -70,7 +70,8 @@ pub async fn post(session: Session, state: web::Data<State>) -> HttpResponse {
         return render_invalid_consent_request(&state.tera);
     }
 
-    let first_request_result = serde_urlencoded::from_str::<authorize::Request>(&first_request.unwrap().unwrap());
+    let first_request_result =
+        serde_urlencoded::from_str::<authorize::Request>(&first_request.unwrap().unwrap());
 
     if let Err(e) = first_request_result {
         error!("Failed to deserialize initial request. {}", e);
@@ -81,13 +82,16 @@ pub async fn post(session: Session, state: web::Data<State>) -> HttpResponse {
     let redirect_uri = first_request.redirect_uri.unwrap();
     let mut url = Url::parse(&redirect_uri).expect("should have been validated upon registration");
 
-    let code = state.auth_code_store.get_authorization_code(first_request.client_id.as_ref().unwrap(), &redirect_uri, Local::now());
+    let code = state.auth_code_store.get_authorization_code(
+        first_request.client_id.as_ref().unwrap(),
+        &redirect_uri,
+        Local::now(),
+    );
 
     url.query_pairs_mut().append_pair("code", &code);
 
     if let Some(state) = first_request.state {
-        url.query_pairs_mut()
-            .append_pair("state", &state);
+        url.query_pairs_mut().append_pair("state", &state);
     }
 
     HttpResponse::SeeOther()

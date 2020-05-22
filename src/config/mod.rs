@@ -63,7 +63,6 @@ fn default_path() -> Option<String> {
 fn default_session_timeout() -> Option<i64> {
     Some(3600)
 }
- 
 
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Tls {

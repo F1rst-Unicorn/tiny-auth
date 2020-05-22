@@ -17,9 +17,9 @@
 
 use tera::Tera;
 
+use crate::store::AuthorizationCodeStore;
 use crate::store::ClientStore;
 use crate::store::UserStore;
-use crate::store::AuthorizationCodeStore;
 
 pub struct State {
     pub tera: Tera,
@@ -33,8 +33,8 @@ pub struct State {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
     use super::super::tera::load_template_engine;
+    use super::*;
 
     pub fn build_test_state() -> State {
         State {

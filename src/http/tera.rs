@@ -17,8 +17,8 @@
 
 use std::collections::HashMap;
 
-use tera::Tera;
 use tera::Result;
+use tera::Tera;
 use tera::Value;
 
 use log::error;

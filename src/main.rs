@@ -28,8 +28,11 @@ use log::info;
 
 fn main() -> std::io::Result<()> {
     let arguments = cli_parser::parse_arguments();
-    logging::initialise(arguments.value_of(cli_parser::FLAG_LOG_CONFIG)
-        .expect("Missing default value in cli_parser"));
+    logging::initialise(
+        arguments
+            .value_of(cli_parser::FLAG_LOG_CONFIG)
+            .expect("Missing default value in cli_parser"),
+    );
 
     info!("Starting up");
 

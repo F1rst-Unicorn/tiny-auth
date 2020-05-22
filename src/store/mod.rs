@@ -17,12 +17,12 @@
 
 pub mod memory;
 
-use crate::domain::user::User;
 use crate::domain::client::Client;
+use crate::domain::user::User;
 
 use chrono::DateTime;
-use chrono::Local;
 use chrono::Duration;
+use chrono::Local;
 
 pub trait UserStore: Send + Sync {
     fn get(&self, key: &str) -> Option<User>;
@@ -33,9 +33,19 @@ pub trait ClientStore: Send + Sync {
 }
 
 pub trait AuthorizationCodeStore: Send + Sync {
-    fn get_authorization_code(&self, client_id: &str, redirect_uri: &str, now: DateTime<Local>) -> String;
+    fn get_authorization_code(
+        &self,
+        client_id: &str,
+        redirect_uri: &str,
+        now: DateTime<Local>,
+    ) -> String;
 
-    fn validate(&self, client_id: &str, authorization_code: &str, now: DateTime<Local>) -> Option<(String, Duration)>;
+    fn validate(
+        &self,
+        client_id: &str,
+        authorization_code: &str,
+        now: DateTime<Local>,
+    ) -> Option<(String, Duration)>;
 }
 
 #[cfg(test)]
@@ -45,8 +55,8 @@ pub mod tests {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
-    use crate::domain::user::User;
     use crate::domain::client::Client;
+    use crate::domain::user::User;
     use crate::protocol::oauth2::ClientType;
 
     struct TestUserStore {}
@@ -58,13 +68,13 @@ pub mod tests {
                     name: key.to_string(),
                     password: key.to_string(),
                 }),
-                _ => None
+                _ => None,
             }
         }
     }
 
     pub fn build_test_user_store() -> Box<impl UserStore> {
-        Box::new(TestUserStore{})
+        Box::new(TestUserStore {})
     }
 
     struct TestClientStore {}
@@ -74,7 +84,7 @@ pub mod tests {
             match key {
                 "client1" => Some(Client {
                     client_id: key.to_string(),
-                    client_type: ClientType::Confidential{
+                    client_type: ClientType::Confidential {
                         password: "client1".to_string(),
                     },
                     redirect_uris: vec!["http://localhost/client1".to_string()],
@@ -84,13 +94,13 @@ pub mod tests {
                     client_type: ClientType::Public,
                     redirect_uris: vec!["http://localhost/client2".to_string()],
                 }),
-                _ => None
+                _ => None,
             }
         }
     }
 
     pub fn build_test_client_store() -> Box<impl ClientStore> {
-        Box::new(TestClientStore{})
+        Box::new(TestClientStore {})
     }
 
     struct TestAuthorizationCodeStore {
@@ -101,13 +111,29 @@ pub mod tests {
     unsafe impl Send for TestAuthorizationCodeStore {}
 
     impl AuthorizationCodeStore for TestAuthorizationCodeStore {
-        fn get_authorization_code(&self, client_id: &str, redirect_uri: &str, now: DateTime<Local>) -> String {
-            self.store.borrow_mut().insert((client_id.to_string(), now.to_rfc3339()), (redirect_uri.to_string(), now));
+        fn get_authorization_code(
+            &self,
+            client_id: &str,
+            redirect_uri: &str,
+            now: DateTime<Local>,
+        ) -> String {
+            self.store.borrow_mut().insert(
+                (client_id.to_string(), now.to_rfc3339()),
+                (redirect_uri.to_string(), now),
+            );
             now.to_rfc3339()
         }
 
-        fn validate(&self, client_id: &str, authorization_code: &str, now: DateTime<Local>) -> Option<(String, Duration)> {
-            let (redirect_uri, creation_datetime) = self.store.borrow_mut().remove(&(client_id.to_string(), authorization_code.to_string()))?;
+        fn validate(
+            &self,
+            client_id: &str,
+            authorization_code: &str,
+            now: DateTime<Local>,
+        ) -> Option<(String, Duration)> {
+            let (redirect_uri, creation_datetime) = self
+                .store
+                .borrow_mut()
+                .remove(&(client_id.to_string(), authorization_code.to_string()))?;
             Some((redirect_uri, now.signed_duration_since(creation_datetime)))
         }
     }

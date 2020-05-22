@@ -15,8 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use actix_web::HttpResponse;
 use actix_web::web;
+use actix_web::HttpResponse;
 
 use actix_session::Session;
 
@@ -26,22 +26,22 @@ use tera::Tera;
 use log::debug;
 use log::error;
 
-use crate::http::state::State;
-use crate::http::endpoints::server_error;
 use crate::http::endpoints::authorize;
+use crate::http::endpoints::server_error;
+use crate::http::state::State;
 
-use serde_derive::Serialize;
 use serde_derive::Deserialize;
+use serde_derive::Serialize;
 
 pub const SESSION_KEY: &str = "b";
 const ERROR_CODE_SESSION_KEY: &str = "e";
 
 #[derive(Serialize, Deserialize)]
 pub struct Request {
-    #[serde(skip_serializing_if = "Option::is_none")] 
+    #[serde(skip_serializing_if = "Option::is_none")]
     username: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")] 
+    #[serde(skip_serializing_if = "Option::is_none")]
     password: Option<String>,
 }
 
@@ -66,7 +66,10 @@ pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
     }
 
     let mut context = Context::new();
-    if let Some(error_code) = session.get::<u64>(ERROR_CODE_SESSION_KEY).expect("failed to deserialize") {
+    if let Some(error_code) = session
+        .get::<u64>(ERROR_CODE_SESSION_KEY)
+        .expect("failed to deserialize")
+    {
         context.insert("error", &error_code);
     }
     let body = state.tera.render("authenticate.html.j2", &context);
@@ -84,11 +87,15 @@ pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
     }
 }
 
-pub async fn post(mut query: web::Form<Request>, state: web::Data<State>, session: Session) -> HttpResponse {
+pub async fn post(
+    mut query: web::Form<Request>,
+    state: web::Data<State>,
+    session: Session,
+) -> HttpResponse {
     query.normalise();
 
     session.remove(ERROR_CODE_SESSION_KEY);
-    
+
     let first_request = session.get::<String>(authorize::SESSION_KEY);
     if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
         debug!("Unsolicited authentication request. {:?}", first_request);
@@ -103,7 +110,7 @@ pub async fn post(mut query: web::Form<Request>, state: web::Data<State>, sessio
         }
         return HttpResponse::SeeOther()
             .set_header("Location", "authenticate")
-            .finish()
+            .finish();
     }
 
     if query.password.is_none() {
@@ -114,7 +121,7 @@ pub async fn post(mut query: web::Form<Request>, state: web::Data<State>, sessio
         }
         return HttpResponse::SeeOther()
             .set_header("Location", "authenticate")
-            .finish()
+            .finish();
     }
 
     let username = query.username.clone().expect("checked before");
@@ -128,7 +135,7 @@ pub async fn post(mut query: web::Form<Request>, state: web::Data<State>, sessio
         }
         return HttpResponse::SeeOther()
             .set_header("Location", "authenticate")
-            .finish()
+            .finish();
     }
 
     let user = user.expect("checked before");
@@ -158,7 +165,7 @@ pub fn render_invalid_authentication_request(tera: &Tera) -> HttpResponse {
     let body = tera.render("invalid_authentication_request.html.j2", &Context::new());
     match body {
         Ok(body) => HttpResponse::BadRequest()
-            .set_header("Content-Type", "text/html") 
+            .set_header("Content-Type", "text/html")
             .body(body),
         Err(e) => {
             log::warn!("{}", e);

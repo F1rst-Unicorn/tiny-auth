@@ -16,10 +16,10 @@
  */
 
 pub mod authenticate;
-pub mod token;
 pub mod authorize;
-pub mod userinfo;
 pub mod consent;
+pub mod token;
+pub mod userinfo;
 
 use crate::protocol::oauth2::ProtocolError;
 
@@ -27,10 +27,15 @@ use actix_web::HttpResponse;
 
 use url::Url;
 
-use serde_derive::Serialize;
 use serde_derive::Deserialize;
+use serde_derive::Serialize;
 
-pub fn missing_parameter(redirect_uri: &str, error: ProtocolError, description: &str, state: &Option<String>) -> HttpResponse {
+pub fn missing_parameter(
+    redirect_uri: &str,
+    error: ProtocolError,
+    description: &str,
+    state: &Option<String>,
+) -> HttpResponse {
     let mut url = Url::parse(redirect_uri).expect("should have been validated upon registration");
 
     url.query_pairs_mut()
@@ -38,8 +43,7 @@ pub fn missing_parameter(redirect_uri: &str, error: ProtocolError, description: 
         .append_pair("error_description", description);
 
     if let Some(state) = state {
-        url.query_pairs_mut()
-            .append_pair("state", state);
+        url.query_pairs_mut().append_pair("state", state);
     }
 
     HttpResponse::TemporaryRedirect()
@@ -51,18 +55,22 @@ pub fn missing_parameter(redirect_uri: &str, error: ProtocolError, description: 
 struct ErrorResponse {
     error: ProtocolError,
 
-    #[serde(skip_serializing_if = "Option::is_none")] 
+    #[serde(skip_serializing_if = "Option::is_none")]
     error_description: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")] 
+    #[serde(skip_serializing_if = "Option::is_none")]
     error_uri: Option<String>,
 }
 
-pub fn render_missing_paramter_with_response(error: ProtocolError, description: &str) -> HttpResponse {
+pub fn render_missing_paramter_with_response(
+    error: ProtocolError,
+    description: &str,
+) -> HttpResponse {
     match error {
         ProtocolError::InvalidClient => HttpResponse::Unauthorized(),
         _ => HttpResponse::BadRequest(),
-    }.json(ErrorResponse {
+    }
+    .json(ErrorResponse {
         error: error,
         error_description: Some(description.to_string()),
         error_uri: None,
@@ -79,16 +87,16 @@ pub fn server_error(tera: &tera::Tera) -> HttpResponse {
             log::warn!("{}", e);
             HttpResponse::InternalServerError().finish()
         }
-    } 
+    }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use actix_web::HttpResponse;
     use actix_web::web::BytesMut;
-    use serde::de::DeserializeOwned;
+    use actix_web::HttpResponse;
     use futures::stream::StreamExt;
+    use serde::de::DeserializeOwned;
 
     pub async fn read_response<T: DeserializeOwned>(mut resp: HttpResponse) -> T {
         let mut body = resp.take_body();

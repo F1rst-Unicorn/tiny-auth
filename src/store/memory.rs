@@ -15,17 +15,17 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::store::UserStore;
-use crate::store::ClientStore;
-use crate::store::AuthorizationCodeStore;
 use crate::domain::client::Client;
 use crate::domain::user::User;
+use crate::store::AuthorizationCodeStore;
+use crate::store::ClientStore;
+use crate::store::UserStore;
 
 use crate::protocol::oauth2::ClientType;
 
 use chrono::DateTime;
-use chrono::Local;
 use chrono::Duration;
+use chrono::Local;
 
 pub struct MemoryUserStore {}
 
@@ -45,7 +45,7 @@ impl ClientStore for MemoryClientStore {
         Some(Client {
             client_id: key.to_string(),
             client_type: ClientType::Public,
-            redirect_uris: vec!("http://localhost/client".to_string()),
+            redirect_uris: vec!["http://localhost/client".to_string()],
         })
     }
 }
@@ -53,11 +53,21 @@ impl ClientStore for MemoryClientStore {
 pub struct MemoryAuthorizationCodeStore {}
 
 impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
-    fn get_authorization_code(&self, client_id: &str, redirect_uri: &str, now: DateTime<Local>) -> String {
+    fn get_authorization_code(
+        &self,
+        client_id: &str,
+        redirect_uri: &str,
+        now: DateTime<Local>,
+    ) -> String {
         "dummy_code".to_string()
     }
 
-    fn validate(&self, client_id: &str, authorization_code: &str, now: DateTime<Local>) -> Option<(String, Duration)> {
+    fn validate(
+        &self,
+        client_id: &str,
+        authorization_code: &str,
+        now: DateTime<Local>,
+    ) -> Option<(String, Duration)> {
         Some(("http://localhost/client".to_string(), Duration::seconds(1)))
     }
 }
