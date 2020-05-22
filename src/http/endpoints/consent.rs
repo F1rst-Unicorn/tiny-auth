@@ -94,7 +94,7 @@ pub async fn post(session: Session, state: web::Data<State>) -> HttpResponse {
         url.query_pairs_mut().append_pair("state", &state);
     }
 
-    HttpResponse::SeeOther()
+    HttpResponse::Found()
         .set_header("Location", url.as_str())
         .finish()
 }
@@ -209,7 +209,7 @@ mod tests {
 
         let resp = post(session, state).await;
 
-        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+        assert_eq!(resp.status(), http::StatusCode::FOUND);
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
