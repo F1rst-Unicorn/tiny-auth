@@ -116,10 +116,10 @@ pub fn render_invalid_consent_request(tera: &tera::Tera) -> HttpResponse {
 mod tests {
     use super::*;
 
+    use actix_session::UserSession;
     use actix_web::http;
     use actix_web::test;
     use actix_web::web::Data;
-    use actix_session::UserSession;
 
     use crate::http::state::tests::build_test_state;
     use crate::store::tests::PUBLIC_CLIENT;
@@ -188,7 +188,7 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let state = Data::new(build_test_state());
         let session = req.get_session();
-        let first_request = authorize::Request{
+        let first_request = authorize::Request {
             client_id: Some(PUBLIC_CLIENT.to_string()),
             redirect_uri: Some("http://localhost/".to_string()),
             state: Some("state".to_string()),
@@ -204,7 +204,12 @@ mod tests {
             scope: None,
             ui_locales: None,
         };
-        session.set(authorize::SESSION_KEY, &serde_urlencoded::to_string(first_request.clone()).unwrap()).unwrap();
+        session
+            .set(
+                authorize::SESSION_KEY,
+                &serde_urlencoded::to_string(first_request.clone()).unwrap(),
+            )
+            .unwrap();
         session.set(authenticate::SESSION_KEY, 1).unwrap();
 
         let resp = post(session, state).await;
@@ -219,7 +224,14 @@ mod tests {
         assert_eq!(expected_url.domain(), url.domain());
         assert_eq!(expected_url.port(), url.port());
         assert_eq!(expected_url.path(), url.path());
-        assert!(url.query_pairs().into_owned().any(|param| param.0 == "state".to_string() && &param.1 == first_request.state.as_ref().unwrap()));
-        assert!(url.query_pairs().into_owned().any(|param| param.0 == "code".to_string() && !param.1.is_empty()));
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param.0 == "state".to_string()
+                && &param.1 == first_request.state.as_ref().unwrap()));
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param.0 == "code".to_string() && !param.1.is_empty()));
     }
 }

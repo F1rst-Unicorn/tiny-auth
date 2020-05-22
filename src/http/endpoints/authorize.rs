@@ -238,11 +238,11 @@ fn render_invalid_redirect_uri_error(tera: &Tera) -> HttpResponse {
 mod tests {
     use super::*;
 
+    use actix_session::UserSession;
     use actix_web::http;
     use actix_web::test;
     use actix_web::web::Data;
     use actix_web::web::Query;
-    use actix_session::UserSession;
 
     use url::Url;
 
@@ -363,7 +363,12 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let state = Data::new(build_test_state());
-        let redirect_uri = state.client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let redirect_uri = state
+            .client_store
+            .get(CONFIDENTIAL_CLIENT)
+            .unwrap()
+            .redirect_uris[0]
+            .to_string();
         let client_state = "somestate".to_string();
         let query = Query(Request {
             scope: None,
@@ -395,8 +400,14 @@ mod tests {
         assert_eq!(expected_url.port(), url.port());
         assert_eq!(expected_url.path(), url.path());
         let expected_error = format!("{}", ProtocolError::InvalidRequest);
-        assert!(url.query_pairs().into_owned().any(|param| param == ("state".to_string(), client_state.to_string())));
-        assert!(url.query_pairs().into_owned().any(|param| param == ("error".to_string(), expected_error.to_string())));
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("state".to_string(), client_state.to_string())));
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("error".to_string(), expected_error.to_string())));
     }
 
     #[actix_rt::test]
@@ -404,7 +415,12 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let state = Data::new(build_test_state());
-        let redirect_uri = state.client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let redirect_uri = state
+            .client_store
+            .get(CONFIDENTIAL_CLIENT)
+            .unwrap()
+            .redirect_uris[0]
+            .to_string();
         let client_state = "somestate".to_string();
         let query = Query(Request {
             scope: Some("email".to_string()),
@@ -436,8 +452,14 @@ mod tests {
         assert_eq!(expected_url.port(), url.port());
         assert_eq!(expected_url.path(), url.path());
         let expected_error = format!("{}", ProtocolError::InvalidRequest);
-        assert!(url.query_pairs().into_owned().any(|param| param == ("state".to_string(), client_state.to_string())));
-        assert!(url.query_pairs().into_owned().any(|param| param == ("error".to_string(), expected_error.to_string())));
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("state".to_string(), client_state.to_string())));
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("error".to_string(), expected_error.to_string())));
     }
 
     #[actix_rt::test]
@@ -445,7 +467,12 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let state = Data::new(build_test_state());
-        let redirect_uri = state.client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let redirect_uri = state
+            .client_store
+            .get(CONFIDENTIAL_CLIENT)
+            .unwrap()
+            .redirect_uris[0]
+            .to_string();
         let client_state = "somestate".to_string();
         let request = Request {
             scope: Some("email".to_string()),

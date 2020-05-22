@@ -262,9 +262,9 @@ mod tests {
     use crate::http::endpoints::ErrorResponse;
     use crate::http::state::tests::build_test_state;
     use crate::protocol::oauth2::ProtocolError;
-    use crate::store::tests::UNKNOWN_CLIENT_ID;
-    use crate::store::tests::PUBLIC_CLIENT;
     use crate::store::tests::CONFIDENTIAL_CLIENT;
+    use crate::store::tests::PUBLIC_CLIENT;
+    use crate::store::tests::UNKNOWN_CLIENT_ID;
 
     #[actix_rt::test]
     async fn missing_grant_type_is_rejected() {
@@ -380,7 +380,11 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
         let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(PUBLIC_CLIENT, &redirect_uri, Local::now());
+        let auth_code = state.auth_code_store.get_authorization_code(
+            PUBLIC_CLIENT,
+            &redirect_uri,
+            Local::now(),
+        );
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -401,7 +405,11 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let state = Data::new(build_test_state());
         let creation_time = Local::now() - Duration::minutes(2 * AUTH_CODE_LIFE_TIME);
-        let auth_code = state.auth_code_store.get_authorization_code(PUBLIC_CLIENT, &redirect_uri, creation_time);
+        let auth_code = state.auth_code_store.get_authorization_code(
+            PUBLIC_CLIENT,
+            &redirect_uri,
+            creation_time,
+        );
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -421,7 +429,11 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
         let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(PUBLIC_CLIENT, &redirect_uri, Local::now());
+        let auth_code = state.auth_code_store.get_authorization_code(
+            PUBLIC_CLIENT,
+            &redirect_uri,
+            Local::now(),
+        );
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -446,7 +458,11 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
         let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(CONFIDENTIAL_CLIENT, &redirect_uri, Local::now());
+        let auth_code = state.auth_code_store.get_authorization_code(
+            CONFIDENTIAL_CLIENT,
+            &redirect_uri,
+            Local::now(),
+        );
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -468,7 +484,11 @@ mod tests {
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(CONFIDENTIAL_CLIENT, &redirect_uri, Local::now());
+        let auth_code = state.auth_code_store.get_authorization_code(
+            CONFIDENTIAL_CLIENT,
+            &redirect_uri,
+            Local::now(),
+        );
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -490,7 +510,11 @@ mod tests {
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(CONFIDENTIAL_CLIENT, &redirect_uri, Local::now());
+        let auth_code = state.auth_code_store.get_authorization_code(
+            CONFIDENTIAL_CLIENT,
+            &redirect_uri,
+            Local::now(),
+        );
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -512,7 +536,11 @@ mod tests {
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(CONFIDENTIAL_CLIENT, &redirect_uri, Local::now());
+        let auth_code = state.auth_code_store.get_authorization_code(
+            CONFIDENTIAL_CLIENT,
+            &redirect_uri,
+            Local::now(),
+        );
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -530,11 +558,18 @@ mod tests {
     #[actix_rt::test]
     async fn missing_password_is_rejected() {
         let req = test::TestRequest::post()
-            .header("Authorization", "Basic ".to_string() + &base64::encode("username".as_bytes()))
+            .header(
+                "Authorization",
+                "Basic ".to_string() + &base64::encode("username".as_bytes()),
+            )
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(CONFIDENTIAL_CLIENT, &redirect_uri, Local::now());
+        let auth_code = state.auth_code_store.get_authorization_code(
+            CONFIDENTIAL_CLIENT,
+            &redirect_uri,
+            Local::now(),
+        );
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -558,7 +593,11 @@ mod tests {
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(CONFIDENTIAL_CLIENT, &redirect_uri, Local::now());
+        let auth_code = state.auth_code_store.get_authorization_code(
+            CONFIDENTIAL_CLIENT,
+            &redirect_uri,
+            Local::now(),
+        );
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),

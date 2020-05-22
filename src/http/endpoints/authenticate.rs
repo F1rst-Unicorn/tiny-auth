@@ -178,11 +178,11 @@ pub fn render_invalid_authentication_request(tera: &Tera) -> HttpResponse {
 mod tests {
     use super::*;
 
+    use actix_session::UserSession;
     use actix_web::http;
     use actix_web::test;
     use actix_web::web::Data;
     use actix_web::web::Form;
-    use actix_session::UserSession;
 
     use crate::http::state::tests::build_test_state;
     use crate::store::tests::UNKNOWN_USER;
@@ -204,7 +204,9 @@ mod tests {
         let req = test::TestRequest::get().to_http_request();
         let state = Data::new(build_test_state());
         let session = req.get_session();
-        session.set(authorize::SESSION_KEY, "dummy".to_string()).unwrap();
+        session
+            .set(authorize::SESSION_KEY, "dummy".to_string())
+            .unwrap();
 
         let resp = get(state, session).await;
 
@@ -216,7 +218,7 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let state = Data::new(build_test_state());
         let session = req.get_session();
-        let form = Form(Request{
+        let form = Form(Request {
             username: Some("user".to_string()),
             password: Some("user".to_string()),
         });
@@ -231,8 +233,10 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let state = Data::new(build_test_state());
         let session = req.get_session();
-        session.set(authorize::SESSION_KEY, "dummy".to_string()).unwrap();
-        let form = Form(Request{
+        session
+            .set(authorize::SESSION_KEY, "dummy".to_string())
+            .unwrap();
+        let form = Form(Request {
             username: None,
             password: Some("user".to_string()),
         });
@@ -243,7 +247,10 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         assert_eq!("authenticate", url);
-        assert_eq!(session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(), 1);
+        assert_eq!(
+            session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
+            1
+        );
     }
 
     #[actix_rt::test]
@@ -251,8 +258,10 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let state = Data::new(build_test_state());
         let session = req.get_session();
-        session.set(authorize::SESSION_KEY, "dummy".to_string()).unwrap();
-        let form = Form(Request{
+        session
+            .set(authorize::SESSION_KEY, "dummy".to_string())
+            .unwrap();
+        let form = Form(Request {
             username: Some("user".to_string()),
             password: None,
         });
@@ -263,7 +272,10 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         assert_eq!("authenticate", url);
-        assert_eq!(session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(), 2);
+        assert_eq!(
+            session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
+            2
+        );
     }
 
     #[actix_rt::test]
@@ -271,8 +283,10 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let state = Data::new(build_test_state());
         let session = req.get_session();
-        session.set(authorize::SESSION_KEY, "dummy".to_string()).unwrap();
-        let form = Form(Request{
+        session
+            .set(authorize::SESSION_KEY, "dummy".to_string())
+            .unwrap();
+        let form = Form(Request {
             username: Some(UNKNOWN_USER.to_string()),
             password: Some(UNKNOWN_USER.to_string() + "wrong"),
         });
@@ -283,7 +297,10 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         assert_eq!("authenticate", url);
-        assert_eq!(session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(), 3);
+        assert_eq!(
+            session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
+            3
+        );
     }
 
     #[actix_rt::test]
@@ -291,8 +308,10 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let state = Data::new(build_test_state());
         let session = req.get_session();
-        session.set(authorize::SESSION_KEY, "dummy".to_string()).unwrap();
-        let form = Form(Request{
+        session
+            .set(authorize::SESSION_KEY, "dummy".to_string())
+            .unwrap();
+        let form = Form(Request {
             username: Some(USER.to_string()),
             password: Some(USER.to_string() + "wrong"),
         });
@@ -303,7 +322,10 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         assert_eq!("authenticate", url);
-        assert_eq!(session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(), 3);
+        assert_eq!(
+            session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
+            3
+        );
     }
 
     #[actix_rt::test]
@@ -311,8 +333,10 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let state = Data::new(build_test_state());
         let session = req.get_session();
-        session.set(authorize::SESSION_KEY, "dummy".to_string()).unwrap();
-        let form = Form(Request{
+        session
+            .set(authorize::SESSION_KEY, "dummy".to_string())
+            .unwrap();
+        let form = Form(Request {
             username: Some(USER.to_string()),
             password: Some(USER.to_string()),
         });
