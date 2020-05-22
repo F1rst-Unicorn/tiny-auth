@@ -38,7 +38,7 @@ use log::info;
 
 pub const SESSION_KEY: &str = "a";
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Request {
     #[serde(skip_serializing_if = "Option::is_none")]
     scope: Option<String>,
@@ -278,7 +278,7 @@ mod tests {
     }
 
     #[actix_rt::test]
-    async fn missiong_redirect_uri_is_rejected() {
+    async fn missing_redirect_uri_is_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let query = Query(Request {
@@ -447,7 +447,7 @@ mod tests {
         let state = Data::new(build_test_state());
         let redirect_uri = state.client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
         let client_state = "somestate".to_string();
-        let query = Query(Request {
+        let request = Request {
             scope: Some("email".to_string()),
             response_type: Some(ResponseType::Code),
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
@@ -462,7 +462,8 @@ mod tests {
             id_token_hint: None,
             login_hint: None,
             acr_values: None,
-        });
+        };
+        let query = Query(request.clone());
 
         let resp = post(query, state, session).await;
 
@@ -470,5 +471,10 @@ mod tests {
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         assert_eq!("authenticate", url);
+
+        let session = req.get_session();
+        let first_request = session.get::<String>(SESSION_KEY).unwrap().unwrap();
+        let first_request = serde_urlencoded::from_str::<Request>(&first_request).unwrap();
+        assert_eq!(request, first_request);
     }
 }

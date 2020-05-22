@@ -59,6 +59,9 @@ pub mod tests {
     use crate::domain::user::User;
     use crate::protocol::oauth2::ClientType;
 
+    pub const UNKNOWN_USER: &str = "unknown_user";
+    pub const USER: &str = "user1";
+
     struct TestUserStore {}
 
     impl UserStore for TestUserStore {

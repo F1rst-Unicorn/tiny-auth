@@ -173,3 +173,157 @@ pub fn render_invalid_authentication_request(tera: &Tera) -> HttpResponse {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use actix_web::http;
+    use actix_web::test;
+    use actix_web::web::Data;
+    use actix_web::web::Form;
+    use actix_session::UserSession;
+
+    use crate::http::state::tests::build_test_state;
+    use crate::store::tests::UNKNOWN_USER;
+    use crate::store::tests::USER;
+
+    #[actix_rt::test]
+    async fn empty_session_gives_error() {
+        let req = test::TestRequest::get().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+
+        let resp = get(state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn authorization_in_session_gives_login_form() {
+        let req = test::TestRequest::get().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        session.set(authorize::SESSION_KEY, "dummy".to_string()).unwrap();
+
+        let resp = get(state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::OK);
+    }
+
+    #[actix_rt::test]
+    async fn emtpy_session_login_gives_error() {
+        let req = test::TestRequest::post().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        let form = Form(Request{
+            username: Some("user".to_string()),
+            password: Some("user".to_string()),
+        });
+
+        let resp = post(form, state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn missing_username_gives_error() {
+        let req = test::TestRequest::post().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        session.set(authorize::SESSION_KEY, "dummy".to_string()).unwrap();
+        let form = Form(Request{
+            username: None,
+            password: Some("user".to_string()),
+        });
+
+        let resp = post(form, state, session).await;
+        let session = req.get_session();
+
+        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        assert_eq!("authenticate", url);
+        assert_eq!(session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(), 1);
+    }
+
+    #[actix_rt::test]
+    async fn missing_password_gives_error() {
+        let req = test::TestRequest::post().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        session.set(authorize::SESSION_KEY, "dummy".to_string()).unwrap();
+        let form = Form(Request{
+            username: Some("user".to_string()),
+            password: None,
+        });
+
+        let resp = post(form, state, session).await;
+        let session = req.get_session();
+
+        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        assert_eq!("authenticate", url);
+        assert_eq!(session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(), 2);
+    }
+
+    #[actix_rt::test]
+    async fn unknown_user_gives_error() {
+        let req = test::TestRequest::post().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        session.set(authorize::SESSION_KEY, "dummy".to_string()).unwrap();
+        let form = Form(Request{
+            username: Some(UNKNOWN_USER.to_string()),
+            password: Some(UNKNOWN_USER.to_string() + "wrong"),
+        });
+
+        let resp = post(form, state, session).await;
+        let session = req.get_session();
+
+        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        assert_eq!("authenticate", url);
+        assert_eq!(session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(), 3);
+    }
+
+    #[actix_rt::test]
+    async fn wrong_password_gives_error() {
+        let req = test::TestRequest::post().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        session.set(authorize::SESSION_KEY, "dummy".to_string()).unwrap();
+        let form = Form(Request{
+            username: Some(USER.to_string()),
+            password: Some(USER.to_string() + "wrong"),
+        });
+
+        let resp = post(form, state, session).await;
+        let session = req.get_session();
+
+        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        assert_eq!("authenticate", url);
+        assert_eq!(session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(), 3);
+    }
+
+    #[actix_rt::test]
+    async fn correct_login_is_reported() {
+        let req = test::TestRequest::post().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        session.set(authorize::SESSION_KEY, "dummy".to_string()).unwrap();
+        let form = Form(Request{
+            username: Some(USER.to_string()),
+            password: Some(USER.to_string()),
+        });
+
+        let resp = post(form, state, session).await;
+        let session = req.get_session();
+
+        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        assert_eq!("consent", url);
+        assert_eq!(session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap(), None);
+        assert_eq!(session.get::<i32>(SESSION_KEY).unwrap().unwrap(), 1);
+    }
+}
