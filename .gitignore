@@ -1,1 +1,3 @@
 /target
+pkg/Archlinux/pkg
+pkg/Archlinux/*.pkg.tar*

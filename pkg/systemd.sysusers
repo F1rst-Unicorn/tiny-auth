@@ -1,0 +1,2 @@
+u tiny-auth - "Tiny OIDC Provider" /var/lib/tiny-auth /usr/bin/nologin
+g tiny-auth - -
