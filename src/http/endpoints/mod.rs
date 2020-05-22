@@ -71,7 +71,7 @@ pub fn render_missing_paramter_with_response(
         _ => HttpResponse::BadRequest(),
     }
     .json(ErrorResponse {
-        error: error,
+        error,
         error_description: Some(description.to_string()),
         error_uri: None,
     })

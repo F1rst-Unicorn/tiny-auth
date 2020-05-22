@@ -178,7 +178,7 @@ pub async fn post(
         return missing_parameter(
             &redirect_uri,
             ProtocolError::InvalidRequest,
-            &format!("Missing required parameter scope"),
+            "Missing required parameter scope",
             &client_state,
         );
     }
@@ -188,7 +188,7 @@ pub async fn post(
         return missing_parameter(
             &redirect_uri,
             ProtocolError::InvalidRequest,
-            &format!("Missing required parameter response_type"),
+            "Missing required parameter response_type",
             &client_state,
         );
     }

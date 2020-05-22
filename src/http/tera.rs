@@ -27,7 +27,7 @@ use log::warn;
 pub fn load_template_engine(static_files_root: &str) -> Tera {
     let template_path = static_files_root.to_string() + "/templates/";
 
-    let mut tera = match Tera::new(&(template_path.clone() + "**/*")) {
+    let mut tera = match Tera::new(&(template_path + "**/*")) {
         Ok(t) => t,
         Err(e) => {
             warn!("Parsing error(s): {}", e);

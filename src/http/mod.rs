@@ -38,7 +38,7 @@ pub async fn run(web: config::Web) -> std::io::Result<()> {
     let tera = tera::load_template_engine(&web.static_files);
 
     let state = web::Data::new(state::State {
-        tera: tera,
+        tera,
         client_store: Box::new(MemoryClientStore {}),
         user_store: Box::new(MemoryUserStore {}),
         auth_code_store: Box::new(MemoryAuthorizationCodeStore {}),
