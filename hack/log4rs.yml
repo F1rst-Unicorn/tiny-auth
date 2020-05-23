@@ -33,5 +33,3 @@ root:
 loggers:
   tiny_auth:
     level: trace
-  actix_session:
-    level: trace

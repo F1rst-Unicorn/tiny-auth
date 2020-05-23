@@ -21,8 +21,6 @@ use serde_derive::Deserialize;
 
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Config {
-    pub http: Http,
-
     pub web: Web,
 }
 
@@ -37,9 +35,6 @@ impl Config {
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]
-pub struct Http {}
-
-#[derive(Default, Clone, Debug, Deserialize)]
 pub struct Web {
     pub bind: String,
 
@@ -49,6 +44,8 @@ pub struct Web {
     pub path: Option<String>,
 
     pub tls: Option<Tls>,
+
+    pub workers: Option<usize>,
 
     pub static_files: String,
 

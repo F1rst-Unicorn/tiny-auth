@@ -22,7 +22,7 @@ pub const FLAG_CONFIG: &str = "config";
 pub const FLAG_LOG_CONFIG: &str = "log";
 
 pub fn parse_arguments<'a>() -> clap::ArgMatches<'a> {
-    let app = App::new("tiny-auth")
+    let app = App::new(env!("CARGO_PKG_NAME"))
         .version(concat!(
             env!("CARGO_PKG_VERSION"),
             " ",

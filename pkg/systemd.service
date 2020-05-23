@@ -3,12 +3,14 @@ Description="OIDC Provider"
 After=network.target network-online.target nss-lookup.target
 
 [Service]
-Type=simple
+Type=notify
 ExecStart=/usr/bin/tiny-auth
 User=tiny-auth
 Group=tiny-auth
 WorkingDirectory=/var/lib/tiny-auth
 Restart=on-failure
+WatchdogSec=5
+WatchdogSignal=SIGTERM
 
 NoNewPrivileges=true
 ProtectSystem=full

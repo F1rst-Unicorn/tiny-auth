@@ -22,8 +22,10 @@ mod http;
 mod logging;
 mod protocol;
 mod store;
+mod systemd;
 
 use config::parser::parse_config;
+
 use log::info;
 
 fn main() -> std::io::Result<()> {
@@ -45,5 +47,6 @@ fn main() -> std::io::Result<()> {
     let config = parse_config(config_path);
 
     http::run(config.web)?;
+
     Ok(())
 }
