@@ -7,6 +7,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* TLS support
+  ([#15](https://gitlab.com/veenj/tiny-auth/issues/15))
+
+* Issuance of access tokens
+  ([#20](https://gitlab.com/veenj/tiny-auth/issues/20))
+
 * [Archlinux](https://www.archlinux.org/) package
   ([#13](https://gitlab.com/veenj/tiny-auth/issues/13))
 
