@@ -141,7 +141,7 @@ fn configure_http_server(web: Web, crypto: Crypto) -> Result<Server, Error> {
     let token_certificate = read_file(&crypto.public_key)?;
     let bytes = token_certificate.as_bytes();
     let mut decoding_key_result = DecodingKey::from_rsa_pem(bytes);
-    if let Err(_) = decoding_key_result {
+    if decoding_key_result.is_err() {
         decoding_key_result = DecodingKey::from_ec_pem(bytes);
         if let Err(e) = decoding_key_result {
             error!("failed to read public token key: {}", e);
@@ -152,17 +152,12 @@ fn configure_http_server(web: Web, crypto: Crypto) -> Result<Server, Error> {
     let file = read_file(&crypto.key)?;
     let bytes = file.as_bytes();
     let mut encoding_key_result = EncodingKey::from_rsa_pem(bytes);
-    let mut ecdsa = false;
-    if let Err(_) = encoding_key_result {
+    let algorithm = if encoding_key_result.is_err() {
         encoding_key_result = EncodingKey::from_ec_pem(bytes);
         if let Err(e) = encoding_key_result {
             error!("failed to read private token key: {}", e);
             return Err(e.into());
         }
-        ecdsa = true;
-    }
-
-    let algorithm = if ecdsa {
         Algorithm::ES384
     } else {
         Algorithm::PS512

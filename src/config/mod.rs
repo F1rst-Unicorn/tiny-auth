@@ -90,7 +90,7 @@ impl Default for TlsConfiguration {
 }
 
 impl TlsConfiguration {
-    pub fn to_acceptor_builder(&self) -> Result<SslAcceptorBuilder, ErrorStack> {
+    pub fn to_acceptor_builder(self) -> Result<SslAcceptorBuilder, ErrorStack> {
         let method = SslMethod::tls_server();
         match self {
             TlsConfiguration::Modern => SslAcceptor::mozilla_modern(method),

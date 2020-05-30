@@ -273,7 +273,7 @@ pub async fn post(
     let encoded_token = encoded_token.unwrap();
 
     HttpResponse::Ok().json(Response {
-        access_token: encoded_token.to_string(),
+        access_token: encoded_token,
         token_type: "bearer".to_string(),
         expires_in: Some(60),
         refresh_token: None,
