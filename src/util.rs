@@ -15,9 +15,9 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::fs::File;
 use std::io::Error;
 use std::io::Read;
-use std::fs::File;
 
 pub fn read_file(file_path: &str) -> Result<String, Error> {
     let mut file = File::open(file_path)?;

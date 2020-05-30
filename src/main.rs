@@ -27,8 +27,8 @@ mod util;
 
 use config::parser::parse_config;
 
-use log::info;
 use log::error;
+use log::info;
 
 fn main() {
     let arguments = cli_parser::parse_arguments();

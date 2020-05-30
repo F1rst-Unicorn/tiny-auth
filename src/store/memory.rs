@@ -69,6 +69,10 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
         authorization_code: &str,
         now: DateTime<Local>,
     ) -> Option<(String, Duration, String)> {
-        Some(("http://localhost/client".to_string(), Duration::seconds(1), "user".to_string()))
+        Some((
+            "http://localhost/client".to_string(),
+            Duration::seconds(1),
+            "user".to_string(),
+        ))
     }
 }

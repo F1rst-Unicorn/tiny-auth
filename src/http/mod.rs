@@ -21,9 +21,9 @@ mod tera;
 
 use std::convert::From;
 
-use crate::config::Web;
 use crate::config::Crypto;
 use crate::config::Tls;
+use crate::config::Web;
 use crate::store::memory::MemoryAuthorizationCodeStore;
 use crate::store::memory::MemoryClientStore;
 use crate::store::memory::MemoryUserStore;
@@ -40,22 +40,22 @@ use actix_web::HttpServer;
 
 use actix_session::CookieSession;
 
-use jsonwebtoken::EncodingKey;
-use jsonwebtoken::DecodingKey;
 use jsonwebtoken::Algorithm;
+use jsonwebtoken::DecodingKey;
+use jsonwebtoken::EncodingKey;
 
+use openssl::dh::Dh;
 use openssl::ssl::SslAcceptorBuilder;
 use openssl::ssl::SslFiletype;
 use openssl::ssl::SslVerifyMode;
-use openssl::x509::X509;
-use openssl::x509::X509Name;
 use openssl::x509::store::X509StoreBuilder;
-use openssl::dh::Dh;
+use openssl::x509::X509Name;
+use openssl::x509::X509;
 
 use log::debug;
+use log::error;
 use log::info;
 use log::warn;
-use log::error;
 
 use tokio::signal::unix::signal;
 use tokio::signal::unix::SignalKind;
@@ -205,11 +205,16 @@ fn configure_http_server(web: Web, crypto: Crypto) -> Result<Server, Error> {
                     )
                     .route("/consent", web::get().to(endpoints::consent::get))
                     .route("/consent", web::post().to(endpoints::consent::post))
-                    .route("/cert", web::get().to(move || actix_web::HttpResponse::Ok().body(token_certificate.clone())))
+                    .route(
+                        "/cert",
+                        web::get().to(move || {
+                            actix_web::HttpResponse::Ok().body(token_certificate.clone())
+                        }),
+                    ),
             )
     })
-        .disable_signals()
-        .shutdown_timeout(30);
+    .disable_signals()
+    .shutdown_timeout(30);
 
     let server = if let Some(tls) = tls {
         let openssl = configure_openssl(&tls);
@@ -230,7 +235,6 @@ fn configure_http_server(web: Web, crypto: Crypto) -> Result<Server, Error> {
     if let Some(workers) = workers {
         server = server.workers(workers);
     }
-
 
     let srv = server.run();
     Ok(srv)

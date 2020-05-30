@@ -21,9 +21,9 @@ use crate::store::UserStore;
 
 use tera::Tera;
 
-use jsonwebtoken::EncodingKey;
-use jsonwebtoken::DecodingKey;
 use jsonwebtoken::Algorithm;
+use jsonwebtoken::DecodingKey;
+use jsonwebtoken::EncodingKey;
 
 pub struct State {
     pub instance: String,
@@ -50,7 +50,10 @@ pub mod tests {
         let secret = "secret";
         State {
             instance: "https://localhost:8088".to_string(),
-            encoding_key: (EncodingKey::from_secret(secret.as_bytes()), Algorithm::HS256),
+            encoding_key: (
+                EncodingKey::from_secret(secret.as_bytes()),
+                Algorithm::HS256,
+            ),
             decoding_key: DecodingKey::from_secret(secret.as_bytes()).into_static(),
             tera: load_template_engine(&(env!("CARGO_MANIFEST_DIR").to_string() + "/static/")),
             client_store: crate::store::tests::build_test_client_store(),

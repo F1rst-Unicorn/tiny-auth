@@ -19,10 +19,10 @@ pub mod parser;
 
 use serde_derive::Deserialize;
 
+use openssl::error::ErrorStack;
 use openssl::ssl::SslAcceptor;
 use openssl::ssl::SslAcceptorBuilder;
 use openssl::ssl::SslMethod;
-use openssl::error::ErrorStack;
 
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Config {
@@ -80,7 +80,7 @@ pub enum TlsConfiguration {
     #[serde(rename = "intermediate")]
     Intermediate,
     #[serde(rename = "intermediate v5")]
-    IntermediateV5
+    IntermediateV5,
 }
 
 impl Default for TlsConfiguration {

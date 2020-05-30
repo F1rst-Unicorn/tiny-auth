@@ -143,7 +143,11 @@ pub mod tests {
                 .store
                 .borrow_mut()
                 .remove(&(client_id.to_string(), authorization_code.to_string()))?;
-            Some((redirect_uri, now.signed_duration_since(creation_datetime), user))
+            Some((
+                redirect_uri,
+                now.signed_duration_since(creation_datetime),
+                user,
+            ))
         }
     }
 

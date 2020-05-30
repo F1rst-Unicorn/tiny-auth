@@ -15,19 +15,18 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::domain::user::User;
 use crate::domain::client::Client;
+use crate::domain::user::User;
 
-use chrono::DateTime;
 use chrono::offset::Local;
+use chrono::DateTime;
 
-use serde_derive::Serialize;
 use serde_derive::Deserialize;
+use serde_derive::Serialize;
 
 /// https://openid.net/specs/openid-connect-core-1_0.html#IDToken
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Token {
-
     #[serde(rename = "iss")]
     pub issuer: String,
 
@@ -79,7 +78,7 @@ impl Token {
             nonce: "".to_string(),
             authentication_context_class_reference: "".to_string(),
             authentication_methods_request: vec![],
-            authorized_party: client.client_id.to_string()
+            authorized_party: client.client_id.to_string(),
         }
     }
 }
@@ -133,7 +132,9 @@ mod tests {
 
         let token = from_str::<Token>(input).expect("invalid input");
 
-        assert_eq!(Audience::Several(vec!["audience1".to_string(), "audience2".to_string()]), token.audience);
+        assert_eq!(
+            Audience::Several(vec!["audience1".to_string(), "audience2".to_string()]),
+            token.audience
+        );
     }
-
 }

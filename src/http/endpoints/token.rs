@@ -32,12 +32,12 @@ use base64;
 
 use log::debug;
 
+use crate::domain::token::Token;
 use crate::http::endpoints::render_missing_paramter_with_response;
 use crate::http::state::State;
 use crate::protocol::oauth2::ClientType;
 use crate::protocol::oauth2::GrantType;
 use crate::protocol::oauth2::ProtocolError;
-use crate::domain::token::Token;
 
 // Recommended lifetime is 10 minutes
 // https://tools.ietf.org/html/rfc6749#section-4.1.2
@@ -244,16 +244,31 @@ pub async fn post(
     let user = state.user_store.get(&stored_data.2);
     if user.is_none() {
         debug!("user {} not found", stored_data.2);
-        return render_missing_paramter_with_response(ProtocolError::InvalidGrant, "User not found");
+        return render_missing_paramter_with_response(
+            ProtocolError::InvalidGrant,
+            "User not found",
+        );
     }
     let user = user.unwrap();
 
-    let token = Token::build(&user, &client, &state.instance, Local::now() + Duration::minutes(1));
+    let token = Token::build(
+        &user,
+        &client,
+        &state.instance,
+        Local::now() + Duration::minutes(1),
+    );
 
-    let encoded_token = encode(&Header::new(state.encoding_key.1), &token, &state.encoding_key.0);
+    let encoded_token = encode(
+        &Header::new(state.encoding_key.1),
+        &token,
+        &state.encoding_key.0,
+    );
     if let Err(e) = encoded_token {
         debug!("failed to encode token: {}", e);
-        return render_missing_paramter_with_response(ProtocolError::ServerError, "token encoding failed");
+        return render_missing_paramter_with_response(
+            ProtocolError::ServerError,
+            "token encoding failed",
+        );
     }
     let encoded_token = encoded_token.unwrap();
 
