@@ -142,7 +142,7 @@ pub async fn post(
     let password = query.password.clone().expect("checked before");
 
     if user.is_password_correct(&password) {
-        if let Err(e) = session.set("b", 1) {
+        if let Err(e) = session.set(SESSION_KEY, user.name) {
             error!("Failed to serialise session: {}", e);
             return server_error(&state.tera);
         }
@@ -348,6 +348,6 @@ mod tests {
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         assert_eq!("consent", url);
         assert_eq!(session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap(), None);
-        assert_eq!(session.get::<i32>(SESSION_KEY).unwrap().unwrap(), 1);
+        assert_eq!(session.get::<String>(SESSION_KEY).unwrap().unwrap(), USER);
     }
 }

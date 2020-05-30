@@ -36,6 +36,7 @@ pub trait AuthorizationCodeStore: Send + Sync {
     fn get_authorization_code(
         &self,
         client_id: &str,
+        user: &str,
         redirect_uri: &str,
         now: DateTime<Local>,
     ) -> String;
@@ -45,7 +46,7 @@ pub trait AuthorizationCodeStore: Send + Sync {
         client_id: &str,
         authorization_code: &str,
         now: DateTime<Local>,
-    ) -> Option<(String, Duration)>;
+    ) -> Option<(String, Duration, String)>;
 }
 
 #[cfg(test)]
@@ -111,7 +112,7 @@ pub mod tests {
     }
 
     struct TestAuthorizationCodeStore {
-        store: RefCell<HashMap<(String, String), (String, DateTime<Local>)>>,
+        store: RefCell<HashMap<(String, String), (String, String, DateTime<Local>)>>,
     }
 
     unsafe impl Sync for TestAuthorizationCodeStore {}
@@ -121,12 +122,13 @@ pub mod tests {
         fn get_authorization_code(
             &self,
             client_id: &str,
+            user: &str,
             redirect_uri: &str,
             now: DateTime<Local>,
         ) -> String {
             self.store.borrow_mut().insert(
                 (client_id.to_string(), now.to_rfc3339()),
-                (redirect_uri.to_string(), now),
+                (redirect_uri.to_string(), user.to_string(), now),
             );
             now.to_rfc3339()
         }
@@ -136,12 +138,12 @@ pub mod tests {
             client_id: &str,
             authorization_code: &str,
             now: DateTime<Local>,
-        ) -> Option<(String, Duration)> {
-            let (redirect_uri, creation_datetime) = self
+        ) -> Option<(String, Duration, String)> {
+            let (redirect_uri, user, creation_datetime) = self
                 .store
                 .borrow_mut()
                 .remove(&(client_id.to_string(), authorization_code.to_string()))?;
-            Some((redirect_uri, now.signed_duration_since(creation_datetime)))
+            Some((redirect_uri, now.signed_duration_since(creation_datetime), user))
         }
     }
 

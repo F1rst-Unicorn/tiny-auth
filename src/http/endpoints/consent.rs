@@ -41,7 +41,7 @@ pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
         return render_invalid_consent_request(&state.tera);
     }
 
-    let authenticated = session.get::<i32>(authenticate::SESSION_KEY);
+    let authenticated = session.get::<String>(authenticate::SESSION_KEY);
     if authenticated.is_err() || authenticated.as_ref().unwrap().is_none() {
         debug!("Unsolicited consent request. {:?}", authenticated);
         return render_invalid_consent_request(&state.tera);
@@ -64,11 +64,12 @@ pub async fn post(session: Session, state: web::Data<State>) -> HttpResponse {
         return render_invalid_consent_request(&state.tera);
     }
 
-    let authenticated = session.get::<i32>(authenticate::SESSION_KEY);
-    if authenticated.is_err() || authenticated.as_ref().unwrap().is_none() {
-        debug!("Unsolicited consent request. {:?}", authenticated);
+    let username = session.get::<String>(authenticate::SESSION_KEY);
+    if username.is_err() || username.as_ref().unwrap().is_none() {
+        debug!("Unsolicited consent request. {:?}", username);
         return render_invalid_consent_request(&state.tera);
     }
+    let username = username.unwrap().unwrap();
 
     let first_request_result =
         serde_urlencoded::from_str::<authorize::Request>(&first_request.unwrap().unwrap());
@@ -84,6 +85,7 @@ pub async fn post(session: Session, state: web::Data<State>) -> HttpResponse {
 
     let code = state.auth_code_store.get_authorization_code(
         first_request.client_id.as_ref().unwrap(),
+        &username,
         &redirect_uri,
         Local::now(),
     );
@@ -153,7 +155,7 @@ mod tests {
         let state = Data::new(build_test_state());
         let session = req.get_session();
         session.set(authorize::SESSION_KEY, "dummy").unwrap();
-        session.set(authenticate::SESSION_KEY, 1).unwrap();
+        session.set(authenticate::SESSION_KEY, "user").unwrap();
 
         let resp = get(state, session).await;
 
@@ -210,7 +212,7 @@ mod tests {
                 &serde_urlencoded::to_string(first_request.clone()).unwrap(),
             )
             .unwrap();
-        session.set(authenticate::SESSION_KEY, 1).unwrap();
+        session.set(authenticate::SESSION_KEY, "user").unwrap();
 
         let resp = post(session, state).await;
 

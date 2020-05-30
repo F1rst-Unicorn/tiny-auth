@@ -27,6 +27,8 @@ use openssl::error::ErrorStack;
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Config {
     pub web: Web,
+
+    pub crypto: Crypto,
 }
 
 impl Config {
@@ -110,4 +112,12 @@ pub struct Tls {
     pub old_ciphers: Option<String>,
     #[serde(rename = "1.3 ciphers")]
     pub ciphers: Option<String>,
+}
+
+#[derive(Default, Clone, Debug, Deserialize)]
+pub struct Crypto {
+    pub key: String,
+
+    #[serde(rename = "public key")]
+    pub public_key: String,
 }

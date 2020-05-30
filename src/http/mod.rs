@@ -19,17 +19,10 @@ pub mod endpoints;
 mod state;
 mod tera;
 
-use std::io::Error;
-
-use actix_web::cookie::SameSite;
-use actix_web::dev::Server;
-use actix_web::web;
-use actix_web::App;
-use actix_web::HttpServer;
-
-use actix_session::CookieSession;
+use std::convert::From;
 
 use crate::config::Web;
+use crate::config::Crypto;
 use crate::config::Tls;
 use crate::store::memory::MemoryAuthorizationCodeStore;
 use crate::store::memory::MemoryClientStore;
@@ -39,7 +32,18 @@ use crate::systemd::notify_about_termination;
 use crate::systemd::watchdog;
 use crate::util::read_file;
 
-use openssl::error::ErrorStack;
+use actix_web::cookie::SameSite;
+use actix_web::dev::Server;
+use actix_web::web;
+use actix_web::App;
+use actix_web::HttpServer;
+
+use actix_session::CookieSession;
+
+use jsonwebtoken::EncodingKey;
+use jsonwebtoken::DecodingKey;
+use jsonwebtoken::Algorithm;
+
 use openssl::ssl::SslAcceptorBuilder;
 use openssl::ssl::SslFiletype;
 use openssl::ssl::SslVerifyMode;
@@ -56,9 +60,33 @@ use log::error;
 use tokio::signal::unix::signal;
 use tokio::signal::unix::SignalKind;
 use tokio::sync::oneshot;
-use std::process::exit;
 
-pub fn run(web: Web) -> std::io::Result<()> {
+#[derive(Debug)]
+pub enum Error {
+    StdIoError(std::io::Error),
+    OpensslError(openssl::error::ErrorStack),
+    JwtError(jsonwebtoken::errors::Error),
+}
+
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
+        Self::StdIoError(error)
+    }
+}
+
+impl From<openssl::error::ErrorStack> for Error {
+    fn from(error: openssl::error::ErrorStack) -> Self {
+        Self::OpensslError(error)
+    }
+}
+
+impl From<jsonwebtoken::errors::Error> for Error {
+    fn from(error: jsonwebtoken::errors::Error) -> Self {
+        Self::JwtError(error)
+    }
+}
+
+pub fn run(web: Web, crypto: Crypto) -> Result<(), Error> {
     let mut tok_runtime = tokio::runtime::Builder::new()
         .threaded_scheduler()
         .core_threads(4)
@@ -75,7 +103,6 @@ pub fn run(web: Web) -> std::io::Result<()> {
         let server = rx.await;
 
         if let Err(e) = server {
-            warn!("Failed to create server: {}", e);
             return;
         }
         let server = server.unwrap();
@@ -87,9 +114,8 @@ pub fn run(web: Web) -> std::io::Result<()> {
 
     tasks.block_on(&mut tok_runtime, async move {
         tokio::task::spawn_local(system_fut);
-        let srv = configure_http_server(web);
+        let srv = configure_http_server(web, crypto);
         if srv.is_err() {
-            error!("Failed to create server");
             return;
         }
         let srv = srv.unwrap();
@@ -105,20 +131,54 @@ pub fn run(web: Web) -> std::io::Result<()> {
     Ok(())
 }
 
-fn configure_http_server(web: Web) -> Result<Server, Error> {
+fn configure_http_server(web: Web, crypto: Crypto) -> Result<Server, Error> {
     let bind = web.bind.clone();
     let workers = web.workers;
     let tls = web.tls.clone();
 
     let tera = tera::load_template_engine(&web.static_files);
 
+    let token_certificate = read_file(&crypto.public_key)?;
+    let bytes = token_certificate.as_bytes();
+    let mut decoding_key_result = DecodingKey::from_rsa_pem(bytes);
+    if let Err(_) = decoding_key_result {
+        decoding_key_result = DecodingKey::from_ec_pem(bytes);
+        if let Err(e) = decoding_key_result {
+            error!("failed to read public token key: {}", e);
+            return Err(e.into());
+        }
+    }
+
+    let file = read_file(&crypto.key)?;
+    let bytes = file.as_bytes();
+    let mut encoding_key_result = EncodingKey::from_rsa_pem(bytes);
+    let mut ecdsa = false;
+    if let Err(_) = encoding_key_result {
+        encoding_key_result = EncodingKey::from_ec_pem(bytes);
+        if let Err(e) = encoding_key_result {
+            error!("failed to read private token key: {}", e);
+            return Err(e.into());
+        }
+        ecdsa = true;
+    }
+
+    let algorithm = if ecdsa {
+        Algorithm::ES384
+    } else {
+        Algorithm::PS512
+    };
+
     let state = web::Data::new(state::State {
+        instance: web.bind.to_string() + "/" + web.path.as_deref().unwrap_or(""),
+        encoding_key: (encoding_key_result.unwrap(), algorithm),
+        decoding_key: decoding_key_result.unwrap().into_static(),
         tera,
         client_store: Box::new(MemoryClientStore {}),
         user_store: Box::new(MemoryUserStore {}),
         auth_code_store: Box::new(MemoryAuthorizationCodeStore {}),
     });
     let server = HttpServer::new(move || {
+        let token_certificate = token_certificate.clone();
         App::new()
             .app_data(state.clone())
             .wrap(
@@ -144,7 +204,8 @@ fn configure_http_server(web: Web) -> Result<Server, Error> {
                         web::post().to(endpoints::authenticate::post),
                     )
                     .route("/consent", web::get().to(endpoints::consent::get))
-                    .route("/consent", web::post().to(endpoints::consent::post)),
+                    .route("/consent", web::post().to(endpoints::consent::post))
+                    .route("/cert", web::get().to(move || actix_web::HttpResponse::Ok().body(token_certificate.clone())))
             )
     })
         .disable_signals()
@@ -153,8 +214,7 @@ fn configure_http_server(web: Web) -> Result<Server, Error> {
     let server = if let Some(tls) = tls {
         let openssl = configure_openssl(&tls);
         if let Err(e) = openssl {
-            warn!("Failed to setup TLS: {}", e);
-            return Err(e.into());
+            return Err(e);
         }
         server.bind_openssl(&bind, openssl.unwrap())
     } else {
@@ -163,7 +223,7 @@ fn configure_http_server(web: Web) -> Result<Server, Error> {
 
     if let Err(e) = server {
         warn!("Failed to create server: {}", e);
-        return Err(e);
+        return Err(e.into());
     }
     let mut server = server.unwrap();
 
@@ -176,7 +236,7 @@ fn configure_http_server(web: Web) -> Result<Server, Error> {
     Ok(srv)
 }
 
-fn configure_openssl(config: &Tls) -> Result<SslAcceptorBuilder, ErrorStack> {
+fn configure_openssl(config: &Tls) -> Result<SslAcceptorBuilder, Error> {
     let mut builder = config.configuration.to_acceptor_builder()?;
 
     if let Some(client_ca) = &config.client_ca {
@@ -189,8 +249,7 @@ fn configure_openssl(config: &Tls) -> Result<SslAcceptorBuilder, ErrorStack> {
 
         let cert_content = read_file(client_ca);
         if let Err(e) = cert_content {
-            error!("Could not open client CA: {}", e);
-            exit(1);
+            return Err(e.into());
         }
         let cert = X509::from_pem(cert_content.unwrap().as_bytes())?;
         let mut store_builder = X509StoreBuilder::new()?;
@@ -213,7 +272,7 @@ fn configure_openssl(config: &Tls) -> Result<SslAcceptorBuilder, ErrorStack> {
         let content = read_file(dhparam);
         if let Err(e) = content {
             error!("Could not open {}: {}", dhparam, e);
-            exit(1);
+            return Err(e.into());
         }
         let dhparam = Dh::params_from_pem(content.unwrap().as_bytes())?;
         builder.set_tmp_dh(&dhparam)?;

@@ -56,6 +56,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
     fn get_authorization_code(
         &self,
         client_id: &str,
+        user: &str,
         redirect_uri: &str,
         now: DateTime<Local>,
     ) -> String {
@@ -67,7 +68,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
         client_id: &str,
         authorization_code: &str,
         now: DateTime<Local>,
-    ) -> Option<(String, Duration)> {
-        Some(("http://localhost/client".to_string(), Duration::seconds(1)))
+    ) -> Option<(String, Duration, String)> {
+        Some(("http://localhost/client".to_string(), Duration::seconds(1), "user".to_string()))
     }
 }

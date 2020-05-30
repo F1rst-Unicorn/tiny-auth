@@ -25,6 +25,9 @@ use serde_derive::Serialize;
 use chrono::offset::Local;
 use chrono::Duration;
 
+use jsonwebtoken::encode;
+use jsonwebtoken::Header;
+
 use base64;
 
 use log::debug;
@@ -34,6 +37,7 @@ use crate::http::state::State;
 use crate::protocol::oauth2::ClientType;
 use crate::protocol::oauth2::GrantType;
 use crate::protocol::oauth2::ProtocolError;
+use crate::domain::token::Token;
 
 // Recommended lifetime is 10 minutes
 // https://tools.ietf.org/html/rfc6749#section-4.1.2
@@ -225,22 +229,38 @@ pub async fn post(
         );
         return render_missing_paramter_with_response(ProtocolError::InvalidGrant, "Invalid code");
     }
-    let stored_redirect_uri = stored_redirect_uri.unwrap();
+    let stored_data = stored_redirect_uri.unwrap();
 
-    if &stored_redirect_uri.0 != request.redirect_uri.as_ref().unwrap() {
+    if &stored_data.0 != request.redirect_uri.as_ref().unwrap() {
         debug!("redirect_uri is wrong");
         return render_missing_paramter_with_response(ProtocolError::InvalidGrant, "Invalid code");
     }
 
-    if stored_redirect_uri.1 > Duration::minutes(AUTH_CODE_LIFE_TIME) {
+    if stored_data.1 > Duration::minutes(AUTH_CODE_LIFE_TIME) {
         debug!("code has expired");
         return render_missing_paramter_with_response(ProtocolError::InvalidGrant, "Invalid code");
     }
 
+    let user = state.user_store.get(&stored_data.2);
+    if user.is_none() {
+        debug!("user {} not found", stored_data.2);
+        return render_missing_paramter_with_response(ProtocolError::InvalidGrant, "User not found");
+    }
+    let user = user.unwrap();
+
+    let token = Token::build(&user, &client, &state.instance, Local::now() + Duration::minutes(1));
+
+    let encoded_token = encode(&Header::new(state.encoding_key.1), &token, &state.encoding_key.0);
+    if let Err(e) = encoded_token {
+        debug!("failed to encode token: {}", e);
+        return render_missing_paramter_with_response(ProtocolError::ServerError, "token encoding failed");
+    }
+    let encoded_token = encoded_token.unwrap();
+
     HttpResponse::Ok().json(Response {
-        access_token: "dummy_token".to_string(),
+        access_token: encoded_token.to_string(),
         token_type: "bearer".to_string(),
-        expires_in: None,
+        expires_in: Some(60),
         refresh_token: None,
         scope: None,
         id_token: None,
@@ -265,6 +285,7 @@ mod tests {
     use crate::store::tests::CONFIDENTIAL_CLIENT;
     use crate::store::tests::PUBLIC_CLIENT;
     use crate::store::tests::UNKNOWN_CLIENT_ID;
+    use crate::store::tests::USER;
 
     #[actix_rt::test]
     async fn missing_grant_type_is_rejected() {
@@ -382,6 +403,7 @@ mod tests {
         let state = Data::new(build_test_state());
         let auth_code = state.auth_code_store.get_authorization_code(
             PUBLIC_CLIENT,
+            USER,
             &redirect_uri,
             Local::now(),
         );
@@ -407,6 +429,7 @@ mod tests {
         let creation_time = Local::now() - Duration::minutes(2 * AUTH_CODE_LIFE_TIME);
         let auth_code = state.auth_code_store.get_authorization_code(
             PUBLIC_CLIENT,
+            USER,
             &redirect_uri,
             creation_time,
         );
@@ -431,6 +454,7 @@ mod tests {
         let state = Data::new(build_test_state());
         let auth_code = state.auth_code_store.get_authorization_code(
             PUBLIC_CLIENT,
+            USER,
             &redirect_uri,
             Local::now(),
         );
@@ -445,9 +469,9 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Response>(resp).await;
-        assert_eq!("dummy_token".to_string(), response.access_token);
+        assert!(!response.access_token.is_empty());
         assert_eq!("bearer".to_string(), response.token_type);
-        assert_eq!(None, response.expires_in);
+        assert_eq!(Some(60), response.expires_in);
         assert_eq!(None, response.refresh_token);
         assert_eq!(None, response.scope);
         assert_eq!(None, response.id_token);
@@ -460,6 +484,7 @@ mod tests {
         let state = Data::new(build_test_state());
         let auth_code = state.auth_code_store.get_authorization_code(
             CONFIDENTIAL_CLIENT,
+            USER,
             &redirect_uri,
             Local::now(),
         );
@@ -486,6 +511,7 @@ mod tests {
         let state = Data::new(build_test_state());
         let auth_code = state.auth_code_store.get_authorization_code(
             CONFIDENTIAL_CLIENT,
+            USER,
             &redirect_uri,
             Local::now(),
         );
@@ -512,6 +538,7 @@ mod tests {
         let state = Data::new(build_test_state());
         let auth_code = state.auth_code_store.get_authorization_code(
             CONFIDENTIAL_CLIENT,
+            USER,
             &redirect_uri,
             Local::now(),
         );
@@ -538,6 +565,7 @@ mod tests {
         let state = Data::new(build_test_state());
         let auth_code = state.auth_code_store.get_authorization_code(
             CONFIDENTIAL_CLIENT,
+            USER,
             &redirect_uri,
             Local::now(),
         );
@@ -567,6 +595,7 @@ mod tests {
         let state = Data::new(build_test_state());
         let auth_code = state.auth_code_store.get_authorization_code(
             CONFIDENTIAL_CLIENT,
+            USER,
             &redirect_uri,
             Local::now(),
         );
@@ -595,6 +624,7 @@ mod tests {
         let state = Data::new(build_test_state());
         let auth_code = state.auth_code_store.get_authorization_code(
             CONFIDENTIAL_CLIENT,
+            USER,
             &redirect_uri,
             Local::now(),
         );
@@ -609,9 +639,9 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Response>(resp).await;
-        assert_eq!("dummy_token".to_string(), response.access_token);
+        assert!(!response.access_token.is_empty());
         assert_eq!("bearer".to_string(), response.token_type);
-        assert_eq!(None, response.expires_in);
+        assert_eq!(Some(60), response.expires_in);
         assert_eq!(None, response.refresh_token);
         assert_eq!(None, response.scope);
         assert_eq!(None, response.id_token);

@@ -28,8 +28,9 @@ mod util;
 use config::parser::parse_config;
 
 use log::info;
+use log::error;
 
-fn main() -> std::io::Result<()> {
+fn main() {
     let arguments = cli_parser::parse_arguments();
     logging::initialise(
         arguments
@@ -47,7 +48,7 @@ fn main() -> std::io::Result<()> {
     info!("Parsing config");
     let config = parse_config(config_path);
 
-    http::run(config.web)?;
-
-    Ok(())
+    if let Err(e) = http::run(config.web, config.crypto) {
+        error!("Server failed: {:#?}", e);
+    }
 }
