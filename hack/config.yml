@@ -21,3 +21,11 @@ web:
   static_files: static
   session_timeout: 60000
   secret_key: jxbvDbbsgJyh1x2HG8V8rqKsD4vW45aIYcNopFuYdPdSvyKSVB54CWmCinCC1iv912AIkEfWB9kVDeliANle5Acc
+  tls:
+    configuration: modern v5
+    key: hack/key.pem
+    certificate: hack/chain.pem
+#    client_ca: hack/ca.pem
+    dh_param: hack/dhparam.pem
+    1.2 ciphers: HIGH
+    1.3 cipers: HIGH

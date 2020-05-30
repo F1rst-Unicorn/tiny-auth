@@ -16,11 +16,9 @@
  */
 
 use crate::config::Config;
+use crate::util::read_file;
 
 use std::fs;
-use std::fs::File;
-use std::io;
-use std::io::Read;
 use std::process::exit;
 use std::result::Result;
 
@@ -107,11 +105,4 @@ fn parse_raw_config(raw_config: &[String]) -> Config {
             .map(Result::unwrap)
             .fold(Config::new(), Config::merge)
     }
-}
-
-fn read_file(file_path: &str) -> Result<String, io::Error> {
-    let mut file = File::open(file_path)?;
-    let mut content = String::new();
-    file.read_to_string(&mut content)?;
-    Ok(content)
 }

@@ -15,39 +15,13 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-mod cli_parser;
-mod config;
-mod domain;
-mod http;
-mod logging;
-mod protocol;
-mod store;
-mod systemd;
-mod util;
+use std::io::Error;
+use std::io::Read;
+use std::fs::File;
 
-use config::parser::parse_config;
-
-use log::info;
-
-fn main() -> std::io::Result<()> {
-    let arguments = cli_parser::parse_arguments();
-    logging::initialise(
-        arguments
-            .value_of(cli_parser::FLAG_LOG_CONFIG)
-            .expect("Missing default value in cli_parser"),
-    );
-
-    info!("Starting up");
-
-    let config_path = arguments
-        .value_of(cli_parser::FLAG_CONFIG)
-        .expect("Missing default value in cli_parser");
-    info!("Config is at {}", config_path);
-
-    info!("Parsing config");
-    let config = parse_config(config_path);
-
-    http::run(config.web)?;
-
-    Ok(())
+pub fn read_file(file_path: &str) -> Result<String, Error> {
+    let mut file = File::open(file_path)?;
+    let mut content = String::new();
+    file.read_to_string(&mut content)?;
+    Ok(content)
 }
