@@ -15,6 +15,13 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use super::render_template;
+use super::server_error;
+use crate::http::endpoints::authenticate;
+use crate::http::endpoints::authorize;
+use crate::http::state::State;
+
+use actix_web::http::StatusCode;
 use actix_web::web;
 use actix_web::HttpResponse;
 
@@ -24,37 +31,29 @@ use url::Url;
 
 use chrono::offset::Local;
 
-use tera::Context;
-
 use log::debug;
 use log::error;
-
-use crate::http::endpoints::authenticate;
-use crate::http::endpoints::authorize;
-use crate::http::endpoints::server_error;
-use crate::http::state::State;
 
 pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
     let first_request = session.get::<String>(authorize::SESSION_KEY);
     if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
-        debug!("Unsolicited consent request. {:?}", first_request);
+        debug!(
+            "Unsolicited consent request. authorize request was {:?}",
+            first_request
+        );
         return render_invalid_consent_request(&state.tera);
     }
 
     let authenticated = session.get::<String>(authenticate::SESSION_KEY);
     if authenticated.is_err() || authenticated.as_ref().unwrap().is_none() {
-        debug!("Unsolicited consent request. {:?}", authenticated);
+        debug!(
+            "Unsolicited consent request. authenticate request was {:?}",
+            authenticated
+        );
         return render_invalid_consent_request(&state.tera);
     }
 
-    let body = state.tera.render("consent.html.j2", &Context::new());
-    match body {
-        Ok(body) => HttpResponse::Ok().body(body),
-        Err(e) => {
-            log::warn!("{}", e);
-            HttpResponse::InternalServerError().finish()
-        }
-    }
+    render_template("consent.html.j2", StatusCode::OK, &state.tera)
 }
 
 pub async fn post(session: Session, state: web::Data<State>) -> HttpResponse {
@@ -102,16 +101,11 @@ pub async fn post(session: Session, state: web::Data<State>) -> HttpResponse {
 }
 
 pub fn render_invalid_consent_request(tera: &tera::Tera) -> HttpResponse {
-    let body = tera.render("invalid_consent_request.html.j2", &tera::Context::new());
-    match body {
-        Ok(body) => HttpResponse::BadRequest()
-            .set_header("Content-Type", "text/html")
-            .body(body),
-        Err(e) => {
-            log::warn!("{}", e);
-            server_error(tera)
-        }
-    }
+    render_template(
+        "invalid_consent_request.html.j2",
+        StatusCode::BAD_REQUEST,
+        tera,
+    )
 }
 
 #[cfg(test)]

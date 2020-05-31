@@ -23,33 +23,17 @@ pub mod userinfo;
 
 use crate::protocol::oauth2::ProtocolError;
 
+use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
 
-use url::Url;
+use tera::Context;
+use tera::Tera;
 
+use serde::de::Deserialize as _;
+use serde::de::Visitor;
+use serde::Deserializer;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
-
-pub fn missing_parameter(
-    redirect_uri: &str,
-    error: ProtocolError,
-    description: &str,
-    state: &Option<String>,
-) -> HttpResponse {
-    let mut url = Url::parse(redirect_uri).expect("should have been validated upon registration");
-
-    url.query_pairs_mut()
-        .append_pair("error", &format!("{}", error))
-        .append_pair("error_description", description);
-
-    if let Some(state) = state {
-        url.query_pairs_mut().append_pair("state", state);
-    }
-
-    HttpResponse::TemporaryRedirect()
-        .set_header("Location", url.as_str())
-        .finish()
-}
 
 #[derive(Serialize, Deserialize)]
 struct ErrorResponse {
@@ -62,10 +46,7 @@ struct ErrorResponse {
     error_uri: Option<String>,
 }
 
-pub fn render_missing_paramter_with_response(
-    error: ProtocolError,
-    description: &str,
-) -> HttpResponse {
+pub fn render_oauth_error_response(error: ProtocolError, description: &str) -> HttpResponse {
     match error {
         ProtocolError::InvalidClient => HttpResponse::Unauthorized(),
         _ => HttpResponse::BadRequest(),
@@ -77,26 +58,128 @@ pub fn render_missing_paramter_with_response(
     })
 }
 
-pub fn server_error(tera: &tera::Tera) -> HttpResponse {
-    let body = tera.render("500.html.j2", &tera::Context::new());
+pub fn server_error(tera: &Tera) -> HttpResponse {
+    render_template("500.html.j2", StatusCode::INTERNAL_SERVER_ERROR, tera)
+}
+
+fn render_template(name: &str, code: StatusCode, tera: &Tera) -> HttpResponse {
+    render_template_with_context(name, code, tera, &Context::new())
+}
+
+fn render_template_with_context(
+    name: &str,
+    code: StatusCode,
+    tera: &Tera,
+    context: &Context,
+) -> HttpResponse {
+    let body = tera.render(name, context);
     match body {
-        Ok(body) => HttpResponse::InternalServerError()
+        Ok(body) => HttpResponse::build(code)
             .set_header("Content-Type", "text/html")
             .body(body),
         Err(e) => {
             log::warn!("{}", e);
-            HttpResponse::InternalServerError().finish()
+            server_error(tera)
         }
     }
+}
+
+fn deserialise_empty_as_none<'de, D: Deserializer<'de>>(
+    value: D,
+) -> Result<Option<String>, D::Error> {
+    struct OptionVisitor {
+        marker: std::marker::PhantomData<String>,
+    }
+
+    impl<'de> Visitor<'de> for OptionVisitor {
+        type Value = Option<String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("option")
+        }
+
+        #[inline]
+        fn visit_none<E>(self) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(None)
+        }
+
+        #[inline]
+        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            String::deserialize(deserializer).map(Some)
+        }
+
+        #[inline]
+        fn visit_unit<E>(self) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(None)
+        }
+
+        #[doc(hidden)]
+        fn __private_visit_untagged_option<D>(self, deserializer: D) -> Result<Self::Value, ()>
+        where
+            D: Deserializer<'de>,
+        {
+            Ok(String::deserialize(deserializer).ok())
+        }
+    }
+    let mut result = value
+        .deserialize_option(OptionVisitor {
+            marker: std::marker::PhantomData,
+        })
+        .ok()
+        .flatten();
+    if result.is_some() && result.as_ref().unwrap().is_empty() {
+        result = None;
+    }
+    Ok(result)
 }
 
 #[cfg(test)]
 mod tests {
 
+    use super::*;
+
     use actix_web::web::BytesMut;
     use actix_web::HttpResponse;
     use futures::stream::StreamExt;
     use serde::de::DeserializeOwned;
+    use serde_derive::Deserialize;
+
+    #[derive(Debug, Deserialize)]
+    struct Test {
+        #[serde(default)]
+        #[serde(deserialize_with = "deserialise_empty_as_none")]
+        pub value: Option<String>,
+    }
+
+    #[test]
+    pub fn empty_string_is_mapped_to_none() {
+        let input = r#"value="#;
+        let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
+        assert_eq!(None, result.value);
+    }
+
+    #[test]
+    pub fn missing_value_is_none() {
+        let input = r#""#;
+        let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
+        assert_eq!(None, result.value);
+    }
+
+    #[test]
+    pub fn value_is_some() {
+        let input = r#"value=value"#;
+        let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
+        assert_eq!(Some("value".to_string()), result.value);
+    }
 
     pub async fn read_response<T: DeserializeOwned>(mut resp: HttpResponse) -> T {
         let mut body = resp.take_body();

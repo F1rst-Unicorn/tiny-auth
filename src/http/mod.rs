@@ -19,17 +19,13 @@ pub mod endpoints;
 mod state;
 mod tera;
 
-use std::convert::From;
-
 use crate::config::Crypto;
 use crate::config::Tls;
 use crate::config::Web;
+use crate::runtime::Error;
 use crate::store::memory::MemoryAuthorizationCodeStore;
 use crate::store::memory::MemoryClientStore;
 use crate::store::memory::MemoryUserStore;
-use crate::systemd::notify_about_start;
-use crate::systemd::notify_about_termination;
-use crate::systemd::watchdog;
 use crate::util::read_file;
 
 use actix_web::cookie::SameSite;
@@ -52,86 +48,10 @@ use openssl::x509::store::X509StoreBuilder;
 use openssl::x509::X509Name;
 use openssl::x509::X509;
 
-use log::debug;
 use log::error;
-use log::info;
 use log::warn;
 
-use tokio::signal::unix::signal;
-use tokio::signal::unix::SignalKind;
-use tokio::sync::oneshot;
-
-#[derive(Debug)]
-pub enum Error {
-    StdIoError(std::io::Error),
-    OpensslError(openssl::error::ErrorStack),
-    JwtError(jsonwebtoken::errors::Error),
-}
-
-impl From<std::io::Error> for Error {
-    fn from(error: std::io::Error) -> Self {
-        Self::StdIoError(error)
-    }
-}
-
-impl From<openssl::error::ErrorStack> for Error {
-    fn from(error: openssl::error::ErrorStack) -> Self {
-        Self::OpensslError(error)
-    }
-}
-
-impl From<jsonwebtoken::errors::Error> for Error {
-    fn from(error: jsonwebtoken::errors::Error) -> Self {
-        Self::JwtError(error)
-    }
-}
-
-pub fn run(web: Web, crypto: Crypto) -> Result<(), Error> {
-    let mut tok_runtime = tokio::runtime::Builder::new()
-        .threaded_scheduler()
-        .core_threads(4)
-        .enable_all()
-        .thread_name(env!("CARGO_PKG_NAME"))
-        .build()?;
-
-    let tasks = tokio::task::LocalSet::new();
-    let system_fut = actix_rt::System::run_in_tokio(env!("CARGO_PKG_NAME"), &tasks);
-
-    let (tx, rx) = oneshot::channel();
-
-    tok_runtime.spawn(async move {
-        let server = rx.await;
-
-        if let Err(e) = server {
-            return;
-        }
-        let server = server.unwrap();
-
-        tokio::spawn(notify_about_start());
-        tokio::spawn(watchdog());
-        tokio::spawn(terminator(server));
-    });
-
-    tasks.block_on(&mut tok_runtime, async move {
-        tokio::task::spawn_local(system_fut);
-        let srv = configure_http_server(web, crypto);
-        if srv.is_err() {
-            return;
-        }
-        let srv = srv.unwrap();
-        let result = tx.send(srv.clone());
-        if result.is_err() {
-            error!("Failed to create server");
-            return;
-        }
-        if let Err(e) = srv.await {
-            error!("HTTP server failed: {}", e);
-        }
-    });
-    Ok(())
-}
-
-fn configure_http_server(web: Web, crypto: Crypto) -> Result<Server, Error> {
+pub fn build(web: Web, crypto: Crypto) -> Result<Server, Error> {
     let bind = web.bind.clone();
     let workers = web.workers;
     let tls = web.tls.clone();
@@ -281,51 +201,4 @@ fn configure_openssl(config: &Tls) -> Result<SslAcceptorBuilder, Error> {
     builder.set_certificate_chain_file(&config.certificate)?;
 
     Ok(builder)
-}
-
-async fn terminator(server: Server) -> Result<(), tokio::io::Error> {
-    let mut sigint = signal(SignalKind::interrupt())?;
-    let mut sigterm = signal(SignalKind::terminate())?;
-    let mut sigquit = signal(SignalKind::quit())?;
-
-    debug!("Signal handler ready");
-    tokio::select! {
-        _ = sigint.recv() => {}
-        _ = sigterm.recv() => {}
-        _ = sigquit.recv() => {}
-    }
-
-    info!("Exitting");
-    tokio::spawn(notify_about_termination());
-    tokio::select! {
-        _ = server.stop(true) => {
-            debug!("HTTP server stopped");
-            return Ok(())
-        }
-        _ = sigint.recv() => {}
-        _ = sigterm.recv() => {}
-        _ = sigquit.recv() => {}
-    };
-
-    info!("Calm down, exitting immediately...");
-    while tokio::select! {
-        _ = server.stop(false) => {
-            debug!("HTTP server stopped");
-            return Ok(())
-        }
-        _ = sigint.recv() => {
-            info!("Still waiting for shutdown...");
-            true
-        }
-        _ = sigterm.recv() => {
-            info!("Still waiting for shutdown...");
-            true
-        }
-        _ = sigquit.recv() => {
-            info!("Still waiting for shutdown...");
-            true
-        }
-    } {}
-
-    Ok(())
 }

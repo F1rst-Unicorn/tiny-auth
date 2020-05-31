@@ -21,8 +21,10 @@ mod domain;
 mod http;
 mod logging;
 mod protocol;
+mod runtime;
 mod store;
 mod systemd;
+mod terminate;
 mod util;
 
 use config::parser::parse_config;
@@ -48,7 +50,7 @@ fn main() {
     info!("Parsing config");
     let config = parse_config(config_path);
 
-    if let Err(e) = http::run(config.web, config.crypto) {
+    if let Err(e) = runtime::run(config.web, config.crypto) {
         error!("Server failed: {:#?}", e);
     }
 }

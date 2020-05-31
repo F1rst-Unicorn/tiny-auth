@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use actix_web::http::HeaderValue;
 use actix_web::web;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
@@ -32,8 +33,10 @@ use base64;
 
 use log::debug;
 
+use super::deserialise_empty_as_none;
+use crate::domain::client::Client;
 use crate::domain::token::Token;
-use crate::http::endpoints::render_missing_paramter_with_response;
+use crate::http::endpoints::render_oauth_error_response;
 use crate::http::state::State;
 use crate::protocol::oauth2::ClientType;
 use crate::protocol::oauth2::GrantType;
@@ -47,10 +50,16 @@ pub const AUTH_CODE_LIFE_TIME: i64 = 10;
 pub struct Request {
     grant_type: Option<GrantType>,
 
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     code: Option<String>,
 
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     redirect_uri: Option<String>,
 
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     client_id: Option<String>,
 }
 
@@ -73,68 +82,59 @@ pub struct Response {
     id_token: Option<String>,
 }
 
-impl Request {
-    pub fn normalise(&mut self) {
-        if self.code.is_some() && self.code.as_ref().unwrap().is_empty() {
-            self.code = None
-        }
-        if self.redirect_uri.is_some() && self.redirect_uri.as_ref().unwrap().is_empty() {
-            self.redirect_uri = None
-        }
-        if self.client_id.is_some() && self.client_id.as_ref().unwrap().is_empty() {
-            self.client_id = None
-        }
-    }
-}
-
 pub async fn post(
     headers: HttpRequest,
-    mut request: web::Form<Request>,
+    request: web::Form<Request>,
     state: web::Data<State>,
 ) -> HttpResponse {
-    request.normalise();
-
     if request.grant_type.is_none() {
-        return render_missing_paramter_with_response(
+        return render_oauth_error_response(
             ProtocolError::InvalidRequest,
             "Missing parameter grant_type",
         );
     }
 
-    if request.grant_type.as_ref().unwrap() != &GrantType::AuthorizationCode {
-        return render_missing_paramter_with_response(
-            ProtocolError::UnsupportedGrantType,
-            "grant_type must be authorization_code",
-        );
-    }
-
     if request.code.is_none() {
-        return render_missing_paramter_with_response(
+        return render_oauth_error_response(
             ProtocolError::InvalidRequest,
             "Missing parameter code",
         );
     }
 
     if request.redirect_uri.is_none() {
-        return render_missing_paramter_with_response(
+        return render_oauth_error_response(
             ProtocolError::InvalidRequest,
             "Missing parameter redirect_uri",
         );
     }
 
     if request.client_id.is_none() {
-        return render_missing_paramter_with_response(
+        return render_oauth_error_response(
             ProtocolError::InvalidRequest,
             "Missing parameter client_id",
         );
     }
 
+    match request.grant_type.as_ref().unwrap() {
+        GrantType::AuthorizationCode => grant_with_authorization_code(headers, request, state),
+        _ => render_oauth_error_response(
+            ProtocolError::UnsupportedGrantType,
+            "grant_type must be authorization_code",
+        ),
+    }
+}
+
+pub fn grant_with_authorization_code(
+    headers: HttpRequest,
+    request: web::Form<Request>,
+    state: web::Data<State>,
+) -> HttpResponse {
     let client_id = request.client_id.as_ref().unwrap();
     let client = state.client_store.get(client_id);
 
     if client.is_none() {
         debug!("client '{}' not found", client_id);
-        return render_missing_paramter_with_response(
+        return render_oauth_error_response(
             ProtocolError::InvalidRequest,
             "client id or password wrong",
         );
@@ -143,77 +143,8 @@ pub async fn post(
     let client = client.unwrap();
 
     if let ClientType::Confidential { .. } = client.client_type {
-        let (client_name, password) = match headers.headers().get("Authorization") {
-            Some(value) => {
-                let value = value.to_str();
-                if let Err(e) = value {
-                    debug!("decoding of authorization header failed. {}", e);
-                    return render_missing_paramter_with_response(
-                        ProtocolError::InvalidClient,
-                        "Invalid authorization header",
-                    );
-                }
-                let value = value.unwrap().to_string();
-
-                if !value.starts_with("Basic ") {
-                    debug!("Malformed HTTP basic authorization header '{}'", value);
-                    return render_missing_paramter_with_response(
-                        ProtocolError::InvalidClient,
-                        "Invalid authorization header",
-                    );
-                }
-                let value = value.replacen("Basic ", "", 1);
-
-                let credentials = base64::decode(value);
-                if let Err(e) = credentials {
-                    debug!("base64 decoding of authorization header failed. {}", e);
-                    return render_missing_paramter_with_response(
-                        ProtocolError::InvalidClient,
-                        "Invalid authorization header",
-                    );
-                }
-                let credentials = credentials.unwrap();
-
-                let credentials = String::from_utf8(credentials);
-                if let Err(e) = credentials {
-                    debug!("utf-8 decoding of authorization header failed. {}", e);
-                    return render_missing_paramter_with_response(
-                        ProtocolError::InvalidClient,
-                        "Invalid authorization header",
-                    );
-                }
-                let credentials = credentials.unwrap();
-
-                let split: Vec<String> = credentials.splitn(2, ':').map(str::to_string).collect();
-                if split.len() == 2 {
-                    (split[0].clone(), split[1].clone())
-                } else {
-                    return render_missing_paramter_with_response(
-                        ProtocolError::InvalidClient,
-                        "Invalid authorization header",
-                    );
-                }
-            }
-            None => {
-                return render_missing_paramter_with_response(
-                    ProtocolError::InvalidClient,
-                    "Missing authorization header",
-                )
-            }
-        };
-
-        if *client_id != client_name {
-            return render_missing_paramter_with_response(
-                ProtocolError::InvalidClient,
-                "Invalid authorization header",
-            );
-        }
-
-        if !client.is_password_correct(&password) {
-            return render_missing_paramter_with_response(
-                ProtocolError::InvalidClient,
-                "client id or password wrong",
-            );
+        if let Some(response) = authenticate_client(headers, &client) {
+            return response;
         }
     }
 
@@ -227,27 +158,24 @@ pub async fn post(
             "No authorization code found for client '{}' with code '{}'",
             client_id, code
         );
-        return render_missing_paramter_with_response(ProtocolError::InvalidGrant, "Invalid code");
+        return render_oauth_error_response(ProtocolError::InvalidGrant, "Invalid code");
     }
     let stored_data = stored_redirect_uri.unwrap();
 
     if &stored_data.0 != request.redirect_uri.as_ref().unwrap() {
         debug!("redirect_uri is wrong");
-        return render_missing_paramter_with_response(ProtocolError::InvalidGrant, "Invalid code");
+        return render_oauth_error_response(ProtocolError::InvalidGrant, "Invalid code");
     }
 
     if stored_data.1 > Duration::minutes(AUTH_CODE_LIFE_TIME) {
         debug!("code has expired");
-        return render_missing_paramter_with_response(ProtocolError::InvalidGrant, "Invalid code");
+        return render_oauth_error_response(ProtocolError::InvalidGrant, "Invalid code");
     }
 
     let user = state.user_store.get(&stored_data.2);
     if user.is_none() {
         debug!("user {} not found", stored_data.2);
-        return render_missing_paramter_with_response(
-            ProtocolError::InvalidGrant,
-            "User not found",
-        );
+        return render_oauth_error_response(ProtocolError::InvalidGrant, "User not found");
     }
     let user = user.unwrap();
 
@@ -265,10 +193,7 @@ pub async fn post(
     );
     if let Err(e) = encoded_token {
         debug!("failed to encode token: {}", e);
-        return render_missing_paramter_with_response(
-            ProtocolError::ServerError,
-            "token encoding failed",
-        );
+        return render_oauth_error_response(ProtocolError::ServerError, "token encoding failed");
     }
     let encoded_token = encoded_token.unwrap();
 
@@ -280,6 +205,78 @@ pub async fn post(
         scope: None,
         id_token: None,
     })
+}
+
+fn authenticate_client(headers: HttpRequest, client: &Client) -> Option<HttpResponse> {
+    let (client_name, password) = match headers.headers().get("Authorization") {
+        Some(value) => match parse_authorization(value) {
+            Some(x) => x,
+            None => {
+                return Some(render_oauth_error_response(
+                    ProtocolError::InvalidClient,
+                    "Invalid authorization header",
+                ));
+            }
+        },
+        None => {
+            return Some(render_oauth_error_response(
+                ProtocolError::InvalidClient,
+                "Missing authorization header",
+            ));
+        }
+    };
+
+    if *client.client_id != client_name {
+        return Some(render_oauth_error_response(
+            ProtocolError::InvalidClient,
+            "Invalid authorization header",
+        ));
+    }
+
+    if !client.is_password_correct(&password) {
+        Some(render_oauth_error_response(
+            ProtocolError::InvalidClient,
+            "client id or password wrong",
+        ))
+    } else {
+        None
+    }
+}
+
+fn parse_authorization(value: &HeaderValue) -> Option<(String, String)> {
+    let value = value.to_str();
+    if let Err(e) = value {
+        debug!("decoding of authorization header failed. {}", e);
+        return None;
+    }
+    let value = value.unwrap().to_string();
+
+    if !value.starts_with("Basic ") {
+        debug!("Malformed HTTP basic authorization header '{}'", value);
+        return None;
+    }
+    let value = value.replacen("Basic ", "", 1);
+
+    let credentials = base64::decode(value);
+    if let Err(e) = credentials {
+        debug!("base64 decoding of authorization header failed. {}", e);
+        return None;
+    }
+    let credentials = credentials.unwrap();
+
+    let credentials = String::from_utf8(credentials);
+    if let Err(e) = credentials {
+        debug!("utf-8 decoding of authorization header failed. {}", e);
+        return None;
+    }
+    let credentials = credentials.unwrap();
+
+    let split: Vec<String> = credentials.splitn(2, ':').map(str::to_string).collect();
+    if split.len() == 2 {
+        Some((split[0].clone(), split[1].clone()))
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]

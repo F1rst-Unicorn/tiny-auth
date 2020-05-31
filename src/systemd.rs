@@ -17,6 +17,9 @@
 
 use systemd::daemon::notify;
 
+use std::str::FromStr;
+use std::time::Duration;
+
 use log::debug;
 use log::error;
 use log::trace;
@@ -24,8 +27,6 @@ use log::warn;
 
 use tokio::task::spawn_blocking;
 use tokio::time;
-
-use std::time::Duration;
 
 pub async fn notify_about_start() {
     let result = spawn_blocking(|| {
@@ -45,20 +46,17 @@ pub async fn notify_about_termination() {
     .await;
 
     if let Err(e) = result {
-        warn!("watchdog failed to notify about startup: {}", e);
+        warn!("watchdog failed to notify about termination: {}", e);
     }
 }
 
 /// See man 5 systemd.service
 /// and man 3 sd_notify
 pub async fn watchdog() {
-    let default_microseconds = 10_000_000;
-    let microseconds =
-        std::env::var("WATCHDOG_USEC").unwrap_or(format!("{}", default_microseconds));
-    let microseconds: u64 = microseconds.parse().unwrap_or(default_microseconds);
-    let watchdog_time = microseconds * 4 / 5;
-    let mut clock = time::interval(Duration::from_micros(watchdog_time));
-    debug!("watchdog will run every {} us", watchdog_time);
+    let watchdog_interval = compute_watchdog_interval();
+    let mut clock = time::interval(Duration::from_micros(watchdog_interval));
+    debug!("watchdog will run every {} us", watchdog_interval);
+
     loop {
         clock.tick().await;
         let result = spawn_blocking(|| {
@@ -70,6 +68,19 @@ pub async fn watchdog() {
             warn!("watchdog failed to notify: {}", e);
         }
     }
+}
+
+fn compute_watchdog_interval() -> u64 {
+    let default = 10_000_000;
+    let raw = std::env::var("WATCHDOG_USEC");
+    let microseconds: u64 = raw
+        .ok()
+        .as_deref()
+        .map(u64::from_str)
+        .map(Result::ok)
+        .flatten()
+        .unwrap_or(default);
+    microseconds * 4 / 5
 }
 
 fn notify_systemd(message: &[(&str, &str)]) {

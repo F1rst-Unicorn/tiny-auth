@@ -15,12 +15,14 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::http::endpoints::missing_parameter;
+use super::deserialise_empty_as_none;
+use super::render_template;
 use crate::http::endpoints::server_error;
 use crate::http::state;
 use crate::protocol::oauth2::ProtocolError;
 use crate::protocol::oauth2::ResponseType;
 
+use actix_web::http::StatusCode;
 use actix_web::web;
 use actix_web::HttpResponse;
 
@@ -29,8 +31,9 @@ use actix_session::Session;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
-use tera::Context;
 use tera::Tera;
+
+use url::Url;
 
 use log::debug;
 use log::error;
@@ -40,91 +43,74 @@ pub const SESSION_KEY: &str = "a";
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Request {
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub scope: Option<String>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_type: Option<ResponseType>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub client_id: Option<String>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub redirect_uri: Option<String>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub state: Option<String>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub response_mode: Option<String>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub nonce: Option<String>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub display: Option<String>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub prompt: Option<String>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub max_age: Option<String>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub ui_locales: Option<String>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub id_token_hint: Option<String>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub login_hint: Option<String>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub acr_values: Option<String>,
-}
-
-impl Request {
-    fn normalise(&mut self) {
-        if self.scope.is_some() && self.scope.as_ref().unwrap().is_empty() {
-            self.scope = None
-        }
-        if self.client_id.is_some() && self.client_id.as_ref().unwrap().is_empty() {
-            self.client_id = None
-        }
-        if self.redirect_uri.is_some() && self.redirect_uri.as_ref().unwrap().is_empty() {
-            self.redirect_uri = None
-        }
-        if self.state.is_some() && self.state.as_ref().unwrap().is_empty() {
-            self.state = None
-        }
-        if self.response_mode.is_some() && self.response_mode.as_ref().unwrap().is_empty() {
-            self.response_mode = None
-        }
-        if self.nonce.is_some() && self.nonce.as_ref().unwrap().is_empty() {
-            self.nonce = None
-        }
-        if self.display.is_some() && self.display.as_ref().unwrap().is_empty() {
-            self.display = None
-        }
-        if self.prompt.is_some() && self.prompt.as_ref().unwrap().is_empty() {
-            self.prompt = None
-        }
-        if self.max_age.is_some() && self.max_age.as_ref().unwrap().is_empty() {
-            self.max_age = None
-        }
-        if self.ui_locales.is_some() && self.ui_locales.as_ref().unwrap().is_empty() {
-            self.ui_locales = None
-        }
-        if self.id_token_hint.is_some() && self.id_token_hint.as_ref().unwrap().is_empty() {
-            self.id_token_hint = None
-        }
-        if self.login_hint.is_some() && self.login_hint.as_ref().unwrap().is_empty() {
-            self.login_hint = None
-        }
-        if self.acr_values.is_some() && self.acr_values.as_ref().unwrap().is_empty() {
-            self.acr_values = None
-        }
-    }
 }
 
 pub async fn get(
@@ -136,12 +122,10 @@ pub async fn get(
 }
 
 pub async fn post(
-    mut query: web::Query<Request>,
+    query: web::Query<Request>,
     state: web::Data<state::State>,
     session: Session,
 ) -> HttpResponse {
-    query.normalise();
-
     if query.client_id.is_none() {
         debug!("missing client_id");
         return render_invalid_client_id_error(&state.tera);
@@ -152,7 +136,7 @@ pub async fn post(
         return render_invalid_redirect_uri_error(&state.tera);
     }
 
-    let redirect_uri = query.redirect_uri.clone().unwrap();
+    let redirect_uri = query.redirect_uri.as_ref().unwrap();
     let client_id = query.client_id.as_ref().unwrap();
 
     let client = state.client_store.get(client_id);
@@ -163,7 +147,7 @@ pub async fn post(
     }
     let client = client.expect("checked before");
 
-    if !client.is_redirect_uri_valid(&redirect_uri) {
+    if !client.is_redirect_uri_valid(redirect_uri) {
         info!(
             "invalid redirect_uri '{}' for client '{}'",
             redirect_uri, client_id
@@ -176,7 +160,7 @@ pub async fn post(
     if query.scope.is_none() {
         debug!("Missing scope");
         return missing_parameter(
-            &redirect_uri,
+            redirect_uri,
             ProtocolError::InvalidRequest,
             "Missing required parameter scope",
             &client_state,
@@ -186,7 +170,7 @@ pub async fn post(
     if query.response_type.is_none() {
         debug!("Missing response_type");
         return missing_parameter(
-            &redirect_uri,
+            redirect_uri,
             ProtocolError::InvalidRequest,
             "Missing required parameter response_type",
             &client_state,
@@ -195,12 +179,7 @@ pub async fn post(
 
     if let Err(e) = session.set(SESSION_KEY, serde_urlencoded::to_string(query.0).unwrap()) {
         error!("Failed to serialise session: {}", e);
-        return missing_parameter(
-            &redirect_uri,
-            ProtocolError::ServerError,
-            "session serialisation failed",
-            &client_state,
-        );
+        return server_error(&state.tera);
     }
 
     HttpResponse::SeeOther()
@@ -209,29 +188,36 @@ pub async fn post(
 }
 
 fn render_invalid_client_id_error(tera: &Tera) -> HttpResponse {
-    let body = tera.render("invalid_client_id.html.j2", &Context::new());
-    match body {
-        Ok(body) => HttpResponse::BadRequest()
-            .set_header("Content-Type", "text/html")
-            .body(body),
-        Err(e) => {
-            log::warn!("{}", e);
-            server_error(tera)
-        }
-    }
+    render_template("invalid_client_id.html.j2", StatusCode::BAD_REQUEST, tera)
 }
 
 fn render_invalid_redirect_uri_error(tera: &Tera) -> HttpResponse {
-    let body = tera.render("invalid_redirect_uri.html.j2", &Context::new());
-    match body {
-        Ok(body) => HttpResponse::BadRequest()
-            .set_header("Content-Type", "text/html")
-            .body(body),
-        Err(e) => {
-            log::warn!("{}", e);
-            server_error(tera)
-        }
+    render_template(
+        "invalid_redirect_uri.html.j2",
+        StatusCode::BAD_REQUEST,
+        tera,
+    )
+}
+
+pub fn missing_parameter(
+    redirect_uri: &str,
+    error: ProtocolError,
+    description: &str,
+    state: &Option<String>,
+) -> HttpResponse {
+    let mut url = Url::parse(redirect_uri).expect("should have been validated upon registration");
+
+    url.query_pairs_mut()
+        .append_pair("error", &format!("{}", error))
+        .append_pair("error_description", description);
+
+    if let Some(state) = state {
+        url.query_pairs_mut().append_pair("state", state);
     }
+
+    HttpResponse::TemporaryRedirect()
+        .set_header("Location", url.as_str())
+        .finish()
 }
 
 #[cfg(test)]

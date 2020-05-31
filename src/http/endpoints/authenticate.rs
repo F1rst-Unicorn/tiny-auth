@@ -15,6 +15,13 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use super::deserialise_empty_as_none;
+use super::render_template;
+use super::server_error;
+use crate::http::endpoints::{authorize, render_template_with_context};
+use crate::http::state::State;
+
+use actix_web::http::StatusCode;
 use actix_web::web;
 use actix_web::HttpResponse;
 
@@ -26,10 +33,6 @@ use tera::Tera;
 use log::debug;
 use log::error;
 
-use crate::http::endpoints::authorize;
-use crate::http::endpoints::server_error;
-use crate::http::state::State;
-
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
@@ -38,24 +41,15 @@ const ERROR_CODE_SESSION_KEY: &str = "e";
 
 #[derive(Serialize, Deserialize)]
 pub struct Request {
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     username: Option<String>,
 
+    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     password: Option<String>,
-}
-
-impl Request {
-    fn normalise(&mut self) {
-        if self.username.is_some() && self.username.as_ref().unwrap().is_empty() {
-            debug!("normalising empty username to None");
-            self.username = None
-        }
-        if self.password.is_some() && self.password.as_ref().unwrap().is_empty() {
-            debug!("normalising empty password to None");
-            self.password = None
-        }
-    }
 }
 
 pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
@@ -72,28 +66,20 @@ pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
     {
         context.insert("error", &error_code);
     }
-    let body = state.tera.render("authenticate.html.j2", &context);
-    match body {
-        Ok(body) => {
-            session.renew();
-            HttpResponse::Ok()
-                .set_header("Content-Type", "text/html")
-                .body(body)
-        }
-        Err(e) => {
-            log::warn!("{}", e);
-            server_error(&state.tera)
-        }
-    }
+
+    render_template_with_context(
+        "authenticate.html.j2",
+        StatusCode::OK,
+        &state.tera,
+        &context,
+    )
 }
 
 pub async fn post(
-    mut query: web::Form<Request>,
+    query: web::Form<Request>,
     state: web::Data<State>,
     session: Session,
 ) -> HttpResponse {
-    query.normalise();
-
     session.remove(ERROR_CODE_SESSION_KEY);
 
     let first_request = session.get::<String>(authorize::SESSION_KEY);
@@ -104,24 +90,12 @@ pub async fn post(
 
     if query.username.is_none() {
         debug!("missing username");
-        if let Err(e) = session.set(ERROR_CODE_SESSION_KEY, 1) {
-            error!("Failed to serialise session: {}", e);
-            return server_error(&state.tera);
-        }
-        return HttpResponse::SeeOther()
-            .set_header("Location", "authenticate")
-            .finish();
+        return render_invalid_input(1, &state.tera, &session);
     }
 
     if query.password.is_none() {
         debug!("missing password");
-        if let Err(e) = session.set(ERROR_CODE_SESSION_KEY, 2) {
-            error!("Failed to serialise session: {}", e);
-            return server_error(&state.tera);
-        }
-        return HttpResponse::SeeOther()
-            .set_header("Location", "authenticate")
-            .finish();
+        return render_invalid_input(2, &state.tera, &session);
     }
 
     let username = query.username.clone().expect("checked before");
@@ -129,49 +103,47 @@ pub async fn post(
 
     if user.is_none() {
         debug!("user '{}' not found", username);
-        if let Err(e) = session.set(ERROR_CODE_SESSION_KEY, 3) {
-            error!("Failed to serialise session: {}", e);
-            return server_error(&state.tera);
-        }
-        return HttpResponse::SeeOther()
-            .set_header("Location", "authenticate")
-            .finish();
+        return render_invalid_input(3, &state.tera, &session);
     }
 
     let user = user.expect("checked before");
     let password = query.password.clone().expect("checked before");
 
     if user.is_password_correct(&password) {
-        if let Err(e) = session.set(SESSION_KEY, user.name) {
-            error!("Failed to serialise session: {}", e);
-            return server_error(&state.tera);
-        }
-        HttpResponse::SeeOther()
-            .set_header("Location", "consent")
-            .finish()
+        redirect_successfully(&state.tera, &session, &user.name)
     } else {
         debug!("password of user '{}' wrong", username);
-        if let Err(e) = session.set(ERROR_CODE_SESSION_KEY, 3) {
-            error!("Failed to serialise session: {}", e);
-            return server_error(&state.tera);
-        }
+        render_invalid_input(3, &state.tera, &session)
+    }
+}
+
+fn redirect_successfully(tera: &Tera, session: &Session, user: &str) -> HttpResponse {
+    if let Err(e) = session.set(SESSION_KEY, user) {
+        error!("Failed to serialise session: {}", e);
+        return server_error(tera);
+    }
+    HttpResponse::SeeOther()
+        .set_header("Location", "consent")
+        .finish()
+}
+
+fn render_invalid_input(error: u64, tera: &Tera, session: &Session) -> HttpResponse {
+    if let Err(e) = session.set(ERROR_CODE_SESSION_KEY, error) {
+        error!("Failed to serialise session: {}", e);
+        server_error(tera)
+    } else {
         HttpResponse::SeeOther()
             .set_header("Location", "authenticate")
             .finish()
     }
 }
 
-pub fn render_invalid_authentication_request(tera: &Tera) -> HttpResponse {
-    let body = tera.render("invalid_authentication_request.html.j2", &Context::new());
-    match body {
-        Ok(body) => HttpResponse::BadRequest()
-            .set_header("Content-Type", "text/html")
-            .body(body),
-        Err(e) => {
-            log::warn!("{}", e);
-            server_error(tera)
-        }
-    }
+fn render_invalid_authentication_request(tera: &Tera) -> HttpResponse {
+    render_template(
+        "invalid_authentication_request.html.j2",
+        StatusCode::BAD_REQUEST,
+        tera,
+    )
 }
 
 #[cfg(test)]

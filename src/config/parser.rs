@@ -16,7 +16,7 @@
  */
 
 use crate::config::Config;
-use crate::util::read_file;
+use crate::util::read_file as read;
 
 use std::fs;
 use std::process::exit;
@@ -39,51 +39,54 @@ pub fn parse_config(path: &str) -> Config {
 }
 
 fn read_config(path: &str) -> Vec<String> {
-    let metadata_result = fs::metadata(path);
+    match fs::metadata(path) {
+        Err(e) => {
+            error!("Failed to read metadata of {}: {}", path, e);
+            exit(EXIT_CODE);
+        }
+        Ok(metadata) => {
+            if metadata.file_type().is_dir() {
+                traverse_directory(path)
+            } else if metadata.file_type().is_file() {
+                read_file(path)
+            } else {
+                warn!("Ignoring file {}", path);
+                Vec::new()
+            }
+        }
+    }
+}
 
-    if let Err(err) = metadata_result {
-        error!("Failed to read metadata of {}: {}", path, err);
+fn read_file(path: &str) -> Vec<String> {
+    match read(path) {
+        Err(error) => {
+            error!("Failed to read file {}: {}", path, error);
+            exit(EXIT_CODE)
+        }
+        Ok(content) => vec![content],
+    }
+}
+
+fn traverse_directory(path: &str) -> Vec<String> {
+    let content = fs::read_dir(path);
+    if let Err(err) = content {
+        error!("Failed to get directory content of {}: {}", path, err);
         exit(EXIT_CODE);
     }
 
-    let mut result: Vec<String>;
-    let metadata = metadata_result.unwrap();
+    let mut result = Vec::new();
 
-    if metadata.file_type().is_dir() {
-        let content = fs::read_dir(path);
-        if let Err(err) = content {
-            error!("Failed to get directory content of {}: {}", path, err);
+    for entry in content.unwrap() {
+        if let Err(err) = entry {
+            error!("Failed to read {}: {}", path, err);
             exit(EXIT_CODE);
         }
+        let entry_path = entry.unwrap().path();
+        let entry_path_string = entry_path.to_str().unwrap();
+        let content = read_config(entry_path_string);
 
-        result = Vec::new();
-
-        for entry in content.unwrap() {
-            if let Err(err) = entry {
-                error!("Failed to read {}: {}", path, err);
-                exit(EXIT_CODE);
-            }
-            let entry_path = entry.unwrap().path();
-            let entry_path_string = entry_path.to_str().unwrap();
-            let content = read_config(entry_path_string);
-
-            result.extend(content);
-        }
-    } else if metadata.file_type().is_file() {
-        match read_file(path) {
-            Err(error) => {
-                error!("Failed to read file {}: {}", path, error);
-                exit(EXIT_CODE);
-            }
-            Ok(content) => {
-                result = vec![content];
-            }
-        }
-    } else {
-        warn!("Ignoring file {}", path);
-        result = Vec::new();
+        result.extend(content);
     }
-
     result
 }
 
@@ -94,15 +97,19 @@ fn parse_raw_config(raw_config: &[String]) -> Config {
         parse_result.clone().filter(Result::is_err).collect();
 
     if !parse_errors.is_empty() {
-        error!("Could not parse config: ");
-        for error in parse_errors {
-            error!("{:#?}", error.unwrap_err());
-        }
-        trace!("Error in configuration file");
+        log_config_errors(parse_errors);
         exit(EXIT_CODE);
     } else {
         parse_result
             .map(Result::unwrap)
             .fold(Config::new(), Config::merge)
     }
+}
+
+fn log_config_errors(parse_errors: Vec<serde_yaml::Result<Config>>) {
+    error!("Could not parse config: ");
+    for error in parse_errors {
+        error!("{:#?}", error.unwrap_err());
+    }
+    trace!("Error in configuration file");
 }
