@@ -33,6 +33,8 @@ use actix_web::dev::Server;
 use actix_web::web;
 use actix_web::App;
 use actix_web::HttpServer;
+use actix_web::HttpResponse;
+use actix_web::middleware::DefaultHeaders;
 
 use actix_session::CookieSession;
 
@@ -107,6 +109,7 @@ pub fn build(web: Web, crypto: Crypto) -> Result<Server, Error> {
                     .same_site(SameSite::Strict)
                     .max_age(web.session_timeout.expect("no default given")),
             )
+            .wrap(DefaultHeaders::new().header("Cache-Control", "no-store"))
             .service(
                 web::scope(&web.path.as_ref().expect("no default given"))
                     .route("/authorize", web::get().to(endpoints::authorize::get))
@@ -123,7 +126,7 @@ pub fn build(web: Web, crypto: Crypto) -> Result<Server, Error> {
                     .route(
                         "/cert",
                         web::get().to(move || {
-                            actix_web::HttpResponse::Ok().body(token_certificate.clone())
+                            HttpResponse::Ok().body(token_certificate.clone())
                         }),
                     ),
             )
