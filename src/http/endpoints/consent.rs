@@ -15,10 +15,11 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use super::deserialise_empty_as_none;
 use super::render_template;
 use super::server_error;
-use crate::http::endpoints::authenticate;
 use crate::http::endpoints::authorize;
+use crate::http::endpoints::{authenticate, render_template_with_context};
 use crate::http::state::State;
 
 use actix_web::http::StatusCode;
@@ -29,10 +30,22 @@ use actix_session::Session;
 
 use url::Url;
 
+use tera::Context;
+
 use chrono::offset::Local;
 
 use log::debug;
 use log::error;
+use log::warn;
+
+use serde_derive::Deserialize;
+
+#[derive(Deserialize)]
+pub struct Request {
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    csrftoken: Option<String>,
+}
 
 pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
     let first_request = session.get::<String>(authorize::SESSION_KEY);
@@ -53,10 +66,25 @@ pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
         return render_invalid_consent_request(&state.tera);
     }
 
-    render_template("consent.html.j2", StatusCode::OK, &state.tera)
+    let context = build_context(&session);
+    match context {
+        Some(context) => {
+            render_template_with_context("consent.html.j2", StatusCode::OK, &state.tera, &context)
+        }
+        None => server_error(&state.tera),
+    }
 }
 
-pub async fn post(session: Session, state: web::Data<State>) -> HttpResponse {
+pub async fn post(
+    query: web::Form<Request>,
+    session: Session,
+    state: web::Data<State>,
+) -> HttpResponse {
+    if !super::is_csrf_valid(&query.csrftoken, &session) {
+        debug!("CSRF protection violation detected");
+        return render_invalid_consent_request(&state.tera);
+    }
+
     let first_request = session.get::<String>(authorize::SESSION_KEY);
     if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
         debug!("Unsolicited consent request. {:?}", first_request);
@@ -100,12 +128,25 @@ pub async fn post(session: Session, state: web::Data<State>) -> HttpResponse {
         .finish()
 }
 
-pub fn render_invalid_consent_request(tera: &tera::Tera) -> HttpResponse {
+fn render_invalid_consent_request(tera: &tera::Tera) -> HttpResponse {
     render_template(
         "invalid_consent_request.html.j2",
         StatusCode::BAD_REQUEST,
         tera,
     )
+}
+
+fn build_context(session: &Session) -> Option<Context> {
+    let mut context = Context::new();
+
+    let csrftoken = super::generate_csrf_token();
+    context.insert(super::CSRF_CONTEXT, &csrftoken);
+
+    if let Err(e) = session.set(super::CSRF_SESSION_KEY, csrftoken) {
+        warn!("Failed to construct context: {}", e);
+        return None;
+    }
+    Some(context)
 }
 
 #[cfg(test)]
@@ -116,7 +157,10 @@ mod tests {
     use actix_web::http;
     use actix_web::test;
     use actix_web::web::Data;
+    use actix_web::web::Form;
 
+    use super::super::generate_csrf_token;
+    use super::super::CSRF_SESSION_KEY;
     use crate::http::state::tests::build_test_state;
     use crate::store::tests::PUBLIC_CLIENT;
 
@@ -157,12 +201,33 @@ mod tests {
     }
 
     #[actix_rt::test]
+    async fn wrong_csrf_gives_error() {
+        let req = test::TestRequest::post().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        let csrftoken = generate_csrf_token();
+        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+        let request = Form(Request {
+            csrftoken: Some(csrftoken + "wrong"),
+        });
+
+        let resp = post(request, session, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
     async fn posting_empty_session_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let state = Data::new(build_test_state());
         let session = req.get_session();
+        let csrftoken = generate_csrf_token();
+        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+        let request = Form(Request {
+            csrftoken: Some(csrftoken),
+        });
 
-        let resp = post(session, state).await;
+        let resp = post(request, session, state).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -173,8 +238,13 @@ mod tests {
         let state = Data::new(build_test_state());
         let session = req.get_session();
         session.set(authorize::SESSION_KEY, "dummy").unwrap();
+        let csrftoken = generate_csrf_token();
+        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+        let request = Form(Request {
+            csrftoken: Some(csrftoken),
+        });
 
-        let resp = post(session, state).await;
+        let resp = post(request, session, state).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -207,8 +277,13 @@ mod tests {
             )
             .unwrap();
         session.set(authenticate::SESSION_KEY, "user").unwrap();
+        let csrftoken = generate_csrf_token();
+        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+        let request = Form(Request {
+            csrftoken: Some(csrftoken),
+        });
 
-        let resp = post(session, state).await;
+        let resp = post(request, session, state).await;
 
         assert_eq!(resp.status(), http::StatusCode::FOUND);
 

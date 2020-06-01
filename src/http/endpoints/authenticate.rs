@@ -32,6 +32,7 @@ use tera::Tera;
 
 use log::debug;
 use log::error;
+use log::warn;
 
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
@@ -50,6 +51,11 @@ pub struct Request {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(deserialize_with = "deserialise_empty_as_none")]
     password: Option<String>,
+
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    csrftoken: Option<String>,
 }
 
 pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
@@ -59,20 +65,35 @@ pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
         return render_invalid_authentication_request(&state.tera);
     }
 
+    let context = build_context(&session);
+    match context {
+        Some(context) => render_template_with_context(
+            "authenticate.html.j2",
+            StatusCode::OK,
+            &state.tera,
+            &context,
+        ),
+        None => server_error(&state.tera),
+    }
+}
+
+fn build_context(session: &Session) -> Option<Context> {
     let mut context = Context::new();
     if let Some(error_code) = session
         .get::<u64>(ERROR_CODE_SESSION_KEY)
         .expect("failed to deserialize")
     {
-        context.insert("error", &error_code);
+        context.insert(super::ERROR_CONTEXT, &error_code);
     }
 
-    render_template_with_context(
-        "authenticate.html.j2",
-        StatusCode::OK,
-        &state.tera,
-        &context,
-    )
+    let csrftoken = super::generate_csrf_token();
+    context.insert(super::CSRF_CONTEXT, &csrftoken);
+
+    if let Err(e) = session.set(super::CSRF_SESSION_KEY, csrftoken) {
+        warn!("Failed to construct context: {}", e);
+        return None;
+    }
+    Some(context)
 }
 
 pub async fn post(
@@ -81,6 +102,11 @@ pub async fn post(
     session: Session,
 ) -> HttpResponse {
     session.remove(ERROR_CODE_SESSION_KEY);
+
+    if !super::is_csrf_valid(&query.csrftoken, &session) {
+        debug!("CSRF protection violation detected");
+        return render_invalid_authentication_request(&state.tera);
+    }
 
     let first_request = session.get::<String>(authorize::SESSION_KEY);
     if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
@@ -151,11 +177,14 @@ mod tests {
     use super::*;
 
     use actix_session::UserSession;
+
     use actix_web::http;
     use actix_web::test;
     use actix_web::web::Data;
     use actix_web::web::Form;
 
+    use super::super::generate_csrf_token;
+    use super::super::CSRF_SESSION_KEY;
     use crate::http::state::tests::build_test_state;
     use crate::store::tests::UNKNOWN_USER;
     use crate::store::tests::USER;
@@ -186,13 +215,32 @@ mod tests {
     }
 
     #[actix_rt::test]
-    async fn emtpy_session_login_gives_error() {
+    async fn missing_csrf_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let state = Data::new(build_test_state());
         let session = req.get_session();
         let form = Form(Request {
             username: Some("user".to_string()),
             password: Some("user".to_string()),
+            csrftoken: None,
+        });
+
+        let resp = post(form, state, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn emtpy_session_login_gives_error() {
+        let req = test::TestRequest::post().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        let csrftoken = generate_csrf_token();
+        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+        let form = Form(Request {
+            username: Some("user".to_string()),
+            password: Some("user".to_string()),
+            csrftoken: Some(csrftoken),
         });
 
         let resp = post(form, state, session).await;
@@ -208,9 +256,13 @@ mod tests {
         session
             .set(authorize::SESSION_KEY, "dummy".to_string())
             .unwrap();
+        let csrftoken = generate_csrf_token();
+        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+
         let form = Form(Request {
             username: None,
             password: Some("user".to_string()),
+            csrftoken: Some(csrftoken),
         });
 
         let resp = post(form, state, session).await;
@@ -233,9 +285,13 @@ mod tests {
         session
             .set(authorize::SESSION_KEY, "dummy".to_string())
             .unwrap();
+        let csrftoken = generate_csrf_token();
+        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+
         let form = Form(Request {
             username: Some("user".to_string()),
             password: None,
+            csrftoken: Some(csrftoken),
         });
 
         let resp = post(form, state, session).await;
@@ -258,9 +314,13 @@ mod tests {
         session
             .set(authorize::SESSION_KEY, "dummy".to_string())
             .unwrap();
+        let csrftoken = generate_csrf_token();
+        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+
         let form = Form(Request {
             username: Some(UNKNOWN_USER.to_string()),
             password: Some(UNKNOWN_USER.to_string() + "wrong"),
+            csrftoken: Some(csrftoken),
         });
 
         let resp = post(form, state, session).await;
@@ -283,9 +343,13 @@ mod tests {
         session
             .set(authorize::SESSION_KEY, "dummy".to_string())
             .unwrap();
+        let csrftoken = generate_csrf_token();
+        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+
         let form = Form(Request {
             username: Some(USER.to_string()),
             password: Some(USER.to_string() + "wrong"),
+            csrftoken: Some(csrftoken),
         });
 
         let resp = post(form, state, session).await;
@@ -308,9 +372,13 @@ mod tests {
         session
             .set(authorize::SESSION_KEY, "dummy".to_string())
             .unwrap();
+        let csrftoken = generate_csrf_token();
+        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+
         let form = Form(Request {
             username: Some(USER.to_string()),
             password: Some(USER.to_string()),
+            csrftoken: Some(csrftoken),
         });
 
         let resp = post(form, state, session).await;

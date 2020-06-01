@@ -29,6 +29,7 @@ tera = "1.3.0"
 base64 = "0.12.1"
 systemd = "0.4"
 jsonwebtoken = "7.1.0"
+rand = "0.7.3"
 
 [dependencies.tokio]
 version = "0.2"

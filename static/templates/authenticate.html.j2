@@ -44,6 +44,7 @@
                autocomplete="current-password" required="" type="password"
                name="password"/>
     </div>
+    <input type="hidden" name="csrftoken" value="{{ csrftoken }}">
     <input class="btn btn-success" type="submit" id="id_submit"
            value="{{ translate(term="Login") }}">
 </form>

@@ -30,11 +30,11 @@ use crate::util::read_file;
 
 use actix_web::cookie::SameSite;
 use actix_web::dev::Server;
+use actix_web::middleware::DefaultHeaders;
 use actix_web::web;
 use actix_web::App;
-use actix_web::HttpServer;
 use actix_web::HttpResponse;
-use actix_web::middleware::DefaultHeaders;
+use actix_web::HttpServer;
 
 use actix_session::CookieSession;
 
@@ -125,9 +125,7 @@ pub fn build(web: Web, crypto: Crypto) -> Result<Server, Error> {
                     .route("/consent", web::post().to(endpoints::consent::post))
                     .route(
                         "/cert",
-                        web::get().to(move || {
-                            HttpResponse::Ok().body(token_certificate.clone())
-                        }),
+                        web::get().to(move || HttpResponse::Ok().body(token_certificate.clone())),
                     ),
             )
     })

@@ -1932,6 +1932,7 @@ dependencies = [
  "log",
  "log4rs",
  "openssl",
+ "rand",
  "serde",
  "serde_derive",
  "serde_json",

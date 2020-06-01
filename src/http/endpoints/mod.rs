@@ -26,14 +26,23 @@ use crate::protocol::oauth2::ProtocolError;
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
 
+use actix_session::Session;
+
 use tera::Context;
 use tera::Tera;
+
+use log::debug;
 
 use serde::de::Deserialize as _;
 use serde::de::Visitor;
 use serde::Deserializer;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
+
+const CSRF_SESSION_KEY: &str = "c";
+
+const CSRF_CONTEXT: &str = "csrftoken";
+const ERROR_CONTEXT: &str = "error";
 
 #[derive(Serialize, Deserialize)]
 struct ErrorResponse {
@@ -81,6 +90,31 @@ fn render_template_with_context(
             log::warn!("{}", e);
             server_error(tera)
         }
+    }
+}
+
+fn generate_csrf_token() -> String {
+    let mut result = String::new();
+    for _ in 0..32 {
+        let mut char = 'ö';
+        while !char.is_ascii_alphanumeric() {
+            char = rand::random::<u8>().into();
+        }
+        result.push(char);
+    }
+    result
+}
+
+fn is_csrf_valid(input_token: &Option<String>, session: &Session) -> bool {
+    match input_token {
+        None => false,
+        Some(token) => match session.get::<String>(CSRF_SESSION_KEY) {
+            Ok(Some(reference)) => token == &reference,
+            e => {
+                debug!("token not found in session: {:#?}", e);
+                false
+            }
+        },
     }
 }
 
@@ -147,9 +181,14 @@ mod tests {
 
     use super::*;
 
+    use actix_web::test;
     use actix_web::web::BytesMut;
     use actix_web::HttpResponse;
+
+    use actix_session::UserSession;
+
     use futures::stream::StreamExt;
+
     use serde::de::DeserializeOwned;
     use serde_derive::Deserialize;
 
@@ -179,6 +218,19 @@ mod tests {
         let input = r#"value=value"#;
         let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
         assert_eq!(Some("value".to_string()), result.value);
+    }
+
+    #[test]
+    pub fn verify_csrf_verification() {
+        let req = test::TestRequest::post().to_http_request();
+        let session = req.get_session();
+        let token = "token".to_string();
+        assert!(!is_csrf_valid(&None, &session));
+        assert!(!is_csrf_valid(&Some(token.clone()), &session));
+
+        session.set(CSRF_SESSION_KEY, &token).unwrap();
+        assert!(!is_csrf_valid(&Some(token.clone() + "wrong"), &session));
+        assert!(is_csrf_valid(&Some(token), &session));
     }
 
     pub async fn read_response<T: DeserializeOwned>(mut resp: HttpResponse) -> T {

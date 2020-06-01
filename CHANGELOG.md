@@ -7,6 +7,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Increase HTTP Security by disabling caching and adding CSRF countermeassures
+  ([#14](https://gitlab.com/veenj/tiny-auth/issues/14),
+  [#1](https://gitlab.com/veenj/tiny-auth/issues/1))
+
 * TLS support
   ([#15](https://gitlab.com/veenj/tiny-auth/issues/15))
 
