@@ -1,0 +1,116 @@
+# tiny-auth: Tiny OIDC Provider
+# Copyright (C) 2019 The tiny-auth developers
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+---
+variables:
+  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+
+stages:
+  - build
+
+build-debug:
+  stage: build
+  image: rust:latest
+  script:
+    - apt-get update
+    - apt-get -y --no-install-recommends install libsystemd-dev
+    - cargo build
+  cache:
+    key: ${CI_JOB_NAME}
+    paths:
+      - target
+      - .cargo
+  artifacts:
+    paths:
+      - target/debug/tiny-auth
+
+build-release:
+  stage: build
+  image: rust:latest
+  script:
+    - apt-get update
+    - apt-get -y --no-install-recommends install libsystemd-dev
+    - cargo build --release
+  cache:
+    key: ${CI_JOB_NAME}
+    paths:
+      - target
+      - .cargo
+  artifacts:
+    paths:
+      - target/release/tiny-auth
+  only:
+    - tags
+
+format:
+  stage: build
+  image: rust:latest
+  script:
+    - apt-get update
+    - apt-get -y --no-install-recommends install libsystemd-dev
+    - rustup component add rustfmt
+    - cargo fmt --all -- --check
+  cache:
+    key: ${CI_JOB_NAME}
+    policy: pull
+    paths:
+      - target
+      - .cargo
+
+clippy:
+  stage: build
+  image: rust:latest
+  script:
+    - apt-get update
+    - apt-get -y --no-install-recommends install libsystemd-dev
+    - rustup component add clippy
+    - cargo clippy --release -j 8 -- -D clippy::all
+  cache:
+    key: ${CI_JOB_NAME}
+    paths:
+      - target
+      - .cargo
+
+test:
+  stage: build
+  image: rust:latest
+  script:
+    - apt-get update
+    - apt-get -y --no-install-recommends install libsystemd-dev
+    - cargo test
+  cache:
+    key: ${CI_JOB_NAME}
+    paths:
+      - target
+      - .cargo
+
+archlinux:
+  stage: build
+  image: archlinux:latest
+  script:
+    - pacman -Syu --noconfirm sudo binutils fakeroot
+    - cd pkg/Archlinux
+    # patch makepkg so it runs as root
+    - sed -i 's/EUID == 0/1 == 0/g' /usr/bin/makepkg
+    - makepkg -s --nocheck --noconfirm
+  cache:
+    key: ${CI_JOB_NAME}
+    paths:
+      - target
+      - .cargo
+  artifacts:
+    paths:
+      - pkg/Archlinux/tiny-auth*.pkg.tar.xz*

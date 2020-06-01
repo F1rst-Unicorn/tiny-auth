@@ -6,8 +6,8 @@ pkgdesc="OIDC Provider"
 arch=('x86_64')
 url="https://gitlab.com/veenj/${pkgname}"
 license=('GPL3')
-depends=('gcc-libs')
-makedepends=('rust')
+depends=('gcc-libs' 'systemd' 'openssl')
+makedepends=('rust' 'gcc' 'pkgconf')
 backup=("etc/${pkgname}/config.yml"
         "etc/${pkgname}/log4rs.yml")
 

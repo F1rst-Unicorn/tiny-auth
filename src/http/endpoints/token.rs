@@ -29,8 +29,6 @@ use chrono::Duration;
 use jsonwebtoken::encode;
 use jsonwebtoken::Header;
 
-use base64;
-
 use log::debug;
 
 use super::deserialise_empty_as_none;
