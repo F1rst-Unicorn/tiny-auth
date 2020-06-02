@@ -18,13 +18,22 @@
 use super::deserialise_empty_as_none;
 use super::render_template;
 use super::server_error;
+use crate::domain::token::Token;
+use crate::http::endpoints::authenticate;
 use crate::http::endpoints::authorize;
-use crate::http::endpoints::{authenticate, render_template_with_context};
+use crate::http::endpoints::render_template_with_context;
 use crate::http::state::State;
+use crate::protocol::oauth2;
+use crate::protocol::oidc;
+
+use std::collections::HashMap;
 
 use actix_web::http::StatusCode;
 use actix_web::web;
 use actix_web::HttpResponse;
+
+use jsonwebtoken::encode;
+use jsonwebtoken::Header;
 
 use actix_session::Session;
 
@@ -33,6 +42,7 @@ use url::Url;
 use tera::Context;
 
 use chrono::offset::Local;
+use chrono::Duration;
 
 use log::debug;
 use log::error;
@@ -107,20 +117,78 @@ pub async fn post(
     }
 
     let first_request = first_request_result.unwrap();
+    let client_name = first_request.client_id.as_ref().unwrap();
+    let response_type = first_request
+        .response_type
+        .as_deref()
+        .map(authorize::parse_response_type)
+        .flatten()
+        .unwrap();
     let redirect_uri = first_request.redirect_uri.unwrap();
     let mut url = Url::parse(&redirect_uri).expect("should have been validated upon registration");
+    let mut response_parameters = HashMap::new();
+    let mut encode_to_fragment = false;
 
-    let code = state.auth_code_store.get_authorization_code(
-        first_request.client_id.as_ref().unwrap(),
-        &username,
-        &redirect_uri,
-        Local::now(),
-    );
+    if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Code)) {
+        let code = state.auth_code_store.get_authorization_code(
+            client_name,
+            &username,
+            &redirect_uri,
+            Local::now(),
+        );
+        response_parameters.insert("code", code);
+    }
 
-    url.query_pairs_mut().append_pair("code", &code);
+    if response_type.contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken)) {
+        encode_to_fragment = true;
+        let user = state.user_store.get(&username);
+        if user.is_none() {
+            debug!("user {} not found", username);
+            return render_invalid_consent_request(&state.tera);
+        }
+        let user = user.unwrap();
 
-    if let Some(state) = first_request.state {
-        url.query_pairs_mut().append_pair("state", &state);
+        let client = state.client_store.get(client_name);
+        if client.is_none() {
+            debug!("client {} not found", client_name);
+            return render_invalid_consent_request(&state.tera);
+        }
+        let client = client.unwrap();
+
+        let token = Token::build(
+            &user,
+            &client,
+            &state.instance,
+            Local::now() + Duration::minutes(1),
+        );
+
+        let encoded_token = encode(
+            &Header::new(state.encoding_key.1),
+            &token,
+            &state.encoding_key.0,
+        );
+        if let Err(e) = encoded_token {
+            debug!("failed to encode token: {}", e);
+            return server_error(&state.tera);
+        }
+        response_parameters.insert("id_token", encoded_token.unwrap());
+    }
+
+    if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token)) {
+        encode_to_fragment = true;
+        // TODO Issue #7
+    }
+
+    first_request
+        .state
+        .and_then(|v| response_parameters.insert("state", v));
+
+    if encode_to_fragment {
+        let fragment =
+            serde_urlencoded::to_string(response_parameters).expect("failed to serialize");
+        url.set_fragment(Some(&fragment));
+    } else {
+        url.query_pairs_mut().extend_pairs(response_parameters);
     }
 
     HttpResponse::Found()
@@ -163,6 +231,7 @@ mod tests {
     use super::super::CSRF_SESSION_KEY;
     use crate::http::state::tests::build_test_state;
     use crate::store::tests::PUBLIC_CLIENT;
+    use crate::store::tests::USER;
 
     #[actix_rt::test]
     async fn empty_session_gives_error() {
@@ -266,7 +335,7 @@ mod tests {
             max_age: None,
             prompt: None,
             response_mode: None,
-            response_type: None,
+            response_type: Some("code".to_string()),
             scope: None,
             ui_locales: None,
         };
@@ -276,7 +345,7 @@ mod tests {
                 &serde_urlencoded::to_string(first_request.clone()).unwrap(),
             )
             .unwrap();
-        session.set(authenticate::SESSION_KEY, "user").unwrap();
+        session.set(authenticate::SESSION_KEY, USER).unwrap();
         let csrftoken = generate_csrf_token();
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
@@ -304,5 +373,61 @@ mod tests {
             .query_pairs()
             .into_owned()
             .any(|param| param.0 == "code".to_string() && !param.1.is_empty()));
+    }
+
+    #[actix_rt::test]
+    async fn successful_request_with_id_token_is_forwarded() {
+        let req = test::TestRequest::post().to_http_request();
+        let state = Data::new(build_test_state());
+        let session = req.get_session();
+        let first_request = authorize::Request {
+            client_id: Some(PUBLIC_CLIENT.to_string()),
+            redirect_uri: Some("http://localhost/".to_string()),
+            state: Some("state".to_string()),
+            acr_values: None,
+            display: None,
+            id_token_hint: None,
+            login_hint: None,
+            nonce: None,
+            max_age: None,
+            prompt: None,
+            response_mode: None,
+            response_type: Some("id_token code".to_string()),
+            scope: None,
+            ui_locales: None,
+        };
+        session
+            .set(
+                authorize::SESSION_KEY,
+                &serde_urlencoded::to_string(first_request.clone()).unwrap(),
+            )
+            .unwrap();
+        session.set(authenticate::SESSION_KEY, USER).unwrap();
+        let csrftoken = generate_csrf_token();
+        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+        let request = Form(Request {
+            csrftoken: Some(csrftoken),
+        });
+
+        let resp = post(request, session, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::FOUND);
+
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let url = Url::parse(url).unwrap();
+        let expected_url = Url::parse(first_request.redirect_uri.as_ref().unwrap()).unwrap();
+
+        assert_eq!(expected_url.scheme(), url.scheme());
+        assert_eq!(expected_url.domain(), url.domain());
+        assert_eq!(expected_url.port(), url.port());
+        assert_eq!(expected_url.path(), url.path());
+
+        let fragment = url.fragment().unwrap_or("");
+        let response_parameters =
+            serde_urlencoded::from_str::<HashMap<String, String>>(fragment).unwrap();
+
+        assert_eq!(Some(&"state".to_string()), response_parameters.get("state"));
+        assert!(!response_parameters.get("code").unwrap().is_empty());
+        assert!(!response_parameters.get("id_token").unwrap().is_empty());
     }
 }

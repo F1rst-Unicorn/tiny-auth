@@ -32,6 +32,14 @@ pub trait ClientStore: Send + Sync {
     fn get(&self, key: &str) -> Option<Client>;
 }
 
+pub struct AuthorizationCodeRecord {
+    pub redirect_uri: String,
+
+    pub stored_duration: Duration,
+
+    pub username: String,
+}
+
 pub trait AuthorizationCodeStore: Send + Sync {
     fn get_authorization_code(
         &self,
@@ -46,7 +54,7 @@ pub trait AuthorizationCodeStore: Send + Sync {
         client_id: &str,
         authorization_code: &str,
         now: DateTime<Local>,
-    ) -> Option<(String, Duration, String)>;
+    ) -> Option<AuthorizationCodeRecord>;
 }
 
 #[cfg(test)]
@@ -138,16 +146,16 @@ pub mod tests {
             client_id: &str,
             authorization_code: &str,
             now: DateTime<Local>,
-        ) -> Option<(String, Duration, String)> {
+        ) -> Option<AuthorizationCodeRecord> {
             let (redirect_uri, user, creation_datetime) = self
                 .store
                 .borrow_mut()
                 .remove(&(client_id.to_string(), authorization_code.to_string()))?;
-            Some((
+            Some(AuthorizationCodeRecord {
                 redirect_uri,
-                now.signed_duration_since(creation_datetime),
-                user,
-            ))
+                stored_duration: now.signed_duration_since(creation_datetime),
+                username: user,
+            })
         }
     }
 

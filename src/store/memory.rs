@@ -17,6 +17,7 @@
 
 use crate::domain::client::Client;
 use crate::domain::user::User;
+use crate::store::AuthorizationCodeRecord;
 use crate::store::AuthorizationCodeStore;
 use crate::store::ClientStore;
 use crate::store::UserStore;
@@ -33,7 +34,7 @@ impl UserStore for MemoryUserStore {
     fn get(&self, key: &str) -> Option<User> {
         Some(User {
             name: key.to_string(),
-            password: "".to_string(),
+            password: key.to_string(),
         })
     }
 }
@@ -68,11 +69,11 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
         client_id: &str,
         authorization_code: &str,
         now: DateTime<Local>,
-    ) -> Option<(String, Duration, String)> {
-        Some((
-            "http://localhost/client".to_string(),
-            Duration::seconds(1),
-            "user".to_string(),
-        ))
+    ) -> Option<AuthorizationCodeRecord> {
+        Some(AuthorizationCodeRecord {
+            redirect_uri: "http://localhost/client".to_string(),
+            stored_duration: Duration::seconds(1),
+            username: "user".to_string(),
+        })
     }
 }

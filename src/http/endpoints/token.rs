@@ -34,11 +34,12 @@ use log::debug;
 use super::deserialise_empty_as_none;
 use crate::domain::client::Client;
 use crate::domain::token::Token;
-use crate::http::endpoints::render_oauth_error_response;
+use crate::http::endpoints::render_json_error;
 use crate::http::state::State;
+use crate::protocol::oauth2;
 use crate::protocol::oauth2::ClientType;
 use crate::protocol::oauth2::GrantType;
-use crate::protocol::oauth2::ProtocolError;
+use crate::protocol::oidc::ProtocolError;
 
 // Recommended lifetime is 10 minutes
 // https://tools.ietf.org/html/rfc6749#section-4.1.2
@@ -86,37 +87,37 @@ pub async fn post(
     state: web::Data<State>,
 ) -> HttpResponse {
     if request.grant_type.is_none() {
-        return render_oauth_error_response(
-            ProtocolError::InvalidRequest,
+        return render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Missing parameter grant_type",
         );
     }
 
     if request.code.is_none() {
-        return render_oauth_error_response(
-            ProtocolError::InvalidRequest,
+        return render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Missing parameter code",
         );
     }
 
     if request.redirect_uri.is_none() {
-        return render_oauth_error_response(
-            ProtocolError::InvalidRequest,
+        return render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Missing parameter redirect_uri",
         );
     }
 
     if request.client_id.is_none() {
-        return render_oauth_error_response(
-            ProtocolError::InvalidRequest,
+        return render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Missing parameter client_id",
         );
     }
 
     match request.grant_type.as_ref().unwrap() {
         GrantType::AuthorizationCode => grant_with_authorization_code(headers, request, state),
-        _ => render_oauth_error_response(
-            ProtocolError::UnsupportedGrantType,
+        _ => render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::UnsupportedGrantType),
             "grant_type must be authorization_code",
         ),
     }
@@ -132,8 +133,8 @@ pub fn grant_with_authorization_code(
 
     if client.is_none() {
         debug!("client '{}' not found", client_id);
-        return render_oauth_error_response(
-            ProtocolError::InvalidRequest,
+        return render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "client id or password wrong",
         );
     }
@@ -147,33 +148,45 @@ pub fn grant_with_authorization_code(
     }
 
     let code = request.code.as_ref().unwrap();
-    let stored_redirect_uri = state
+    let record = state
         .auth_code_store
         .validate(client_id, &code, Local::now());
 
-    if stored_redirect_uri.is_none() {
+    if record.is_none() {
         debug!(
             "No authorization code found for client '{}' with code '{}'",
             client_id, code
         );
-        return render_oauth_error_response(ProtocolError::InvalidGrant, "Invalid code");
+        return render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
+            "Invalid code",
+        );
     }
-    let stored_data = stored_redirect_uri.unwrap();
+    let record = record.unwrap();
 
-    if &stored_data.0 != request.redirect_uri.as_ref().unwrap() {
+    if &record.redirect_uri != request.redirect_uri.as_ref().unwrap() {
         debug!("redirect_uri is wrong");
-        return render_oauth_error_response(ProtocolError::InvalidGrant, "Invalid code");
+        return render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
+            "Invalid code",
+        );
     }
 
-    if stored_data.1 > Duration::minutes(AUTH_CODE_LIFE_TIME) {
+    if record.stored_duration > Duration::minutes(AUTH_CODE_LIFE_TIME) {
         debug!("code has expired");
-        return render_oauth_error_response(ProtocolError::InvalidGrant, "Invalid code");
+        return render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
+            "Invalid code",
+        );
     }
 
-    let user = state.user_store.get(&stored_data.2);
+    let user = state.user_store.get(&record.username);
     if user.is_none() {
-        debug!("user {} not found", stored_data.2);
-        return render_oauth_error_response(ProtocolError::InvalidGrant, "User not found");
+        debug!("user {} not found", record.username);
+        return render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
+            "User not found",
+        );
     }
     let user = user.unwrap();
 
@@ -191,17 +204,20 @@ pub fn grant_with_authorization_code(
     );
     if let Err(e) = encoded_token {
         debug!("failed to encode token: {}", e);
-        return render_oauth_error_response(ProtocolError::ServerError, "token encoding failed");
+        return render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::ServerError),
+            "token encoding failed",
+        );
     }
     let encoded_token = encoded_token.unwrap();
 
     HttpResponse::Ok().json(Response {
-        access_token: encoded_token,
+        access_token: encoded_token.clone(),
         token_type: "bearer".to_string(),
         expires_in: Some(60),
         refresh_token: None,
         scope: None,
-        id_token: None,
+        id_token: Some(encoded_token),
     })
 }
 
@@ -210,30 +226,30 @@ fn authenticate_client(headers: HttpRequest, client: &Client) -> Option<HttpResp
         Some(value) => match parse_authorization(value) {
             Some(x) => x,
             None => {
-                return Some(render_oauth_error_response(
-                    ProtocolError::InvalidClient,
+                return Some(render_json_error(
+                    ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
                     "Invalid authorization header",
                 ));
             }
         },
         None => {
-            return Some(render_oauth_error_response(
-                ProtocolError::InvalidClient,
+            return Some(render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
                 "Missing authorization header",
             ));
         }
     };
 
     if *client.client_id != client_name {
-        return Some(render_oauth_error_response(
-            ProtocolError::InvalidClient,
+        return Some(render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
             "Invalid authorization header",
         ));
     }
 
     if !client.is_password_correct(&password) {
-        Some(render_oauth_error_response(
-            ProtocolError::InvalidClient,
+        Some(render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
             "client id or password wrong",
         ))
     } else {
@@ -292,6 +308,7 @@ mod tests {
     use crate::http::endpoints::ErrorResponse;
     use crate::http::state::tests::build_test_state;
     use crate::protocol::oauth2::ProtocolError;
+    use crate::protocol::oidc::ProtocolError as OidcError;
     use crate::store::tests::CONFIDENTIAL_CLIENT;
     use crate::store::tests::PUBLIC_CLIENT;
     use crate::store::tests::UNKNOWN_CLIENT_ID;
@@ -312,7 +329,10 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(ProtocolError::InvalidRequest, response.error);
+        assert_eq!(
+            OidcError::from(ProtocolError::InvalidRequest),
+            response.error
+        );
     }
 
     #[actix_rt::test]
@@ -330,7 +350,10 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(ProtocolError::InvalidRequest, response.error);
+        assert_eq!(
+            OidcError::from(ProtocolError::InvalidRequest),
+            response.error
+        );
     }
 
     #[actix_rt::test]
@@ -348,7 +371,10 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(ProtocolError::InvalidRequest, response.error);
+        assert_eq!(
+            OidcError::from(ProtocolError::InvalidRequest),
+            response.error
+        );
     }
 
     #[actix_rt::test]
@@ -366,7 +392,10 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(ProtocolError::InvalidRequest, response.error);
+        assert_eq!(
+            OidcError::from(ProtocolError::InvalidRequest),
+            response.error
+        );
     }
 
     #[actix_rt::test]
@@ -384,7 +413,10 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(ProtocolError::InvalidRequest, response.error);
+        assert_eq!(
+            OidcError::from(ProtocolError::InvalidRequest),
+            response.error
+        );
     }
 
     #[actix_rt::test]
@@ -403,7 +435,7 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(ProtocolError::InvalidGrant, response.error);
+        assert_eq!(OidcError::from(ProtocolError::InvalidGrant), response.error);
     }
 
     #[actix_rt::test]
@@ -428,7 +460,7 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(ProtocolError::InvalidGrant, response.error);
+        assert_eq!(OidcError::from(ProtocolError::InvalidGrant), response.error);
     }
 
     #[actix_rt::test]
@@ -454,7 +486,7 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(ProtocolError::InvalidGrant, response.error);
+        assert_eq!(OidcError::from(ProtocolError::InvalidGrant), response.error);
     }
 
     #[actix_rt::test]
@@ -484,7 +516,7 @@ mod tests {
         assert_eq!(Some(60), response.expires_in);
         assert_eq!(None, response.refresh_token);
         assert_eq!(None, response.scope);
-        assert_eq!(None, response.id_token);
+        assert!(!response.id_token.unwrap().is_empty());
     }
 
     #[actix_rt::test]
@@ -509,7 +541,10 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(ProtocolError::InvalidClient, response.error);
+        assert_eq!(
+            OidcError::from(ProtocolError::InvalidClient),
+            response.error
+        );
     }
 
     #[actix_rt::test]
@@ -536,7 +571,10 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(ProtocolError::InvalidClient, response.error);
+        assert_eq!(
+            OidcError::from(ProtocolError::InvalidClient),
+            response.error
+        );
     }
 
     #[actix_rt::test]
@@ -563,7 +601,10 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(ProtocolError::InvalidClient, response.error);
+        assert_eq!(
+            OidcError::from(ProtocolError::InvalidClient),
+            response.error
+        );
     }
 
     #[actix_rt::test]
@@ -590,7 +631,10 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(ProtocolError::InvalidClient, response.error);
+        assert_eq!(
+            OidcError::from(ProtocolError::InvalidClient),
+            response.error
+        );
     }
 
     #[actix_rt::test]
@@ -620,7 +664,10 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(ProtocolError::InvalidClient, response.error);
+        assert_eq!(
+            OidcError::from(ProtocolError::InvalidClient),
+            response.error
+        );
     }
 
     #[actix_rt::test]
@@ -654,6 +701,40 @@ mod tests {
         assert_eq!(Some(60), response.expires_in);
         assert_eq!(None, response.refresh_token);
         assert_eq!(None, response.scope);
-        assert_eq!(None, response.id_token);
+        assert!(!response.id_token.unwrap().is_empty());
+    }
+
+    #[actix_rt::test]
+    async fn issue_valid_token_with_id_token_for_correct_password() {
+        let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
+        let encoded_auth = base64::encode(auth);
+        let req = test::TestRequest::post()
+            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .to_http_request();
+        let redirect_uri = "fdsa".to_string();
+        let state = Data::new(build_test_state());
+        let auth_code = state.auth_code_store.get_authorization_code(
+            CONFIDENTIAL_CLIENT,
+            USER,
+            &redirect_uri,
+            Local::now(),
+        );
+        let form = Form(Request {
+            grant_type: Some(GrantType::AuthorizationCode),
+            code: Some(auth_code),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri),
+        });
+
+        let resp = post(req, form, state).await;
+
+        assert_eq!(resp.status(), http::StatusCode::OK);
+        let response = read_response::<Response>(resp).await;
+        assert!(!response.access_token.is_empty());
+        assert_eq!("bearer".to_string(), response.token_type);
+        assert_eq!(Some(60), response.expires_in);
+        assert_eq!(None, response.refresh_token);
+        assert_eq!(None, response.scope);
+        assert!(!response.id_token.unwrap().is_empty());
     }
 }

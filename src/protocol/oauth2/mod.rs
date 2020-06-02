@@ -52,12 +52,9 @@ pub enum GrantType {
     RefreshToken,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ResponseType {
-    #[serde(rename = "code")]
     Code,
-
-    #[serde(rename = "token")]
     Token,
 }
 

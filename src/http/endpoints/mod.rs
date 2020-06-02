@@ -21,7 +21,8 @@ pub mod consent;
 pub mod token;
 pub mod userinfo;
 
-use crate::protocol::oauth2::ProtocolError;
+use crate::protocol::oauth2::ProtocolError as OAuthError;
+use crate::protocol::oidc::ProtocolError;
 
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
@@ -55,9 +56,9 @@ struct ErrorResponse {
     error_uri: Option<String>,
 }
 
-pub fn render_oauth_error_response(error: ProtocolError, description: &str) -> HttpResponse {
+pub fn render_json_error(error: ProtocolError, description: &str) -> HttpResponse {
     match error {
-        ProtocolError::InvalidClient => HttpResponse::Unauthorized(),
+        ProtocolError::OAuth2(OAuthError::InvalidClient) => HttpResponse::Unauthorized(),
         _ => HttpResponse::BadRequest(),
     }
     .json(ErrorResponse {

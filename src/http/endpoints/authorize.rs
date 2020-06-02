@@ -19,8 +19,11 @@ use super::deserialise_empty_as_none;
 use super::render_template;
 use crate::http::endpoints::server_error;
 use crate::http::state;
-use crate::protocol::oauth2::ProtocolError;
-use crate::protocol::oauth2::ResponseType;
+use crate::protocol::oauth2;
+use crate::protocol::oidc::ProtocolError;
+use crate::protocol::oidc::ResponseType;
+
+use std::convert::TryFrom;
 
 use actix_web::http::StatusCode;
 use actix_web::web;
@@ -50,7 +53,8 @@ pub struct Request {
 
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub response_type: Option<ResponseType>,
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    pub response_type: Option<String>,
 
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -161,7 +165,7 @@ pub async fn post(
         debug!("Missing scope");
         return missing_parameter(
             redirect_uri,
-            ProtocolError::InvalidRequest,
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Missing required parameter scope",
             &client_state,
         );
@@ -171,8 +175,17 @@ pub async fn post(
         debug!("Missing response_type");
         return missing_parameter(
             redirect_uri,
-            ProtocolError::InvalidRequest,
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Missing required parameter response_type",
+            &client_state,
+        );
+    }
+
+    if parse_response_type(query.response_type.as_deref().unwrap()).is_none() {
+        return missing_parameter(
+            redirect_uri,
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+            "Invalid required parameter response_type",
             &client_state,
         );
     }
@@ -185,6 +198,21 @@ pub async fn post(
     HttpResponse::SeeOther()
         .set_header("Location", "authenticate")
         .finish()
+}
+
+pub fn parse_response_type(input: &str) -> Option<Vec<ResponseType>> {
+    let mut result = Vec::new();
+    for word in input.split(' ') {
+        let parsed_word = ResponseType::try_from(word);
+        match parsed_word {
+            Err(e) => {
+                debug!("invalid response_type {}. Error was: {}", word, e);
+                return None;
+            }
+            Ok(response_type) => result.push(response_type),
+        }
+    }
+    Some(result)
 }
 
 fn render_invalid_client_id_error(tera: &Tera) -> HttpResponse {
@@ -233,6 +261,11 @@ mod tests {
     use url::Url;
 
     use crate::http::state::tests::build_test_state;
+    use crate::protocol::oauth2::ResponseType::Code;
+    use crate::protocol::oauth2::ResponseType::Token;
+    use crate::protocol::oidc::OidcResponseType::IdToken;
+    use crate::protocol::oidc::ResponseType::OAuth2;
+    use crate::protocol::oidc::ResponseType::Oidc;
     use crate::store::tests::CONFIDENTIAL_CLIENT;
     use crate::store::tests::UNKNOWN_CLIENT_ID;
 
@@ -385,7 +418,10 @@ mod tests {
         assert_eq!(expected_url.domain(), url.domain());
         assert_eq!(expected_url.port(), url.port());
         assert_eq!(expected_url.path(), url.path());
-        let expected_error = format!("{}", ProtocolError::InvalidRequest);
+        let expected_error = format!(
+            "{}",
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
+        );
         assert!(url
             .query_pairs()
             .into_owned()
@@ -437,7 +473,10 @@ mod tests {
         assert_eq!(expected_url.domain(), url.domain());
         assert_eq!(expected_url.port(), url.port());
         assert_eq!(expected_url.path(), url.path());
-        let expected_error = format!("{}", ProtocolError::InvalidRequest);
+        let expected_error = format!(
+            "{}",
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
+        );
         assert!(url
             .query_pairs()
             .into_owned()
@@ -462,7 +501,7 @@ mod tests {
         let client_state = "somestate".to_string();
         let request = Request {
             scope: Some("email".to_string()),
-            response_type: Some(ResponseType::Code),
+            response_type: Some("code".to_string()),
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri.to_string()),
             state: Some(client_state.clone()),
@@ -489,5 +528,33 @@ mod tests {
         let first_request = session.get::<String>(SESSION_KEY).unwrap().unwrap();
         let first_request = serde_urlencoded::from_str::<Request>(&first_request).unwrap();
         assert_eq!(request, first_request);
+    }
+
+    #[test]
+    pub fn single_response_types_are_parsed() {
+        assert_eq!(Some(vec![OAuth2(Code)]), parse_response_type("code"));
+        assert_eq!(Some(vec![OAuth2(Token)]), parse_response_type("token"));
+        assert_eq!(Some(vec![Oidc(IdToken)]), parse_response_type("id_token"));
+    }
+
+    #[test]
+    pub fn composite_response_types_are_parsed() {
+        assert_eq!(
+            Some(vec![OAuth2(Code), Oidc(IdToken)]),
+            parse_response_type("code id_token")
+        );
+        assert_eq!(
+            Some(vec![OAuth2(Token), Oidc(IdToken)]),
+            parse_response_type("token id_token")
+        );
+        assert_eq!(
+            Some(vec![Oidc(IdToken), OAuth2(Token), OAuth2(Code)]),
+            parse_response_type("id_token token code")
+        );
+    }
+
+    #[test]
+    pub fn errors_are_reported() {
+        assert_eq!(None, parse_response_type("code id_token invalid"));
     }
 }
