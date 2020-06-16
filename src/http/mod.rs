@@ -19,6 +19,8 @@ pub mod endpoints;
 mod state;
 mod tera;
 
+use crate::business::authenticator::Authenticator;
+use crate::business::token::TokenCreator;
 use crate::config::Crypto;
 use crate::config::Tls;
 use crate::config::Web;
@@ -85,19 +87,21 @@ pub fn build(web: Web, crypto: Crypto) -> Result<Server, Error> {
         Algorithm::PS512
     };
 
-    let state = web::Data::new(state::State {
-        instance: web.bind.to_string() + "/" + web.path.as_deref().unwrap_or(""),
-        encoding_key: (encoding_key_result.unwrap(), algorithm),
-        decoding_key: decoding_key_result.unwrap().into_static(),
-        tera,
-        client_store: Box::new(MemoryClientStore {}),
-        user_store: Box::new(MemoryUserStore {}),
-        auth_code_store: Box::new(MemoryAuthorizationCodeStore {}),
-    });
+    let encoding_key = encoding_key_result.unwrap();
+    let token_issuer = web.bind.to_string() + "/" + web.path.as_deref().unwrap_or("");
+
+    let token_creator = TokenCreator::new(encoding_key, algorithm, token_issuer);
+
     let server = HttpServer::new(move || {
         let token_certificate = token_certificate.clone();
         App::new()
-            .app_data(state.clone())
+            .app_data(tera.clone())
+            .app_data(web::Data::new(Authenticator::new(Box::new(
+                MemoryUserStore {},
+            ))))
+            .app_data(web::Data::new(Box::new(MemoryClientStore {})))
+            .app_data(web::Data::new(Box::new(MemoryAuthorizationCodeStore {})))
+            .app_data(web::Data::new(token_creator.clone()))
             .wrap(
                 CookieSession::private(web.secret_key.as_bytes())
                     // ^- encryption is only needed to avoid encoding problems

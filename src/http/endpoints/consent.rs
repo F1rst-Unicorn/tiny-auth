@@ -18,13 +18,16 @@
 use super::deserialise_empty_as_none;
 use super::render_template;
 use super::server_error;
+use crate::business::token::TokenCreator;
 use crate::domain::token::Token;
 use crate::http::endpoints::authenticate;
 use crate::http::endpoints::authorize;
 use crate::http::endpoints::render_template_with_context;
-use crate::http::state::State;
 use crate::protocol::oauth2;
 use crate::protocol::oidc;
+use crate::store::AuthorizationCodeStore;
+use crate::store::ClientStore;
+use crate::store::UserStore;
 
 use std::collections::HashMap;
 
@@ -32,14 +35,12 @@ use actix_web::http::StatusCode;
 use actix_web::web;
 use actix_web::HttpResponse;
 
-use jsonwebtoken::encode;
-use jsonwebtoken::Header;
-
 use actix_session::Session;
 
 use url::Url;
 
 use tera::Context;
+use tera::Tera;
 
 use chrono::offset::Local;
 use chrono::Duration;
@@ -57,66 +58,69 @@ pub struct Request {
     csrftoken: Option<String>,
 }
 
-pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
-    let first_request = session.get::<String>(authorize::SESSION_KEY);
-    if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
-        debug!(
-            "Unsolicited consent request. authorize request was {:?}",
-            first_request
-        );
-        return render_invalid_consent_request(&state.tera);
-    }
-
-    let authenticated = session.get::<String>(authenticate::SESSION_KEY);
-    if authenticated.is_err() || authenticated.as_ref().unwrap().is_none() {
-        debug!(
-            "Unsolicited consent request. authenticate request was {:?}",
-            authenticated
-        );
-        return render_invalid_consent_request(&state.tera);
-    }
-
-    let context = build_context(&session);
-    match context {
-        Some(context) => {
-            render_template_with_context("consent.html.j2", StatusCode::OK, &state.tera, &context)
+pub async fn get(tera: web::Data<Tera>, session: Session) -> HttpResponse {
+    match session.get::<String>(authorize::SESSION_KEY) {
+        Err(_) | Ok(None) => {
+            debug!("unsolicited consent request");
+            return render_invalid_consent_request(&tera);
         }
-        None => server_error(&state.tera),
+        _ => {}
+    }
+
+    match session.get::<String>(authenticate::SESSION_KEY) {
+        Err(_) | Ok(None) => {
+            debug!("unsolicited consent request");
+            return render_invalid_consent_request(&tera);
+        }
+        _ => {}
+    }
+
+    match build_context(&session) {
+        Some(context) => {
+            render_template_with_context("consent.html.j2", StatusCode::OK, &tera, &context)
+        }
+        None => server_error(&tera),
     }
 }
 
 pub async fn post(
     query: web::Form<Request>,
     session: Session,
-    state: web::Data<State>,
+    tera: web::Data<Tera>,
+    client_store: web::Data<Box<dyn ClientStore>>,
+    user_store: web::Data<Box<dyn UserStore>>,
+    auth_code_store: web::Data<Box<dyn AuthorizationCodeStore>>,
+    token_creator: web::Data<TokenCreator>,
 ) -> HttpResponse {
     if !super::is_csrf_valid(&query.csrftoken, &session) {
         debug!("CSRF protection violation detected");
-        return render_invalid_consent_request(&state.tera);
+        return render_invalid_consent_request(&tera);
     }
 
-    let first_request = session.get::<String>(authorize::SESSION_KEY);
-    if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
-        debug!("Unsolicited consent request. {:?}", first_request);
-        return render_invalid_consent_request(&state.tera);
-    }
+    let first_request = match session.get::<String>(authorize::SESSION_KEY) {
+        Err(_) | Ok(None) => {
+            debug!("unsolicited consent request");
+            return render_invalid_consent_request(&tera);
+        }
+        Ok(Some(req)) => req,
+    };
 
-    let username = session.get::<String>(authenticate::SESSION_KEY);
-    if username.is_err() || username.as_ref().unwrap().is_none() {
-        debug!("Unsolicited consent request. {:?}", username);
-        return render_invalid_consent_request(&state.tera);
-    }
-    let username = username.unwrap().unwrap();
+    let username = match session.get::<String>(authenticate::SESSION_KEY) {
+        Err(_) | Ok(None) => {
+            debug!("unsolicited consent request");
+            return render_invalid_consent_request(&tera);
+        }
+        Ok(Some(username)) => username,
+    };
 
-    let first_request_result =
-        serde_urlencoded::from_str::<authorize::Request>(&first_request.unwrap().unwrap());
+    let first_request = match serde_urlencoded::from_str::<authorize::Request>(&first_request) {
+        Err(e) => {
+            error!("Failed to deserialize initial request. {}", e);
+            return server_error(&tera);
+        }
+        Ok(req) => req,
+    };
 
-    if let Err(e) = first_request_result {
-        error!("Failed to deserialize initial request. {}", e);
-        return server_error(&state.tera);
-    }
-
-    let first_request = first_request_result.unwrap();
     let client_name = first_request.client_id.as_ref().unwrap();
     let response_type = first_request
         .response_type
@@ -130,7 +134,7 @@ pub async fn post(
     let mut encode_to_fragment = false;
 
     if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Code)) {
-        let code = state.auth_code_store.get_authorization_code(
+        let code = auth_code_store.get_authorization_code(
             client_name,
             &username,
             &redirect_uri,
@@ -141,37 +145,32 @@ pub async fn post(
 
     if response_type.contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken)) {
         encode_to_fragment = true;
-        let user = state.user_store.get(&username);
-        if user.is_none() {
-            debug!("user {} not found", username);
-            return render_invalid_consent_request(&state.tera);
-        }
-        let user = user.unwrap();
+        let user = match user_store.get(&username) {
+            None => {
+                debug!("user {} not found", username);
+                return render_invalid_consent_request(&tera);
+            }
+            Some(user) => user,
+        };
 
-        let client = state.client_store.get(client_name);
-        if client.is_none() {
-            debug!("client {} not found", client_name);
-            return render_invalid_consent_request(&state.tera);
-        }
-        let client = client.unwrap();
+        let client = match client_store.get(client_name) {
+            None => {
+                debug!("client {} not found", client_name);
+                return render_invalid_consent_request(&tera);
+            }
+            Some(client) => client,
+        };
 
-        let token = Token::build(
-            &user,
-            &client,
-            &state.instance,
-            Local::now() + Duration::minutes(1),
-        );
+        let token = Token::build(&user, &client, Local::now() + Duration::minutes(1));
 
-        let encoded_token = encode(
-            &Header::new(state.encoding_key.1),
-            &token,
-            &state.encoding_key.0,
-        );
-        if let Err(e) = encoded_token {
-            debug!("failed to encode token: {}", e);
-            return server_error(&state.tera);
-        }
-        response_parameters.insert("id_token", encoded_token.unwrap());
+        let encoded_token = match token_creator.create(token) {
+            Err(e) => {
+                debug!("failed to encode token: {}", e);
+                return server_error(&tera);
+            }
+            Ok(token) => token,
+        };
+        response_parameters.insert("id_token", encoded_token);
     }
 
     if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token)) {
@@ -224,22 +223,24 @@ mod tests {
     use actix_session::UserSession;
     use actix_web::http;
     use actix_web::test;
-    use actix_web::web::Data;
     use actix_web::web::Form;
 
     use super::super::generate_csrf_token;
     use super::super::CSRF_SESSION_KEY;
-    use crate::http::state::tests::build_test_state;
+    use crate::http::state::tests::build_test_auth_code_store;
+    use crate::http::state::tests::build_test_client_store;
+    use crate::http::state::tests::build_test_tera;
+    use crate::http::state::tests::build_test_token_creator;
+    use crate::http::state::tests::build_test_user_store;
     use crate::store::tests::PUBLIC_CLIENT;
     use crate::store::tests::USER;
 
     #[actix_rt::test]
     async fn empty_session_gives_error() {
         let req = test::TestRequest::get().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
 
-        let resp = get(state, session).await;
+        let resp = get(build_test_tera(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -247,11 +248,10 @@ mod tests {
     #[actix_rt::test]
     async fn missing_authentication_gives_error() {
         let req = test::TestRequest::get().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         session.set(authorize::SESSION_KEY, "dummy").unwrap();
 
-        let resp = get(state, session).await;
+        let resp = get(build_test_tera(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -259,12 +259,11 @@ mod tests {
     #[actix_rt::test]
     async fn valid_request_is_rendered() {
         let req = test::TestRequest::get().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         session.set(authorize::SESSION_KEY, "dummy").unwrap();
         session.set(authenticate::SESSION_KEY, "user").unwrap();
 
-        let resp = get(state, session).await;
+        let resp = get(build_test_tera(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
@@ -272,7 +271,6 @@ mod tests {
     #[actix_rt::test]
     async fn wrong_csrf_gives_error() {
         let req = test::TestRequest::post().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         let csrftoken = generate_csrf_token();
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
@@ -280,7 +278,16 @@ mod tests {
             csrftoken: Some(csrftoken + "wrong"),
         });
 
-        let resp = post(request, session, state).await;
+        let resp = post(
+            request,
+            session,
+            build_test_tera(),
+            build_test_client_store(),
+            build_test_user_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -288,7 +295,6 @@ mod tests {
     #[actix_rt::test]
     async fn posting_empty_session_gives_error() {
         let req = test::TestRequest::post().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         let csrftoken = generate_csrf_token();
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
@@ -296,7 +302,16 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(request, session, state).await;
+        let resp = post(
+            request,
+            session,
+            build_test_tera(),
+            build_test_client_store(),
+            build_test_user_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -304,7 +319,6 @@ mod tests {
     #[actix_rt::test]
     async fn posting_missing_authentication_gives_error() {
         let req = test::TestRequest::post().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         session.set(authorize::SESSION_KEY, "dummy").unwrap();
         let csrftoken = generate_csrf_token();
@@ -313,7 +327,16 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(request, session, state).await;
+        let resp = post(
+            request,
+            session,
+            build_test_tera(),
+            build_test_client_store(),
+            build_test_user_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -321,7 +344,6 @@ mod tests {
     #[actix_rt::test]
     async fn successful_request_is_forwarded() {
         let req = test::TestRequest::post().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         let first_request = authorize::Request {
             client_id: Some(PUBLIC_CLIENT.to_string()),
@@ -352,7 +374,16 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(request, session, state).await;
+        let resp = post(
+            request,
+            session,
+            build_test_tera(),
+            build_test_client_store(),
+            build_test_user_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::FOUND);
 
@@ -378,7 +409,6 @@ mod tests {
     #[actix_rt::test]
     async fn successful_request_with_id_token_is_forwarded() {
         let req = test::TestRequest::post().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         let first_request = authorize::Request {
             client_id: Some(PUBLIC_CLIENT.to_string()),
@@ -409,7 +439,16 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(request, session, state).await;
+        let resp = post(
+            request,
+            session,
+            build_test_tera(),
+            build_test_client_store(),
+            build_test_user_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::FOUND);
 

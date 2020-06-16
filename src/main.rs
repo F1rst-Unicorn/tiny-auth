@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+mod business;
 mod cli_parser;
 mod config;
 mod domain;

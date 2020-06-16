@@ -15,6 +15,19 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use super::deserialise_empty_as_none;
+use crate::business::token::TokenCreator;
+use crate::domain::client::Client;
+use crate::domain::token::Token;
+use crate::http::endpoints::render_json_error;
+use crate::protocol::oauth2;
+use crate::protocol::oauth2::ClientType;
+use crate::protocol::oauth2::GrantType;
+use crate::protocol::oidc::ProtocolError;
+use crate::store::AuthorizationCodeStore;
+use crate::store::ClientStore;
+use crate::store::UserStore;
+
 use actix_web::http::HeaderValue;
 use actix_web::web;
 use actix_web::HttpRequest;
@@ -26,20 +39,7 @@ use serde_derive::Serialize;
 use chrono::offset::Local;
 use chrono::Duration;
 
-use jsonwebtoken::encode;
-use jsonwebtoken::Header;
-
 use log::debug;
-
-use super::deserialise_empty_as_none;
-use crate::domain::client::Client;
-use crate::domain::token::Token;
-use crate::http::endpoints::render_json_error;
-use crate::http::state::State;
-use crate::protocol::oauth2;
-use crate::protocol::oauth2::ClientType;
-use crate::protocol::oauth2::GrantType;
-use crate::protocol::oidc::ProtocolError;
 
 // Recommended lifetime is 10 minutes
 // https://tools.ietf.org/html/rfc6749#section-4.1.2
@@ -84,7 +84,10 @@ pub struct Response {
 pub async fn post(
     headers: HttpRequest,
     request: web::Form<Request>,
-    state: web::Data<State>,
+    client_store: web::Data<Box<dyn ClientStore>>,
+    user_store: web::Data<Box<dyn UserStore>>,
+    auth_code_store: web::Data<Box<dyn AuthorizationCodeStore>>,
+    token_creator: web::Data<TokenCreator>,
 ) -> HttpResponse {
     if request.grant_type.is_none() {
         return render_json_error(
@@ -115,7 +118,14 @@ pub async fn post(
     }
 
     match request.grant_type.as_ref().unwrap() {
-        GrantType::AuthorizationCode => grant_with_authorization_code(headers, request, state),
+        GrantType::AuthorizationCode => grant_with_authorization_code(
+            headers,
+            request,
+            client_store,
+            user_store,
+            auth_code_store,
+            token_creator,
+        ),
         _ => render_json_error(
             ProtocolError::OAuth2(oauth2::ProtocolError::UnsupportedGrantType),
             "grant_type must be authorization_code",
@@ -126,20 +136,22 @@ pub async fn post(
 pub fn grant_with_authorization_code(
     headers: HttpRequest,
     request: web::Form<Request>,
-    state: web::Data<State>,
+    client_store: web::Data<Box<dyn ClientStore>>,
+    user_store: web::Data<Box<dyn UserStore>>,
+    auth_code_store: web::Data<Box<dyn AuthorizationCodeStore>>,
+    token_creator: web::Data<TokenCreator>,
 ) -> HttpResponse {
     let client_id = request.client_id.as_ref().unwrap();
-    let client = state.client_store.get(client_id);
-
-    if client.is_none() {
-        debug!("client '{}' not found", client_id);
-        return render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-            "client id or password wrong",
-        );
-    }
-
-    let client = client.unwrap();
+    let client = match client_store.get(client_id) {
+        None => {
+            debug!("client '{}' not found", client_id);
+            return render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "client id or password wrong",
+            );
+        }
+        Some(client) => client,
+    };
 
     if let ClientType::Confidential { .. } = client.client_type {
         if let Some(response) = authenticate_client(headers, &client) {
@@ -148,21 +160,19 @@ pub fn grant_with_authorization_code(
     }
 
     let code = request.code.as_ref().unwrap();
-    let record = state
-        .auth_code_store
-        .validate(client_id, &code, Local::now());
-
-    if record.is_none() {
-        debug!(
-            "No authorization code found for client '{}' with code '{}'",
-            client_id, code
-        );
-        return render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
-            "Invalid code",
-        );
-    }
-    let record = record.unwrap();
+    let record = match auth_code_store.validate(client_id, &code, Local::now()) {
+        None => {
+            debug!(
+                "No authorization code found for client '{}' with code '{}'",
+                client_id, code
+            );
+            return render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
+                "Invalid code",
+            );
+        }
+        Some(record) => record,
+    };
 
     if &record.redirect_uri != request.redirect_uri.as_ref().unwrap() {
         debug!("redirect_uri is wrong");
@@ -180,36 +190,29 @@ pub fn grant_with_authorization_code(
         );
     }
 
-    let user = state.user_store.get(&record.username);
-    if user.is_none() {
-        debug!("user {} not found", record.username);
-        return render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
-            "User not found",
-        );
-    }
-    let user = user.unwrap();
+    let user = match user_store.get(&record.username) {
+        None => {
+            debug!("user {} not found", record.username);
+            return render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
+                "User not found",
+            );
+        }
+        Some(user) => user,
+    };
 
-    let token = Token::build(
-        &user,
-        &client,
-        &state.instance,
-        Local::now() + Duration::minutes(1),
-    );
+    let token = Token::build(&user, &client, Local::now() + Duration::minutes(1));
 
-    let encoded_token = encode(
-        &Header::new(state.encoding_key.1),
-        &token,
-        &state.encoding_key.0,
-    );
-    if let Err(e) = encoded_token {
-        debug!("failed to encode token: {}", e);
-        return render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::ServerError),
-            "token encoding failed",
-        );
-    }
-    let encoded_token = encoded_token.unwrap();
+    let encoded_token = match token_creator.create(token) {
+        Err(e) => {
+            debug!("failed to encode token: {}", e);
+            return render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::ServerError),
+                "token encoding failed",
+            );
+        }
+        Ok(token) => token,
+    };
 
     HttpResponse::Ok().json(Response {
         access_token: encoded_token.clone(),
@@ -258,12 +261,13 @@ fn authenticate_client(headers: HttpRequest, client: &Client) -> Option<HttpResp
 }
 
 fn parse_authorization(value: &HeaderValue) -> Option<(String, String)> {
-    let value = value.to_str();
-    if let Err(e) = value {
-        debug!("decoding of authorization header failed. {}", e);
-        return None;
-    }
-    let value = value.unwrap().to_string();
+    let value = match value.to_str() {
+        Err(e) => {
+            debug!("decoding of authorization header failed. {}", e);
+            return None;
+        }
+        Ok(value) => value,
+    };
 
     if !value.starts_with("Basic ") {
         debug!("Malformed HTTP basic authorization header '{}'", value);
@@ -271,19 +275,21 @@ fn parse_authorization(value: &HeaderValue) -> Option<(String, String)> {
     }
     let value = value.replacen("Basic ", "", 1);
 
-    let credentials = base64::decode(value);
-    if let Err(e) = credentials {
-        debug!("base64 decoding of authorization header failed. {}", e);
-        return None;
-    }
-    let credentials = credentials.unwrap();
+    let credentials = match base64::decode(value) {
+        Err(e) => {
+            debug!("base64 decoding of authorization header failed. {}", e);
+            return None;
+        }
+        Ok(cred) => cred,
+    };
 
-    let credentials = String::from_utf8(credentials);
-    if let Err(e) = credentials {
-        debug!("utf-8 decoding of authorization header failed. {}", e);
-        return None;
-    }
-    let credentials = credentials.unwrap();
+    let credentials = match String::from_utf8(credentials) {
+        Err(e) => {
+            debug!("utf-8 decoding of authorization header failed. {}", e);
+            return None;
+        }
+        Ok(cred) => cred,
+    };
 
     let split: Vec<String> = credentials.splitn(2, ':').map(str::to_string).collect();
     if split.len() == 2 {
@@ -299,14 +305,16 @@ mod tests {
 
     use actix_web::http;
     use actix_web::test;
-    use actix_web::web::Data;
     use actix_web::web::Form;
 
     use chrono::offset::Local;
 
     use crate::http::endpoints::tests::read_response;
     use crate::http::endpoints::ErrorResponse;
-    use crate::http::state::tests::build_test_state;
+    use crate::http::state::tests::build_test_auth_code_store;
+    use crate::http::state::tests::build_test_client_store;
+    use crate::http::state::tests::build_test_token_creator;
+    use crate::http::state::tests::build_test_user_store;
     use crate::protocol::oauth2::ProtocolError;
     use crate::protocol::oidc::ProtocolError as OidcError;
     use crate::store::tests::CONFIDENTIAL_CLIENT;
@@ -323,9 +331,16 @@ mod tests {
             client_id: Some("fdsa".to_string()),
             redirect_uri: Some("fdsa".to_string()),
         });
-        let state = Data::new(build_test_state());
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -344,9 +359,16 @@ mod tests {
             client_id: Some("fdsa".to_string()),
             redirect_uri: Some("fdsa".to_string()),
         });
-        let state = Data::new(build_test_state());
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -365,9 +387,16 @@ mod tests {
             client_id: None,
             redirect_uri: Some("fdsa".to_string()),
         });
-        let state = Data::new(build_test_state());
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -386,9 +415,16 @@ mod tests {
             client_id: Some("fdsa".to_string()),
             redirect_uri: None,
         });
-        let state = Data::new(build_test_state());
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -407,9 +443,16 @@ mod tests {
             client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
             redirect_uri: Some("fdsa".to_string()),
         });
-        let state = Data::new(build_test_state());
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -429,9 +472,16 @@ mod tests {
             client_id: Some(PUBLIC_CLIENT.to_string()),
             redirect_uri: Some("fdsa".to_string()),
         });
-        let state = Data::new(build_test_state());
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -442,8 +492,8 @@ mod tests {
     async fn wrong_redirect_uri_is_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
-        let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(
+        let auth_code_store = build_test_auth_code_store();
+        let auth_code = auth_code_store.get_authorization_code(
             PUBLIC_CLIENT,
             USER,
             &redirect_uri,
@@ -456,7 +506,15 @@ mod tests {
             redirect_uri: Some(redirect_uri + "/wrong"),
         });
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -467,9 +525,9 @@ mod tests {
     async fn expired_code_is_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
-        let state = Data::new(build_test_state());
+        let auth_code_store = build_test_auth_code_store();
         let creation_time = Local::now() - Duration::minutes(2 * AUTH_CODE_LIFE_TIME);
-        let auth_code = state.auth_code_store.get_authorization_code(
+        let auth_code = auth_code_store.get_authorization_code(
             PUBLIC_CLIENT,
             USER,
             &redirect_uri,
@@ -482,7 +540,15 @@ mod tests {
             redirect_uri: Some(redirect_uri),
         });
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -493,8 +559,8 @@ mod tests {
     async fn valid_token_is_issued() {
         let req = test::TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
-        let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(
+        let auth_code_store = build_test_auth_code_store();
+        let auth_code = auth_code_store.get_authorization_code(
             PUBLIC_CLIENT,
             USER,
             &redirect_uri,
@@ -507,7 +573,15 @@ mod tests {
             redirect_uri: Some(redirect_uri),
         });
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Response>(resp).await;
@@ -523,8 +597,8 @@ mod tests {
     async fn confidential_client_without_basic_auth_is_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
-        let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(
+        let auth_code_store = build_test_auth_code_store();
+        let auth_code = auth_code_store.get_authorization_code(
             CONFIDENTIAL_CLIENT,
             USER,
             &redirect_uri,
@@ -537,7 +611,15 @@ mod tests {
             redirect_uri: Some(redirect_uri),
         });
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -553,8 +635,8 @@ mod tests {
             .header("Authorization", "Invalid")
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
-        let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(
+        let auth_code_store = build_test_auth_code_store();
+        let auth_code = auth_code_store.get_authorization_code(
             CONFIDENTIAL_CLIENT,
             USER,
             &redirect_uri,
@@ -567,7 +649,15 @@ mod tests {
             redirect_uri: Some(redirect_uri),
         });
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -583,8 +673,8 @@ mod tests {
             .header("Authorization", "Basic invalid")
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
-        let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(
+        let auth_code_store = build_test_auth_code_store();
+        let auth_code = auth_code_store.get_authorization_code(
             CONFIDENTIAL_CLIENT,
             USER,
             &redirect_uri,
@@ -597,7 +687,15 @@ mod tests {
             redirect_uri: Some(redirect_uri),
         });
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -613,8 +711,8 @@ mod tests {
             .header("Authorization", "Basic changeme")
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
-        let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(
+        let auth_code_store = build_test_auth_code_store();
+        let auth_code = auth_code_store.get_authorization_code(
             CONFIDENTIAL_CLIENT,
             USER,
             &redirect_uri,
@@ -627,7 +725,15 @@ mod tests {
             redirect_uri: Some(redirect_uri),
         });
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -646,8 +752,8 @@ mod tests {
             )
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
-        let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(
+        let auth_code_store = build_test_auth_code_store();
+        let auth_code = auth_code_store.get_authorization_code(
             CONFIDENTIAL_CLIENT,
             USER,
             &redirect_uri,
@@ -660,7 +766,15 @@ mod tests {
             redirect_uri: Some(redirect_uri),
         });
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -678,8 +792,8 @@ mod tests {
             .header("Authorization", "Basic ".to_string() + &encoded_auth)
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
-        let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(
+        let auth_code_store = build_test_auth_code_store();
+        let auth_code = auth_code_store.get_authorization_code(
             CONFIDENTIAL_CLIENT,
             USER,
             &redirect_uri,
@@ -692,7 +806,15 @@ mod tests {
             redirect_uri: Some(redirect_uri),
         });
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Response>(resp).await;
@@ -712,8 +834,8 @@ mod tests {
             .header("Authorization", "Basic ".to_string() + &encoded_auth)
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
-        let state = Data::new(build_test_state());
-        let auth_code = state.auth_code_store.get_authorization_code(
+        let auth_code_store = build_test_auth_code_store();
+        let auth_code = auth_code_store.get_authorization_code(
             CONFIDENTIAL_CLIENT,
             USER,
             &redirect_uri,
@@ -726,7 +848,15 @@ mod tests {
             redirect_uri: Some(redirect_uri),
         });
 
-        let resp = post(req, form, state).await;
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Response>(resp).await;

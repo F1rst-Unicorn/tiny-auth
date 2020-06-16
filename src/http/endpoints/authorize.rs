@@ -18,10 +18,10 @@
 use super::deserialise_empty_as_none;
 use super::render_template;
 use crate::http::endpoints::server_error;
-use crate::http::state;
 use crate::protocol::oauth2;
 use crate::protocol::oidc::ProtocolError;
 use crate::protocol::oidc::ResponseType;
+use crate::store::ClientStore;
 
 use std::convert::TryFrom;
 
@@ -119,44 +119,49 @@ pub struct Request {
 
 pub async fn get(
     query: web::Query<Request>,
-    state: web::Data<state::State>,
+    tera: web::Data<Tera>,
+    client_store: web::Data<Box<dyn ClientStore>>,
     session: Session,
 ) -> HttpResponse {
-    post(query, state, session).await
+    post(query, tera, client_store, session).await
 }
 
 pub async fn post(
     query: web::Query<Request>,
-    state: web::Data<state::State>,
+    tera: web::Data<Tera>,
+    client_store: web::Data<Box<dyn ClientStore>>,
     session: Session,
 ) -> HttpResponse {
-    if query.client_id.is_none() {
-        debug!("missing client_id");
-        return render_invalid_client_id_error(&state.tera);
-    }
+    let redirect_uri = match query.redirect_uri.as_ref() {
+        None => {
+            debug!("missing redirect_uri");
+            return render_invalid_redirect_uri_error(&tera);
+        }
+        Some(uri) => uri,
+    };
 
-    if query.redirect_uri.is_none() {
-        debug!("missing redirect_uri");
-        return render_invalid_redirect_uri_error(&state.tera);
-    }
+    let client_id = match query.client_id.as_ref() {
+        None => {
+            debug!("missing client_id");
+            return render_invalid_client_id_error(&tera);
+        }
+        Some(client_id) => client_id,
+    };
 
-    let redirect_uri = query.redirect_uri.as_ref().unwrap();
-    let client_id = query.client_id.as_ref().unwrap();
-
-    let client = state.client_store.get(client_id);
-
-    if client.is_none() {
-        info!("client '{}' not found", client_id);
-        return render_invalid_client_id_error(&state.tera);
-    }
-    let client = client.expect("checked before");
+    let client = match client_store.get(client_id) {
+        None => {
+            info!("client '{}' not found", client_id);
+            return render_invalid_client_id_error(&tera);
+        }
+        Some(client) => client,
+    };
 
     if !client.is_redirect_uri_valid(redirect_uri) {
         info!(
             "invalid redirect_uri '{}' for client '{}'",
             redirect_uri, client_id
         );
-        return render_invalid_redirect_uri_error(&state.tera);
+        return render_invalid_redirect_uri_error(&tera);
     }
 
     let client_state = query.state.clone();
@@ -192,7 +197,7 @@ pub async fn post(
 
     if let Err(e) = session.set(SESSION_KEY, serde_urlencoded::to_string(query.0).unwrap()) {
         error!("Failed to serialise session: {}", e);
-        return server_error(&state.tera);
+        return server_error(&tera);
     }
 
     HttpResponse::SeeOther()
@@ -255,12 +260,12 @@ mod tests {
     use actix_session::UserSession;
     use actix_web::http;
     use actix_web::test;
-    use actix_web::web::Data;
     use actix_web::web::Query;
 
     use url::Url;
 
-    use crate::http::state::tests::build_test_state;
+    use crate::http::state::tests::build_test_client_store;
+    use crate::http::state::tests::build_test_tera;
     use crate::protocol::oauth2::ResponseType::Code;
     use crate::protocol::oauth2::ResponseType::Token;
     use crate::protocol::oidc::OidcResponseType::IdToken;
@@ -289,9 +294,8 @@ mod tests {
             login_hint: None,
             acr_values: None,
         });
-        let state = Data::new(build_test_state());
 
-        let resp = post(query, state, session).await;
+        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -316,9 +320,8 @@ mod tests {
             login_hint: None,
             acr_values: None,
         });
-        let state = Data::new(build_test_state());
 
-        let resp = post(query, state, session).await;
+        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -343,9 +346,8 @@ mod tests {
             login_hint: None,
             acr_values: None,
         });
-        let state = Data::new(build_test_state());
 
-        let resp = post(query, state, session).await;
+        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -370,9 +372,8 @@ mod tests {
             login_hint: None,
             acr_values: None,
         });
-        let state = Data::new(build_test_state());
 
-        let resp = post(query, state, session).await;
+        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -381,13 +382,9 @@ mod tests {
     async fn missing_scope_is_redirected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        let state = Data::new(build_test_state());
-        let redirect_uri = state
-            .client_store
-            .get(CONFIDENTIAL_CLIENT)
-            .unwrap()
-            .redirect_uris[0]
-            .to_string();
+        let client_store = build_test_client_store();
+        let redirect_uri =
+            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
         let client_state = "somestate".to_string();
         let query = Query(Request {
             scope: None,
@@ -406,7 +403,7 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = post(query, state, session).await;
+        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
 
@@ -436,13 +433,9 @@ mod tests {
     async fn missing_response_type_is_redirected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        let state = Data::new(build_test_state());
-        let redirect_uri = state
-            .client_store
-            .get(CONFIDENTIAL_CLIENT)
-            .unwrap()
-            .redirect_uris[0]
-            .to_string();
+        let client_store = build_test_client_store();
+        let redirect_uri =
+            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
         let client_state = "somestate".to_string();
         let query = Query(Request {
             scope: Some("email".to_string()),
@@ -461,7 +454,7 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = post(query, state, session).await;
+        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
 
@@ -490,14 +483,10 @@ mod tests {
     #[actix_rt::test]
     async fn successful_authorization_is_redirected() {
         let req = test::TestRequest::post().to_http_request();
+        let client_store = build_test_client_store();
         let session = req.get_session();
-        let state = Data::new(build_test_state());
-        let redirect_uri = state
-            .client_store
-            .get(CONFIDENTIAL_CLIENT)
-            .unwrap()
-            .redirect_uris[0]
-            .to_string();
+        let redirect_uri =
+            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
         let client_state = "somestate".to_string();
         let request = Request {
             scope: Some("email".to_string()),
@@ -517,7 +506,7 @@ mod tests {
         };
         let query = Query(request.clone());
 
-        let resp = post(query, state, session).await;
+        let resp = post(query, build_test_tera(), client_store, session).await;
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
 

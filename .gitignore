@@ -6,3 +6,5 @@ pkg/Archlinux/*.pkg.tar*
 
 *.iml
 .idea
+
+.vscode

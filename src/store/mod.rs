@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#[allow(unused_variables)]
 pub mod memory;
 
 use crate::domain::client::Client;

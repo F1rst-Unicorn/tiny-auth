@@ -15,50 +15,63 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::store::AuthorizationCodeStore;
-use crate::store::ClientStore;
-use crate::store::UserStore;
-
-use tera::Tera;
-
-use jsonwebtoken::Algorithm;
-use jsonwebtoken::DecodingKey;
-use jsonwebtoken::EncodingKey;
-
-pub struct State {
-    pub instance: String,
-
-    pub encoding_key: (EncodingKey, Algorithm),
-
-    pub decoding_key: DecodingKey<'static>,
-
-    pub tera: Tera,
-
-    pub client_store: Box<dyn ClientStore>,
-
-    pub user_store: Box<dyn UserStore>,
-
-    pub auth_code_store: Box<dyn AuthorizationCodeStore>,
-}
-
 #[cfg(test)]
 pub mod tests {
     use super::super::tera::load_template_engine;
-    use super::*;
+    use crate::business::authenticator::Authenticator;
+    use crate::business::token::TokenCreator;
+    use crate::store::AuthorizationCodeStore;
+    use crate::store::ClientStore;
+    use crate::store::UserStore;
 
-    pub fn build_test_state() -> State {
-        let secret = "secret";
-        State {
-            instance: "https://localhost:8088".to_string(),
-            encoding_key: (
-                EncodingKey::from_secret(secret.as_bytes()),
-                Algorithm::HS256,
-            ),
-            decoding_key: DecodingKey::from_secret(secret.as_bytes()).into_static(),
-            tera: load_template_engine(&(env!("CARGO_MANIFEST_DIR").to_string() + "/static/")),
-            client_store: crate::store::tests::build_test_client_store(),
-            user_store: crate::store::tests::build_test_user_store(),
-            auth_code_store: crate::store::tests::build_test_auth_code_store(),
-        }
+    use actix_web::web::Data;
+
+    use jsonwebtoken::Algorithm;
+    use jsonwebtoken::EncodingKey;
+
+    use tera::Tera;
+
+    pub fn build_test_token_creator() -> Data<TokenCreator> {
+        Data::new(TokenCreator::new(
+            build_test_encoding_key(),
+            build_test_algorithm(),
+            build_test_token_issuer(),
+        ))
+    }
+
+    fn build_test_token_issuer() -> String {
+        "https://localhost:8088".to_string()
+    }
+
+    fn build_test_algorithm() -> Algorithm {
+        Algorithm::HS256
+    }
+
+    fn build_test_encoding_key() -> EncodingKey {
+        EncodingKey::from_secret("secret".as_bytes())
+    }
+
+    pub fn build_test_tera() -> Data<Tera> {
+        Data::new(load_template_engine(
+            &(env!("CARGO_MANIFEST_DIR").to_string() + "/static/"),
+        ))
+    }
+
+    pub fn build_test_client_store() -> Data<Box<dyn ClientStore>> {
+        Data::new(crate::store::tests::build_test_client_store())
+    }
+
+    pub fn build_test_user_store() -> Data<Box<dyn UserStore>> {
+        Data::new(crate::store::tests::build_test_user_store())
+    }
+
+    pub fn build_test_auth_code_store() -> Data<Box<dyn AuthorizationCodeStore>> {
+        Data::new(crate::store::tests::build_test_auth_code_store())
+    }
+
+    pub fn build_test_authenticator() -> Data<Authenticator> {
+        Data::new(Authenticator::new(
+            crate::store::tests::build_test_user_store(),
+        ))
     }
 }

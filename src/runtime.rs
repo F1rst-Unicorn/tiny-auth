@@ -64,13 +64,13 @@ pub fn run(web: Web, crypto: Crypto) -> Result<(), Error> {
     let (pass_server, receive_server) = oneshot::channel();
 
     tok_runtime.spawn(async move {
-        let server = receive_server.await;
-
-        if let Err(e) = server {
-            error!("failed to receive server: {}", e);
-            return;
-        }
-        let server = server.unwrap();
+        let server = match receive_server.await {
+            Err(e) => {
+                error!("failed to receive server: {}", e);
+                return;
+            }
+            Ok(server) => server,
+        };
 
         tokio::spawn(notify_about_start());
         tokio::spawn(watchdog());
@@ -82,13 +82,11 @@ pub fn run(web: Web, crypto: Crypto) -> Result<(), Error> {
 
     tasks.block_on(&mut tok_runtime, async move {
         tokio::task::spawn_local(system_fut);
-        let srv = http::build(web, crypto);
-        if srv.is_err() {
-            return;
-        }
-        let srv = srv.unwrap();
-        let result = pass_server.send(srv.clone());
-        if result.is_err() {
+        let srv = match http::build(web, crypto) {
+            Err(_) => return,
+            Ok(srv) => srv,
+        };
+        if pass_server.send(srv.clone()).is_err() {
             error!("Failed to create server");
             return;
         }

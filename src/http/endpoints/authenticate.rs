@@ -18,8 +18,9 @@
 use super::deserialise_empty_as_none;
 use super::render_template;
 use super::server_error;
-use crate::http::endpoints::{authorize, render_template_with_context};
-use crate::http::state::State;
+use crate::business::authenticator::Authenticator;
+use crate::http::endpoints::authorize;
+use crate::http::endpoints::render_template_with_context;
 
 use actix_web::http::StatusCode;
 use actix_web::web;
@@ -58,31 +59,68 @@ pub struct Request {
     csrftoken: Option<String>,
 }
 
-pub async fn get(state: web::Data<State>, session: Session) -> HttpResponse {
-    let first_request = session.get::<String>(authorize::SESSION_KEY);
-    if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
-        debug!("Unsolicited authentication request. {:?}", first_request);
-        return render_invalid_authentication_request(&state.tera);
+pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
+    match session.get::<String>(authorize::SESSION_KEY) {
+        Err(_) | Ok(None) => {
+            debug!("unsolicited authentication request");
+            return render_invalid_authentication_request(&tera);
+        }
+        _ => {}
     }
 
-    let context = build_context(&session);
-    match context {
-        Some(context) => render_template_with_context(
-            "authenticate.html.j2",
-            StatusCode::OK,
-            &state.tera,
-            &context,
-        ),
-        None => server_error(&state.tera),
+    match build_context(&session) {
+        Some(context) => {
+            render_template_with_context("authenticate.html.j2", StatusCode::OK, &tera, &context)
+        }
+        None => server_error(&tera),
+    }
+}
+
+pub async fn post(
+    query: web::Form<Request>,
+    session: Session,
+    tera: web::Data<Tera>,
+    authenticator: web::Data<Authenticator>,
+) -> HttpResponse {
+    session.remove(ERROR_CODE_SESSION_KEY);
+
+    if !super::is_csrf_valid(&query.csrftoken, &session) {
+        debug!("CSRF protection violation detected");
+        return render_invalid_authentication_request(&tera);
+    }
+
+    match session.get::<String>(authorize::SESSION_KEY) {
+        Err(_) | Ok(None) => {
+            debug!("unsolicited authentication request");
+            return render_invalid_authentication_request(&tera);
+        }
+        _ => {}
+    }
+
+    let username = if query.username.is_none() {
+        debug!("missing username");
+        return render_invalid_input(1, &tera, &session);
+    } else {
+        query.username.clone().unwrap()
+    };
+
+    let password = if query.password.is_none() {
+        debug!("missing password");
+        return render_invalid_input(2, &tera, &session);
+    } else {
+        query.password.clone().unwrap()
+    };
+
+    if authenticator.authenticate(&username, &password) {
+        redirect_successfully(&tera, &session, &username)
+    } else {
+        render_invalid_input(3, &tera, &session)
     }
 }
 
 fn build_context(session: &Session) -> Option<Context> {
     let mut context = Context::new();
-    if let Some(error_code) = session
-        .get::<u64>(ERROR_CODE_SESSION_KEY)
-        .expect("failed to deserialize")
-    {
+    if let Ok(Some(error_code)) = session.get::<u64>(ERROR_CODE_SESSION_KEY) {
         context.insert(super::ERROR_CONTEXT, &error_code);
     }
 
@@ -94,53 +132,6 @@ fn build_context(session: &Session) -> Option<Context> {
         return None;
     }
     Some(context)
-}
-
-pub async fn post(
-    query: web::Form<Request>,
-    state: web::Data<State>,
-    session: Session,
-) -> HttpResponse {
-    session.remove(ERROR_CODE_SESSION_KEY);
-
-    if !super::is_csrf_valid(&query.csrftoken, &session) {
-        debug!("CSRF protection violation detected");
-        return render_invalid_authentication_request(&state.tera);
-    }
-
-    let first_request = session.get::<String>(authorize::SESSION_KEY);
-    if first_request.is_err() || first_request.as_ref().unwrap().is_none() {
-        debug!("Unsolicited authentication request. {:?}", first_request);
-        return render_invalid_authentication_request(&state.tera);
-    }
-
-    if query.username.is_none() {
-        debug!("missing username");
-        return render_invalid_input(1, &state.tera, &session);
-    }
-
-    if query.password.is_none() {
-        debug!("missing password");
-        return render_invalid_input(2, &state.tera, &session);
-    }
-
-    let username = query.username.clone().expect("checked before");
-    let user = state.user_store.get(&username);
-
-    if user.is_none() {
-        debug!("user '{}' not found", username);
-        return render_invalid_input(3, &state.tera, &session);
-    }
-
-    let user = user.expect("checked before");
-    let password = query.password.clone().expect("checked before");
-
-    if user.is_password_correct(&password) {
-        redirect_successfully(&state.tera, &session, &user.name)
-    } else {
-        debug!("password of user '{}' wrong", username);
-        render_invalid_input(3, &state.tera, &session)
-    }
 }
 
 fn redirect_successfully(tera: &Tera, session: &Session, user: &str) -> HttpResponse {
@@ -180,22 +171,21 @@ mod tests {
 
     use actix_web::http;
     use actix_web::test;
-    use actix_web::web::Data;
     use actix_web::web::Form;
 
     use super::super::generate_csrf_token;
     use super::super::CSRF_SESSION_KEY;
-    use crate::http::state::tests::build_test_state;
+    use crate::http::state::tests::build_test_authenticator;
+    use crate::http::state::tests::build_test_tera;
     use crate::store::tests::UNKNOWN_USER;
     use crate::store::tests::USER;
 
     #[actix_rt::test]
     async fn empty_session_gives_error() {
         let req = test::TestRequest::get().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
 
-        let resp = get(state, session).await;
+        let resp = get(session, build_test_tera()).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -203,13 +193,12 @@ mod tests {
     #[actix_rt::test]
     async fn authorization_in_session_gives_login_form() {
         let req = test::TestRequest::get().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         session
             .set(authorize::SESSION_KEY, "dummy".to_string())
             .unwrap();
 
-        let resp = get(state, session).await;
+        let resp = get(session, build_test_tera()).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
@@ -217,7 +206,6 @@ mod tests {
     #[actix_rt::test]
     async fn missing_csrf_gives_error() {
         let req = test::TestRequest::post().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         let form = Form(Request {
             username: Some("user".to_string()),
@@ -225,7 +213,7 @@ mod tests {
             csrftoken: None,
         });
 
-        let resp = post(form, state, session).await;
+        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -233,7 +221,6 @@ mod tests {
     #[actix_rt::test]
     async fn emtpy_session_login_gives_error() {
         let req = test::TestRequest::post().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         let csrftoken = generate_csrf_token();
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
@@ -243,7 +230,7 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, state, session).await;
+        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -251,7 +238,6 @@ mod tests {
     #[actix_rt::test]
     async fn missing_username_gives_error() {
         let req = test::TestRequest::post().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         session
             .set(authorize::SESSION_KEY, "dummy".to_string())
@@ -265,7 +251,7 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, state, session).await;
+        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
         let session = req.get_session();
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
@@ -280,7 +266,6 @@ mod tests {
     #[actix_rt::test]
     async fn missing_password_gives_error() {
         let req = test::TestRequest::post().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         session
             .set(authorize::SESSION_KEY, "dummy".to_string())
@@ -294,7 +279,7 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, state, session).await;
+        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
         let session = req.get_session();
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
@@ -309,7 +294,6 @@ mod tests {
     #[actix_rt::test]
     async fn unknown_user_gives_error() {
         let req = test::TestRequest::post().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         session
             .set(authorize::SESSION_KEY, "dummy".to_string())
@@ -323,7 +307,7 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, state, session).await;
+        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
         let session = req.get_session();
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
@@ -338,7 +322,6 @@ mod tests {
     #[actix_rt::test]
     async fn wrong_password_gives_error() {
         let req = test::TestRequest::post().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         session
             .set(authorize::SESSION_KEY, "dummy".to_string())
@@ -352,7 +335,7 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, state, session).await;
+        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
         let session = req.get_session();
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
@@ -367,7 +350,6 @@ mod tests {
     #[actix_rt::test]
     async fn correct_login_is_reported() {
         let req = test::TestRequest::post().to_http_request();
-        let state = Data::new(build_test_state());
         let session = req.get_session();
         session
             .set(authorize::SESSION_KEY, "dummy".to_string())
@@ -381,7 +363,7 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, state, session).await;
+        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
         let session = req.get_session();
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);

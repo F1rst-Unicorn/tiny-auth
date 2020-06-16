@@ -68,9 +68,9 @@ fn is_zero(n: &i64) -> bool {
 }
 
 impl Token {
-    pub fn build(user: &User, client: &Client, issuer: &str, expiration: DateTime<Local>) -> Self {
+    pub fn build(user: &User, client: &Client, expiration: DateTime<Local>) -> Self {
         Self {
-            issuer: issuer.to_string(),
+            issuer: "".to_string(),
             subject: user.name.clone(),
             audience: Audience::Single(client.client_id.clone()),
             expiration: expiration.timestamp(),
