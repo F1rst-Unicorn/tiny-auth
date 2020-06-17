@@ -82,6 +82,12 @@ impl Token {
             authorized_party: client.client_id.to_string(),
         }
     }
+
+    pub fn add_nonce(&mut self, nonce: Option<String>) {
+        if let Some(nonce) = nonce {
+            self.nonce = nonce;
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]

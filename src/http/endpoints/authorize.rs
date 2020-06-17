@@ -19,6 +19,7 @@ use super::deserialise_empty_as_none;
 use super::render_template;
 use crate::http::endpoints::server_error;
 use crate::protocol::oauth2;
+use crate::protocol::oidc::OidcResponseType;
 use crate::protocol::oidc::ProtocolError;
 use crate::protocol::oidc::ResponseType;
 use crate::store::ClientStore;
@@ -176,21 +177,28 @@ pub async fn post(
         );
     }
 
-    if query.response_type.is_none() {
-        debug!("Missing response_type");
-        return missing_parameter(
-            redirect_uri,
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-            "Missing required parameter response_type",
-            &client_state,
-        );
-    }
+    let response_type = match query.response_type.as_deref().map(parse_response_type) {
+        None | Some(None) => {
+            debug!("Missing or invalid response_type");
+            return missing_parameter(
+                redirect_uri,
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "Invalid required parameter response_type",
+                &client_state,
+            );
+        }
+        Some(Some(response_type)) => response_type,
+    };
 
-    if parse_response_type(query.response_type.as_deref().unwrap()).is_none() {
+    // https://openid.net/specs/openid-connect-core-1_0.html#ImplicitAuthRequest
+    if response_type.contains(&ResponseType::Oidc(OidcResponseType::IdToken))
+        && query.nonce.is_none()
+    {
+        debug!("Missing required parameter nonce for implicit flow");
         return missing_parameter(
             redirect_uri,
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-            "Invalid required parameter response_type",
+            "Invalid required parameter nonce",
             &client_state,
         );
     }

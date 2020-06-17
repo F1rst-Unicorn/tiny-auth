@@ -143,7 +143,9 @@ pub async fn post(
         response_parameters.insert("code", code);
     }
 
-    if response_type.contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken)) {
+    if response_type.contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken))
+        || response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token))
+    {
         encode_to_fragment = true;
         let user = match user_store.get(&username) {
             None => {
@@ -161,7 +163,10 @@ pub async fn post(
             Some(client) => client,
         };
 
-        let token = Token::build(&user, &client, Local::now() + Duration::minutes(1));
+        let expires_in = Duration::minutes(1);
+
+        let mut token = Token::build(&user, &client, Local::now() + expires_in);
+        token.add_nonce(first_request.nonce);
 
         let encoded_token = match token_creator.create(token) {
             Err(e) => {
@@ -170,12 +175,15 @@ pub async fn post(
             }
             Ok(token) => token,
         };
-        response_parameters.insert("id_token", encoded_token);
-    }
+        if response_type.contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken)) {
+            response_parameters.insert("id_token", encoded_token.clone());
+        }
+        if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token)) {
+            response_parameters.insert("access_token", encoded_token);
+        }
 
-    if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token)) {
-        encode_to_fragment = true;
-        // TODO Issue #7
+        response_parameters.insert("token_type", "bearer".to_string());
+        response_parameters.insert("expires_in", expires_in.num_seconds().to_string());
     }
 
     first_request

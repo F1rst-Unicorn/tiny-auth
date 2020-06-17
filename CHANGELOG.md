@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Support for Implicit flow
+  ([#7](https://gitlab.com/veenj/tiny-auth/issues/7),
+
 * Increase HTTP Security by disabling caching and adding CSRF countermeassures
   ([#14](https://gitlab.com/veenj/tiny-auth/issues/14),
   [#1](https://gitlab.com/veenj/tiny-auth/issues/1))
