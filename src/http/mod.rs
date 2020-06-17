@@ -19,15 +19,9 @@ pub mod endpoints;
 mod state;
 mod tera;
 
-use crate::business::authenticator::Authenticator;
-use crate::business::token::TokenCreator;
-use crate::config::Crypto;
+use crate::config::Config;
 use crate::config::Tls;
-use crate::config::Web;
 use crate::runtime::Error;
-use crate::store::memory::MemoryAuthorizationCodeStore;
-use crate::store::memory::MemoryClientStore;
-use crate::store::memory::MemoryUserStore;
 use crate::util::read_file;
 
 use actix_web::cookie::SameSite;
@@ -40,10 +34,6 @@ use actix_web::HttpServer;
 
 use actix_session::CookieSession;
 
-use jsonwebtoken::Algorithm;
-use jsonwebtoken::DecodingKey;
-use jsonwebtoken::EncodingKey;
-
 use openssl::dh::Dh;
 use openssl::ssl::SslAcceptorBuilder;
 use openssl::ssl::SslFiletype;
@@ -55,67 +45,52 @@ use openssl::x509::X509;
 use log::error;
 use log::warn;
 
-pub fn build(web: Web, crypto: Crypto) -> Result<Server, Error> {
-    let bind = web.bind.clone();
-    let workers = web.workers;
-    let tls = web.tls.clone();
+pub fn build(config: Config) -> Result<Server, Error> {
+    let bind = config.web.bind.clone();
+    let workers = config.web.workers;
+    let tls = config.web.tls.clone();
 
-    let tera = tera::load_template_engine(&web.static_files);
+    let constructor = state::Constructor::new(&config);
 
-    let token_certificate = read_file(&crypto.public_key)?;
-    let bytes = token_certificate.as_bytes();
-    let mut decoding_key_result = DecodingKey::from_rsa_pem(bytes);
-    if decoding_key_result.is_err() {
-        decoding_key_result = DecodingKey::from_ec_pem(bytes);
-        if let Err(e) = decoding_key_result {
-            error!("failed to read public token key: {}", e);
-            return Err(e.into());
-        }
-    }
-
-    let file = read_file(&crypto.key)?;
-    let bytes = file.as_bytes();
-    let mut encoding_key_result = EncodingKey::from_rsa_pem(bytes);
-    let algorithm = if encoding_key_result.is_err() {
-        encoding_key_result = EncodingKey::from_ec_pem(bytes);
-        if let Err(e) = encoding_key_result {
-            error!("failed to read private token key: {}", e);
-            return Err(e.into());
-        }
-        Algorithm::ES384
-    } else {
-        Algorithm::PS512
-    };
-
-    let encoding_key = encoding_key_result.unwrap();
-    let token_issuer = web.bind.to_string() + "/" + web.path.as_deref().unwrap_or("");
-
-    let token_creator = TokenCreator::new(encoding_key, algorithm, token_issuer);
+    let tera = constructor.build_template_engine()?;
+    let token_certificate = constructor.build_public_key()?;
+    let token_creator = constructor.build_token_creator()?;
+    let user_store = constructor
+        .build_user_store()
+        .ok_or(Error::LoggedBeforeError)?;
+    let client_store = constructor
+        .build_client_store()
+        .ok_or(Error::LoggedBeforeError)?;
+    let auth_code_store = constructor
+        .build_auth_code_store()
+        .ok_or(Error::LoggedBeforeError)?;
+    let authenticator = constructor
+        .build_authenticator()
+        .ok_or(Error::LoggedBeforeError)?;
 
     let server = HttpServer::new(move || {
         let token_certificate = token_certificate.clone();
         App::new()
-            .app_data(tera.clone())
-            .app_data(web::Data::new(Authenticator::new(Box::new(
-                MemoryUserStore {},
-            ))))
-            .app_data(web::Data::new(Box::new(MemoryClientStore {})))
-            .app_data(web::Data::new(Box::new(MemoryAuthorizationCodeStore {})))
+            .app_data(web::Data::new(tera.clone()))
+            .app_data(web::Data::new(authenticator.clone()))
+            .app_data(web::Data::new(client_store.clone()))
+            .app_data(web::Data::new(user_store.clone()))
+            .app_data(web::Data::new(auth_code_store.clone()))
             .app_data(web::Data::new(token_creator.clone()))
             .wrap(
-                CookieSession::private(web.secret_key.as_bytes())
+                CookieSession::private(config.web.secret_key.as_bytes())
                     // ^- encryption is only needed to avoid encoding problems
-                    .domain(&web.domain)
+                    .domain(&config.web.domain)
                     .name("session")
-                    .path(web.path.as_ref().expect("no default given"))
-                    .secure(web.tls.is_some())
+                    .path(config.web.path.as_ref().expect("no default given"))
+                    .secure(config.web.tls.is_some())
                     .http_only(true)
                     .same_site(SameSite::Strict)
-                    .max_age(web.session_timeout.expect("no default given")),
+                    .max_age(config.web.session_timeout.expect("no default given")),
             )
             .wrap(DefaultHeaders::new().header("Cache-Control", "no-store"))
             .service(
-                web::scope(&web.path.as_ref().expect("no default given"))
+                web::scope(&config.web.path.as_ref().expect("no default given"))
                     .route("/authorize", web::get().to(endpoints::authorize::get))
                     .route("/authorize", web::post().to(endpoints::authorize::post))
                     .route("/token", web::post().to(endpoints::token::post))

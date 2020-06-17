@@ -15,10 +15,18 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashMap;
+
+use serde::Deserialize;
+
+#[derive(Clone, Deserialize)]
 pub struct User {
     pub name: String,
 
     pub password: String,
+
+    #[serde(flatten)]
+    pub attributes: HashMap<String, String>,
 }
 
 impl User {

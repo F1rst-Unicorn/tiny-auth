@@ -17,16 +17,17 @@
 
 use crate::store::UserStore;
 
-use std::boxed::Box;
+use std::sync::Arc;
 
 use log::debug;
 
+#[derive(Clone)]
 pub struct Authenticator {
-    user_store: Box<dyn UserStore>,
+    user_store: Arc<dyn UserStore>,
 }
 
 impl Authenticator {
-    pub fn new(user_store: Box<dyn UserStore>) -> Self {
+    pub fn new(user_store: Arc<dyn UserStore>) -> Self {
         Self { user_store }
     }
 

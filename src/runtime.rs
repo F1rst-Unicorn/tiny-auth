@@ -17,8 +17,7 @@
 
 use std::convert::From;
 
-use crate::config::Crypto;
-use crate::config::Web;
+use crate::config::Config;
 use crate::http;
 use crate::systemd::notify_about_start;
 use crate::systemd::watchdog;
@@ -30,9 +29,12 @@ use tokio::sync::oneshot;
 
 #[derive(Debug)]
 pub enum Error {
+    LoggedBeforeError,
+
     StdIoError(std::io::Error),
     OpensslError(openssl::error::ErrorStack),
     JwtError(jsonwebtoken::errors::Error),
+    TeraError(tera::Error),
 }
 
 impl From<std::io::Error> for Error {
@@ -53,7 +55,13 @@ impl From<jsonwebtoken::errors::Error> for Error {
     }
 }
 
-pub fn run(web: Web, crypto: Crypto) -> Result<(), Error> {
+impl From<tera::Error> for Error {
+    fn from(error: tera::Error) -> Self {
+        Self::TeraError(error)
+    }
+}
+
+pub fn run(config: Config) -> Result<(), Error> {
     let mut tok_runtime = tokio::runtime::Builder::new()
         .threaded_scheduler()
         .core_threads(4)
@@ -82,7 +90,7 @@ pub fn run(web: Web, crypto: Crypto) -> Result<(), Error> {
 
     tasks.block_on(&mut tok_runtime, async move {
         tokio::task::spawn_local(system_fut);
-        let srv = match http::build(web, crypto) {
+        let srv = match http::build(config) {
             Err(_) => return,
             Ok(srv) => srv,
         };

@@ -15,6 +15,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ---
+store:
+  configuration file:
+    base: hack/store
+
 crypto:
   key: hack/key.pem
   public key: hack/pubkey.pem
@@ -25,9 +29,9 @@ web:
   static_files: static
   session_timeout: 60000
   secret_key: jxbvDbbsgJyh1x2HG8V8rqKsD4vW45aIYcNopFuYdPdSvyKSVB54CWmCinCC1iv912AIkEfWB9kVDeliANle5Acc
-  tls:
-    configuration: modern v5
-    key: hack/key.pem
-    certificate: hack/chain.pem
-#    client_ca: hack/ca.pem
-    dh_param: hack/dhparam.pem
+# tls:
+#   configuration: modern v5
+#   key: hack/key.pem
+#   certificate: hack/chain.pem
+#   client_ca: hack/ca.pem
+#   dh_param: hack/dhparam.pem

@@ -51,7 +51,7 @@ fn main() {
     info!("Parsing config");
     let config = parse_config(config_path);
 
-    if let Err(e) = runtime::run(config.web, config.crypto) {
+    if let Err(e) = runtime::run(config) {
         error!("Server failed: {:#?}", e);
     }
 }

@@ -30,6 +30,7 @@ use crate::store::ClientStore;
 use crate::store::UserStore;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use actix_web::http::StatusCode;
 use actix_web::web;
@@ -87,9 +88,9 @@ pub async fn post(
     query: web::Form<Request>,
     session: Session,
     tera: web::Data<Tera>,
-    client_store: web::Data<Box<dyn ClientStore>>,
-    user_store: web::Data<Box<dyn UserStore>>,
-    auth_code_store: web::Data<Box<dyn AuthorizationCodeStore>>,
+    client_store: web::Data<Arc<dyn ClientStore>>,
+    user_store: web::Data<Arc<dyn UserStore>>,
+    auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
     token_creator: web::Data<TokenCreator>,
 ) -> HttpResponse {
     if !super::is_csrf_valid(&query.csrftoken, &session) {

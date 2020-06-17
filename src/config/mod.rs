@@ -26,6 +26,8 @@ use openssl::ssl::SslMethod;
 
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Config {
+    pub store: Option<Store>,
+
     pub web: Web,
 
     pub crypto: Crypto,
@@ -39,6 +41,12 @@ impl Config {
     pub fn merge(self, other: Self) -> Config {
         other
     }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub enum Store {
+    #[serde(rename = "configuration file")]
+    Config { base: String },
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]
@@ -63,7 +71,7 @@ pub struct Web {
 }
 
 fn default_path() -> Option<String> {
-    Some("/".to_string())
+    Some("".to_string())
 }
 
 fn default_session_timeout() -> Option<i64> {

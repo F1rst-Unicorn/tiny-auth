@@ -17,12 +17,13 @@
 
 use crate::domain::client::Client;
 use crate::domain::user::User;
+use crate::protocol::oauth2::ClientType;
 use crate::store::AuthorizationCodeRecord;
 use crate::store::AuthorizationCodeStore;
 use crate::store::ClientStore;
 use crate::store::UserStore;
 
-use crate::protocol::oauth2::ClientType;
+use std::collections::HashMap;
 
 use chrono::DateTime;
 use chrono::Duration;
@@ -35,6 +36,7 @@ impl UserStore for MemoryUserStore {
         Some(User {
             name: key.to_string(),
             password: key.to_string(),
+            attributes: HashMap::new(),
         })
     }
 }
@@ -47,6 +49,7 @@ impl ClientStore for MemoryClientStore {
             client_id: key.to_string(),
             client_type: ClientType::Public,
             redirect_uris: vec!["http://localhost/client".to_string()],
+            attributes: HashMap::new(),
         })
     }
 }

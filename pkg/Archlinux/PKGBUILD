@@ -36,4 +36,9 @@ package() {
 
     mkdir -p $pkgdir/usr/share/${pkgname}/static
     cp -r static $pkgdir/usr/share/${pkgname}
+
+    mkdir -p $pkgdir/etc/${pkgname}/store/{users,clients}
+
+    mkdir -p $pkgdir/usr/share/doc/${pkgname}
+    cp -r doc/* $pkgdir/usr/share/doc/${pkgname}
 }

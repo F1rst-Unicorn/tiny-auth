@@ -25,6 +25,7 @@ use crate::protocol::oidc::ResponseType;
 use crate::store::ClientStore;
 
 use std::convert::TryFrom;
+use std::sync::Arc;
 
 use actix_web::http::StatusCode;
 use actix_web::web;
@@ -121,7 +122,7 @@ pub struct Request {
 pub async fn get(
     query: web::Query<Request>,
     tera: web::Data<Tera>,
-    client_store: web::Data<Box<dyn ClientStore>>,
+    client_store: web::Data<Arc<dyn ClientStore>>,
     session: Session,
 ) -> HttpResponse {
     post(query, tera, client_store, session).await
@@ -130,7 +131,7 @@ pub async fn get(
 pub async fn post(
     query: web::Query<Request>,
     tera: web::Data<Tera>,
-    client_store: web::Data<Box<dyn ClientStore>>,
+    client_store: web::Data<Arc<dyn ClientStore>>,
     session: Session,
 ) -> HttpResponse {
     let redirect_uri = match query.redirect_uri.as_ref() {

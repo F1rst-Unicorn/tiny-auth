@@ -1,0 +1,7 @@
+---
+client_id: confidential
+client_type:
+  confidential:
+    password: password
+redirect_uris:
+  - http://localhost/confidential

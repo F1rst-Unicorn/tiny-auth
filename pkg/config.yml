@@ -15,7 +15,14 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ---
-http: {}
+store:
+  configuration file:
+    base: /etc/tiny-auth/store
+
+crypto:
+  key: /etc/tiny-auth/key.pem
+  public key: /etc/tiny-auth/public-key.pem
+
 web:
   bind: localhost:8088
   domain: localhost

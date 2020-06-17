@@ -31,9 +31,12 @@ pub struct ErrorResponse {
     state: Option<String>,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Deserialize, PartialEq, Eq)]
 pub enum ClientType {
+    #[serde(rename = "public")]
     Public,
+
+    #[serde(rename = "confidential")]
     Confidential { password: String },
 }
 

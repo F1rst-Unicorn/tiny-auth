@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+pub mod file;
 #[allow(unused_variables)]
 pub mod memory;
 
@@ -64,6 +65,7 @@ pub mod tests {
 
     use std::cell::RefCell;
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     use crate::domain::client::Client;
     use crate::domain::user::User;
@@ -80,14 +82,15 @@ pub mod tests {
                 "user1" | "user2" | "user3" => Some(User {
                     name: key.to_string(),
                     password: key.to_string(),
+                    attributes: HashMap::new(),
                 }),
                 _ => None,
             }
         }
     }
 
-    pub fn build_test_user_store() -> Box<impl UserStore> {
-        Box::new(TestUserStore {})
+    pub fn build_test_user_store() -> Arc<impl UserStore> {
+        Arc::new(TestUserStore {})
     }
 
     pub const UNKNOWN_CLIENT_ID: &str = "unknown_client";
@@ -105,19 +108,21 @@ pub mod tests {
                         password: "client1".to_string(),
                     },
                     redirect_uris: vec!["http://localhost/client1".to_string()],
+                    attributes: HashMap::new(),
                 }),
                 "client2" => Some(Client {
                     client_id: key.to_string(),
                     client_type: ClientType::Public,
                     redirect_uris: vec!["http://localhost/client2".to_string()],
+                    attributes: HashMap::new(),
                 }),
                 _ => None,
             }
         }
     }
 
-    pub fn build_test_client_store() -> Box<impl ClientStore> {
-        Box::new(TestClientStore {})
+    pub fn build_test_client_store() -> Arc<impl ClientStore> {
+        Arc::new(TestClientStore {})
     }
 
     struct TestAuthorizationCodeStore {
@@ -160,8 +165,8 @@ pub mod tests {
         }
     }
 
-    pub fn build_test_auth_code_store() -> Box<impl AuthorizationCodeStore> {
-        Box::new(TestAuthorizationCodeStore {
+    pub fn build_test_auth_code_store() -> Arc<impl AuthorizationCodeStore> {
+        Arc::new(TestAuthorizationCodeStore {
             store: RefCell::new(HashMap::new()),
         })
     }

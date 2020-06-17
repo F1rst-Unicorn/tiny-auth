@@ -28,6 +28,8 @@ use crate::store::AuthorizationCodeStore;
 use crate::store::ClientStore;
 use crate::store::UserStore;
 
+use std::sync::Arc;
+
 use actix_web::http::HeaderValue;
 use actix_web::web;
 use actix_web::HttpRequest;
@@ -84,9 +86,9 @@ pub struct Response {
 pub async fn post(
     headers: HttpRequest,
     request: web::Form<Request>,
-    client_store: web::Data<Box<dyn ClientStore>>,
-    user_store: web::Data<Box<dyn UserStore>>,
-    auth_code_store: web::Data<Box<dyn AuthorizationCodeStore>>,
+    client_store: web::Data<Arc<dyn ClientStore>>,
+    user_store: web::Data<Arc<dyn UserStore>>,
+    auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
     token_creator: web::Data<TokenCreator>,
 ) -> HttpResponse {
     if request.grant_type.is_none() {
@@ -136,9 +138,9 @@ pub async fn post(
 pub fn grant_with_authorization_code(
     headers: HttpRequest,
     request: web::Form<Request>,
-    client_store: web::Data<Box<dyn ClientStore>>,
-    user_store: web::Data<Box<dyn UserStore>>,
-    auth_code_store: web::Data<Box<dyn AuthorizationCodeStore>>,
+    client_store: web::Data<Arc<dyn ClientStore>>,
+    user_store: web::Data<Arc<dyn UserStore>>,
+    auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
     token_creator: web::Data<TokenCreator>,
 ) -> HttpResponse {
     let client_id = request.client_id.as_ref().unwrap();
