@@ -15,8 +15,44 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use super::parse_bearer_authorization;
+use crate::business::token::TokenValidator;
+
+use actix_web::web::Data;
+use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 
-pub async fn get() -> HttpResponse {
-    HttpResponse::Ok().finish()
+pub async fn handle(headers: HttpRequest, validator: Data<TokenValidator>) -> HttpResponse {
+    let token = match headers.headers().get("Authorization") {
+        Some(header) => match parse_bearer_authorization(header) {
+            Some(token) => token,
+            None => {
+                return HttpResponse::Unauthorized()
+                .header("www-authenticate", "error=\"invalid_request\", error_description=\"Invalid authorization header\"")
+                .finish();
+            }
+        },
+        None => {
+            return HttpResponse::BadRequest()
+                .header(
+                    "www-authenticate",
+                    "error=\"invalid_request\", error_description=\"Missing authorization header\"",
+                )
+                .finish();
+        }
+    };
+
+    let token = match validator.validate(&token) {
+        None => {
+            return HttpResponse::Unauthorized()
+                .header(
+                    "www-authenticate",
+                    "error=\"invalid_token\", error_description=\"Invalid token\"",
+                )
+                .finish();
+        }
+        Some(token) => token,
+    };
+
+    HttpResponse::Ok().json(token)
 }

@@ -16,6 +16,7 @@
  */
 
 use super::deserialise_empty_as_none;
+use super::parse_basic_authorization;
 use crate::business::token::TokenCreator;
 use crate::domain::client::Client;
 use crate::domain::token::Token;
@@ -31,7 +32,6 @@ use crate::store::AUTH_CODE_LIFE_TIME;
 
 use std::sync::Arc;
 
-use actix_web::http::HeaderValue;
 use actix_web::web;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
@@ -231,7 +231,7 @@ async fn grant_with_authorization_code(
 
 fn authenticate_client(headers: HttpRequest, client: &Client) -> Option<HttpResponse> {
     let (client_name, password) = match headers.headers().get("Authorization") {
-        Some(value) => match parse_authorization(value) {
+        Some(value) => match parse_basic_authorization(value) {
             Some(x) => x,
             None => {
                 return Some(render_json_error(
@@ -260,45 +260,6 @@ fn authenticate_client(headers: HttpRequest, client: &Client) -> Option<HttpResp
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
             "client id or password wrong",
         ))
-    } else {
-        None
-    }
-}
-
-fn parse_authorization(value: &HeaderValue) -> Option<(String, String)> {
-    let value = match value.to_str() {
-        Err(e) => {
-            debug!("decoding of authorization header failed. {}", e);
-            return None;
-        }
-        Ok(value) => value,
-    };
-
-    if !value.starts_with("Basic ") {
-        debug!("Malformed HTTP basic authorization header '{}'", value);
-        return None;
-    }
-    let value = value.replacen("Basic ", "", 1);
-
-    let credentials = match base64::decode(value) {
-        Err(e) => {
-            debug!("base64 decoding of authorization header failed. {}", e);
-            return None;
-        }
-        Ok(cred) => cred,
-    };
-
-    let credentials = match String::from_utf8(credentials) {
-        Err(e) => {
-            debug!("utf-8 decoding of authorization header failed. {}", e);
-            return None;
-        }
-        Ok(cred) => cred,
-    };
-
-    let split: Vec<String> = credentials.splitn(2, ':').map(str::to_string).collect();
-    if split.len() == 2 {
-        Some((split[0].clone(), split[1].clone()))
     } else {
         None
     }

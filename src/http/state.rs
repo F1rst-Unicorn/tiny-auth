@@ -18,6 +18,7 @@
 use super::tera::load_template_engine;
 use crate::business::authenticator::Authenticator;
 use crate::business::token::TokenCreator;
+use crate::business::token::TokenValidator;
 use crate::config::Config;
 use crate::config::Store;
 use crate::runtime::Error;
@@ -91,6 +92,19 @@ impl<'a> Constructor<'a> {
         }
     }
 
+    fn build_token_issuer(&self) -> String {
+        let mut token_issuer = self.config.web.bind.to_string();
+        if let Some(path) = &self.config.web.path {
+            if !path.is_empty() {
+                if !path.starts_with('/') {
+                    token_issuer += "/";
+                }
+                token_issuer += path;
+            }
+        }
+        token_issuer
+    }
+
     pub fn build_token_creator(&self) -> Result<TokenCreator, Error> {
         let file = read_file(&self.config.crypto.key)?;
         let bytes = file.as_bytes();
@@ -107,16 +121,30 @@ impl<'a> Constructor<'a> {
         };
 
         let encoding_key = encoding_key_result.unwrap();
-        let mut token_issuer = self.config.web.bind.to_string();
-        if let Some(path) = &self.config.web.path {
-            if !path.is_empty() {
-                if !path.starts_with('/') {
-                    token_issuer += "/";
-                }
-                token_issuer += path;
-            }
-        }
+        let token_issuer = self.build_token_issuer();
         Ok(TokenCreator::new(encoding_key, algorithm, token_issuer))
+    }
+
+    pub fn build_token_validator(&self) -> Result<TokenValidator, Error> {
+        let public_key = self.build_public_key()?;
+
+        let family;
+        let key = match DecodingKey::from_rsa_pem(public_key.as_bytes()) {
+            Err(_) => {
+                family = Algorithm::ES384;
+                DecodingKey::from_ec_pem(public_key.as_bytes())?
+            }
+            Ok(key) => {
+                family = Algorithm::PS512;
+                key
+            }
+        };
+
+        Ok(TokenValidator::new(
+            key.into_static(),
+            family,
+            self.build_token_issuer(),
+        ))
     }
 }
 

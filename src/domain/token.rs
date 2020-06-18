@@ -44,18 +44,22 @@ pub struct Token {
 
     #[serde(rename = "auth_time")]
     #[serde(skip_serializing_if = "is_zero")]
+    #[serde(default)]
     pub auth_time: i64,
 
     #[serde(rename = "nonce")]
     #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub nonce: String,
 
     #[serde(rename = "acr")]
     #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(default)]
     pub authentication_context_class_reference: String,
 
     #[serde(rename = "amr")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub authentication_methods_request: Vec<String>,
 
     #[serde(rename = "azp")]

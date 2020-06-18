@@ -55,6 +55,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
     let tera = constructor.build_template_engine()?;
     let token_certificate = constructor.build_public_key()?;
     let token_creator = constructor.build_token_creator()?;
+    let token_validator = constructor.build_token_validator()?;
     let user_store = constructor
         .build_user_store()
         .ok_or(Error::LoggedBeforeError)?;
@@ -67,6 +68,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
     let authenticator = constructor
         .build_authenticator()
         .ok_or(Error::LoggedBeforeError)?;
+
     let server = HttpServer::new(move || {
         let token_certificate = token_certificate.clone();
         App::new()
@@ -76,6 +78,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .app_data(web::Data::new(user_store.clone()))
             .app_data(web::Data::new(auth_code_store.clone()))
             .app_data(web::Data::new(token_creator.clone()))
+            .app_data(web::Data::new(token_validator.clone()))
             .wrap(
                 CookieSession::private(config.web.secret_key.as_bytes())
                     // ^- encryption is only needed to avoid encoding problems
@@ -93,7 +96,8 @@ pub fn build(config: Config) -> Result<Server, Error> {
                     .route("/authorize", web::get().to(endpoints::authorize::get))
                     .route("/authorize", web::post().to(endpoints::authorize::post))
                     .route("/token", web::post().to(endpoints::token::post))
-                    .route("/userinfo", web::get().to(endpoints::userinfo::get))
+                    .route("/userinfo", web::get().to(endpoints::userinfo::handle))
+                    .route("/userinfo", web::post().to(endpoints::userinfo::handle))
                     .route("/authenticate", web::get().to(endpoints::authenticate::get))
                     .route(
                         "/authenticate",

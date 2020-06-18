@@ -17,19 +17,24 @@
 
 use crate::domain::token::Token;
 
+use jsonwebtoken::decode;
 use jsonwebtoken::encode;
 use jsonwebtoken::errors::Result;
 use jsonwebtoken::Algorithm;
+use jsonwebtoken::DecodingKey;
 use jsonwebtoken::EncodingKey;
 use jsonwebtoken::Header;
+use jsonwebtoken::Validation;
+
+use log::debug;
 
 #[derive(Clone)]
 pub struct TokenCreator {
-    pub key: EncodingKey,
+    key: EncodingKey,
 
-    pub algorithm: Algorithm,
+    algorithm: Algorithm,
 
-    pub issuer: String,
+    issuer: String,
 }
 
 impl TokenCreator {
@@ -44,5 +49,38 @@ impl TokenCreator {
     pub fn create(&self, mut token: Token) -> Result<String> {
         token.issuer = self.issuer.clone();
         encode(&Header::new(self.algorithm), &token, &self.key)
+    }
+}
+
+#[derive(Clone)]
+pub struct TokenValidator {
+    key: DecodingKey<'static>,
+
+    validation: Validation,
+}
+
+impl TokenValidator {
+    pub fn new(key: DecodingKey<'static>, algorithm: Algorithm, issuer: String) -> Self {
+        Self {
+            key,
+            validation: Validation {
+                leeway: 5,
+                validate_exp: true,
+                validate_nbf: false,
+                iss: Some(issuer),
+                algorithms: vec![algorithm],
+                ..Default::default()
+            },
+        }
+    }
+
+    pub fn validate(&self, token: &str) -> Option<Token> {
+        decode(token, &self.key, &self.validation)
+            .map(|v| v.claims)
+            .map_err(|e| {
+                debug!("Token validation failed: {}", e);
+                e
+            })
+            .ok()
     }
 }

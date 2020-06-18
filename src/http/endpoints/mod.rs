@@ -25,6 +25,7 @@ use crate::protocol::oauth2::ProtocolError as OAuthError;
 use crate::protocol::oidc::ProtocolError;
 use crate::util::generate_random_string;
 
+use actix_web::http::HeaderValue;
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
 
@@ -110,6 +111,53 @@ fn is_csrf_valid(input_token: &Option<String>, session: &Session) -> bool {
             }
         },
     }
+}
+
+pub fn parse_basic_authorization(value: &HeaderValue) -> Option<(String, String)> {
+    let credentials = parse_authorization(value, "Basic")?;
+    let credentials = match base64::decode(credentials) {
+        Err(e) => {
+            debug!("base64 decoding of authorization header failed. {}", e);
+            return None;
+        }
+        Ok(cred) => cred,
+    };
+
+    let credentials = match String::from_utf8(credentials) {
+        Err(e) => {
+            debug!("utf-8 decoding of authorization header failed. {}", e);
+            return None;
+        }
+        Ok(cred) => cred,
+    };
+
+    let split: Vec<String> = credentials.splitn(2, ':').map(str::to_string).collect();
+    if split.len() == 2 {
+        Some((split[0].clone(), split[1].clone()))
+    } else {
+        None
+    }
+}
+
+pub fn parse_bearer_authorization(value: &HeaderValue) -> Option<String> {
+    parse_authorization(value, "Bearer")
+}
+
+pub fn parse_authorization(value: &HeaderValue, auth_type: &str) -> Option<String> {
+    let auth_type = auth_type.to_string() + " ";
+    let value = match value.to_str() {
+        Err(e) => {
+            debug!("decoding of authorization header failed. {}", e);
+            return None;
+        }
+        Ok(value) => value,
+    };
+
+    if !value.starts_with(&auth_type) {
+        debug!("Malformed HTTP basic authorization header '{}'", value);
+        return None;
+    }
+    Some(value.replacen(&auth_type, "", 1))
 }
 
 fn deserialise_empty_as_none<'de, D: Deserializer<'de>>(
