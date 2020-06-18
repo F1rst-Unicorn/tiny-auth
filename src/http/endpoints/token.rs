@@ -27,6 +27,7 @@ use crate::protocol::oidc::ProtocolError;
 use crate::store::AuthorizationCodeStore;
 use crate::store::ClientStore;
 use crate::store::UserStore;
+use crate::store::AUTH_CODE_LIFE_TIME;
 
 use std::sync::Arc;
 
@@ -42,10 +43,6 @@ use chrono::offset::Local;
 use chrono::Duration;
 
 use log::debug;
-
-// Recommended lifetime is 10 minutes
-// https://tools.ietf.org/html/rfc6749#section-4.1.2
-pub const AUTH_CODE_LIFE_TIME: i64 = 10;
 
 #[derive(Deserialize)]
 pub struct Request {

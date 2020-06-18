@@ -35,6 +35,10 @@ pub trait ClientStore: Send + Sync {
     fn get(&self, key: &str) -> Option<Client>;
 }
 
+// Recommended lifetime is 10 minutes
+// https://tools.ietf.org/html/rfc6749#section-4.1.2
+pub const AUTH_CODE_LIFE_TIME: i64 = 10;
+
 pub struct AuthorizationCodeRecord {
     pub redirect_uri: String,
 

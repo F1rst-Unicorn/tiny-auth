@@ -64,7 +64,12 @@ impl<'a> Constructor<'a> {
     }
 
     pub fn build_auth_code_store(&self) -> Option<Arc<dyn AuthorizationCodeStore>> {
-        Some(Arc::new(MemoryAuthorizationCodeStore::default()))
+        let result = Arc::new(MemoryAuthorizationCodeStore::default());
+        let arg = result.clone();
+        tokio::spawn(async {
+            auth_code_clean_job(arg).await;
+        });
+        Some(result)
     }
 
     pub fn build_template_engine(&self) -> Result<Tera, Error> {

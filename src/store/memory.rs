@@ -29,10 +29,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 
 use tokio::sync::RwLock;
+use tokio::time;
 
 use chrono::DateTime;
+use chrono::Duration;
 use chrono::Local;
 
+use log::debug;
 pub struct MemoryUserStore {}
 
 impl UserStore for MemoryUserStore {
@@ -85,6 +88,25 @@ impl Default for MemoryAuthorizationCodeStore {
     }
 }
 
+impl MemoryAuthorizationCodeStore {
+    async fn clear_expired_codes(&self, now: DateTime<Local>, validity: Duration) {
+        let mut store = self.store.write().await;
+        store.retain(|_, v| now.signed_duration_since(v.insertion_time) <= validity);
+    }
+}
+
+pub async fn auth_code_clean_job(store: Arc<MemoryAuthorizationCodeStore>) {
+    let mut clock = time::interval(std::time::Duration::from_secs(120));
+
+    loop {
+        clock.tick().await;
+        debug!("Purging expired auth codes");
+        store
+            .clear_expired_codes(Local::now(), Duration::minutes(super::AUTH_CODE_LIFE_TIME))
+            .await;
+    }
+}
+
 #[async_trait]
 impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
     async fn get_authorization_code(
@@ -94,22 +116,28 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
         redirect_uri: &str,
         now: DateTime<Local>,
     ) -> String {
-        let auth_code = crate::util::generate_random_string(32);
         let mut store = self.store.write().await;
+        let mut key = AuthCodeKey {
+            client_id: client_id.to_string(),
+            authorization_code: "".to_string(),
+        };
 
-        store.insert(
-            AuthCodeKey {
-                client_id: client_id.to_string(),
-                authorization_code: auth_code.clone(),
-            },
-            AuthCodeValue {
-                redirect_uri: redirect_uri.to_string(),
-                user: user.to_string(),
-                insertion_time: now,
-            },
-        );
+        loop {
+            let auth_code = crate::util::generate_random_string(32);
+            key.authorization_code = auth_code.clone();
 
-        auth_code
+            if store.get(&key).is_none() {
+                store.insert(
+                    key,
+                    AuthCodeValue {
+                        redirect_uri: redirect_uri.to_string(),
+                        user: user.to_string(),
+                        insertion_time: now,
+                    },
+                );
+                break auth_code;
+            }
+        }
     }
 
     async fn validate(
@@ -130,5 +158,82 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
             stored_duration: now.signed_duration_since(value.insertion_time),
             username: value.user,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn successful_validation_works() {
+        let uut = MemoryAuthorizationCodeStore::default();
+        let date = Local::now();
+        let duration = Duration::minutes(1);
+        let auth_code = uut
+            .get_authorization_code("client", "user", "redirect_uri", date)
+            .await;
+
+        let output = uut.validate("client", &auth_code, date + duration).await;
+
+        assert!(output.is_some());
+        let output = output.unwrap();
+        assert_eq!("redirect_uri", &output.redirect_uri);
+        assert_eq!("user", &output.username);
+        assert_eq!(duration, output.stored_duration);
+    }
+
+    #[tokio::test]
+    async fn expired_code_is_deleted() {
+        let uut = MemoryAuthorizationCodeStore::default();
+        let date = Local::now();
+        let duration = Duration::minutes(1);
+        let auth_code = uut
+            .get_authorization_code("client", "user", "redirect_uri", date)
+            .await;
+
+        uut.clear_expired_codes(date + duration + duration, duration)
+            .await;
+
+        let output = uut.validate("client", &auth_code, date + duration).await;
+
+        assert!(output.is_none());
+    }
+
+    #[tokio::test]
+    async fn code_still_works_at_sharp_expiration_time() {
+        let uut = MemoryAuthorizationCodeStore::default();
+        let date = Local::now();
+        let duration = Duration::minutes(1);
+        let auth_code = uut
+            .get_authorization_code("client", "user", "redirect_uri", date)
+            .await;
+
+        uut.clear_expired_codes(date + duration, duration).await;
+
+        let output = uut.validate("client", &auth_code, date + duration).await;
+
+        assert!(output.is_some());
+        let output = output.unwrap();
+        assert_eq!("redirect_uri", &output.redirect_uri);
+        assert_eq!("user", &output.username);
+        assert_eq!(duration, output.stored_duration);
+    }
+
+    #[tokio::test]
+    async fn code_past_expiration_date_doesnt_work_anymore() {
+        let uut = MemoryAuthorizationCodeStore::default();
+        let date = Local::now();
+        let duration = Duration::minutes(1);
+        let auth_code = uut
+            .get_authorization_code("client", "user", "redirect_uri", date)
+            .await;
+
+        uut.clear_expired_codes(date + duration + Duration::nanoseconds(1), duration)
+            .await;
+
+        let output = uut.validate("client", &auth_code, date + duration).await;
+
+        assert!(output.is_none());
     }
 }

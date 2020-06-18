@@ -67,7 +67,6 @@ pub fn build(config: Config) -> Result<Server, Error> {
     let authenticator = constructor
         .build_authenticator()
         .ok_or(Error::LoggedBeforeError)?;
-
     let server = HttpServer::new(move || {
         let token_certificate = token_certificate.clone();
         App::new()
