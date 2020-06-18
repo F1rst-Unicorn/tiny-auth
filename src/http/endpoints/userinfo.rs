@@ -56,3 +56,93 @@ pub async fn handle(headers: HttpRequest, validator: Data<TokenValidator>) -> Ht
 
     HttpResponse::Ok().json(token)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::domain::token::Token;
+    use crate::http::endpoints::tests::read_response;
+    use crate::http::state::tests::build_test_client_store;
+    use crate::http::state::tests::build_test_token_creator;
+    use crate::http::state::tests::build_test_token_issuer;
+    use crate::http::state::tests::build_test_token_validator;
+    use crate::http::state::tests::build_test_user_store;
+    use crate::store::tests::PUBLIC_CLIENT;
+    use crate::store::tests::USER;
+
+    use chrono::Duration;
+    use chrono::Local;
+
+    use actix_web::http;
+    use actix_web::test;
+
+    #[tokio::test]
+    pub async fn missing_header_is_rejected() {
+        let validator = build_test_token_validator();
+        let request = test::TestRequest::post().to_http_request();
+
+        let resp = handle(request, validator).await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    pub async fn invalid_header_is_rejected() {
+        let validator = build_test_token_validator();
+        let request = test::TestRequest::post()
+            .header("authorization", "invalid")
+            .to_http_request();
+
+        let resp = handle(request, validator).await;
+
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    pub async fn expired_token_is_rejected() {
+        let creator = build_test_token_creator();
+        let validator = build_test_token_validator();
+        let user = build_test_user_store().get(USER).unwrap();
+        let client = build_test_client_store().get(PUBLIC_CLIENT).unwrap();
+        let request = test::TestRequest::post()
+            .header(
+                "authorization",
+                "Bearer ".to_string()
+                    + &creator
+                        .create(Token::build(
+                            &user,
+                            &client,
+                            Local::now() - Duration::minutes(3),
+                        ))
+                        .unwrap(),
+            )
+            .to_http_request();
+
+        let resp = handle(request, validator).await;
+
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    pub async fn valid_token_is_returned() {
+        let creator = build_test_token_creator();
+        let validator = build_test_token_validator();
+        let user = build_test_user_store().get(USER).unwrap();
+        let client = build_test_client_store().get(PUBLIC_CLIENT).unwrap();
+        let mut token = Token::build(&user, &client, Local::now() + Duration::minutes(3));
+        token.issuer = build_test_token_issuer();
+        let request = test::TestRequest::post()
+            .header(
+                "authorization",
+                "Bearer ".to_string() + &creator.create(token.clone()).unwrap(),
+            )
+            .to_http_request();
+
+        let resp = handle(request, validator).await;
+
+        assert_eq!(resp.status(), http::StatusCode::OK);
+        let response = read_response::<Token>(resp).await;
+        assert_eq!(token, response);
+    }
+}

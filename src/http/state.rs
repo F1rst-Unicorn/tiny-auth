@@ -153,6 +153,7 @@ pub mod tests {
     use super::super::tera::load_template_engine;
     use crate::business::authenticator::Authenticator;
     use crate::business::token::TokenCreator;
+    use crate::business::token::TokenValidator;
     use crate::store::AuthorizationCodeStore;
     use crate::store::ClientStore;
     use crate::store::UserStore;
@@ -162,6 +163,7 @@ pub mod tests {
     use actix_web::web::Data;
 
     use jsonwebtoken::Algorithm;
+    use jsonwebtoken::DecodingKey;
     use jsonwebtoken::EncodingKey;
 
     use tera::Tera;
@@ -174,7 +176,7 @@ pub mod tests {
         ))
     }
 
-    fn build_test_token_issuer() -> String {
+    pub fn build_test_token_issuer() -> String {
         "https://localhost:8088".to_string()
     }
 
@@ -207,6 +209,18 @@ pub mod tests {
     pub fn build_test_authenticator() -> Data<Authenticator> {
         Data::new(Authenticator::new(
             crate::store::tests::build_test_user_store(),
+        ))
+    }
+
+    pub fn build_test_decoding_key() -> DecodingKey<'static> {
+        DecodingKey::from_secret("secret".as_bytes()).into_static()
+    }
+
+    pub fn build_test_token_validator() -> Data<TokenValidator> {
+        Data::new(TokenValidator::new(
+            build_test_decoding_key(),
+            Algorithm::HS256,
+            build_test_token_issuer(),
         ))
     }
 }
