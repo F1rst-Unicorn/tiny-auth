@@ -64,7 +64,7 @@ impl<'a> Constructor<'a> {
     }
 
     pub fn build_auth_code_store(&self) -> Option<Arc<dyn AuthorizationCodeStore>> {
-        Some(Arc::new(MemoryAuthorizationCodeStore {}))
+        Some(Arc::new(MemoryAuthorizationCodeStore::default()))
     }
 
     pub fn build_template_engine(&self) -> Result<Tera, Error> {

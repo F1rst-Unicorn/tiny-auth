@@ -52,3 +52,15 @@ pub fn iterate_directory<T: AsRef<Path> + Debug>(path: T) -> Option<fs::ReadDir>
         Ok(files) => Some(files),
     }
 }
+
+pub fn generate_random_string(length: u32) -> String {
+    let mut result = String::new();
+    for _ in 0..length {
+        let mut char = 'ö';
+        while !char.is_ascii_alphanumeric() {
+            char = rand::random::<u8>().into();
+        }
+        result.push(char);
+    }
+    result
+}

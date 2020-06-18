@@ -16,11 +16,12 @@
  */
 
 pub mod file;
-#[allow(unused_variables)]
 pub mod memory;
 
 use crate::domain::client::Client;
 use crate::domain::user::User;
+
+use async_trait::async_trait;
 
 use chrono::DateTime;
 use chrono::Duration;
@@ -42,8 +43,9 @@ pub struct AuthorizationCodeRecord {
     pub username: String,
 }
 
+#[async_trait]
 pub trait AuthorizationCodeStore: Send + Sync {
-    fn get_authorization_code(
+    async fn get_authorization_code(
         &self,
         client_id: &str,
         user: &str,
@@ -51,7 +53,7 @@ pub trait AuthorizationCodeStore: Send + Sync {
         now: DateTime<Local>,
     ) -> String;
 
-    fn validate(
+    async fn validate(
         &self,
         client_id: &str,
         authorization_code: &str,
@@ -132,8 +134,9 @@ pub mod tests {
     unsafe impl Sync for TestAuthorizationCodeStore {}
     unsafe impl Send for TestAuthorizationCodeStore {}
 
+    #[async_trait]
     impl AuthorizationCodeStore for TestAuthorizationCodeStore {
-        fn get_authorization_code(
+        async fn get_authorization_code(
             &self,
             client_id: &str,
             user: &str,
@@ -147,7 +150,7 @@ pub mod tests {
             now.to_rfc3339()
         }
 
-        fn validate(
+        async fn validate(
             &self,
             client_id: &str,
             authorization_code: &str,

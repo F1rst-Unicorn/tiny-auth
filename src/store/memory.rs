@@ -24,9 +24,13 @@ use crate::store::ClientStore;
 use crate::store::UserStore;
 
 use std::collections::HashMap;
+use std::sync::Arc;
+
+use async_trait::async_trait;
+
+use tokio::sync::RwLock;
 
 use chrono::DateTime;
-use chrono::Duration;
 use chrono::Local;
 
 pub struct MemoryUserStore {}
@@ -54,29 +58,77 @@ impl ClientStore for MemoryClientStore {
     }
 }
 
-pub struct MemoryAuthorizationCodeStore {}
+#[derive(PartialEq, Eq, Hash)]
+struct AuthCodeKey {
+    client_id: String,
 
+    authorization_code: String,
+}
+
+struct AuthCodeValue {
+    redirect_uri: String,
+
+    user: String,
+
+    insertion_time: DateTime<Local>,
+}
+
+pub struct MemoryAuthorizationCodeStore {
+    store: Arc<RwLock<HashMap<AuthCodeKey, AuthCodeValue>>>,
+}
+
+impl Default for MemoryAuthorizationCodeStore {
+    fn default() -> Self {
+        Self {
+            store: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+}
+
+#[async_trait]
 impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
-    fn get_authorization_code(
+    async fn get_authorization_code(
         &self,
         client_id: &str,
         user: &str,
         redirect_uri: &str,
         now: DateTime<Local>,
     ) -> String {
-        "dummy_code".to_string()
+        let auth_code = crate::util::generate_random_string(32);
+        let mut store = self.store.write().await;
+
+        store.insert(
+            AuthCodeKey {
+                client_id: client_id.to_string(),
+                authorization_code: auth_code.clone(),
+            },
+            AuthCodeValue {
+                redirect_uri: redirect_uri.to_string(),
+                user: user.to_string(),
+                insertion_time: now,
+            },
+        );
+
+        auth_code
     }
 
-    fn validate(
+    async fn validate(
         &self,
         client_id: &str,
         authorization_code: &str,
         now: DateTime<Local>,
     ) -> Option<AuthorizationCodeRecord> {
+        let mut store = self.store.write().await;
+
+        let value = store.remove(&AuthCodeKey {
+            client_id: client_id.to_string(),
+            authorization_code: authorization_code.to_string(),
+        })?;
+
         Some(AuthorizationCodeRecord {
-            redirect_uri: "http://localhost/client".to_string(),
-            stored_duration: Duration::seconds(1),
-            username: "user".to_string(),
+            redirect_uri: value.redirect_uri.clone(),
+            stored_duration: now.signed_duration_since(value.insertion_time),
+            username: value.user,
         })
     }
 }

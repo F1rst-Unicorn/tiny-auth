@@ -23,6 +23,7 @@ pub mod userinfo;
 
 use crate::protocol::oauth2::ProtocolError as OAuthError;
 use crate::protocol::oidc::ProtocolError;
+use crate::util::generate_random_string;
 
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
@@ -95,15 +96,7 @@ fn render_template_with_context(
 }
 
 fn generate_csrf_token() -> String {
-    let mut result = String::new();
-    for _ in 0..32 {
-        let mut char = 'ö';
-        while !char.is_ascii_alphanumeric() {
-            char = rand::random::<u8>().into();
-        }
-        result.push(char);
-    }
-    result
+    generate_random_string(32)
 }
 
 fn is_csrf_valid(input_token: &Option<String>, session: &Session) -> bool {

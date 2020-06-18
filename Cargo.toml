@@ -30,6 +30,7 @@ base64 = "0.12.1"
 systemd = "0.4"
 jsonwebtoken = "7.1.0"
 rand = "0.7.3"
+async-trait = "0.1.35"
 
 [dependencies.tokio]
 version = "0.2"

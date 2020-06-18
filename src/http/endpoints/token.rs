@@ -120,14 +120,17 @@ pub async fn post(
     }
 
     match request.grant_type.as_ref().unwrap() {
-        GrantType::AuthorizationCode => grant_with_authorization_code(
-            headers,
-            request,
-            client_store,
-            user_store,
-            auth_code_store,
-            token_creator,
-        ),
+        GrantType::AuthorizationCode => {
+            grant_with_authorization_code(
+                headers,
+                request,
+                client_store,
+                user_store,
+                auth_code_store,
+                token_creator,
+            )
+            .await
+        }
         _ => render_json_error(
             ProtocolError::OAuth2(oauth2::ProtocolError::UnsupportedGrantType),
             "grant_type must be authorization_code",
@@ -135,7 +138,7 @@ pub async fn post(
     }
 }
 
-pub fn grant_with_authorization_code(
+async fn grant_with_authorization_code(
     headers: HttpRequest,
     request: web::Form<Request>,
     client_store: web::Data<Arc<dyn ClientStore>>,
@@ -162,7 +165,10 @@ pub fn grant_with_authorization_code(
     }
 
     let code = request.code.as_ref().unwrap();
-    let record = match auth_code_store.validate(client_id, &code, Local::now()) {
+    let record = match auth_code_store
+        .validate(client_id, &code, Local::now())
+        .await
+    {
         None => {
             debug!(
                 "No authorization code found for client '{}' with code '{}'",
@@ -495,12 +501,9 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
-        let auth_code = auth_code_store.get_authorization_code(
-            PUBLIC_CLIENT,
-            USER,
-            &redirect_uri,
-            Local::now(),
-        );
+        let auth_code = auth_code_store
+            .get_authorization_code(PUBLIC_CLIENT, USER, &redirect_uri, Local::now())
+            .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -529,12 +532,9 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let creation_time = Local::now() - Duration::minutes(2 * AUTH_CODE_LIFE_TIME);
-        let auth_code = auth_code_store.get_authorization_code(
-            PUBLIC_CLIENT,
-            USER,
-            &redirect_uri,
-            creation_time,
-        );
+        let auth_code = auth_code_store
+            .get_authorization_code(PUBLIC_CLIENT, USER, &redirect_uri, creation_time)
+            .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -562,12 +562,9 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
-        let auth_code = auth_code_store.get_authorization_code(
-            PUBLIC_CLIENT,
-            USER,
-            &redirect_uri,
-            Local::now(),
-        );
+        let auth_code = auth_code_store
+            .get_authorization_code(PUBLIC_CLIENT, USER, &redirect_uri, Local::now())
+            .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -600,12 +597,9 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
-        let auth_code = auth_code_store.get_authorization_code(
-            CONFIDENTIAL_CLIENT,
-            USER,
-            &redirect_uri,
-            Local::now(),
-        );
+        let auth_code = auth_code_store
+            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -638,12 +632,9 @@ mod tests {
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
-        let auth_code = auth_code_store.get_authorization_code(
-            CONFIDENTIAL_CLIENT,
-            USER,
-            &redirect_uri,
-            Local::now(),
-        );
+        let auth_code = auth_code_store
+            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -676,12 +667,9 @@ mod tests {
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
-        let auth_code = auth_code_store.get_authorization_code(
-            CONFIDENTIAL_CLIENT,
-            USER,
-            &redirect_uri,
-            Local::now(),
-        );
+        let auth_code = auth_code_store
+            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -714,12 +702,9 @@ mod tests {
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
-        let auth_code = auth_code_store.get_authorization_code(
-            CONFIDENTIAL_CLIENT,
-            USER,
-            &redirect_uri,
-            Local::now(),
-        );
+        let auth_code = auth_code_store
+            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -755,12 +740,9 @@ mod tests {
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
-        let auth_code = auth_code_store.get_authorization_code(
-            CONFIDENTIAL_CLIENT,
-            USER,
-            &redirect_uri,
-            Local::now(),
-        );
+        let auth_code = auth_code_store
+            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -795,12 +777,9 @@ mod tests {
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
-        let auth_code = auth_code_store.get_authorization_code(
-            CONFIDENTIAL_CLIENT,
-            USER,
-            &redirect_uri,
-            Local::now(),
-        );
+        let auth_code = auth_code_store
+            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
@@ -837,12 +816,9 @@ mod tests {
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
-        let auth_code = auth_code_store.get_authorization_code(
-            CONFIDENTIAL_CLIENT,
-            USER,
-            &redirect_uri,
-            Local::now(),
-        );
+        let auth_code = auth_code_store
+            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),

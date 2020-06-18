@@ -135,12 +135,9 @@ pub async fn post(
     let mut encode_to_fragment = false;
 
     if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Code)) {
-        let code = auth_code_store.get_authorization_code(
-            client_name,
-            &username,
-            &redirect_uri,
-            Local::now(),
-        );
+        let code = auth_code_store
+            .get_authorization_code(client_name, &username, &redirect_uri, Local::now())
+            .await;
         response_parameters.insert("code", code);
     }
 
