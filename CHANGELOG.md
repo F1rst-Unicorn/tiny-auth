@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Support configuration file store
+  ([#4](https://gitlab.com/veenj/tiny-auth/issues/4),
+
 * Support for Implicit flow
   ([#7](https://gitlab.com/veenj/tiny-auth/issues/7),
 
