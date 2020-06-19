@@ -15,7 +15,11 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::domain::client::Client;
+use crate::protocol::oauth2::ClientType;
+
 use std::collections::HashMap;
+use std::convert::TryFrom;
 
 use serde::Deserialize;
 
@@ -32,5 +36,19 @@ pub struct User {
 impl User {
     pub fn is_password_correct(&self, password: &str) -> bool {
         self.password == password
+    }
+}
+
+impl TryFrom<Client> for User {
+    type Error = String;
+    fn try_from(client: Client) -> Result<Self, Self::Error> {
+        match client.client_type {
+            ClientType::Public => Err("invalid client type".to_string()),
+            ClientType::Confidential { password } => Ok(Self {
+                name: client.client_id,
+                password,
+                attributes: client.attributes,
+            }),
+        }
     }
 }

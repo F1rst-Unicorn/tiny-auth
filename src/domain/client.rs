@@ -44,7 +44,7 @@ impl Client {
         match &self.client_type {
             ClientType::Public => {
                 error!("verified password on public client '{}'", self.client_id);
-                true
+                panic!("verified password on public client");
             }
 
             ClientType::Confidential {

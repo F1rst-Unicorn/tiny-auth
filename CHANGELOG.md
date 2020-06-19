@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Support client credentials authentication
+  ([#8](https://gitlab.com/veenj/tiny-auth/issues/8),
+
 * Support configuration file store
   ([#4](https://gitlab.com/veenj/tiny-auth/issues/4),
 
