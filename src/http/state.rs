@@ -47,7 +47,10 @@ impl<'a> Constructor<'a> {
     }
 
     pub fn build_authenticator(&self) -> Option<Authenticator> {
-        Some(Authenticator::new(self.build_user_store()?))
+        Some(Authenticator::new(
+            self.build_user_store()?,
+            &self.config.crypto.pepper,
+        ))
     }
 
     pub fn build_user_store(&self) -> Option<Arc<dyn UserStore>> {
@@ -209,6 +212,7 @@ pub mod tests {
     pub fn build_test_authenticator() -> Data<Authenticator> {
         Data::new(Authenticator::new(
             crate::store::tests::build_test_user_store(),
+            "pepper",
         ))
     }
 

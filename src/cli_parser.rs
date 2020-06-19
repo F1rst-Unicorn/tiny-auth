@@ -36,7 +36,7 @@ pub fn parse_arguments<'a>() -> clap::ArgMatches<'a> {
                 .short("c")
                 .long(FLAG_CONFIG)
                 .value_name("PATH")
-                .help("The config file or directory to run with")
+                .help("The config file to run with")
                 .takes_value(true)
                 .default_value("/etc/tiny-auth/config.yml"),
         )

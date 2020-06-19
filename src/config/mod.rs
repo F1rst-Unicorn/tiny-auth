@@ -128,4 +128,6 @@ pub struct Crypto {
 
     #[serde(rename = "public key")]
     pub public_key: String,
+
+    pub pepper: String,
 }

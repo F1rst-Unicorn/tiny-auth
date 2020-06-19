@@ -16,42 +16,14 @@
  */
 
 mod business;
-mod cli_parser;
-mod config;
-mod domain;
+pub mod cli_parser;
+pub mod config;
+pub mod domain;
 mod http;
-mod logging;
+pub mod logging;
 mod protocol;
-mod runtime;
+pub mod runtime;
 mod store;
 mod systemd;
 mod terminate;
 mod util;
-
-use config::parser::parse_config;
-
-use log::error;
-use log::info;
-
-fn main() {
-    let arguments = cli_parser::parse_arguments();
-    logging::initialise(
-        arguments
-            .value_of(cli_parser::FLAG_LOG_CONFIG)
-            .expect("Missing default value in cli_parser"),
-    );
-
-    info!("Starting up");
-
-    let config_path = arguments
-        .value_of(cli_parser::FLAG_CONFIG)
-        .expect("Missing default value in cli_parser");
-    info!("Config is at {}", config_path);
-
-    info!("Parsing config");
-    let config = parse_config(config_path);
-
-    if let Err(e) = runtime::run(config) {
-        error!("Server failed: {:#?}", e);
-    }
-}

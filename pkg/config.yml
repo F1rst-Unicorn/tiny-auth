@@ -22,6 +22,7 @@ store:
 crypto:
   key: /etc/tiny-auth/key.pem
   public key: /etc/tiny-auth/public-key.pem
+  pepper: a random string used to secure passwords
 
 web:
   bind: localhost:8088

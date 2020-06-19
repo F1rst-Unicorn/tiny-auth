@@ -17,3 +17,7 @@
 
 pub mod authenticator;
 pub mod token;
+
+pub use authenticator::Authenticator;
+pub use token::TokenCreator;
+pub use token::TokenValidator;

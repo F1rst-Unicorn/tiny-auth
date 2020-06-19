@@ -15,7 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::domain::client::Client;
+use crate::domain::Client;
+use crate::domain::Password;
 use crate::protocol::oauth2::ClientType;
 
 use std::collections::HashMap;
@@ -27,15 +28,15 @@ use serde::Deserialize;
 pub struct User {
     pub name: String,
 
-    pub password: String,
+    pub password: Password,
 
     #[serde(flatten)]
     pub attributes: HashMap<String, String>,
 }
 
 impl User {
-    pub fn is_password_correct(&self, password: &str) -> bool {
-        self.password == password
+    pub fn is_password_correct(&self, password: &str, pepper: &str) -> bool {
+        self.password.verify(&self.name, password, pepper)
     }
 }
 

@@ -18,6 +18,7 @@
 use super::deserialise_empty_as_none;
 use super::parse_basic_authorization;
 use crate::business::token::TokenCreator;
+use crate::business::Authenticator;
 use crate::domain::client::Client;
 use crate::domain::token::Token;
 use crate::domain::user::User;
@@ -93,6 +94,7 @@ pub async fn post(
     user_store: web::Data<Arc<dyn UserStore>>,
     auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
     token_creator: web::Data<TokenCreator>,
+    authenticator: web::Data<Authenticator>,
 ) -> HttpResponse {
     let grant_type = match &request.grant_type {
         None => {
@@ -112,10 +114,13 @@ pub async fn post(
                 client_store,
                 user_store,
                 auth_code_store,
+                authenticator,
             )
             .await
         }
-        GrantType::ClientCredentials => grant_with_client_credentials(headers, client_store).await,
+        GrantType::ClientCredentials => {
+            grant_with_client_credentials(headers, client_store, authenticator).await
+        }
         _ => {
             return render_json_error(
                 ProtocolError::OAuth2(oauth2::ProtocolError::UnsupportedGrantType),
@@ -158,6 +163,7 @@ async fn grant_with_authorization_code(
     client_store: web::Data<Arc<dyn ClientStore>>,
     user_store: web::Data<Arc<dyn UserStore>>,
     auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
+    authenticator: web::Data<Authenticator>,
 ) -> Result<(User, Client), HttpResponse> {
     if request.redirect_uri.is_none() {
         return Err(render_json_error(
@@ -193,9 +199,12 @@ async fn grant_with_authorization_code(
     };
 
     if let ClientType::Confidential { .. } = client.client_type {
-        if let Err(r) =
-            authenticate_client(headers, (*client_store).clone(), request.client_id.clone())
-        {
+        if let Err(r) = authenticate_client(
+            headers,
+            (*client_store).clone(),
+            authenticator,
+            request.client_id.clone(),
+        ) {
             return Err(r);
         }
     }
@@ -251,8 +260,9 @@ async fn grant_with_authorization_code(
 async fn grant_with_client_credentials(
     headers: HttpRequest,
     client_store: web::Data<Arc<dyn ClientStore>>,
+    authenticator: web::Data<Authenticator>,
 ) -> Result<(User, Client), HttpResponse> {
-    let client = match authenticate_client(headers, (*client_store).clone(), None) {
+    let client = match authenticate_client(headers, (*client_store).clone(), authenticator, None) {
         Err(r) => return Err(r),
         Ok(client) => client,
     };
@@ -263,6 +273,7 @@ async fn grant_with_client_credentials(
 fn authenticate_client(
     headers: HttpRequest,
     client_store: Arc<Arc<dyn ClientStore>>,
+    authenticator: web::Data<Authenticator>,
     client_id: Option<String>,
 ) -> Result<Client, HttpResponse> {
     let (client_name, password) = match headers.headers().get("Authorization") {
@@ -312,7 +323,7 @@ fn authenticate_client(
         ));
     }
 
-    if !client.is_password_correct(&password) {
+    if !authenticator.authenticate_client(&client, &password) {
         debug!("password for client '{}' was wrong", client_name);
         Err(render_json_error(
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
@@ -336,6 +347,7 @@ mod tests {
     use crate::http::endpoints::tests::read_response;
     use crate::http::endpoints::ErrorResponse;
     use crate::http::state::tests::build_test_auth_code_store;
+    use crate::http::state::tests::build_test_authenticator;
     use crate::http::state::tests::build_test_client_store;
     use crate::http::state::tests::build_test_token_creator;
     use crate::http::state::tests::build_test_user_store;
@@ -364,6 +376,7 @@ mod tests {
             build_test_user_store(),
             build_test_auth_code_store(),
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -393,6 +406,7 @@ mod tests {
             build_test_user_store(),
             build_test_auth_code_store(),
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -422,6 +436,7 @@ mod tests {
             build_test_user_store(),
             build_test_auth_code_store(),
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -451,6 +466,7 @@ mod tests {
             build_test_user_store(),
             build_test_auth_code_store(),
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -480,6 +496,7 @@ mod tests {
             build_test_user_store(),
             build_test_auth_code_store(),
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -510,6 +527,7 @@ mod tests {
             build_test_user_store(),
             build_test_auth_code_store(),
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -541,6 +559,7 @@ mod tests {
             build_test_user_store(),
             auth_code_store,
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -573,6 +592,7 @@ mod tests {
             build_test_user_store(),
             auth_code_store,
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -604,6 +624,7 @@ mod tests {
             build_test_user_store(),
             auth_code_store,
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -640,6 +661,7 @@ mod tests {
             build_test_user_store(),
             auth_code_store,
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -676,6 +698,7 @@ mod tests {
             build_test_user_store(),
             auth_code_store,
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -712,6 +735,7 @@ mod tests {
             build_test_user_store(),
             auth_code_store,
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -748,6 +772,7 @@ mod tests {
             build_test_user_store(),
             auth_code_store,
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -787,6 +812,7 @@ mod tests {
             build_test_user_store(),
             auth_code_store,
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -825,6 +851,7 @@ mod tests {
             build_test_user_store(),
             auth_code_store,
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -865,6 +892,7 @@ mod tests {
             build_test_user_store(),
             auth_code_store,
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -901,6 +929,7 @@ mod tests {
             build_test_user_store(),
             auth_code_store,
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 
@@ -935,6 +964,7 @@ mod tests {
             build_test_user_store(),
             auth_code_store,
             build_test_token_creator(),
+            build_test_authenticator(),
         )
         .await;
 

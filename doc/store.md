@@ -42,7 +42,8 @@ A user configuration has at least the following properties:
 ```yaml
 ---
 name: johndoe
-password: password
+password:
+  ...
 ```
 
 The file must be named the same as the `name` field, appended by `.yml`.
@@ -56,7 +57,10 @@ between all users.
 
 #### `password`
 
-The password of the user, stored in cleartext, see [issue](https://gitlab.com/veenj/tiny-auth/-/issues/23).
+The encoded password of the user. Use tiny-auth's password encoder (usually
+installed as `tiny-auth-password-encoder) to generate a valid structure for
+the user. The tool will output a YAML object which must be put as a dictionary
+inside the `password` field. Mind the indentation.
 
 ### Client Configuration
 
@@ -89,10 +93,17 @@ Either `client_type: public` or
 ```yaml
 client_type:
   confidential:
-    password: password
+    password:
+      ...
 ```
 
-are allowed where the password must be stored in cleartext.
+are allowed.
+
+The `...` is meant to be replaced by the output of tiny-auth's password
+encoder (usually installed as `tiny-auth-password-encoder). Use it to
+generate a valid password for the client. The tool will output a YAML object
+which must be put as a dictionary inside the `password` field. Mind the
+indentation.
 
 #### `redirect_uris`
 

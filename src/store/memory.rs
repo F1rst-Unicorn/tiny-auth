@@ -15,13 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::domain::client::Client;
-use crate::domain::user::User;
-use crate::protocol::oauth2::ClientType;
 use crate::store::AuthorizationCodeRecord;
 use crate::store::AuthorizationCodeStore;
-use crate::store::ClientStore;
-use crate::store::UserStore;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -36,30 +31,6 @@ use chrono::Duration;
 use chrono::Local;
 
 use log::debug;
-pub struct MemoryUserStore {}
-
-impl UserStore for MemoryUserStore {
-    fn get(&self, key: &str) -> Option<User> {
-        Some(User {
-            name: key.to_string(),
-            password: key.to_string(),
-            attributes: HashMap::new(),
-        })
-    }
-}
-
-pub struct MemoryClientStore {}
-
-impl ClientStore for MemoryClientStore {
-    fn get(&self, key: &str) -> Option<Client> {
-        Some(Client {
-            client_id: key.to_string(),
-            client_type: ClientType::Public,
-            redirect_uris: vec!["http://localhost/client".to_string()],
-            attributes: HashMap::new(),
-        })
-    }
-}
 
 #[derive(PartialEq, Eq, Hash)]
 struct AuthCodeKey {

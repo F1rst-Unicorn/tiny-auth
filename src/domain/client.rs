@@ -40,7 +40,7 @@ impl Client {
         self.redirect_uris.contains(&uri.to_string())
     }
 
-    pub fn is_password_correct(&self, password: &str) -> bool {
+    pub fn is_password_correct(&self, password: &str, pepper: &str) -> bool {
         match &self.client_type {
             ClientType::Public => {
                 error!("verified password on public client '{}'", self.client_id);
@@ -49,7 +49,7 @@ impl Client {
 
             ClientType::Confidential {
                 password: stored_password,
-            } => stored_password == password,
+            } => stored_password.verify(&self.client_id, password, pepper),
         }
     }
 }

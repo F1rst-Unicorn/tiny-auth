@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::domain::Client;
 use crate::store::UserStore;
 
 use std::sync::Arc;
@@ -24,14 +25,19 @@ use log::debug;
 #[derive(Clone)]
 pub struct Authenticator {
     user_store: Arc<dyn UserStore>,
+
+    pepper: String,
 }
 
 impl Authenticator {
-    pub fn new(user_store: Arc<dyn UserStore>) -> Self {
-        Self { user_store }
+    pub fn new(user_store: Arc<dyn UserStore>, pepper: &str) -> Self {
+        Self {
+            user_store,
+            pepper: pepper.to_string(),
+        }
     }
 
-    pub fn authenticate(&self, username: &str, password: &str) -> bool {
+    pub fn authenticate_user(&self, username: &str, password: &str) -> bool {
         let user = match self.user_store.get(username) {
             None => {
                 debug!("user '{}' not found", username);
@@ -40,11 +46,15 @@ impl Authenticator {
             Some(u) => u,
         };
 
-        if user.is_password_correct(password) {
+        if user.is_password_correct(password, &self.pepper) {
             true
         } else {
             debug!("password of user '{}' wrong", username);
             false
         }
+    }
+
+    pub fn authenticate_client(&self, client: &Client, password: &str) -> bool {
+        client.is_password_correct(password, &self.pepper)
     }
 }

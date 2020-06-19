@@ -2,6 +2,11 @@
 client_id: confidential
 client_type:
   confidential:
-    password: password
+    password:
+      Pbkdf2HmacSha256:
+        credential: yIwGQgK7dU7LKxageOikUK1Ci8LekYLAUqsUQqKgBXk=
+        iterations: 100000
+        salt: GDyTkeq//lzzWvEd6JJn8Eu227floAeFemr+4oAsXA1jb25maWRlbnRpYWw=
+
 redirect_uris:
   - http://localhost/confidential

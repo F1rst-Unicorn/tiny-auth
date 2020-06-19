@@ -15,6 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::domain::Password;
+
 use std::fmt::Display;
 
 use serde_derive::Deserialize;
@@ -37,7 +39,7 @@ pub enum ClientType {
     Public,
 
     #[serde(rename = "confidential")]
-    Confidential { password: String },
+    Confidential { password: Password },
 }
 
 #[derive(Deserialize, PartialEq, Eq)]

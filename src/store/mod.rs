@@ -73,8 +73,9 @@ pub mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    use crate::domain::client::Client;
-    use crate::domain::user::User;
+    use crate::domain::Client;
+    use crate::domain::Password;
+    use crate::domain::User;
     use crate::protocol::oauth2::ClientType;
 
     pub const UNKNOWN_USER: &str = "unknown_user";
@@ -87,7 +88,7 @@ pub mod tests {
             match key {
                 "user1" | "user2" | "user3" => Some(User {
                     name: key.to_string(),
-                    password: key.to_string(),
+                    password: Password::Plain(key.to_string()),
                     attributes: HashMap::new(),
                 }),
                 _ => None,
@@ -111,7 +112,7 @@ pub mod tests {
                 "client1" => Some(Client {
                     client_id: key.to_string(),
                     client_type: ClientType::Confidential {
-                        password: "client1".to_string(),
+                        password: Password::Plain("client1".to_string()),
                     },
                     redirect_uris: vec!["http://localhost/client1".to_string()],
                     attributes: HashMap::new(),

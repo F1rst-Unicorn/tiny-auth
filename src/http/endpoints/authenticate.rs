@@ -111,7 +111,7 @@ pub async fn post(
         query.password.clone().unwrap()
     };
 
-    if authenticator.authenticate(&username, &password) {
+    if authenticator.authenticate_user(&username, &password) {
         redirect_successfully(&tera, &session, &username)
     } else {
         render_invalid_input(3, &tera, &session)

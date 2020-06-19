@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Support encrypted passwords
+  ([#23](https://gitlab.com/veenj/tiny-auth/issues/23),
+
 * Support client credentials authentication
   ([#8](https://gitlab.com/veenj/tiny-auth/issues/8),
 

@@ -13,6 +13,14 @@ lto = true
 opt-level = "s"
 codegen-units = 1
 
+[[bin]]
+name = "tiny-auth"
+path = "src/bin/tiny-auth.rs"
+
+[[bin]]
+name = "tiny-auth-password-encoder"
+path = "src/bin/password-encoder.rs"
+
 [dependencies]
 clap = "2.27.0"
 log = "0.4"
@@ -30,7 +38,11 @@ base64 = "0.12.1"
 systemd = "0.4"
 jsonwebtoken = "7.1.2"
 rand = "0.7.3"
-async-trait = "0.1.35"
+async-trait = "0.1.36"
+
+[dependencies.ring]
+version = "0.16.15"
+features = ["alloc", "std"]
 
 [dependencies.tokio]
 version = "0.2"

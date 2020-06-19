@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::domain::token::Token;
+use crate::domain::Token;
 
 use jsonwebtoken::decode;
 use jsonwebtoken::encode;

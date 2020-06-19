@@ -1,3 +1,7 @@
 ---
 name: john
-password: password
+password:
+  Pbkdf2HmacSha256:
+    credential: iWUVg0T0npFqraL7frcoddhxQqkeL939abeUdq6LLMA=
+    iterations: 100000
+    salt: EkhhHSTv8lHJ0rICs1eRm88gw1KvyWs8D5x23M5+VYdqb2hu

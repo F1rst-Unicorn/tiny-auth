@@ -16,5 +16,11 @@
  */
 
 pub mod client;
+pub mod password;
 pub mod token;
 pub mod user;
+
+pub use client::Client;
+pub use password::Password;
+pub use token::Token;
+pub use user::User;
