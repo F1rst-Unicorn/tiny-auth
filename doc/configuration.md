@@ -26,8 +26,8 @@ and cookies.
 
 #### `path`
 
-The path under which tiny-auth is hosted. If it is deployed on a subpath below
-a domain, set the subpath here.
+Optional. The path under which tiny-auth is hosted. If it is deployed on a
+subpath below a domain, set the subpath here.
 
 #### `static_files`
 
@@ -36,8 +36,8 @@ by the distribution or package maintainer.
 
 #### `session_timeout`
 
-Timeout for a single authorization session. Internally this is the `Max-Age` of
-the session cookie.
+Optional. Timeout for a single authorization session in seconds. Internally this
+is the `Max-Age` of the session cookie. Default value is `3600`.
 
 #### `secret_key`
 
@@ -46,7 +46,7 @@ session cookie.
 
 #### `workers`
 
-Number of HTTP workers dispatching incoming requests.
+Optional. Number of HTTP workers dispatching incoming requests.
 
 #### `tls`
 
@@ -64,7 +64,7 @@ users. Otherwise all passwords are invalidated.
 
 #### `key` and `public key`
 
-Keypair to sign JWT tokens. Generate them e.g. with openssl:
+Paths to a keypair to sign JWT tokens. Generate them e.g. with openssl:
 
 ```bash
 openssl genrsa 4096 > key.pem

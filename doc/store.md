@@ -58,7 +58,7 @@ between all users.
 #### `password`
 
 The encoded password of the user. Use tiny-auth's password encoder (usually
-installed as `tiny-auth-password-encoder) to generate a valid structure for
+installed as `tiny-auth-password-encoder`) to generate a valid structure for
 the user. The tool will output a YAML object which must be put as a dictionary
 inside the `password` field. Mind the indentation.
 
@@ -100,7 +100,7 @@ client_type:
 are allowed.
 
 The `...` is meant to be replaced by the output of tiny-auth's password
-encoder (usually installed as `tiny-auth-password-encoder). Use it to
+encoder (usually installed as `tiny-auth-password-encoder`). Use it to
 generate a valid password for the client. The tool will output a YAML object
 which must be put as a dictionary inside the `password` field. Mind the
 indentation.
