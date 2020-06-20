@@ -1,7 +1,7 @@
 # HTTP Endpoints
 
 All endpoints are relative to the configured
-[domain](doc/configuration.md#domain) and [path](doc/configuration.md#path).
+[domain](configuration.md#domain) and [path](configuration.md#path).
 
 ## OIDC Endpoints
 
@@ -21,5 +21,5 @@ The Token endpoint to fetch a token from in the Authorization Code Flow.
 
 ### `/cert`
 
-The [public key](doc/configuration.md#key-and-public-key) used to verify JWT
+The [public key](configuration.md#key-and-public-key) used to verify JWT
 tokens from this instance.
