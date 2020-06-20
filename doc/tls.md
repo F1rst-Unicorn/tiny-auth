@@ -29,11 +29,9 @@ trusted root certificate.
 
 ## `client_ca`
 
-The file path to a list of PEM-formatted certificates. They will be used
-to verify client requests. If specified all client requests need to be
-authenticated. The maximum verification depth is 30.
-
-Omitting this parameter will turn off client certificate verification.
+Optional. The file path to a list of PEM-formatted certificates. They will be
+used to verify client requests. If specified all client requests need to be
+authenticated.
 
 ## `versions`
 
