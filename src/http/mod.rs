@@ -21,8 +21,11 @@ mod tera;
 
 use crate::config::Config;
 use crate::config::Tls;
+use crate::config::TlsVersion;
 use crate::runtime::Error;
-use crate::util::read_file;
+
+use std::fs::File;
+use std::io::BufReader;
 
 use actix_web::cookie::SameSite;
 use actix_web::dev::Server;
@@ -34,13 +37,12 @@ use actix_web::HttpServer;
 
 use actix_session::CookieSession;
 
-use openssl::dh::Dh;
-use openssl::ssl::SslAcceptorBuilder;
-use openssl::ssl::SslFiletype;
-use openssl::ssl::SslVerifyMode;
-use openssl::x509::store::X509StoreBuilder;
-use openssl::x509::X509Name;
-use openssl::x509::X509;
+use rustls::internal::pemfile::certs;
+use rustls::internal::pemfile::pkcs8_private_keys;
+use rustls::AllowAnyAuthenticatedClient;
+use rustls::NoClientAuth;
+use rustls::RootCertStore;
+use rustls::ServerConfig;
 
 use log::error;
 use log::warn;
@@ -87,7 +89,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
                     .path(config.web.path.as_ref().expect("no default given"))
                     .secure(config.web.tls.is_some())
                     .http_only(true)
-                    .same_site(SameSite::Strict)
+                    .same_site(SameSite::Lax)
                     .max_age(config.web.session_timeout.expect("no default given")),
             )
             .wrap(DefaultHeaders::new().header("Cache-Control", "no-store"))
@@ -112,14 +114,15 @@ pub fn build(config: Config) -> Result<Server, Error> {
             )
     })
     .disable_signals()
+    .keep_alive(60)
     .shutdown_timeout(30);
 
     let server = if let Some(tls) = tls {
-        let openssl = configure_openssl(&tls);
-        if let Err(e) = openssl {
+        let tls_config = configure_tls(&tls);
+        if let Err(e) = tls_config {
             return Err(e);
         }
-        server.bind_openssl(&bind, openssl.unwrap())
+        server.bind_rustls(&bind, tls_config.unwrap())
     } else {
         server.bind(&bind)
     };
@@ -138,50 +141,58 @@ pub fn build(config: Config) -> Result<Server, Error> {
     Ok(srv)
 }
 
-fn configure_openssl(config: &Tls) -> Result<SslAcceptorBuilder, Error> {
-    let mut builder = config.configuration.to_acceptor_builder()?;
-
-    if let Some(client_ca) = &config.client_ca {
-        let mut mode = SslVerifyMode::empty();
-        mode.insert(SslVerifyMode::PEER);
-        mode.insert(SslVerifyMode::FAIL_IF_NO_PEER_CERT);
-        builder.set_verify(mode);
-        builder.set_verify_depth(30);
-        builder.set_client_ca_list(X509Name::load_client_ca_file(client_ca)?);
-
-        let cert_content = read_file(client_ca);
-        if let Err(e) = cert_content {
-            return Err(e.into());
+fn configure_tls(config: &Tls) -> Result<ServerConfig, Error> {
+    let mut result = if let Some(client_ca) = &config.client_ca {
+        let mut ca_store = RootCertStore::empty();
+        if ca_store
+            .add_pem_file(&mut BufReader::new(File::open(&client_ca)?))
+            .is_err()
+        {
+            error!("could not load tls client ca");
+            return Err(Error::LoggedBeforeError);
         }
-        let cert = X509::from_pem(cert_content.unwrap().as_bytes())?;
-        let mut store_builder = X509StoreBuilder::new()?;
-        store_builder.add_cert(cert)?;
-        let store = store_builder.build();
-        builder.set_verify_cert_store(store)?;
+        ServerConfig::new(AllowAnyAuthenticatedClient::new(ca_store))
     } else {
-        builder.set_verify(SslVerifyMode::NONE);
-    }
+        ServerConfig::new(NoClientAuth::new())
+    };
 
-    if let Some(ciphers) = &config.old_ciphers {
-        builder.set_cipher_list(&ciphers)?;
-    }
-
-    if let Some(ciphers) = &config.ciphers {
-        builder.set_ciphersuites(&ciphers)?;
-    }
-
-    if let Some(dhparam) = &config.dh_param {
-        let content = read_file(dhparam);
-        if let Err(e) = content {
-            error!("Could not open {}: {}", dhparam, e);
-            return Err(e.into());
+    let certs = match certs(&mut BufReader::new(File::open(&config.certificate)?)) {
+        Err(_) => {
+            error!("could not read tls certificate file");
+            return Err(Error::LoggedBeforeError);
         }
-        let dhparam = Dh::params_from_pem(content.unwrap().as_bytes())?;
-        builder.set_tmp_dh(&dhparam)?;
+        Ok(certs) => certs,
+    };
+
+    let key = match pkcs8_private_keys(&mut BufReader::new(File::open(&config.key)?)) {
+        Err(_) => {
+            error!("could not read tls key file");
+            return Err(Error::LoggedBeforeError);
+        }
+        Ok(keys) => match keys.len() {
+            0 => {
+                error!("No tls key found");
+                return Err(Error::LoggedBeforeError);
+            }
+            1 => keys[0].clone(),
+            _ => {
+                error!("Put only one tls key into the tls key file");
+                return Err(Error::LoggedBeforeError);
+            }
+        },
+    };
+
+    if let Err(e) = result.set_single_cert(certs, key) {
+        error!("tls key is invalid: {}", e);
+        return Err(Error::LoggedBeforeError);
     }
 
-    builder.set_private_key_file(&config.key, SslFiletype::PEM)?;
-    builder.set_certificate_chain_file(&config.certificate)?;
+    result.versions = config
+        .versions
+        .clone()
+        .into_iter()
+        .map(TlsVersion::into)
+        .collect();
 
-    Ok(builder)
+    Ok(result)
 }

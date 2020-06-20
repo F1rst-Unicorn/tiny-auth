@@ -8,28 +8,13 @@ The configuration looks like this:
 ```yml
 web:
   tls:
-    configuration: modern v5
     key: path/key.pem
     certificate: path/cert.pem
     client_ca: path/ca.pem
-    dh_param: path/dhparam.pem
-    1.2 ciphers: HIGH
-    1.3 cipers: HIGH
+    versions:
+      - 1.2
+      - 1.3
 ```
-
-## `configuration`
-
-Supported values are
-
-* `modern`
-
-* `modern v5`
-
-* `intermediate`
-
-* `intermediate v5`
-
-They correspond to [Mozilla's TLS Recommendations](https://wiki.mozilla.org/Security/Server_Side_TLS).
 
 ## `key`
 
@@ -50,12 +35,6 @@ authenticated. The maximum verification depth is 30.
 
 Omitting this parameter will turn off client certificate verification.
 
-## `dh_param`
+## `versions`
 
-The Diffie-Hellman parameters to use. See `man 1 dhparam`. The use is
-optional.
-
-## `1.2 ciphers` and `1.3 ciphers`
-
-The ciphers to be used by openssl. See `man 1 ciphers` for details on
-the format. Their use is optional.
+The list of supported TLS versions. Allowed values are `1.2` and `1.3`.

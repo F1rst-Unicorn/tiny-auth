@@ -17,12 +17,9 @@
 
 pub mod parser;
 
-use serde_derive::Deserialize;
+use std::convert::Into;
 
-use openssl::error::ErrorStack;
-use openssl::ssl::SslAcceptor;
-use openssl::ssl::SslAcceptorBuilder;
-use openssl::ssl::SslMethod;
+use serde_derive::Deserialize;
 
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Config {
@@ -78,48 +75,36 @@ fn default_session_timeout() -> Option<i64> {
     Some(3600)
 }
 
-/// https://wiki.mozilla.org/Security/Server_Side_TLS
-#[derive(Copy, Clone, Debug, Deserialize)]
-pub enum TlsConfiguration {
-    #[serde(rename = "modern")]
-    Modern,
-    #[serde(rename = "modern v5")]
-    ModernV5,
-    #[serde(rename = "intermediate")]
-    Intermediate,
-    #[serde(rename = "intermediate v5")]
-    IntermediateV5,
-}
-
-impl Default for TlsConfiguration {
-    fn default() -> Self {
-        TlsConfiguration::ModernV5
-    }
-}
-
-impl TlsConfiguration {
-    pub fn to_acceptor_builder(self) -> Result<SslAcceptorBuilder, ErrorStack> {
-        let method = SslMethod::tls_server();
-        match self {
-            TlsConfiguration::Modern => SslAcceptor::mozilla_modern(method),
-            TlsConfiguration::ModernV5 => SslAcceptor::mozilla_modern_v5(method),
-            TlsConfiguration::Intermediate => SslAcceptor::mozilla_intermediate(method),
-            TlsConfiguration::IntermediateV5 => SslAcceptor::mozilla_intermediate_v5(method),
-        }
-    }
-}
-
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Tls {
-    pub configuration: TlsConfiguration,
     pub key: String,
     pub certificate: String,
     pub client_ca: Option<String>,
-    pub dh_param: Option<String>,
-    #[serde(rename = "1.2 ciphers")]
-    pub old_ciphers: Option<String>,
-    #[serde(rename = "1.3 ciphers")]
-    pub ciphers: Option<String>,
+
+    #[serde(default = "default_versions")]
+    pub versions: Vec<TlsVersion>,
+}
+
+fn default_versions() -> Vec<TlsVersion> {
+    vec![TlsVersion::Tls1_3]
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub enum TlsVersion {
+    #[serde(rename = "1.3")]
+    Tls1_3,
+
+    #[serde(rename = "1.2")]
+    Tls1_2,
+}
+
+impl Into<rustls::ProtocolVersion> for TlsVersion {
+    fn into(self) -> rustls::ProtocolVersion {
+        match self {
+            Self::Tls1_3 => rustls::ProtocolVersion::TLSv1_3,
+            Self::Tls1_2 => rustls::ProtocolVersion::TLSv1_2,
+        }
+    }
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]

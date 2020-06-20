@@ -39,6 +39,7 @@ systemd = "0.4"
 jsonwebtoken = "7.1.2"
 rand = "0.7.3"
 async-trait = "0.1.36"
+rustls = "0.16.0"
 
 [dependencies.ring]
 version = "0.16.15"
@@ -50,11 +51,7 @@ features = ["full"]
 
 [dependencies.actix-web]
 version = "2.0"
-features = ["openssl"]
-
-[dependencies.openssl]
-version = "0.10"
-features = ["v110"]
+features = ["rustls"]
 
 [dependencies.uuid]
 version = "0.8.1"

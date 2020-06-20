@@ -27,12 +27,11 @@ crypto:
 web:
   bind: localhost:8088
   domain: localhost
+  path: /oidc
   static_files: static
   session_timeout: 60000
   secret_key: jxbvDbbsgJyh1x2HG8V8rqKsD4vW45aIYcNopFuYdPdSvyKSVB54CWmCinCC1iv912AIkEfWB9kVDeliANle5Acc
-# tls:
-#   configuration: modern v5
-#   key: hack/key.pem
-#   certificate: hack/chain.pem
-#   client_ca: hack/ca.pem
-#   dh_param: hack/dhparam.pem
+  tls:
+    key: hack/key.pem
+    certificate: hack/chain.pem
+    client_ca: hack/ca.pem

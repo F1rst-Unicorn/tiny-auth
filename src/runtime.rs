@@ -15,13 +15,14 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::convert::From;
-
 use crate::config::Config;
 use crate::http;
 use crate::systemd::notify_about_start;
 use crate::systemd::watchdog;
 use crate::terminate::terminator;
+
+use std::convert::From;
+use std::fmt::Display;
 
 use log::error;
 
@@ -32,20 +33,24 @@ pub enum Error {
     LoggedBeforeError,
 
     StdIoError(std::io::Error),
-    OpensslError(openssl::error::ErrorStack),
     JwtError(jsonwebtoken::errors::Error),
     TeraError(tera::Error),
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LoggedBeforeError => write!(f, "Error: See above"),
+            Self::StdIoError(e) => write!(f, "IO error: {}", e),
+            Self::JwtError(e) => write!(f, "JWT error: {}", e),
+            Self::TeraError(e) => write!(f, "Template error: {}", e),
+        }
+    }
 }
 
 impl From<std::io::Error> for Error {
     fn from(error: std::io::Error) -> Self {
         Self::StdIoError(error)
-    }
-}
-
-impl From<openssl::error::ErrorStack> for Error {
-    fn from(error: openssl::error::ErrorStack) -> Self {
-        Self::OpensslError(error)
     }
 }
 
@@ -91,7 +96,10 @@ pub fn run(config: Config) -> Result<(), Error> {
     tasks.block_on(&mut tok_runtime, async move {
         tokio::task::spawn_local(system_fut);
         let srv = match http::build(config) {
-            Err(_) => return,
+            Err(e) => {
+                error!("Startup failed: {}", e);
+                return;
+            }
             Ok(srv) => srv,
         };
         if pass_server.send(srv.clone()).is_err() {
