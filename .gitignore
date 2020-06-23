@@ -8,3 +8,5 @@ pkg/Archlinux/*.pkg.tar*
 .idea
 
 .vscode
+
+static/img/favicon.png

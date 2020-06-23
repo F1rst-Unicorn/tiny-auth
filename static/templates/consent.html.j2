@@ -17,10 +17,25 @@
 
 {% extends "base.html.j2" %}
 {% block content %}
-<h1>Are you fine with this?</h1>
+<div class="form">
+<h2>{{ translate(term="Consent") }}</h2>
+<div class="username">John Silver</div>
+<div class="consent">
+Do you want to give Confidential Client access to this?
+<dl>
+  <dt>E-Mail</dt>
+  <dd>
+  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus eu libero dapibus, aliquet felis nec, finibus erat. Cras massa risus, ornare sed nulla quis, posuere condimentum neque. Ut in bibendum urna. Phasellus id dolor eros. Ut mattis turpis nec velit semper, id commodo nulla elementum. Aliquam nulla tellus, feugiat sed eros vitae, egestas tristique ex. In consequat leo a neque pretium, tempus consectetur turpis semper. Nulla facilisi. Duis eros magna, laoreet vitae maximus sagittis, lacinia et erat. </dd>
+</dl>
+<dl>
+  <dt>Pictures</dt>
+  <dd>Access to all your pictures</dd>
+</dl>
+</div>
 <form action="{{ url(name="consent") }}" method="post">
     <input type="hidden" name="csrftoken" value="{{ csrftoken }}">
     <input class="btn btn-success" type="submit" id="id_submit"
            value="{{ translate(term="Agree") }}">
 </form>
+</div>
 {% endblock %}

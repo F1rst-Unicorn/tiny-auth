@@ -93,25 +93,64 @@ pub fn build(config: Config) -> Result<Server, Error> {
                     .max_age(config.web.session_timeout.expect("no default given")),
             )
             .wrap(DefaultHeaders::new().header("Cache-Control", "no-store"))
+            .service(actix_files::Files::new(
+                &(config.web.path.clone().unwrap() + "/static/css"),
+                &(config.web.static_files.clone() + "/css"),
+            ))
+            .service(actix_files::Files::new(
+                &(config.web.path.clone().unwrap() + "/static/img"),
+                &(config.web.static_files.clone() + "/img"),
+            ))
             .service(
-                web::scope(&config.web.path.as_ref().expect("no default given"))
+                web::scope(&config.web.path.as_ref().unwrap())
                     .route("/authorize", web::get().to(endpoints::authorize::get))
                     .route("/authorize", web::post().to(endpoints::authorize::post))
+                    .route(
+                        "/authorize",
+                        web::route()
+                            .to(|| HttpResponse::MethodNotAllowed().body("method not allowed")),
+                    )
                     .route("/token", web::post().to(endpoints::token::post))
+                    .route(
+                        "/token",
+                        web::route()
+                            .to(|| HttpResponse::MethodNotAllowed().body("method not allowed")),
+                    )
                     .route("/userinfo", web::get().to(endpoints::userinfo::handle))
                     .route("/userinfo", web::post().to(endpoints::userinfo::handle))
+                    .route(
+                        "/userinfo",
+                        web::route()
+                            .to(|| HttpResponse::MethodNotAllowed().body("method not allowed")),
+                    )
                     .route("/authenticate", web::get().to(endpoints::authenticate::get))
                     .route(
                         "/authenticate",
                         web::post().to(endpoints::authenticate::post),
                     )
+                    .route(
+                        "/authenticate",
+                        web::route()
+                            .to(|| HttpResponse::MethodNotAllowed().body("method not allowed")),
+                    )
                     .route("/consent", web::get().to(endpoints::consent::get))
                     .route("/consent", web::post().to(endpoints::consent::post))
                     .route(
+                        "/consent",
+                        web::route()
+                            .to(|| HttpResponse::MethodNotAllowed().body("method not allowed")),
+                    )
+                    .route(
                         "/cert",
                         web::get().to(move || HttpResponse::Ok().body(token_certificate.clone())),
+                    )
+                    .route(
+                        "/cert",
+                        web::route()
+                            .to(|| HttpResponse::MethodNotAllowed().body("method not allowed")),
                     ),
             )
+            .default_service(web::route().to(|| HttpResponse::NotFound().body("not found")))
     })
     .disable_signals()
     .keep_alive(60)

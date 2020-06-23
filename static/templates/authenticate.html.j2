@@ -18,7 +18,9 @@
 {% extends "base.html.j2" %}
 {% block content %}
 {% set error = error | default(value=0) %}
-<h1>{{ translate(term="Login") }}</h1>
+<div class="form">
+<h2>{{ translate(term="Login") }}</h2>
+<form action="{{ url(name="authenticate") }}" method="post">
 {% if error == 1 %}
     <div id="error" class="alert alert-danger"
          role="alert">{{ translate(term="Missing username")}}</div>
@@ -29,23 +31,21 @@
     <div id="error" class="alert alert-danger"
          role="alert">{{ translate(term="Username or password wrong")}}</div>
 {% endif %}
-<form action="{{ url(name="authenticate") }}" method="post">
     <div class="form-group">
-        <label class="control-label"
-               for="id_username">{{ translate(term="Username") }}</label>
         <input id="id_username" class="form-control" autofocus=""
                autocapitalize="none" autocomplete="username" maxlength="150"
+               placeholder="{{ translate(term="Username") }}"
                required="" type="text" name="username"/>
     </div>
     <div class="form-group">
-        <label class="control-label"
-               for="id_password">{{ translate(term="Password") }}</label>
         <input id="id_password" class="form-control"
                autocomplete="current-password" required="" type="password"
+               placeholder="{{ translate(term="Password") }}"
                name="password"/>
     </div>
     <input type="hidden" name="csrftoken" value="{{ csrftoken }}">
     <input class="btn btn-success" type="submit" id="id_submit"
            value="{{ translate(term="Login") }}">
 </form>
+</div>
 {% endblock %}
