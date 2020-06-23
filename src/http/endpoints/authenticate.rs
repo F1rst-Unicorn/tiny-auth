@@ -273,9 +273,7 @@ mod tests {
     async fn authorization_in_session_gives_login_form() {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
-        session
-            .set(authorize::SESSION_KEY, "dummy".to_string())
-            .unwrap();
+        session.set(authorize::SESSION_KEY, "dummy").unwrap();
 
         let resp = get(session, build_test_tera()).await;
 
@@ -318,9 +316,7 @@ mod tests {
     async fn missing_username_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        session
-            .set(authorize::SESSION_KEY, "dummy".to_string())
-            .unwrap();
+        session.set(authorize::SESSION_KEY, "dummy").unwrap();
         let csrftoken = generate_csrf_token();
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
@@ -346,9 +342,7 @@ mod tests {
     async fn missing_password_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        session
-            .set(authorize::SESSION_KEY, "dummy".to_string())
-            .unwrap();
+        session.set(authorize::SESSION_KEY, "dummy").unwrap();
         let csrftoken = generate_csrf_token();
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
@@ -374,9 +368,7 @@ mod tests {
     async fn unknown_user_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        session
-            .set(authorize::SESSION_KEY, "dummy".to_string())
-            .unwrap();
+        session.set(authorize::SESSION_KEY, "dummy").unwrap();
         let csrftoken = generate_csrf_token();
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
@@ -402,9 +394,7 @@ mod tests {
     async fn wrong_password_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        session
-            .set(authorize::SESSION_KEY, "dummy".to_string())
-            .unwrap();
+        session.set(authorize::SESSION_KEY, "dummy").unwrap();
         let csrftoken = generate_csrf_token();
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
@@ -430,9 +420,7 @@ mod tests {
     async fn correct_login_is_reported() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        session
-            .set(authorize::SESSION_KEY, "dummy".to_string())
-            .unwrap();
+        session.set(authorize::SESSION_KEY, "dummy").unwrap();
         let csrftoken = generate_csrf_token();
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
@@ -450,5 +438,80 @@ mod tests {
         assert_eq!("consent", url);
         assert_eq!(session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap(), None);
         assert_eq!(session.get::<String>(SESSION_KEY).unwrap().unwrap(), USER);
+    }
+
+    #[actix_rt::test]
+    async fn default_try_count_is_two() {
+        let req = test::TestRequest::post().to_http_request();
+        let session = req.get_session();
+        session.set(authorize::SESSION_KEY, "dummy").unwrap();
+        let csrftoken = generate_csrf_token();
+        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+
+        let form = Form(Request {
+            username: Some(UNKNOWN_USER.to_string()),
+            password: Some(UNKNOWN_USER.to_string()),
+            csrftoken: Some(csrftoken),
+        });
+
+        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
+        let session = req.get_session();
+
+        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        assert_eq!("authenticate", url);
+        assert_eq!(
+            session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
+            3
+        );
+        assert_eq!(
+            session.get::<i32>(TRIES_LEFT_SESSION_KEY).unwrap().unwrap(),
+            2
+        );
+    }
+
+    #[actix_rt::test]
+    async fn no_tries_left_will_redirect_to_client() {
+        let req = test::TestRequest::post().to_http_request();
+        let session = req.get_session();
+        session
+            .set(
+                authorize::SESSION_KEY,
+                serde_urlencoded::to_string(authorize::Request {
+                    redirect_uri: Some("http://redirect_uri.example".to_string()),
+                    ..Default::default()
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        session.set(TRIES_LEFT_SESSION_KEY, 1).unwrap();
+        let csrftoken = generate_csrf_token();
+        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+
+        let form = Form(Request {
+            username: Some(UNKNOWN_USER.to_string()),
+            password: Some(UNKNOWN_USER.to_string()),
+            csrftoken: Some(csrftoken),
+        });
+
+        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
+
+        assert_eq!(resp.status(), http::StatusCode::FOUND);
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let url = Url::parse(url).unwrap();
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param.0 == "error".to_string()
+                && param.1
+                    == format!(
+                        "{}",
+                        oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied)
+                    )));
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param.0 == "error_description".to_string()
+                && param.1 == "user failed to authenticate"));
     }
 }
