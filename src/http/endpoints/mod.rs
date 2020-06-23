@@ -48,6 +48,7 @@ const CSRF_SESSION_KEY: &str = "c";
 
 const CSRF_CONTEXT: &str = "csrftoken";
 const ERROR_CONTEXT: &str = "error";
+const TRIES_LEFT_CONTEXT: &str = "tries";
 
 #[derive(Serialize, Deserialize)]
 struct ErrorResponse {

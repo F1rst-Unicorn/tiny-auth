@@ -22,8 +22,8 @@ use crate::business::token::TokenCreator;
 use crate::domain::token::Token;
 use crate::http::endpoints::authenticate;
 use crate::http::endpoints::authorize;
-use crate::http::endpoints::render_template_with_context;
 use crate::http::endpoints::render_redirect_error;
+use crate::http::endpoints::render_template_with_context;
 use crate::protocol::oauth2;
 use crate::protocol::oidc;
 use crate::store::AuthorizationCodeStore;
@@ -221,7 +221,11 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     let redirect_uri = first_request.redirect_uri.unwrap();
     let mut url = Url::parse(&redirect_uri).expect("should have been validated upon registration");
 
-    render_redirect_error(&mut url, oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied), "user denied consent")
+    render_redirect_error(
+        &mut url,
+        oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
+        "user denied consent",
+    )
 }
 
 fn render_invalid_consent_request(tera: &tera::Tera) -> HttpResponse {

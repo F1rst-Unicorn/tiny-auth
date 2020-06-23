@@ -21,9 +21,8 @@ use super::server_error;
 use crate::business::authenticator::Authenticator;
 use crate::http::endpoints::authorize;
 use crate::http::endpoints::render_template_with_context;
-use crate::http::endpoints::render_redirect_error;
-use crate::protocol::oidc;
 use crate::protocol::oauth2;
+use crate::protocol::oidc;
 
 use actix_web::http::StatusCode;
 use actix_web::web;
@@ -45,6 +44,7 @@ use serde_derive::Serialize;
 
 pub const SESSION_KEY: &str = "b";
 const ERROR_CODE_SESSION_KEY: &str = "e";
+const TRIES_LEFT_SESSION_KEY: &str = "t";
 
 #[derive(Serialize, Deserialize)]
 pub struct Request {
@@ -102,32 +102,68 @@ pub async fn post(
         _ => {}
     }
 
+    let tries_left = match session.get::<i32>(TRIES_LEFT_SESSION_KEY) {
+        Err(_) => {
+            debug!("unsolicited authentication request");
+            return render_invalid_authentication_request(&tera);
+        }
+        Ok(None) => 2,
+        Ok(Some(tries)) => tries - 1,
+    };
+
     let username = if query.username.is_none() {
         debug!("missing username");
-        return render_invalid_input(1, &tera, &session);
+        return render_invalid_input(1, &tera, &session, None);
     } else {
         query.username.clone().unwrap()
     };
 
     let password = if query.password.is_none() {
         debug!("missing password");
-        return render_invalid_input(2, &tera, &session);
+        return render_invalid_input(2, &tera, &session, None);
     } else {
         query.password.clone().unwrap()
     };
 
     if authenticator.authenticate_user(&username, &password) {
+        session.remove(TRIES_LEFT_SESSION_KEY);
+        session.remove(ERROR_CODE_SESSION_KEY);
         redirect_successfully(&tera, &session, &username)
+    } else if tries_left > 0 {
+        debug!("{} tries left", tries_left);
+        render_invalid_input(3, &tera, &session, Some(tries_left))
     } else {
-        render_invalid_input(3, &tera, &session)
+        debug!("no tries left");
+        session.remove(TRIES_LEFT_SESSION_KEY);
+        session.remove(ERROR_CODE_SESSION_KEY);
+        render_redirect_error(
+            session,
+            &tera,
+            oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
+            "user failed to authenticate",
+        )
     }
 }
 
 pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
+    render_redirect_error(
+        session,
+        &tera,
+        oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
+        "user denied authentication",
+    )
+}
+
+fn render_redirect_error(
+    session: Session,
+    tera: &Tera,
+    error: oidc::ProtocolError,
+    description: &str,
+) -> HttpResponse {
     let first_request = match session.get::<String>(authorize::SESSION_KEY) {
         Err(_) | Ok(None) => {
-            debug!("unsolicited consent request");
-            return render_invalid_consent_request(&tera);
+            debug!("unsolicited authentication request");
+            return render_invalid_authentication_request(&tera);
         }
         Ok(Some(req)) => req,
     };
@@ -142,21 +178,17 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     let redirect_uri = first_request.redirect_uri.unwrap();
     let mut url = Url::parse(&redirect_uri).expect("should have been validated upon registration");
 
-    render_redirect_error(&mut url, oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied), "user denied authentication")
-}
-
-fn render_invalid_consent_request(tera: &tera::Tera) -> HttpResponse {
-    render_template(
-        "invalid_consent_request.html.j2",
-        StatusCode::BAD_REQUEST,
-        tera,
-    )
+    super::render_redirect_error(&mut url, error, description)
 }
 
 fn build_context(session: &Session) -> Option<Context> {
     let mut context = Context::new();
     if let Ok(Some(error_code)) = session.get::<u64>(ERROR_CODE_SESSION_KEY) {
         context.insert(super::ERROR_CONTEXT, &error_code);
+    }
+
+    if let Ok(Some(tries_left)) = session.get::<u64>(TRIES_LEFT_SESSION_KEY) {
+        context.insert(super::TRIES_LEFT_CONTEXT, &tries_left);
     }
 
     let csrftoken = super::generate_csrf_token();
@@ -179,15 +211,27 @@ fn redirect_successfully(tera: &Tera, session: &Session, user: &str) -> HttpResp
         .finish()
 }
 
-fn render_invalid_input(error: u64, tera: &Tera, session: &Session) -> HttpResponse {
+fn render_invalid_input(
+    error: u64,
+    tera: &Tera,
+    session: &Session,
+    tries_left: Option<i32>,
+) -> HttpResponse {
     if let Err(e) = session.set(ERROR_CODE_SESSION_KEY, error) {
         error!("Failed to serialise session: {}", e);
-        server_error(tera)
-    } else {
-        HttpResponse::SeeOther()
-            .set_header("Location", "authenticate")
-            .finish()
+        return server_error(tera);
     }
+
+    if let Some(tries_left) = tries_left {
+        if let Err(e) = session.set(TRIES_LEFT_SESSION_KEY, tries_left) {
+            error!("Failed to serialise session: {}", e);
+            return server_error(tera);
+        }
+    }
+
+    HttpResponse::SeeOther()
+        .set_header("Location", "authenticate")
+        .finish()
 }
 
 fn render_invalid_authentication_request(tera: &Tera) -> HttpResponse {
