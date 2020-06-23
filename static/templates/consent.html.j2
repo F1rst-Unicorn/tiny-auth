@@ -34,6 +34,7 @@ Do you want to give Confidential Client access to this?
 </div>
 <form action="{{ url(name="consent") }}" method="post">
     <input type="hidden" name="csrftoken" value="{{ csrftoken }}">
+    <a class="btn btn-error" href="{{ url(name="consent/cancel") }}" >{{ translate(term="Cancel") }}</a>
     <input class="btn btn-success" type="submit" id="id_submit"
            value="{{ translate(term="Agree") }}">
 </form>

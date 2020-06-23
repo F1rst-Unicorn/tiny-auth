@@ -31,6 +31,9 @@ use actix_web::cookie::SameSite;
 use actix_web::dev::Server;
 use actix_web::middleware::DefaultHeaders;
 use actix_web::web;
+use actix_web::web::get;
+use actix_web::web::post;
+use actix_web::web::route as all;
 use actix_web::App;
 use actix_web::HttpResponse;
 use actix_web::HttpServer;
@@ -103,54 +106,37 @@ pub fn build(config: Config) -> Result<Server, Error> {
             ))
             .service(
                 web::scope(&config.web.path.as_ref().unwrap())
-                    .route("/authorize", web::get().to(endpoints::authorize::get))
-                    .route("/authorize", web::post().to(endpoints::authorize::post))
+                    .route("/authorize", get().to(endpoints::authorize::get))
+                    .route("/authorize", post().to(endpoints::authorize::post))
+                    .route("/authorize", all().to(endpoints::method_not_allowed))
+                    .route("/token", post().to(endpoints::token::post))
+                    .route("/token", all().to(endpoints::method_not_allowed))
+                    .route("/userinfo", get().to(endpoints::userinfo::handle))
+                    .route("/userinfo", post().to(endpoints::userinfo::handle))
+                    .route("/userinfo", all().to(endpoints::method_not_allowed))
+                    .route("/authenticate", get().to(endpoints::authenticate::get))
+                    .route("/authenticate", post().to(endpoints::authenticate::post))
+                    .route("/authenticate", all().to(endpoints::method_not_allowed))
                     .route(
-                        "/authorize",
-                        web::route()
-                            .to(|| HttpResponse::MethodNotAllowed().body("method not allowed")),
-                    )
-                    .route("/token", web::post().to(endpoints::token::post))
-                    .route(
-                        "/token",
-                        web::route()
-                            .to(|| HttpResponse::MethodNotAllowed().body("method not allowed")),
-                    )
-                    .route("/userinfo", web::get().to(endpoints::userinfo::handle))
-                    .route("/userinfo", web::post().to(endpoints::userinfo::handle))
-                    .route(
-                        "/userinfo",
-                        web::route()
-                            .to(|| HttpResponse::MethodNotAllowed().body("method not allowed")),
-                    )
-                    .route("/authenticate", web::get().to(endpoints::authenticate::get))
-                    .route(
-                        "/authenticate",
-                        web::post().to(endpoints::authenticate::post),
+                        "/authenticate/cancel",
+                        get().to(endpoints::authenticate::cancel),
                     )
                     .route(
-                        "/authenticate",
-                        web::route()
-                            .to(|| HttpResponse::MethodNotAllowed().body("method not allowed")),
+                        "/authenticate/cancel",
+                        all().to(endpoints::method_not_allowed),
                     )
-                    .route("/consent", web::get().to(endpoints::consent::get))
-                    .route("/consent", web::post().to(endpoints::consent::post))
-                    .route(
-                        "/consent",
-                        web::route()
-                            .to(|| HttpResponse::MethodNotAllowed().body("method not allowed")),
-                    )
+                    .route("/consent", get().to(endpoints::consent::get))
+                    .route("/consent", post().to(endpoints::consent::post))
+                    .route("/consent", all().to(endpoints::method_not_allowed))
+                    .route("/consent/cancel", get().to(endpoints::consent::cancel))
+                    .route("/consent/cancel", all().to(endpoints::method_not_allowed))
                     .route(
                         "/cert",
-                        web::get().to(move || HttpResponse::Ok().body(token_certificate.clone())),
+                        get().to(move || HttpResponse::Ok().body(token_certificate.clone())),
                     )
-                    .route(
-                        "/cert",
-                        web::route()
-                            .to(|| HttpResponse::MethodNotAllowed().body("method not allowed")),
-                    ),
+                    .route("/cert", all().to(endpoints::method_not_allowed))
+                    .default_service(all().to(|| HttpResponse::NotFound().body("not found"))),
             )
-            .default_service(web::route().to(|| HttpResponse::NotFound().body("not found")))
     })
     .disable_signals()
     .keep_alive(60)

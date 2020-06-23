@@ -31,6 +31,8 @@ use actix_web::HttpResponse;
 
 use actix_session::Session;
 
+use url::Url;
+
 use tera::Context;
 use tera::Tera;
 
@@ -58,7 +60,11 @@ struct ErrorResponse {
     error_uri: Option<String>,
 }
 
-pub fn render_json_error(error: ProtocolError, description: &str) -> HttpResponse {
+pub fn method_not_allowed() -> HttpResponse {
+    HttpResponse::MethodNotAllowed().body("method not allowed")
+}
+
+fn render_json_error(error: ProtocolError, description: &str) -> HttpResponse {
     match error {
         ProtocolError::OAuth2(OAuthError::InvalidClient) => HttpResponse::Unauthorized(),
         _ => HttpResponse::BadRequest(),
@@ -70,7 +76,17 @@ pub fn render_json_error(error: ProtocolError, description: &str) -> HttpRespons
     })
 }
 
-pub fn server_error(tera: &Tera) -> HttpResponse {
+fn render_redirect_error(url: &mut Url, error: ProtocolError, description: &str) -> HttpResponse {
+    url.query_pairs_mut()
+        .append_pair("error", &format!("{}", error))
+        .append_pair("error_description", description);
+
+    HttpResponse::Found()
+        .header("Location", url.as_str())
+        .finish()
+}
+
+fn server_error(tera: &Tera) -> HttpResponse {
     render_template("500.html.j2", StatusCode::INTERNAL_SERVER_ERROR, tera)
 }
 

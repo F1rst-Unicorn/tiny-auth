@@ -23,6 +23,7 @@ use crate::domain::token::Token;
 use crate::http::endpoints::authenticate;
 use crate::http::endpoints::authorize;
 use crate::http::endpoints::render_template_with_context;
+use crate::http::endpoints::render_redirect_error;
 use crate::protocol::oauth2;
 use crate::protocol::oidc;
 use crate::store::AuthorizationCodeStore;
@@ -199,6 +200,28 @@ pub async fn post(
     HttpResponse::Found()
         .set_header("Location", url.as_str())
         .finish()
+}
+
+pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
+    let first_request = match session.get::<String>(authorize::SESSION_KEY) {
+        Err(_) | Ok(None) => {
+            debug!("unsolicited consent request");
+            return render_invalid_consent_request(&tera);
+        }
+        Ok(Some(req)) => req,
+    };
+    let first_request = match serde_urlencoded::from_str::<authorize::Request>(&first_request) {
+        Err(e) => {
+            error!("Failed to deserialize initial request. {}", e);
+            return server_error(&tera);
+        }
+        Ok(req) => req,
+    };
+
+    let redirect_uri = first_request.redirect_uri.unwrap();
+    let mut url = Url::parse(&redirect_uri).expect("should have been validated upon registration");
+
+    render_redirect_error(&mut url, oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied), "user denied consent")
 }
 
 fn render_invalid_consent_request(tera: &tera::Tera) -> HttpResponse {
