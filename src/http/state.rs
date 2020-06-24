@@ -85,7 +85,11 @@ impl<'a> Constructor<'a> {
     }
 
     pub fn build_template_engine(&self) -> Result<Tera, Error> {
-        load_template_engine(&self.config.web.static_files).map_err(Into::into)
+        load_template_engine(
+            &self.config.web.static_files,
+            self.config.web.path.as_ref().unwrap(),
+        )
+        .map_err(Into::into)
     }
 
     pub fn build_public_key(&self) -> Result<String, Error> {
@@ -211,7 +215,8 @@ pub mod tests {
 
     pub fn build_test_tera() -> Data<Tera> {
         Data::new(
-            load_template_engine(&(env!("CARGO_MANIFEST_DIR").to_string() + "/static/")).unwrap(),
+            load_template_engine(&(env!("CARGO_MANIFEST_DIR").to_string() + "/static/"), "")
+                .unwrap(),
         )
     }
 

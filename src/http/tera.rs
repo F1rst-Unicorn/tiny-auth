@@ -17,13 +17,15 @@
 
 use std::collections::HashMap;
 
+use tera::from_value;
+use tera::to_value;
 use tera::Result;
 use tera::Tera;
 use tera::Value;
 
 use log::error;
 
-pub fn load_template_engine(static_files_root: &str) -> Result<Tera> {
+pub fn load_template_engine(static_files_root: &str, http_path: &str) -> Result<Tera> {
     let template_path = static_files_root.to_string() + "/templates/";
 
     let mut tera = match Tera::new(&(template_path + "**/*")) {
@@ -36,7 +38,7 @@ pub fn load_template_engine(static_files_root: &str) -> Result<Tera> {
 
     tera.register_function("url", url_mapper);
     tera.register_function("translate", translator);
-    tera.register_function("static", static_mapper);
+    tera.register_function("static", make_static_mapper(http_path.to_string()));
     Ok(tera)
 }
 
@@ -60,12 +62,22 @@ fn translator(args: &HashMap<String, Value>) -> Result<Value> {
     }
 }
 
-fn static_mapper(args: &HashMap<String, Value>) -> Result<Value> {
-    match args.get("name") {
-        Some(val) => Ok(val.clone()),
-        None => {
-            error!("no name given");
-            Err("oops".into())
+fn make_static_mapper(
+    http_path: String,
+) -> Box<dyn Fn(&HashMap<String, Value>) -> Result<Value> + Sync + Send> {
+    Box::new(move |args| -> Result<Value> {
+        match args.get("name") {
+            Some(val) => match from_value::<String>(val.clone()) {
+                Ok(v) => to_value(http_path.to_string() + &v).map_err(Into::into),
+                Err(e) => {
+                    error!("could not convert to string: {}", e);
+                    Err("oops".into())
+                }
+            },
+            None => {
+                error!("no name given");
+                Err("oops".into())
+            }
         }
-    }
+    })
 }
