@@ -21,7 +21,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 * [Documentation](https://gitlab.com/veenj/tiny-auth/-/blob/master/doc/README.md)
   ([#25](https://gitlab.com/veenj/tiny-auth/issues/25),
 
-* OpenID Connect Discovery endpoint
+* OpenID Connect [Discovery
+  endpoint](https://gitlab.com/veenj/tiny-auth/-/blob/issue-9/doc/endpoints.md#well-knownopenid-configuration)
   ([#24](https://gitlab.com/veenj/tiny-auth/issues/24),
 
 ## [0.1.0]
