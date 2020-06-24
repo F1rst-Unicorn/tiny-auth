@@ -66,6 +66,14 @@ pub struct Request {
     #[serde(default)]
     #[serde(deserialize_with = "deserialise_empty_as_none")]
     scope: Option<String>,
+
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    username: Option<String>,
+
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    password: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -120,6 +128,9 @@ pub async fn post(
         }
         GrantType::ClientCredentials => {
             grant_with_client_credentials(headers, client_store, authenticator).await
+        }
+        GrantType::Password => {
+            grant_with_password(headers, request, client_store, authenticator).await
         }
         _ => {
             return render_json_error(
@@ -270,6 +281,62 @@ async fn grant_with_client_credentials(
     Ok((client.clone().try_into().unwrap(), client))
 }
 
+async fn grant_with_password(
+    headers: HttpRequest,
+    request: web::Form<Request>,
+    client_store: web::Data<Arc<dyn ClientStore>>,
+    authenticator: web::Data<Authenticator>,
+) -> Result<(User, Client), HttpResponse> {
+    let username = match &request.username {
+        None => {
+            return Err(render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "Missing username",
+            ))
+        }
+        Some(username) => username,
+    };
+
+    let password = match &request.password {
+        None => {
+            return Err(render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "Missing password",
+            ))
+        }
+        Some(password) => password,
+    };
+
+    if headers.headers().get("Authorization").is_some() {
+        let client = match authenticate_client(
+            headers,
+            (*client_store).clone(),
+            authenticator.clone(),
+            None,
+        ) {
+            Ok(client) => client,
+            Err(e) => return Err(e),
+        };
+
+        let user = match authenticator.authenticate_user(&username, &password) {
+            None => {
+                return Err(render_json_error(
+                    ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
+                    "usernmae or password wrong",
+                ))
+            }
+            Some(user) => user,
+        };
+
+        Ok((user, client))
+    } else {
+        Err(render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
+            "Missing authorization header",
+        ))
+    }
+}
+
 fn authenticate_client(
     headers: HttpRequest,
     client_store: Arc<Arc<dyn ClientStore>>,
@@ -367,6 +434,8 @@ mod tests {
             client_id: Some("fdsa".to_string()),
             redirect_uri: Some("fdsa".to_string()),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -397,6 +466,8 @@ mod tests {
             client_id: Some("fdsa".to_string()),
             redirect_uri: Some("fdsa".to_string()),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -427,6 +498,8 @@ mod tests {
             client_id: None,
             redirect_uri: Some("fdsa".to_string()),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -457,6 +530,8 @@ mod tests {
             client_id: Some("fdsa".to_string()),
             redirect_uri: None,
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -487,6 +562,8 @@ mod tests {
             client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
             redirect_uri: Some("fdsa".to_string()),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -518,6 +595,8 @@ mod tests {
             client_id: Some(PUBLIC_CLIENT.to_string()),
             redirect_uri: Some("fdsa".to_string()),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -550,6 +629,8 @@ mod tests {
             client_id: Some(PUBLIC_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri + "/wrong"),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -583,6 +664,8 @@ mod tests {
             client_id: Some(PUBLIC_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -615,6 +698,8 @@ mod tests {
             client_id: Some(PUBLIC_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -652,6 +737,8 @@ mod tests {
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -689,6 +776,8 @@ mod tests {
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -726,6 +815,8 @@ mod tests {
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -763,6 +854,8 @@ mod tests {
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -803,6 +896,8 @@ mod tests {
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -842,6 +937,8 @@ mod tests {
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -883,6 +980,8 @@ mod tests {
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri),
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -920,6 +1019,8 @@ mod tests {
             client_id: None,
             redirect_uri: None,
             scope: None,
+            username: None,
+            password: None,
         });
 
         let resp = post(
@@ -955,6 +1056,158 @@ mod tests {
             client_id: None,
             redirect_uri: None,
             scope: None,
+            username: None,
+            password: None,
+        });
+
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+            build_test_authenticator(),
+        )
+        .await;
+
+        assert_eq!(resp.status(), http::StatusCode::OK);
+        let response = read_response::<Response>(resp).await;
+        assert!(!response.access_token.is_empty());
+        assert_eq!("bearer".to_string(), response.token_type);
+        assert_eq!(Some(60), response.expires_in);
+        assert_eq!(None, response.refresh_token);
+        assert_eq!(None, response.scope);
+        assert!(!response.id_token.unwrap().is_empty());
+    }
+
+    #[actix_rt::test]
+    async fn missing_username_is_rejected() {
+        let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
+        let encoded_auth = base64::encode(auth);
+        let auth_code_store = build_test_auth_code_store();
+        let req = test::TestRequest::post()
+            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .to_http_request();
+        let form = Form(Request {
+            grant_type: Some(GrantType::Password),
+            code: None,
+            client_id: None,
+            redirect_uri: None,
+            scope: None,
+            username: None,
+            password: Some(USER.to_string()),
+        });
+
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+            build_test_authenticator(),
+        )
+        .await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(
+            OidcError::from(ProtocolError::InvalidRequest),
+            response.error
+        );
+    }
+
+    #[actix_rt::test]
+    async fn missing_password_is_rejected_with_password_grant() {
+        let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
+        let encoded_auth = base64::encode(auth);
+        let auth_code_store = build_test_auth_code_store();
+        let req = test::TestRequest::post()
+            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .to_http_request();
+        let form = Form(Request {
+            grant_type: Some(GrantType::Password),
+            code: None,
+            client_id: None,
+            redirect_uri: None,
+            scope: None,
+            username: Some(USER.to_string()),
+            password: None,
+        });
+
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+            build_test_authenticator(),
+        )
+        .await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(
+            OidcError::from(ProtocolError::InvalidRequest),
+            response.error
+        );
+    }
+
+    #[actix_rt::test]
+    async fn public_client_cannot_use_password_grant() {
+        let auth = PUBLIC_CLIENT.to_string() + ":" + PUBLIC_CLIENT;
+        let encoded_auth = base64::encode(auth);
+        let auth_code_store = build_test_auth_code_store();
+        let req = test::TestRequest::post()
+            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .to_http_request();
+        let form = Form(Request {
+            grant_type: Some(GrantType::Password),
+            code: None,
+            client_id: None,
+            redirect_uri: None,
+            scope: None,
+            username: Some(USER.to_string()),
+            password: Some(USER.to_string()),
+        });
+
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+            build_test_authenticator(),
+        )
+        .await;
+
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
+        let response = read_response::<ErrorResponse>(resp).await;
+        assert_eq!(
+            OidcError::from(ProtocolError::InvalidClient),
+            response.error
+        );
+    }
+
+    #[actix_rt::test]
+    async fn confidential_client_can_use_password_grant() {
+        let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
+        let encoded_auth = base64::encode(auth);
+        let auth_code_store = build_test_auth_code_store();
+        let req = test::TestRequest::post()
+            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .to_http_request();
+        let form = Form(Request {
+            grant_type: Some(GrantType::Password),
+            code: None,
+            client_id: None,
+            redirect_uri: None,
+            scope: None,
+            username: Some(USER.to_string()),
+            password: Some(USER.to_string()),
         });
 
         let resp = post(

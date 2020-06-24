@@ -17,6 +17,10 @@ The OIDC userinfo endpoint to get information about the authorizing user.
 
 The Token endpoint to fetch a token from in the Authorization Code Flow.
 
+### `/.well-known/openid-configuration`
+
+The discovery endpoint for automatic discovery
+
 ## Custom endpoints
 
 ### `/cert`

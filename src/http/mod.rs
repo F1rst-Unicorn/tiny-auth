@@ -100,6 +100,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
                     .max_age(config.web.session_timeout.expect("no default given")),
             )
             .wrap(DefaultHeaders::new().header("Cache-Control", "no-store"))
+            .wrap(DefaultHeaders::new().header("Pragma", "no-cache"))
             .service(actix_files::Files::new(
                 &(config.web.path.clone().unwrap() + "/static/css"),
                 &(config.web.static_files.clone() + "/css"),

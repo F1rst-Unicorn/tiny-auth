@@ -146,6 +146,7 @@ pub async fn get(config: Data<IssuerConfiguration>) -> HttpResponse {
             "authorization_code".to_string(),
             "implicit".to_string(),
             "client_credentials".to_string(),
+            "password".to_string(),
         ],
         subject_types_supported: vec!["public".to_string()],
         id_token_signing_alg_values_supported: vec![

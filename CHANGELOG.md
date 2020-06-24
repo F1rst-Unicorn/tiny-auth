@@ -10,6 +10,20 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 * Changed TLS implementation to fix reverse proxy problems. TLS configuration
   format changed, see [doc](doc/tls.md)!
 
+### Added
+
+* Support password grants
+  ([#9](https://gitlab.com/veenj/tiny-auth/issues/9),
+
+* Nice UI for login forms
+  ([#2](https://gitlab.com/veenj/tiny-auth/issues/2),
+
+* [Documentation](https://gitlab.com/veenj/tiny-auth/-/blob/master/doc/README.md)
+  ([#25](https://gitlab.com/veenj/tiny-auth/issues/25),
+
+* OpenID Connect Discovery endpoint
+  ([#24](https://gitlab.com/veenj/tiny-auth/issues/24),
+
 ## [0.1.0]
 
 ### Added

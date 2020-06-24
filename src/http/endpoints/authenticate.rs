@@ -125,7 +125,7 @@ pub async fn post(
         query.password.clone().unwrap()
     };
 
-    if authenticator.authenticate_user(&username, &password) {
+    if authenticator.authenticate_user_and_forget(&username, &password) {
         session.remove(TRIES_LEFT_SESSION_KEY);
         session.remove(ERROR_CODE_SESSION_KEY);
         redirect_successfully(&tera, &session, &username)

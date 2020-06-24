@@ -16,6 +16,7 @@
  */
 
 use crate::domain::Client;
+use crate::domain::User;
 use crate::store::UserStore;
 
 use std::sync::Arc;
@@ -37,20 +38,24 @@ impl Authenticator {
         }
     }
 
-    pub fn authenticate_user(&self, username: &str, password: &str) -> bool {
+    pub fn authenticate_user_and_forget(&self, username: &str, password: &str) -> bool {
+        self.authenticate_user(username, password).is_some()
+    }
+
+    pub fn authenticate_user(&self, username: &str, password: &str) -> Option<User> {
         let user = match self.user_store.get(username) {
             None => {
                 debug!("user '{}' not found", username);
-                return false;
+                return None;
             }
             Some(u) => u,
         };
 
         if user.is_password_correct(password, &self.pepper) {
-            true
+            Some(user)
         } else {
             debug!("password of user '{}' wrong", username);
-            false
+            None
         }
     }
 
