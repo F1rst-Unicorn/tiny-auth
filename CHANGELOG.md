@@ -13,33 +13,33 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 
 * Support password grants
-  ([#9](https://gitlab.com/veenj/tiny-auth/issues/9),
+  ([#9](https://gitlab.com/veenj/tiny-auth/issues/9))
 
 * Nice UI for login forms
-  ([#2](https://gitlab.com/veenj/tiny-auth/issues/2),
+  ([#2](https://gitlab.com/veenj/tiny-auth/issues/2))
 
-* [Documentation](https://gitlab.com/veenj/tiny-auth/-/blob/master/doc/README.md)
-  ([#25](https://gitlab.com/veenj/tiny-auth/issues/25),
+* [Documentation](doc/README.md)
+  ([#25](https://gitlab.com/veenj/tiny-auth/issues/25))
 
 * OpenID Connect [Discovery
-  endpoint](https://gitlab.com/veenj/tiny-auth/-/blob/issue-9/doc/endpoints.md#well-knownopenid-configuration)
-  ([#24](https://gitlab.com/veenj/tiny-auth/issues/24),
+  endpoint](doc/endpoints.md#well-knownopenid-configuration)
+  ([#24](https://gitlab.com/veenj/tiny-auth/issues/24))
 
 ## [0.1.0]
 
 ### Added
 
 * Support encrypted passwords
-  ([#23](https://gitlab.com/veenj/tiny-auth/issues/23),
+  ([#23](https://gitlab.com/veenj/tiny-auth/issues/23))
 
 * Support client credentials authentication
-  ([#8](https://gitlab.com/veenj/tiny-auth/issues/8),
+  ([#8](https://gitlab.com/veenj/tiny-auth/issues/8))
 
 * Support configuration file store
-  ([#4](https://gitlab.com/veenj/tiny-auth/issues/4),
+  ([#4](https://gitlab.com/veenj/tiny-auth/issues/4))
 
 * Support for Implicit flow
-  ([#7](https://gitlab.com/veenj/tiny-auth/issues/7),
+  ([#7](https://gitlab.com/veenj/tiny-auth/issues/7))
 
 * Increase HTTP Security by disabling caching and adding CSRF countermeassures
   ([#14](https://gitlab.com/veenj/tiny-auth/issues/14),
