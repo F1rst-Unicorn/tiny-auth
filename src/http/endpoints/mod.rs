@@ -18,6 +18,7 @@
 pub mod authenticate;
 pub mod authorize;
 pub mod consent;
+pub mod discovery;
 pub mod token;
 pub mod userinfo;
 

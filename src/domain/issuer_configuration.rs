@@ -15,14 +15,9 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod client;
-pub mod issuer_configuration;
-pub mod password;
-pub mod token;
-pub mod user;
+#[derive(Clone)]
+pub struct IssuerConfiguration {
+    pub issuer_url: String,
 
-pub use client::Client;
-pub use issuer_configuration::IssuerConfiguration;
-pub use password::Password;
-pub use token::Token;
-pub use user::User;
+    pub algorithm: String,
+}

@@ -50,6 +50,16 @@ impl TokenCreator {
         token.issuer = self.issuer.clone();
         encode(&Header::new(self.algorithm), &token, &self.key)
     }
+
+    pub fn get_key_type(&self) -> String {
+        match self.algorithm {
+            Algorithm::ES384 => "EC".to_string(),
+            Algorithm::PS512 => "RSA".to_string(),
+            _ => {
+                unimplemented!("unsupported token algorithm");
+            }
+        }
+    }
 }
 
 #[derive(Clone)]

@@ -73,6 +73,9 @@ pub fn build(config: Config) -> Result<Server, Error> {
     let authenticator = constructor
         .build_authenticator()
         .ok_or(Error::LoggedBeforeError)?;
+    let issuer_config = constructor
+        .build_issuer_config()
+        .ok_or(Error::LoggedBeforeError)?;
 
     let server = HttpServer::new(move || {
         let token_certificate = token_certificate.clone();
@@ -84,6 +87,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .app_data(web::Data::new(auth_code_store.clone()))
             .app_data(web::Data::new(token_creator.clone()))
             .app_data(web::Data::new(token_validator.clone()))
+            .app_data(web::Data::new(issuer_config.clone()))
             .wrap(
                 CookieSession::private(config.web.secret_key.as_bytes())
                     // ^- encryption is only needed to avoid encoding problems
@@ -106,6 +110,16 @@ pub fn build(config: Config) -> Result<Server, Error> {
             ))
             .service(
                 web::scope(&config.web.path.as_ref().unwrap())
+                    .route(
+                        "/.well-known/openid-configuration",
+                        get().to(endpoints::discovery::get),
+                    )
+                    .route(
+                        "/.well-known/openid-configuration",
+                        all().to(endpoints::method_not_allowed),
+                    )
+                    .route("/jwks", get().to(endpoints::discovery::jwks))
+                    .route("/jwks", all().to(endpoints::method_not_allowed))
                     .route("/authorize", get().to(endpoints::authorize::get))
                     .route("/authorize", post().to(endpoints::authorize::post))
                     .route("/authorize", all().to(endpoints::method_not_allowed))

@@ -21,6 +21,7 @@ use crate::business::token::TokenCreator;
 use crate::business::token::TokenValidator;
 use crate::config::Config;
 use crate::config::Store;
+use crate::domain::IssuerConfiguration;
 use crate::runtime::Error;
 use crate::store::file::*;
 use crate::store::memory::*;
@@ -44,6 +45,13 @@ pub struct Constructor<'a> {
 impl<'a> Constructor<'a> {
     pub fn new(config: &'a Config) -> Self {
         Self { config }
+    }
+
+    pub fn build_issuer_config(&self) -> Option<IssuerConfiguration> {
+        Some(IssuerConfiguration {
+            issuer_url: self.build_token_issuer(),
+            algorithm: self.build_token_creator().ok()?.get_key_type(),
+        })
     }
 
     pub fn build_authenticator(&self) -> Option<Authenticator> {
@@ -96,7 +104,12 @@ impl<'a> Constructor<'a> {
     }
 
     fn build_token_issuer(&self) -> String {
-        let mut token_issuer = self.config.web.bind.to_string();
+        let mut token_issuer = "http".to_string();
+        if self.config.web.tls.is_some() {
+            token_issuer += "s";
+        }
+        token_issuer += "://";
+        token_issuer += &self.config.web.bind;
         if let Some(path) = &self.config.web.path {
             if !path.is_empty() {
                 if !path.starts_with('/') {
@@ -105,6 +118,11 @@ impl<'a> Constructor<'a> {
                 token_issuer += path;
             }
         }
+
+        while token_issuer.ends_with('/') {
+            token_issuer.pop();
+        }
+
         token_issuer
     }
 
