@@ -12,6 +12,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Remember authenticated users
+  ([#3](https://gitlab.com/veenj/tiny-auth/issues/3))
+
 * Support password grants
   ([#9](https://gitlab.com/veenj/tiny-auth/issues/9))
 

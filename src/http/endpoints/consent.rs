@@ -197,6 +197,8 @@ pub async fn post(
         url.query_pairs_mut().extend_pairs(response_parameters);
     }
 
+    session.remove(authorize::SESSION_KEY);
+
     HttpResponse::Found()
         .set_header("Location", url.as_str())
         .finish()
@@ -218,6 +220,7 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
         Ok(req) => req,
     };
 
+    session.remove(authorize::SESSION_KEY);
     let redirect_uri = first_request.redirect_uri.unwrap();
     let mut url = Url::parse(&redirect_uri).expect("should have been validated upon registration");
 

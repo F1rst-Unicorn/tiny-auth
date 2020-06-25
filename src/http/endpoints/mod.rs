@@ -122,7 +122,10 @@ fn is_csrf_valid(input_token: &Option<String>, session: &Session) -> bool {
     match input_token {
         None => false,
         Some(token) => match session.get::<String>(CSRF_SESSION_KEY) {
-            Ok(Some(reference)) => token == &reference,
+            Ok(Some(reference)) => {
+                session.remove(CSRF_SESSION_KEY);
+                token == &reference
+            }
             e => {
                 debug!("token not found in session: {:#?}", e);
                 false
@@ -281,7 +284,7 @@ mod tests {
     }
 
     #[test]
-    pub fn verify_csrf_verification() {
+    pub fn verify_wrong_csrf_verification() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let token = "token".to_string();
@@ -290,6 +293,17 @@ mod tests {
 
         session.set(CSRF_SESSION_KEY, &token).unwrap();
         assert!(!is_csrf_valid(&Some(token.clone() + "wrong"), &session));
+    }
+
+    #[test]
+    pub fn verify_csrf_verification() {
+        let req = test::TestRequest::post().to_http_request();
+        let session = req.get_session();
+        let token = "token".to_string();
+        assert!(!is_csrf_valid(&None, &session));
+        assert!(!is_csrf_valid(&Some(token.clone()), &session));
+
+        session.set(CSRF_SESSION_KEY, &token).unwrap();
         assert!(is_csrf_valid(&Some(token), &session));
     }
 

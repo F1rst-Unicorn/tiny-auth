@@ -73,6 +73,11 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
         _ => {}
     }
 
+    if let Ok(Some(username)) = session.get::<String>(SESSION_KEY) {
+        debug!("Recognised authenticated user '{}'", username);
+        return redirect_successfully(&tera, &session, &username);
+    }
+
     match build_context(&session) {
         Some(context) => {
             render_template_with_context("authenticate.html.j2", StatusCode::OK, &tera, &context)
