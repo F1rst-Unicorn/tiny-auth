@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::domain::RefreshToken;
 use crate::domain::Token;
 
 use jsonwebtoken::decode;
@@ -47,6 +48,16 @@ impl TokenCreator {
     }
 
     pub fn create(&self, mut token: Token) -> Result<String> {
+        token.issuer = self.issuer.clone();
+        encode(&Header::new(self.algorithm), &token, &self.key)
+    }
+
+    pub fn create_refresh_token(
+        &self,
+        mut token: RefreshToken,
+        scopes: Vec<String>,
+    ) -> Result<String> {
+        token.set_scopes(scopes);
         token.issuer = self.issuer.clone();
         encode(&Header::new(self.algorithm), &token, &self.key)
     }

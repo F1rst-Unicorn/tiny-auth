@@ -20,6 +20,7 @@ use crate::domain::user::User;
 
 use chrono::offset::Local;
 use chrono::DateTime;
+use chrono::Duration;
 
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
@@ -99,6 +100,36 @@ impl Token {
 pub enum Audience {
     Single(String),
     Several(Vec<String>),
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct RefreshToken {
+    #[serde(rename = "iss")]
+    pub issuer: String,
+
+    pub access_token: Token,
+
+    #[serde(rename = "exp")]
+    pub expiration: i64,
+
+    pub scopes: Vec<String>,
+}
+
+impl From<Token> for RefreshToken {
+    fn from(token: Token) -> Self {
+        RefreshToken {
+            issuer: "".to_string(),
+            expiration: token.expiration + Duration::minutes(1).num_seconds(),
+            access_token: token,
+            scopes: Vec::new(),
+        }
+    }
+}
+
+impl RefreshToken {
+    pub fn set_scopes(&mut self, scopes: Vec<String>) {
+        self.scopes = scopes;
+    }
 }
 
 #[cfg(test)]

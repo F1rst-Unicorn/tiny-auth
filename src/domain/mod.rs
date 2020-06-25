@@ -24,5 +24,6 @@ pub mod user;
 pub use client::Client;
 pub use issuer_configuration::IssuerConfiguration;
 pub use password::Password;
+pub use token::RefreshToken;
 pub use token::Token;
 pub use user::User;

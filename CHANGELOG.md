@@ -12,6 +12,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Offer refresh tokens
+  ([#17](https://gitlab.com/veenj/tiny-auth/issues/17))
+
 * Remember authenticated users
   ([#3](https://gitlab.com/veenj/tiny-auth/issues/3))
 

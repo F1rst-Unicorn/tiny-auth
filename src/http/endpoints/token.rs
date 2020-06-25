@@ -19,9 +19,10 @@ use super::deserialise_empty_as_none;
 use super::parse_basic_authorization;
 use crate::business::token::TokenCreator;
 use crate::business::Authenticator;
-use crate::domain::client::Client;
-use crate::domain::token::Token;
 use crate::domain::user::User;
+use crate::domain::Client;
+use crate::domain::RefreshToken;
+use crate::domain::Token;
 use crate::http::endpoints::render_json_error;
 use crate::protocol::oauth2;
 use crate::protocol::oauth2::ClientType;
@@ -147,7 +148,7 @@ pub async fn post(
 
     let token = Token::build(&user, &client, Local::now() + Duration::minutes(1));
 
-    let encoded_token = match token_creator.create(token) {
+    let encoded_token = match token_creator.create(token.clone()) {
         Err(e) => {
             debug!("failed to encode token: {}", e);
             return render_json_error(
@@ -157,12 +158,26 @@ pub async fn post(
         }
         Ok(token) => token,
     };
+    let refresh_token = if let oauth2::ClientType::Confidential { .. } = client.client_type {
+        match token_creator.create_refresh_token(RefreshToken::from(token), Vec::new()) {
+            Err(e) => {
+                debug!("failed to encode refresh token: {}", e);
+                return render_json_error(
+                    ProtocolError::OAuth2(oauth2::ProtocolError::ServerError),
+                    "refresh token encoding failed",
+                );
+            }
+            token => token.ok(),
+        }
+    } else {
+        None
+    };
 
     HttpResponse::Ok().json(Response {
         access_token: encoded_token.clone(),
         token_type: "bearer".to_string(),
         expires_in: Some(60),
-        refresh_token: None,
+        refresh_token,
         scope: None,
         id_token: Some(encoded_token),
     })
@@ -957,7 +972,7 @@ mod tests {
         assert!(!response.access_token.is_empty());
         assert_eq!("bearer".to_string(), response.token_type);
         assert_eq!(Some(60), response.expires_in);
-        assert_eq!(None, response.refresh_token);
+        assert!(response.refresh_token.iter().any(|v| !v.is_empty()));
         assert_eq!(None, response.scope);
         assert!(!response.id_token.unwrap().is_empty());
     }
@@ -1000,7 +1015,7 @@ mod tests {
         assert!(!response.access_token.is_empty());
         assert_eq!("bearer".to_string(), response.token_type);
         assert_eq!(Some(60), response.expires_in);
-        assert_eq!(None, response.refresh_token);
+        assert!(response.refresh_token.iter().any(|v| !v.is_empty()));
         assert_eq!(None, response.scope);
         assert!(!response.id_token.unwrap().is_empty());
     }
@@ -1076,7 +1091,7 @@ mod tests {
         assert!(!response.access_token.is_empty());
         assert_eq!("bearer".to_string(), response.token_type);
         assert_eq!(Some(60), response.expires_in);
-        assert_eq!(None, response.refresh_token);
+        assert!(response.refresh_token.iter().any(|v| !v.is_empty()));
         assert_eq!(None, response.scope);
         assert!(!response.id_token.unwrap().is_empty());
     }
@@ -1226,7 +1241,7 @@ mod tests {
         assert!(!response.access_token.is_empty());
         assert_eq!("bearer".to_string(), response.token_type);
         assert_eq!(Some(60), response.expires_in);
-        assert_eq!(None, response.refresh_token);
+        assert!(response.refresh_token.iter().any(|v| !v.is_empty()));
         assert_eq!(None, response.scope);
         assert!(!response.id_token.unwrap().is_empty());
     }

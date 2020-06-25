@@ -19,7 +19,8 @@ use super::deserialise_empty_as_none;
 use super::render_template;
 use super::server_error;
 use crate::business::token::TokenCreator;
-use crate::domain::token::Token;
+use crate::domain::RefreshToken;
+use crate::domain::Token;
 use crate::http::endpoints::authenticate;
 use crate::http::endpoints::authorize;
 use crate::http::endpoints::render_redirect_error;
@@ -167,7 +168,7 @@ pub async fn post(
         let mut token = Token::build(&user, &client, Local::now() + expires_in);
         token.add_nonce(first_request.nonce);
 
-        let encoded_token = match token_creator.create(token) {
+        let encoded_token = match token_creator.create(token.clone()) {
             Err(e) => {
                 debug!("failed to encode token: {}", e);
                 return server_error(&tera);
@@ -179,6 +180,17 @@ pub async fn post(
         }
         if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token)) {
             response_parameters.insert("access_token", encoded_token);
+        }
+        if let oauth2::ClientType::Confidential { .. } = client.client_type {
+            let encoded_refresh_token =
+                match token_creator.create_refresh_token(RefreshToken::from(token), Vec::new()) {
+                    Err(e) => {
+                        debug!("failed to encode refresh token: {}", e);
+                        return server_error(&tera);
+                    }
+                    Ok(token) => token,
+                };
+            response_parameters.insert("refresh_token", encoded_refresh_token);
         }
 
         response_parameters.insert("token_type", "bearer".to_string());
