@@ -18,6 +18,7 @@
 use super::deserialise_empty_as_none;
 use super::parse_basic_authorization;
 use crate::business::token::TokenCreator;
+use crate::business::token::TokenValidator;
 use crate::business::Authenticator;
 use crate::domain::user::User;
 use crate::domain::Client;
@@ -75,6 +76,10 @@ pub struct Request {
     #[serde(default)]
     #[serde(deserialize_with = "deserialise_empty_as_none")]
     password: Option<String>,
+
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    refresh_token: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -96,6 +101,7 @@ pub struct Response {
     id_token: Option<String>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn post(
     headers: HttpRequest,
     request: web::Form<Request>,
@@ -104,6 +110,7 @@ pub async fn post(
     auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
     token_creator: web::Data<TokenCreator>,
     authenticator: web::Data<Authenticator>,
+    token_validator: web::Data<TokenValidator>,
 ) -> HttpResponse {
     let grant_type = match &request.grant_type {
         None => {
@@ -115,38 +122,70 @@ pub async fn post(
         Some(grant_type) => grant_type,
     };
 
-    let result = match grant_type {
-        GrantType::AuthorizationCode => {
-            grant_with_authorization_code(
+    let generate_refresh_token;
+
+    let token: Token = match grant_type {
+        GrantType::RefreshToken => {
+            generate_refresh_token = true;
+            match grant_with_refresh_token(
                 headers,
                 request,
                 client_store,
-                user_store,
-                auth_code_store,
                 authenticator,
+                token_validator,
             )
             .await
-        }
-        GrantType::ClientCredentials => {
-            grant_with_client_credentials(headers, client_store, authenticator).await
-        }
-        GrantType::Password => {
-            grant_with_password(headers, request, client_store, authenticator).await
+            {
+                Err(e) => return e,
+                Ok(t) => t,
+            }
         }
         _ => {
-            return render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::UnsupportedGrantType),
-                "invalid grant_type",
-            );
+            let result = match grant_type {
+                GrantType::AuthorizationCode => {
+                    grant_with_authorization_code(
+                        headers,
+                        request,
+                        client_store,
+                        user_store,
+                        auth_code_store,
+                        authenticator,
+                    )
+                    .await
+                }
+                GrantType::ClientCredentials => {
+                    grant_with_client_credentials(headers, client_store, authenticator).await
+                }
+                GrantType::Password => {
+                    grant_with_password(headers, request, client_store, authenticator).await
+                }
+                _ => {
+                    return render_json_error(
+                        ProtocolError::OAuth2(oauth2::ProtocolError::UnsupportedGrantType),
+                        "invalid grant_type",
+                    );
+                }
+            };
+
+            let (user, client, auth_time) = match result {
+                Err(r) => return r,
+                Ok(x) => x,
+            };
+
+            generate_refresh_token = match client.client_type {
+                ClientType::Confidential { .. } => true,
+                _ => false,
+            };
+
+            Token::build(
+                &user,
+                &client,
+                Local::now(),
+                Duration::minutes(1),
+                auth_time,
+            )
         }
     };
-
-    let (user, client) = match result {
-        Err(r) => return r,
-        Ok(x) => x,
-    };
-
-    let token = Token::build(&user, &client, Local::now() + Duration::minutes(1));
 
     let encoded_token = match token_creator.create(token.clone()) {
         Err(e) => {
@@ -158,8 +197,12 @@ pub async fn post(
         }
         Ok(token) => token,
     };
-    let refresh_token = if let oauth2::ClientType::Confidential { .. } = client.client_type {
-        match token_creator.create_refresh_token(RefreshToken::from(token), Vec::new()) {
+    let refresh_token = if generate_refresh_token {
+        match token_creator.create_refresh_token(RefreshToken::from(
+            token,
+            Duration::minutes(1),
+            Vec::new(),
+        )) {
             Err(e) => {
                 debug!("failed to encode refresh token: {}", e);
                 return render_json_error(
@@ -190,7 +233,7 @@ async fn grant_with_authorization_code(
     user_store: web::Data<Arc<dyn UserStore>>,
     auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
     authenticator: web::Data<Authenticator>,
-) -> Result<(User, Client), HttpResponse> {
+) -> Result<(User, Client, i64), HttpResponse> {
     if request.redirect_uri.is_none() {
         return Err(render_json_error(
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
@@ -225,14 +268,12 @@ async fn grant_with_authorization_code(
     };
 
     if let ClientType::Confidential { .. } = client.client_type {
-        if let Err(r) = authenticate_client(
+        authenticate_client(
             headers,
             (*client_store).clone(),
             authenticator,
             request.client_id.clone(),
-        ) {
-            return Err(r);
-        }
+        )?;
     }
 
     let code = request.code.as_ref().unwrap();
@@ -280,20 +321,20 @@ async fn grant_with_authorization_code(
         Some(user) => user,
     };
 
-    Ok((user, client))
+    Ok((user, client, record.auth_time.timestamp()))
 }
 
 async fn grant_with_client_credentials(
     headers: HttpRequest,
     client_store: web::Data<Arc<dyn ClientStore>>,
     authenticator: web::Data<Authenticator>,
-) -> Result<(User, Client), HttpResponse> {
-    let client = match authenticate_client(headers, (*client_store).clone(), authenticator, None) {
-        Err(r) => return Err(r),
-        Ok(client) => client,
-    };
-
-    Ok((client.clone().try_into().unwrap(), client))
+) -> Result<(User, Client, i64), HttpResponse> {
+    let client = authenticate_client(headers, (*client_store).clone(), authenticator, None)?;
+    Ok((
+        client.clone().try_into().unwrap(),
+        client,
+        Local::now().timestamp(),
+    ))
 }
 
 async fn grant_with_password(
@@ -301,7 +342,7 @@ async fn grant_with_password(
     request: web::Form<Request>,
     client_store: web::Data<Arc<dyn ClientStore>>,
     authenticator: web::Data<Authenticator>,
-) -> Result<(User, Client), HttpResponse> {
+) -> Result<(User, Client, i64), HttpResponse> {
     let username = match &request.username {
         None => {
             return Err(render_json_error(
@@ -323,15 +364,12 @@ async fn grant_with_password(
     };
 
     if headers.headers().get("Authorization").is_some() {
-        let client = match authenticate_client(
+        let client = authenticate_client(
             headers,
             (*client_store).clone(),
             authenticator.clone(),
             None,
-        ) {
-            Ok(client) => client,
-            Err(e) => return Err(e),
-        };
+        )?;
 
         let user = match authenticator.authenticate_user(&username, &password) {
             None => {
@@ -343,13 +381,47 @@ async fn grant_with_password(
             Some(user) => user,
         };
 
-        Ok((user, client))
+        Ok((user, client, Local::now().timestamp()))
     } else {
         Err(render_json_error(
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
             "Missing authorization header",
         ))
     }
+}
+
+async fn grant_with_refresh_token(
+    headers: HttpRequest,
+    request: web::Form<Request>,
+    client_store: web::Data<Arc<dyn ClientStore>>,
+    authenticator: web::Data<Authenticator>,
+    validator: web::Data<TokenValidator>,
+) -> Result<Token, HttpResponse> {
+    let raw_token = match &request.refresh_token {
+        None => {
+            return Err(render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "Missing refresh token",
+            ));
+        }
+        Some(token) => token,
+    };
+
+    let refresh_token = match validator.validate::<RefreshToken>(&raw_token) {
+        None => {
+            return Err(render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
+                "Invalid refresh token",
+            ));
+        }
+        Some(token) => token,
+    };
+
+    authenticate_client(headers, (*client_store).clone(), authenticator, None)?;
+
+    let mut token = refresh_token.access_token;
+    token.renew(Local::now(), Duration::minutes(1));
+    Ok(token)
 }
 
 fn authenticate_client(
@@ -432,6 +504,8 @@ mod tests {
     use crate::http::state::tests::build_test_authenticator;
     use crate::http::state::tests::build_test_client_store;
     use crate::http::state::tests::build_test_token_creator;
+    use crate::http::state::tests::build_test_token_issuer;
+    use crate::http::state::tests::build_test_token_validator;
     use crate::http::state::tests::build_test_user_store;
     use crate::protocol::oauth2::ProtocolError;
     use crate::protocol::oidc::ProtocolError as OidcError;
@@ -451,6 +525,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -461,6 +536,7 @@ mod tests {
             build_test_auth_code_store(),
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -483,6 +559,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -493,6 +570,7 @@ mod tests {
             build_test_auth_code_store(),
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -515,6 +593,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -525,6 +604,7 @@ mod tests {
             build_test_auth_code_store(),
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -547,6 +627,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -557,6 +638,7 @@ mod tests {
             build_test_auth_code_store(),
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -579,6 +661,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -589,6 +672,7 @@ mod tests {
             build_test_auth_code_store(),
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -612,6 +696,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -622,6 +707,7 @@ mod tests {
             build_test_auth_code_store(),
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -636,7 +722,13 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
-            .get_authorization_code(PUBLIC_CLIENT, USER, &redirect_uri, Local::now())
+            .get_authorization_code(
+                PUBLIC_CLIENT,
+                USER,
+                &redirect_uri,
+                Local::now(),
+                Local::now(),
+            )
             .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
@@ -646,6 +738,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -656,6 +749,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -671,7 +765,13 @@ mod tests {
         let auth_code_store = build_test_auth_code_store();
         let creation_time = Local::now() - Duration::minutes(2 * AUTH_CODE_LIFE_TIME);
         let auth_code = auth_code_store
-            .get_authorization_code(PUBLIC_CLIENT, USER, &redirect_uri, creation_time)
+            .get_authorization_code(
+                PUBLIC_CLIENT,
+                USER,
+                &redirect_uri,
+                creation_time,
+                Local::now(),
+            )
             .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
@@ -681,6 +781,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -691,6 +792,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -705,7 +807,13 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
-            .get_authorization_code(PUBLIC_CLIENT, USER, &redirect_uri, Local::now())
+            .get_authorization_code(
+                PUBLIC_CLIENT,
+                USER,
+                &redirect_uri,
+                Local::now(),
+                Local::now(),
+            )
             .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
@@ -715,6 +823,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -725,6 +834,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -744,7 +854,13 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
-            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .get_authorization_code(
+                CONFIDENTIAL_CLIENT,
+                USER,
+                &redirect_uri,
+                Local::now(),
+                Local::now(),
+            )
             .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
@@ -754,6 +870,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -764,6 +881,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -783,7 +901,13 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
-            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .get_authorization_code(
+                CONFIDENTIAL_CLIENT,
+                USER,
+                &redirect_uri,
+                Local::now(),
+                Local::now(),
+            )
             .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
@@ -793,6 +917,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -803,6 +928,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -822,7 +948,13 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
-            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .get_authorization_code(
+                CONFIDENTIAL_CLIENT,
+                USER,
+                &redirect_uri,
+                Local::now(),
+                Local::now(),
+            )
             .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
@@ -832,6 +964,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -842,6 +975,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -861,7 +995,13 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
-            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .get_authorization_code(
+                CONFIDENTIAL_CLIENT,
+                USER,
+                &redirect_uri,
+                Local::now(),
+                Local::now(),
+            )
             .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
@@ -871,6 +1011,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -881,6 +1022,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -903,7 +1045,13 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
-            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .get_authorization_code(
+                CONFIDENTIAL_CLIENT,
+                USER,
+                &redirect_uri,
+                Local::now(),
+                Local::now(),
+            )
             .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
@@ -913,6 +1061,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -923,6 +1072,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -944,7 +1094,13 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
-            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .get_authorization_code(
+                CONFIDENTIAL_CLIENT,
+                USER,
+                &redirect_uri,
+                Local::now(),
+                Local::now(),
+            )
             .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
@@ -954,6 +1110,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -964,6 +1121,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -987,7 +1145,13 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
-            .get_authorization_code(CONFIDENTIAL_CLIENT, USER, &redirect_uri, Local::now())
+            .get_authorization_code(
+                CONFIDENTIAL_CLIENT,
+                USER,
+                &redirect_uri,
+                Local::now(),
+                Local::now(),
+            )
             .await;
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
@@ -997,6 +1161,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -1007,6 +1172,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -1036,6 +1202,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -1046,6 +1213,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -1073,6 +1241,7 @@ mod tests {
             scope: None,
             username: None,
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -1083,6 +1252,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -1112,6 +1282,7 @@ mod tests {
             scope: None,
             username: None,
             password: Some(USER.to_string()),
+            refresh_token: None,
         });
 
         let resp = post(
@@ -1122,6 +1293,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -1149,6 +1321,7 @@ mod tests {
             scope: None,
             username: Some(USER.to_string()),
             password: None,
+            refresh_token: None,
         });
 
         let resp = post(
@@ -1159,6 +1332,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -1186,6 +1360,7 @@ mod tests {
             scope: None,
             username: Some(USER.to_string()),
             password: Some(USER.to_string()),
+            refresh_token: None,
         });
 
         let resp = post(
@@ -1196,6 +1371,7 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 
@@ -1223,6 +1399,7 @@ mod tests {
             scope: None,
             username: Some(USER.to_string()),
             password: Some(USER.to_string()),
+            refresh_token: None,
         });
 
         let resp = post(
@@ -1233,6 +1410,164 @@ mod tests {
             auth_code_store,
             build_test_token_creator(),
             build_test_authenticator(),
+            build_test_token_validator(),
+        )
+        .await;
+
+        assert_eq!(resp.status(), http::StatusCode::OK);
+        let response = read_response::<Response>(resp).await;
+        assert!(!response.access_token.is_empty());
+        assert_eq!("bearer".to_string(), response.token_type);
+        assert_eq!(Some(60), response.expires_in);
+        assert!(response.refresh_token.iter().any(|v| !v.is_empty()));
+        assert_eq!(None, response.scope);
+        assert!(!response.id_token.unwrap().is_empty());
+    }
+
+    #[actix_rt::test]
+    async fn missing_refresh_token_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let form = Form(Request {
+            grant_type: Some(GrantType::RefreshToken),
+            code: None,
+            client_id: None,
+            redirect_uri: None,
+            scope: None,
+            username: None,
+            password: None,
+            refresh_token: None,
+        });
+
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+            build_test_authenticator(),
+            build_test_token_validator(),
+        )
+        .await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn invalid_refresh_token_is_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let form = Form(Request {
+            grant_type: Some(GrantType::RefreshToken),
+            code: None,
+            client_id: None,
+            redirect_uri: None,
+            scope: None,
+            username: None,
+            password: None,
+            refresh_token: Some("dummy".to_string()),
+        });
+
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+            build_test_authenticator(),
+            build_test_token_validator(),
+        )
+        .await;
+
+        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+    }
+
+    #[actix_rt::test]
+    async fn invalid_client_credentials_are_rejected() {
+        let auth = CONFIDENTIAL_CLIENT.to_string() + ":wrong";
+        let encoded_auth = base64::encode(auth);
+        let auth_code_store = build_test_auth_code_store();
+        let req = test::TestRequest::post()
+            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .to_http_request();
+
+        let token_creator = build_test_token_creator();
+        let token = Token::build(
+            &build_test_user_store().get(USER).unwrap(),
+            &build_test_client_store().get(CONFIDENTIAL_CLIENT).unwrap(),
+            Local::now(),
+            Duration::minutes(3),
+            0,
+        );
+        let refresh_token = token_creator
+            .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), Vec::new()))
+            .unwrap();
+        let form = Form(Request {
+            grant_type: Some(GrantType::RefreshToken),
+            code: None,
+            client_id: None,
+            redirect_uri: None,
+            scope: None,
+            username: None,
+            password: None,
+            refresh_token: Some(refresh_token),
+        });
+
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+            build_test_authenticator(),
+            build_test_token_validator(),
+        )
+        .await;
+
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
+    }
+    #[actix_rt::test]
+    async fn successful_refresh_token_authentication() {
+        let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
+        let encoded_auth = base64::encode(auth);
+        let auth_code_store = build_test_auth_code_store();
+        let req = test::TestRequest::post()
+            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .to_http_request();
+
+        let token_creator = build_test_token_creator();
+        let mut token = Token::build(
+            &build_test_user_store().get(USER).unwrap(),
+            &build_test_client_store().get(CONFIDENTIAL_CLIENT).unwrap(),
+            Local::now(),
+            Duration::minutes(3),
+            0,
+        );
+        token.set_issuer(&build_test_token_issuer());
+        let refresh_token = token_creator
+            .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), Vec::new()))
+            .unwrap();
+        let form = Form(Request {
+            grant_type: Some(GrantType::RefreshToken),
+            code: None,
+            client_id: None,
+            redirect_uri: None,
+            scope: None,
+            username: None,
+            password: None,
+            refresh_token: Some(refresh_token),
+        });
+
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+            build_test_authenticator(),
+            build_test_token_validator(),
         )
         .await;
 

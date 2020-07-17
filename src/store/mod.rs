@@ -45,6 +45,8 @@ pub struct AuthorizationCodeRecord {
     pub stored_duration: Duration,
 
     pub username: String,
+
+    pub auth_time: DateTime<Local>,
 }
 
 #[async_trait]
@@ -55,6 +57,7 @@ pub trait AuthorizationCodeStore: Send + Sync {
         user: &str,
         redirect_uri: &str,
         now: DateTime<Local>,
+        auth_time: DateTime<Local>,
     ) -> String;
 
     async fn validate(
@@ -133,7 +136,8 @@ pub mod tests {
     }
 
     struct TestAuthorizationCodeStore {
-        store: RefCell<HashMap<(String, String), (String, String, DateTime<Local>)>>,
+        store:
+            RefCell<HashMap<(String, String), (String, String, DateTime<Local>, DateTime<Local>)>>,
     }
 
     unsafe impl Sync for TestAuthorizationCodeStore {}
@@ -147,10 +151,11 @@ pub mod tests {
             user: &str,
             redirect_uri: &str,
             now: DateTime<Local>,
+            auth_time: DateTime<Local>,
         ) -> String {
             self.store.borrow_mut().insert(
                 (client_id.to_string(), now.to_rfc3339()),
-                (redirect_uri.to_string(), user.to_string(), now),
+                (redirect_uri.to_string(), user.to_string(), now, auth_time),
             );
             now.to_rfc3339()
         }
@@ -161,7 +166,7 @@ pub mod tests {
             authorization_code: &str,
             now: DateTime<Local>,
         ) -> Option<AuthorizationCodeRecord> {
-            let (redirect_uri, user, creation_datetime) = self
+            let (redirect_uri, user, creation_datetime, auth_time) = self
                 .store
                 .borrow_mut()
                 .remove(&(client_id.to_string(), authorization_code.to_string()))?;
@@ -169,6 +174,7 @@ pub mod tests {
                 redirect_uri,
                 stored_duration: now.signed_duration_since(creation_datetime),
                 username: user,
+                auth_time,
             })
         }
     }

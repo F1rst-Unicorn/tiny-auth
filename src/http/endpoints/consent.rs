@@ -47,6 +47,7 @@ use tera::Tera;
 
 use chrono::offset::Local;
 use chrono::Duration;
+use chrono::TimeZone;
 
 use log::debug;
 use log::error;
@@ -116,6 +117,15 @@ pub async fn post(
         Ok(Some(username)) => username,
     };
 
+    let auth_time = match session.get::<i64>(authenticate::AUTH_TIME_SESSION_KEY) {
+        Err(_) | Ok(None) => {
+            debug!("unsolicited consent request");
+            return render_invalid_consent_request(&tera);
+        }
+        Ok(Some(username)) => username,
+    };
+    let auth_time = Local.timestamp(auth_time, 0);
+
     let first_request = match serde_urlencoded::from_str::<authorize::Request>(&first_request) {
         Err(e) => {
             error!("Failed to deserialize initial request. {}", e);
@@ -138,7 +148,13 @@ pub async fn post(
 
     if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Code)) {
         let code = auth_code_store
-            .get_authorization_code(client_name, &username, &redirect_uri, Local::now())
+            .get_authorization_code(
+                client_name,
+                &username,
+                &redirect_uri,
+                Local::now(),
+                auth_time,
+            )
             .await;
         response_parameters.insert("code", code);
     }
@@ -165,8 +181,16 @@ pub async fn post(
 
         let expires_in = Duration::minutes(1);
 
-        let mut token = Token::build(&user, &client, Local::now() + expires_in);
-        token.add_nonce(first_request.nonce);
+        let auth_time = match session.get::<i64>(authenticate::AUTH_TIME_SESSION_KEY) {
+            Err(_) | Ok(None) => {
+                debug!("missing auth_time");
+                return render_invalid_consent_request(&tera);
+            }
+            Ok(Some(req)) => req,
+        };
+
+        let mut token = Token::build(&user, &client, Local::now(), expires_in, auth_time);
+        token.set_nonce(first_request.nonce);
 
         let encoded_token = match token_creator.create(token.clone()) {
             Err(e) => {
@@ -182,14 +206,15 @@ pub async fn post(
             response_parameters.insert("access_token", encoded_token);
         }
         if let oauth2::ClientType::Confidential { .. } = client.client_type {
-            let encoded_refresh_token =
-                match token_creator.create_refresh_token(RefreshToken::from(token), Vec::new()) {
-                    Err(e) => {
-                        debug!("failed to encode refresh token: {}", e);
-                        return server_error(&tera);
-                    }
-                    Ok(token) => token,
-                };
+            let encoded_refresh_token = match token_creator
+                .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), Vec::new()))
+            {
+                Err(e) => {
+                    debug!("failed to encode refresh token: {}", e);
+                    return server_error(&tera);
+                }
+                Ok(token) => token,
+            };
             response_parameters.insert("refresh_token", encoded_refresh_token);
         }
 
@@ -369,6 +394,7 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         session.set(authorize::SESSION_KEY, "dummy").unwrap();
+        session.set(authenticate::AUTH_TIME_SESSION_KEY, 0).unwrap();
         let csrftoken = generate_csrf_token();
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
@@ -415,6 +441,7 @@ mod tests {
                 &serde_urlencoded::to_string(first_request.clone()).unwrap(),
             )
             .unwrap();
+        session.set(authenticate::AUTH_TIME_SESSION_KEY, 0).unwrap();
         session.set(authenticate::SESSION_KEY, USER).unwrap();
         let csrftoken = generate_csrf_token();
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
@@ -480,6 +507,7 @@ mod tests {
                 &serde_urlencoded::to_string(first_request.clone()).unwrap(),
             )
             .unwrap();
+        session.set(authenticate::AUTH_TIME_SESSION_KEY, 0).unwrap();
         session.set(authenticate::SESSION_KEY, USER).unwrap();
         let csrftoken = generate_csrf_token();
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();

@@ -29,42 +29,42 @@ use serde_derive::Serialize;
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Token {
     #[serde(rename = "iss")]
-    pub issuer: String,
+    issuer: String,
 
     #[serde(rename = "sub")]
-    pub subject: String,
+    subject: String,
 
     #[serde(rename = "aud")]
-    pub audience: Audience,
+    audience: Audience,
 
     #[serde(rename = "exp")]
-    pub expiration: i64,
+    expiration: i64,
 
     #[serde(rename = "iat")]
-    pub issuance_time: i64,
+    issuance_time: i64,
 
     #[serde(rename = "auth_time")]
     #[serde(skip_serializing_if = "is_zero")]
     #[serde(default)]
-    pub auth_time: i64,
+    auth_time: i64,
 
     #[serde(rename = "nonce")]
     #[serde(skip_serializing_if = "String::is_empty")]
     #[serde(default)]
-    pub nonce: String,
+    nonce: String,
 
     #[serde(rename = "acr")]
     #[serde(skip_serializing_if = "String::is_empty")]
     #[serde(default)]
-    pub authentication_context_class_reference: String,
+    authentication_context_class_reference: String,
 
     #[serde(rename = "amr")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
-    pub authentication_methods_request: Vec<String>,
+    authentication_methods_request: Vec<String>,
 
     #[serde(rename = "azp")]
-    pub authorized_party: String,
+    authorized_party: String,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde needs this API
@@ -73,14 +73,20 @@ fn is_zero(n: &i64) -> bool {
 }
 
 impl Token {
-    pub fn build(user: &User, client: &Client, expiration: DateTime<Local>) -> Self {
+    pub fn build(
+        user: &User,
+        client: &Client,
+        now: DateTime<Local>,
+        expiration: Duration,
+        auth_time: i64,
+    ) -> Self {
         Self {
             issuer: "".to_string(),
             subject: user.name.clone(),
             audience: Audience::Single(client.client_id.clone()),
-            expiration: expiration.timestamp(),
-            issuance_time: Local::now().timestamp(),
-            auth_time: 0,
+            expiration: (now + expiration).timestamp(),
+            issuance_time: now.timestamp(),
+            auth_time,
             nonce: "".to_string(),
             authentication_context_class_reference: "".to_string(),
             authentication_methods_request: vec![],
@@ -88,10 +94,19 @@ impl Token {
         }
     }
 
-    pub fn add_nonce(&mut self, nonce: Option<String>) {
+    pub fn set_nonce(&mut self, nonce: Option<String>) {
         if let Some(nonce) = nonce {
             self.nonce = nonce;
         }
+    }
+
+    pub fn set_issuer(&mut self, issuer: &str) {
+        self.issuer = issuer.to_string();
+    }
+
+    pub fn renew(&mut self, now: DateTime<Local>, expiration: Duration) {
+        self.issuance_time = now.clone().timestamp();
+        self.expiration = (now + expiration).timestamp();
     }
 }
 
@@ -115,20 +130,19 @@ pub struct RefreshToken {
     pub scopes: Vec<String>,
 }
 
-impl From<Token> for RefreshToken {
-    fn from(token: Token) -> Self {
+impl RefreshToken {
+    pub fn from(token: Token, additional_expiration: Duration, scopes: Vec<String>) -> Self {
         RefreshToken {
-            issuer: "".to_string(),
-            expiration: token.expiration + Duration::minutes(1).num_seconds(),
+            issuer: token.issuer.clone(),
+            expiration: token.expiration + additional_expiration.num_seconds(),
             access_token: token,
-            scopes: Vec::new(),
+            scopes,
         }
     }
-}
 
-impl RefreshToken {
-    pub fn set_scopes(&mut self, scopes: Vec<String>) {
-        self.scopes = scopes;
+    pub fn set_issuer(&mut self, issuer: &str) {
+        self.issuer = issuer.to_string();
+        self.access_token.set_issuer(issuer);
     }
 }
 

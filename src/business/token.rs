@@ -27,6 +27,8 @@ use jsonwebtoken::EncodingKey;
 use jsonwebtoken::Header;
 use jsonwebtoken::Validation;
 
+use serde::de::DeserializeOwned;
+
 use log::debug;
 
 #[derive(Clone)]
@@ -48,17 +50,12 @@ impl TokenCreator {
     }
 
     pub fn create(&self, mut token: Token) -> Result<String> {
-        token.issuer = self.issuer.clone();
+        token.set_issuer(&self.issuer);
         encode(&Header::new(self.algorithm), &token, &self.key)
     }
 
-    pub fn create_refresh_token(
-        &self,
-        mut token: RefreshToken,
-        scopes: Vec<String>,
-    ) -> Result<String> {
-        token.set_scopes(scopes);
-        token.issuer = self.issuer.clone();
+    pub fn create_refresh_token(&self, mut token: RefreshToken) -> Result<String> {
+        token.set_issuer(&self.issuer);
         encode(&Header::new(self.algorithm), &token, &self.key)
     }
 
@@ -95,8 +92,8 @@ impl TokenValidator {
         }
     }
 
-    pub fn validate(&self, token: &str) -> Option<Token> {
-        decode(token, &self.key, &self.validation)
+    pub fn validate<T: DeserializeOwned>(&self, token: &str) -> Option<T> {
+        decode::<T>(token, &self.key, &self.validation)
             .map(|v| v.claims)
             .map_err(|e| {
                 debug!("Token validation failed: {}", e);

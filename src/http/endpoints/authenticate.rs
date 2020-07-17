@@ -32,6 +32,8 @@ use actix_session::Session;
 
 use url::Url;
 
+use chrono::Local;
+
 use tera::Context;
 use tera::Tera;
 
@@ -43,8 +45,9 @@ use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
 pub const SESSION_KEY: &str = "b";
+pub const AUTH_TIME_SESSION_KEY: &str = "t";
 const ERROR_CODE_SESSION_KEY: &str = "e";
-const TRIES_LEFT_SESSION_KEY: &str = "t";
+const TRIES_LEFT_SESSION_KEY: &str = "l";
 
 #[derive(Serialize, Deserialize)]
 pub struct Request {
@@ -209,6 +212,10 @@ fn build_context(session: &Session) -> Option<Context> {
 fn redirect_successfully(tera: &Tera, session: &Session, user: &str) -> HttpResponse {
     if let Err(e) = session.set(SESSION_KEY, user) {
         error!("Failed to serialise session: {}", e);
+        return server_error(tera);
+    }
+    if let Err(e) = session.set(AUTH_TIME_SESSION_KEY, Local::now().timestamp()) {
+        error!("Failed to serialise auth_time: {}", e);
         return server_error(tera);
     }
     HttpResponse::SeeOther()

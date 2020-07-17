@@ -45,6 +45,8 @@ struct AuthCodeValue {
     user: String,
 
     insertion_time: DateTime<Local>,
+
+    auth_time: DateTime<Local>,
 }
 
 pub struct MemoryAuthorizationCodeStore {
@@ -86,6 +88,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
         user: &str,
         redirect_uri: &str,
         now: DateTime<Local>,
+        auth_time: DateTime<Local>,
     ) -> String {
         let mut store = self.store.write().await;
         let mut key = AuthCodeKey {
@@ -104,6 +107,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
                         redirect_uri: redirect_uri.to_string(),
                         user: user.to_string(),
                         insertion_time: now,
+                        auth_time,
                     },
                 );
                 break auth_code;
@@ -128,6 +132,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
             redirect_uri: value.redirect_uri.clone(),
             stored_duration: now.signed_duration_since(value.insertion_time),
             username: value.user,
+            auth_time: value.auth_time,
         })
     }
 }
@@ -142,7 +147,7 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code("client", "user", "redirect_uri", date)
+            .get_authorization_code("client", "user", "redirect_uri", date, date)
             .await;
 
         let output = uut.validate("client", &auth_code, date + duration).await;
@@ -160,7 +165,7 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code("client", "user", "redirect_uri", date)
+            .get_authorization_code("client", "user", "redirect_uri", date, date)
             .await;
 
         uut.clear_expired_codes(date + duration + duration, duration)
@@ -177,7 +182,7 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code("client", "user", "redirect_uri", date)
+            .get_authorization_code("client", "user", "redirect_uri", date, date)
             .await;
 
         uut.clear_expired_codes(date + duration, duration).await;
@@ -197,7 +202,7 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code("client", "user", "redirect_uri", date)
+            .get_authorization_code("client", "user", "redirect_uri", date, date)
             .await;
 
         uut.clear_expired_codes(date + duration + Duration::nanoseconds(1), duration)

@@ -17,6 +17,7 @@
 
 use super::parse_bearer_authorization;
 use crate::business::token::TokenValidator;
+use crate::domain::Token;
 
 use actix_web::web::Data;
 use actix_web::HttpRequest;
@@ -42,7 +43,7 @@ pub async fn handle(headers: HttpRequest, validator: Data<TokenValidator>) -> Ht
         }
     };
 
-    let token = match validator.validate(&token) {
+    let token = match validator.validate::<Token>(&token) {
         None => {
             return HttpResponse::Unauthorized()
                 .header(
@@ -105,6 +106,7 @@ mod tests {
         let validator = build_test_token_validator();
         let user = build_test_user_store().get(USER).unwrap();
         let client = build_test_client_store().get(PUBLIC_CLIENT).unwrap();
+        let expiration = Duration::minutes(3);
         let request = test::TestRequest::post()
             .header(
                 "authorization",
@@ -113,7 +115,9 @@ mod tests {
                         .create(Token::build(
                             &user,
                             &client,
-                            Local::now() - Duration::minutes(3),
+                            Local::now() - expiration,
+                            Duration::zero(),
+                            0,
                         ))
                         .unwrap(),
             )
@@ -130,8 +134,9 @@ mod tests {
         let validator = build_test_token_validator();
         let user = build_test_user_store().get(USER).unwrap();
         let client = build_test_client_store().get(PUBLIC_CLIENT).unwrap();
-        let mut token = Token::build(&user, &client, Local::now() + Duration::minutes(3));
-        token.issuer = build_test_token_issuer();
+        let expiration = Duration::minutes(3);
+        let mut token = Token::build(&user, &client, Local::now() + expiration, expiration, 0);
+        token.set_issuer(&build_test_token_issuer());
         let request = test::TestRequest::post()
             .header(
                 "authorization",
