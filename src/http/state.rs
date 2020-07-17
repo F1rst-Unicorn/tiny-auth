@@ -113,7 +113,7 @@ impl<'a> Constructor<'a> {
             token_issuer += "s";
         }
         token_issuer += "://";
-        token_issuer += &self.config.web.bind;
+        token_issuer += &self.config.web.domain;
         if let Some(path) = &self.config.web.path {
             if !path.is_empty() {
                 if !path.starts_with('/') {
