@@ -5,6 +5,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+* Fix standard compliance for confidential clients when requesting tokens
+  ([#38](https://gitlab.com/veenj/tiny-auth/issues/38))
+
 ## [0.2.0]
 
 ### Fixed

@@ -241,13 +241,6 @@ async fn grant_with_authorization_code(
         ));
     }
 
-    if request.client_id.is_none() {
-        return Err(render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-            "Missing parameter client_id",
-        ));
-    }
-
     if request.code.is_none() {
         return Err(render_json_error(
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
@@ -255,36 +248,49 @@ async fn grant_with_authorization_code(
         ));
     }
 
-    let client_id = request.client_id.as_ref().unwrap();
-    let client = match client_store.get(client_id) {
-        None => {
-            debug!("client '{}' not found", client_id);
-            return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-                "client id or password wrong",
-            ));
-        }
-        Some(client) => client,
-    };
+    let client = match authenticate_client(headers, (*client_store).clone(), authenticator) {
+        Err(_) => {
+            let client_id = match &request.client_id {
+                None => {
+                    return Err(render_json_error(
+                        ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                        "Missing parameter client_id",
+                    ))
+                }
+                Some(client_id) => client_id,
+            };
+            let client = match client_store.get(&client_id) {
+                None => {
+                    debug!("client '{}' not found", client_id);
+                    return Err(render_json_error(
+                        ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
+                        "client id or password wrong",
+                    ));
+                }
+                Some(client) => client,
+            };
 
-    if let ClientType::Confidential { .. } = client.client_type {
-        authenticate_client(
-            headers,
-            (*client_store).clone(),
-            authenticator,
-            request.client_id.clone(),
-        )?;
-    }
+            if let ClientType::Confidential { .. } = client.client_type {
+                return Err(render_json_error(
+                    ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
+                    "Confidential client has to authenticate",
+                ));
+            }
+
+            client
+        }
+        Ok(client) => client,
+    };
 
     let code = request.code.as_ref().unwrap();
     let record = match auth_code_store
-        .validate(client_id, &code, Local::now())
+        .validate(&client.client_id, &code, Local::now())
         .await
     {
         None => {
             debug!(
                 "No authorization code found for client '{}' with code '{}'",
-                client_id, code
+                &client.client_id, code
             );
             return Err(render_json_error(
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
@@ -329,7 +335,7 @@ async fn grant_with_client_credentials(
     client_store: web::Data<Arc<dyn ClientStore>>,
     authenticator: web::Data<Authenticator>,
 ) -> Result<(User, Client, i64), HttpResponse> {
-    let client = authenticate_client(headers, (*client_store).clone(), authenticator, None)?;
+    let client = authenticate_client(headers, (*client_store).clone(), authenticator)?;
     Ok((
         client.clone().try_into().unwrap(),
         client,
@@ -364,12 +370,7 @@ async fn grant_with_password(
     };
 
     if headers.headers().get("Authorization").is_some() {
-        let client = authenticate_client(
-            headers,
-            (*client_store).clone(),
-            authenticator.clone(),
-            None,
-        )?;
+        let client = authenticate_client(headers, (*client_store).clone(), authenticator.clone())?;
 
         let user = match authenticator.authenticate_user(&username, &password) {
             None => {
@@ -417,7 +418,7 @@ async fn grant_with_refresh_token(
         Some(token) => token,
     };
 
-    authenticate_client(headers, (*client_store).clone(), authenticator, None)?;
+    authenticate_client(headers, (*client_store).clone(), authenticator)?;
 
     let mut token = refresh_token.access_token;
     token.renew(Local::now(), Duration::minutes(1));
@@ -428,7 +429,6 @@ fn authenticate_client(
     headers: HttpRequest,
     client_store: Arc<Arc<dyn ClientStore>>,
     authenticator: web::Data<Authenticator>,
-    client_id: Option<String>,
 ) -> Result<Client, HttpResponse> {
     let (client_name, password) = match headers.headers().get("Authorization") {
         Some(value) => match parse_basic_authorization(value) {
@@ -458,16 +458,6 @@ fn authenticate_client(
         }
         Some(c) => c,
     };
-
-    if let Some(client_id) = client_id {
-        if client_id != client_name {
-            debug!("Claimed client name doesn't match authorization header");
-            return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
-                "Invalid authorization header",
-            ));
-        }
-    }
 
     if let ClientType::Public = client.client_type {
         debug!("tried to authenticate public client");
@@ -676,10 +666,10 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
         assert_eq!(
-            OidcError::from(ProtocolError::InvalidRequest),
+            OidcError::from(oauth2::ProtocolError::UnauthorizedClient),
             response.error
         );
     }
@@ -888,7 +878,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
         assert_eq!(
-            OidcError::from(ProtocolError::InvalidClient),
+            OidcError::from(oauth2::ProtocolError::UnauthorizedClient),
             response.error
         );
     }
@@ -935,7 +925,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
         assert_eq!(
-            OidcError::from(ProtocolError::InvalidClient),
+            OidcError::from(oauth2::ProtocolError::UnauthorizedClient),
             response.error
         );
     }
@@ -982,7 +972,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
         assert_eq!(
-            OidcError::from(ProtocolError::InvalidClient),
+            OidcError::from(oauth2::ProtocolError::UnauthorizedClient),
             response.error
         );
     }
@@ -1029,7 +1019,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
         assert_eq!(
-            OidcError::from(ProtocolError::InvalidClient),
+            OidcError::from(oauth2::ProtocolError::UnauthorizedClient),
             response.error
         );
     }
@@ -1079,7 +1069,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
         assert_eq!(
-            OidcError::from(ProtocolError::InvalidClient),
+            OidcError::from(oauth2::ProtocolError::UnauthorizedClient),
             response.error
         );
     }
@@ -1479,11 +1469,11 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
     }
 
     #[actix_rt::test]
-    async fn invalid_client_credentials_are_rejected() {
+    async fn invalid_client_credentials_with_refresh_token_are_rejected() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":wrong";
         let encoded_auth = base64::encode(auth);
         let auth_code_store = build_test_auth_code_store();
@@ -1527,6 +1517,7 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
     }
+
     #[actix_rt::test]
     async fn successful_refresh_token_authentication() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
