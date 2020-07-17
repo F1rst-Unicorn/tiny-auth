@@ -23,6 +23,7 @@ use crate::domain::RefreshToken;
 use crate::domain::Token;
 use crate::http::endpoints::authenticate;
 use crate::http::endpoints::authorize;
+use crate::http::endpoints::parse_first_request;
 use crate::http::endpoints::render_redirect_error;
 use crate::http::endpoints::render_template_with_context;
 use crate::protocol::oauth2;
@@ -50,7 +51,6 @@ use chrono::Duration;
 use chrono::TimeZone;
 
 use log::debug;
-use log::error;
 use log::warn;
 
 use serde_derive::Deserialize;
@@ -101,12 +101,11 @@ pub async fn post(
         return render_invalid_consent_request(&tera);
     }
 
-    let first_request = match session.get::<String>(authorize::SESSION_KEY) {
-        Err(_) | Ok(None) => {
-            debug!("unsolicited consent request");
+    let first_request = match parse_first_request(&session) {
+        None => {
             return render_invalid_consent_request(&tera);
         }
-        Ok(Some(req)) => req,
+        Some(req) => req,
     };
 
     let username = match session.get::<String>(authenticate::SESSION_KEY) {
@@ -125,14 +124,6 @@ pub async fn post(
         Ok(Some(username)) => username,
     };
     let auth_time = Local.timestamp(auth_time, 0);
-
-    let first_request = match serde_urlencoded::from_str::<authorize::Request>(&first_request) {
-        Err(e) => {
-            error!("Failed to deserialize initial request. {}", e);
-            return server_error(&tera);
-        }
-        Ok(req) => req,
-    };
 
     let client_name = first_request.client_id.as_ref().unwrap();
     let response_type = first_request
@@ -242,19 +233,11 @@ pub async fn post(
 }
 
 pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
-    let first_request = match session.get::<String>(authorize::SESSION_KEY) {
-        Err(_) | Ok(None) => {
-            debug!("unsolicited consent request");
+    let first_request = match parse_first_request(&session) {
+        None => {
             return render_invalid_consent_request(&tera);
         }
-        Ok(Some(req)) => req,
-    };
-    let first_request = match serde_urlencoded::from_str::<authorize::Request>(&first_request) {
-        Err(e) => {
-            error!("Failed to deserialize initial request. {}", e);
-            return server_error(&tera);
-        }
-        Ok(req) => req,
+        Some(req) => req,
     };
 
     session.remove(authorize::SESSION_KEY);
@@ -278,6 +261,12 @@ fn render_invalid_consent_request(tera: &tera::Tera) -> HttpResponse {
 
 fn build_context(session: &Session) -> Option<Context> {
     let mut context = Context::new();
+
+    let first_request = parse_first_request(session)?;
+    context.insert(super::CLIENT_ID_CONTEXT, &first_request.client_id.unwrap());
+
+    let username = session.get::<String>(authenticate::SESSION_KEY).ok()??;
+    context.insert(super::USER_NAME_CONTEXT, &username);
 
     let csrftoken = super::generate_csrf_token();
     context.insert(super::CSRF_CONTEXT, &csrftoken);
@@ -333,7 +322,29 @@ mod tests {
     async fn valid_request_is_rendered() {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
-        session.set(authorize::SESSION_KEY, "dummy").unwrap();
+        let first_request = authorize::Request {
+            client_id: Some(PUBLIC_CLIENT.to_string()),
+            redirect_uri: Some("http://localhost/".to_string()),
+            state: Some("state".to_string()),
+            acr_values: None,
+            display: None,
+            id_token_hint: None,
+            login_hint: None,
+            nonce: None,
+            max_age: None,
+            prompt: None,
+            response_mode: None,
+            response_type: Some("code".to_string()),
+            scope: None,
+            ui_locales: None,
+        };
+        session
+            .set(
+                authorize::SESSION_KEY,
+                &serde_urlencoded::to_string(first_request).unwrap(),
+            )
+            .unwrap();
+
         session.set(authenticate::SESSION_KEY, "user").unwrap();
 
         let resp = get(build_test_tera(), session).await;

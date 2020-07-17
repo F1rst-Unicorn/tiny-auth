@@ -38,6 +38,7 @@ use tera::Context;
 use tera::Tera;
 
 use log::debug;
+use log::error;
 
 use serde::de::Deserialize as _;
 use serde::de::Visitor;
@@ -50,6 +51,28 @@ const CSRF_SESSION_KEY: &str = "c";
 const CSRF_CONTEXT: &str = "csrftoken";
 const ERROR_CONTEXT: &str = "error";
 const TRIES_LEFT_CONTEXT: &str = "tries";
+const CLIENT_ID_CONTEXT: &str = "client";
+const USER_NAME_CONTEXT: &str = "user";
+
+fn parse_first_request(session: &Session) -> Option<authorize::Request> {
+    let first_request = match session.get::<String>(authorize::SESSION_KEY) {
+        Err(_) | Ok(None) => {
+            debug!("unsolicited consent request");
+            return None;
+        }
+        Ok(Some(req)) => req,
+    };
+
+    let first_request = match serde_urlencoded::from_str::<authorize::Request>(&first_request) {
+        Err(e) => {
+            error!("Failed to deserialize initial request. {}", e);
+            return None;
+        }
+        Ok(req) => req,
+    };
+
+    Some(first_request)
+}
 
 #[derive(Serialize, Deserialize)]
 struct ErrorResponse {

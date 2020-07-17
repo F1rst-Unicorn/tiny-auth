@@ -19,9 +19,9 @@
 {% block content %}
 <div class="form">
 <h2>{{ translate(term="Consent") }}</h2>
-<div class="username">John Silver</div>
+<div class="username">{{ user }}</div>
 <div class="consent">
-Do you want to give Confidential Client access to this?
+Do you want to grant "{{ client }}" access to this?
 <dl>
   <dt>E-Mail</dt>
   <dd>

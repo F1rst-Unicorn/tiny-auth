@@ -273,6 +273,7 @@ mod tests {
 
     use url::Url;
 
+    use crate::http::endpoints::parse_first_request;
     use crate::http::state::tests::build_test_client_store;
     use crate::http::state::tests::build_test_tera;
     use crate::protocol::oauth2::ResponseType::Code;
@@ -523,8 +524,7 @@ mod tests {
         assert_eq!("authenticate", url);
 
         let session = req.get_session();
-        let first_request = session.get::<String>(SESSION_KEY).unwrap().unwrap();
-        let first_request = serde_urlencoded::from_str::<Request>(&first_request).unwrap();
+        let first_request = parse_first_request(&session).unwrap();
         assert_eq!(request, first_request);
     }
 

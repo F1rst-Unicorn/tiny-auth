@@ -20,6 +20,7 @@ use super::render_template;
 use super::server_error;
 use crate::business::authenticator::Authenticator;
 use crate::http::endpoints::authorize;
+use crate::http::endpoints::parse_first_request;
 use crate::http::endpoints::render_template_with_context;
 use crate::protocol::oauth2;
 use crate::protocol::oidc;
@@ -168,19 +169,11 @@ fn render_redirect_error(
     error: oidc::ProtocolError,
     description: &str,
 ) -> HttpResponse {
-    let first_request = match session.get::<String>(authorize::SESSION_KEY) {
-        Err(_) | Ok(None) => {
-            debug!("unsolicited authentication request");
+    let first_request = match parse_first_request(&session) {
+        None => {
             return render_invalid_authentication_request(&tera);
         }
-        Ok(Some(req)) => req,
-    };
-    let first_request = match serde_urlencoded::from_str::<authorize::Request>(&first_request) {
-        Err(e) => {
-            error!("Failed to deserialize initial request. {}", e);
-            return server_error(&tera);
-        }
-        Ok(req) => req,
+        Some(req) => req,
     };
 
     let redirect_uri = first_request.redirect_uri.unwrap();
