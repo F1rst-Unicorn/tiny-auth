@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.2.0]
+
 ### Fixed
 
 * Changed TLS implementation to fix reverse proxy problems. TLS configuration
