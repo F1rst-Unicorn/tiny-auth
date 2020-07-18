@@ -18,12 +18,15 @@
 pub mod client;
 pub mod issuer_configuration;
 pub mod password;
+pub mod scope;
 pub mod token;
 pub mod user;
 
 pub use client::Client;
 pub use issuer_configuration::IssuerConfiguration;
 pub use password::Password;
+pub use scope::Scope;
+pub use scope::ScopeDescription;
 pub use token::RefreshToken;
 pub use token::Token;
 pub use user::User;

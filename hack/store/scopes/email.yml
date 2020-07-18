@@ -1,0 +1,14 @@
+---
+name: email
+pretty name: Email Address
+description: Access to your email address
+
+mappings:
+  - structure:
+      email: "{{ user.email }}"
+    type: template
+    optional: true
+
+  - structure:
+      email_verified: true
+    type: plain

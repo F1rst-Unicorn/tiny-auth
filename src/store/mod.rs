@@ -18,8 +18,9 @@
 pub mod file;
 pub mod memory;
 
-use crate::domain::client::Client;
-use crate::domain::user::User;
+use crate::domain::Client;
+use crate::domain::Scope;
+use crate::domain::User;
 
 use async_trait::async_trait;
 
@@ -33,6 +34,11 @@ pub trait UserStore: Send + Sync {
 
 pub trait ClientStore: Send + Sync {
     fn get(&self, key: &str) -> Option<Client>;
+}
+
+pub trait ScopeStore: Send + Sync {
+    fn get(&self, key: &str) -> Option<Scope>;
+    fn get_scope_names(&self) -> Vec<String>;
 }
 
 // Recommended lifetime is 10 minutes
@@ -133,6 +139,21 @@ pub mod tests {
 
     pub fn build_test_client_store() -> Arc<impl ClientStore> {
         Arc::new(TestClientStore {})
+    }
+
+    struct TestScopeStore {}
+
+    impl ScopeStore for TestScopeStore {
+        fn get(&self, key: &str) -> Option<Scope> {
+            Some(Scope::new(key, key, key))
+        }
+        fn get_scope_names(&self) -> Vec<String> {
+            Vec::new()
+        }
+    }
+
+    pub fn build_test_scope_store() -> Arc<impl ScopeStore> {
+        Arc::new(TestScopeStore {})
     }
 
     struct TestAuthorizationCodeStore {

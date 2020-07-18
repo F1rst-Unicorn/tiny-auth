@@ -22,15 +22,12 @@
 <div class="username">{{ user }}</div>
 <div class="consent">
 Do you want to grant "{{ client }}" access to this?
+{% for scope in scopes %}
 <dl>
-  <dt>E-Mail</dt>
-  <dd>
-  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vivamus eu libero dapibus, aliquet felis nec, finibus erat. Cras massa risus, ornare sed nulla quis, posuere condimentum neque. Ut in bibendum urna. Phasellus id dolor eros. Ut mattis turpis nec velit semper, id commodo nulla elementum. Aliquam nulla tellus, feugiat sed eros vitae, egestas tristique ex. In consequat leo a neque pretium, tempus consectetur turpis semper. Nulla facilisi. Duis eros magna, laoreet vitae maximus sagittis, lacinia et erat. </dd>
+  <dt>{{ scope.pretty_name }}</dt>
+  <dd>{{ scope.description }}</dd>
 </dl>
-<dl>
-  <dt>Pictures</dt>
-  <dd>Access to all your pictures</dd>
-</dl>
+{% endfor %}
 </div>
 <form action="{{ url(name="consent") }}" method="post">
     <input type="hidden" name="csrftoken" value="{{ csrftoken }}">

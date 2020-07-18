@@ -15,9 +15,11 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::domain::client::Client;
-use crate::domain::user::User;
+use crate::domain::Client;
+use crate::domain::Scope;
+use crate::domain::User;
 use crate::store::ClientStore;
+use crate::store::ScopeStore;
 use crate::store::UserStore;
 use crate::util::iterate_directory;
 use crate::util::read_file;
@@ -150,5 +152,72 @@ impl FileClientStore {
         }
 
         Some(FileClientStore { clients })
+    }
+}
+
+pub struct FileScopeStore {
+    scopes: BTreeMap<String, Scope>,
+}
+
+impl ScopeStore for FileScopeStore {
+    fn get(&self, key: &str) -> Option<Scope> {
+        self.scopes.get(key).map(Clone::clone)
+    }
+
+    fn get_scope_names(&self) -> Vec<String> {
+        self.scopes.keys().map(Clone::clone).collect()
+    }
+}
+
+impl FileScopeStore {
+    pub fn new(base: &str) -> Option<Self> {
+        let mut scopes = BTreeMap::new();
+        let scope_store = base.to_string() + "/scopes";
+        for file in iterate_directory(&scope_store)? {
+            let file = match file {
+                Err(e) => {
+                    error!("Could not read store file: {}", e);
+                    return None;
+                }
+                Ok(f) => {
+                    if !f.path().is_file() {
+                        error!(
+                            "{:?} is no file. Only files are allowed inside the store",
+                            f.path()
+                        );
+                        return None;
+                    }
+                    f
+                }
+            };
+            let raw_content = match read_file(file.path()) {
+                Err(e) => {
+                    error!("Could not read file {:?}: {}", file.path(), e);
+                    return None;
+                }
+                Ok(content) => content,
+            };
+
+            let scope = match serde_yaml::from_str::<Scope>(&raw_content) {
+                Err(e) => {
+                    error!("File {:?} is malformed: {}", file.path(), e);
+                    return None;
+                }
+                Ok(scope) => scope,
+            };
+
+            if PathBuf::from(scope.name.clone() + ".yml") != file.file_name() {
+                error!(
+                    "scope '{}' is stored in '{:?}' but was expected to be stored in '{}.yml'",
+                    scope.name,
+                    file.path(),
+                    scope.name
+                );
+                return None;
+            }
+            scopes.insert(scope.name.clone(), scope);
+        }
+
+        Some(FileScopeStore { scopes })
     }
 }

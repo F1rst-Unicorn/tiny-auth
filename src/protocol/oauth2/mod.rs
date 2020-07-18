@@ -33,7 +33,7 @@ pub struct ErrorResponse {
     state: Option<String>,
 }
 
-#[derive(Clone, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ClientType {
     #[serde(rename = "public")]
     Public,

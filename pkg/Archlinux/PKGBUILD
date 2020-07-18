@@ -37,8 +37,10 @@ package() {
 
     mkdir -p $pkgdir/usr/share/${pkgname}/static
     cp -r static $pkgdir/usr/share/${pkgname}
+    mkdir -p $pkgdir/usr/share/${pkgname}/static/img
 
-    mkdir -p $pkgdir/etc/${pkgname}/store/{users,clients}
+    mkdir -p $pkgdir/etc/${pkgname}/store/{users,clients,scopes}
+    cp -r pkg/scopes/* $pkgdir/etc/${pkgname}/store/scopes
 
     mkdir -p $pkgdir/usr/share/doc/${pkgname}
     cp -r doc/* $pkgdir/usr/share/doc/${pkgname}

@@ -23,15 +23,18 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 
 use serde::Deserialize;
+use serde::Serialize;
 
-#[derive(Clone, Deserialize)]
+use serde_json::Value;
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct User {
     pub name: String,
 
     pub password: Password,
 
     #[serde(flatten)]
-    pub attributes: HashMap<String, String>,
+    pub attributes: HashMap<String, Value>,
 }
 
 impl User {

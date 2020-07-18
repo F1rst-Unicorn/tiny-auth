@@ -16,6 +16,9 @@
  */
 
 use crate::domain::IssuerConfiguration;
+use crate::store::ScopeStore;
+
+use std::sync::Arc;
 
 use actix_web::web::Data;
 use actix_web::HttpResponse;
@@ -126,13 +129,17 @@ struct Response {
     op_tos_uri: String,
 }
 
-pub async fn get(config: Data<IssuerConfiguration>) -> HttpResponse {
+pub async fn get(
+    config: Data<IssuerConfiguration>,
+    scopes: Data<Arc<dyn ScopeStore>>,
+) -> HttpResponse {
     let response = Response {
         issuer: config.issuer_url.clone(),
         authorization_endpoint: config.issuer_url.clone() + "/authorize",
         token_endpoint: config.issuer_url.clone() + "/token",
         userinfo_endpoint: config.issuer_url.clone() + "/userinfo",
         jwks_uri: config.issuer_url.clone() + "/jwks",
+        scopes_supported: scopes.get_scope_names(),
         response_types_supported: vec![
             "code".to_string(),
             "token".to_string(),

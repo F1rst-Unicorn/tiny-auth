@@ -1,0 +1,23 @@
+---
+name: profile
+pretty name: Profile Information
+description: Access to your name, birthdate, gender and position
+
+mappings:
+  - structure:
+      name: "{{ user.given_name }} {{ user.middle_name }} {{ user.family_name }}"
+      family_name: "{{ user.family_name }}"
+      given_name: "{{ user.given_name }}"
+      middle_name: "{{ user.middle_name }}"
+      nickname: "{{ user.nickname | default(value=user.given_name) }}"
+      preferred_username: "{{ user.preferred_username }}"
+      profile: "{{ user.profile }}"
+      picture: "{{ user.picture }}"
+      website: "{{ user.website }}"
+      gender: "{{ user.gender }}"
+      birthdate: "{{ user.birthdate }}"
+      zoneinfo: "{{ user.zoneinfo }}"
+      locale: "{{ user.locale }}"
+      updated_at: "{{ user.updated_at }}"
+    type: template
+    optional: true

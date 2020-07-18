@@ -20,10 +20,13 @@ use crate::protocol::oauth2::ClientType;
 use std::collections::HashMap;
 
 use serde::Deserialize;
+use serde::Serialize;
+
+use serde_json::Value;
 
 use log::error;
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Client {
     pub client_id: String,
 
@@ -32,7 +35,7 @@ pub struct Client {
     pub redirect_uris: Vec<String>,
 
     #[serde(flatten)]
-    pub attributes: HashMap<String, String>,
+    pub attributes: HashMap<String, Value>,
 }
 
 impl Client {

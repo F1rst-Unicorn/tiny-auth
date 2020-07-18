@@ -20,16 +20,19 @@ use super::render_template;
 use super::server_error;
 use crate::business::token::TokenCreator;
 use crate::domain::RefreshToken;
+use crate::domain::ScopeDescription;
 use crate::domain::Token;
 use crate::http::endpoints::authenticate;
 use crate::http::endpoints::authorize;
 use crate::http::endpoints::parse_first_request;
+use crate::http::endpoints::parse_scope_names;
 use crate::http::endpoints::render_redirect_error;
 use crate::http::endpoints::render_template_with_context;
 use crate::protocol::oauth2;
 use crate::protocol::oidc;
 use crate::store::AuthorizationCodeStore;
 use crate::store::ClientStore;
+use crate::store::ScopeStore;
 use crate::store::UserStore;
 
 use std::collections::HashMap;
@@ -62,7 +65,11 @@ pub struct Request {
     csrftoken: Option<String>,
 }
 
-pub async fn get(tera: web::Data<Tera>, session: Session) -> HttpResponse {
+pub async fn get(
+    tera: web::Data<Tera>,
+    scope_store: web::Data<Arc<dyn ScopeStore>>,
+    session: Session,
+) -> HttpResponse {
     match session.get::<String>(authorize::SESSION_KEY) {
         Err(_) | Ok(None) => {
             debug!("unsolicited consent request");
@@ -79,7 +86,7 @@ pub async fn get(tera: web::Data<Tera>, session: Session) -> HttpResponse {
         _ => {}
     }
 
-    match build_context(&session) {
+    match build_context(&session, scope_store) {
         Some(context) => {
             render_template_with_context("consent.html.j2", StatusCode::OK, &tera, &context)
         }
@@ -259,11 +266,22 @@ fn render_invalid_consent_request(tera: &tera::Tera) -> HttpResponse {
     )
 }
 
-fn build_context(session: &Session) -> Option<Context> {
+fn build_context(
+    session: &Session,
+    scope_store: web::Data<Arc<dyn ScopeStore>>,
+) -> Option<Context> {
     let mut context = Context::new();
 
     let first_request = parse_first_request(session)?;
     context.insert(super::CLIENT_ID_CONTEXT, &first_request.client_id.unwrap());
+
+    let mut scopes: Vec<ScopeDescription> = Vec::new();
+    for scope_name in parse_scope_names(&first_request.scope.unwrap()) {
+        if let Some(scope) = scope_store.get(&scope_name) {
+            scopes.push(scope.into());
+        }
+    }
+    context.insert(super::SCOPES_CONTEXT, &scopes);
 
     let username = session.get::<String>(authenticate::SESSION_KEY).ok()??;
     context.insert(super::USER_NAME_CONTEXT, &username);
@@ -291,6 +309,7 @@ mod tests {
     use super::super::CSRF_SESSION_KEY;
     use crate::http::state::tests::build_test_auth_code_store;
     use crate::http::state::tests::build_test_client_store;
+    use crate::http::state::tests::build_test_scope_store;
     use crate::http::state::tests::build_test_tera;
     use crate::http::state::tests::build_test_token_creator;
     use crate::http::state::tests::build_test_user_store;
@@ -302,7 +321,7 @@ mod tests {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
 
-        let resp = get(build_test_tera(), session).await;
+        let resp = get(build_test_tera(), build_test_scope_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -313,7 +332,7 @@ mod tests {
         let session = req.get_session();
         session.set(authorize::SESSION_KEY, "dummy").unwrap();
 
-        let resp = get(build_test_tera(), session).await;
+        let resp = get(build_test_tera(), build_test_scope_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -335,7 +354,7 @@ mod tests {
             prompt: None,
             response_mode: None,
             response_type: Some("code".to_string()),
-            scope: None,
+            scope: Some("openid".to_string()),
             ui_locales: None,
         };
         session
@@ -347,7 +366,7 @@ mod tests {
 
         session.set(authenticate::SESSION_KEY, "user").unwrap();
 
-        let resp = get(build_test_tera(), session).await;
+        let resp = get(build_test_tera(), build_test_scope_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
     }

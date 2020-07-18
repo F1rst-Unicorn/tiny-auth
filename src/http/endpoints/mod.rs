@@ -25,6 +25,7 @@ pub mod userinfo;
 use crate::protocol::oauth2::ProtocolError as OAuthError;
 use crate::protocol::oidc::ProtocolError;
 use crate::util::generate_random_string;
+use crate::util::render_tera_error;
 
 use actix_web::http::HeaderValue;
 use actix_web::http::StatusCode;
@@ -53,6 +54,7 @@ const ERROR_CONTEXT: &str = "error";
 const TRIES_LEFT_CONTEXT: &str = "tries";
 const CLIENT_ID_CONTEXT: &str = "client";
 const USER_NAME_CONTEXT: &str = "user";
+const SCOPES_CONTEXT: &str = "scopes";
 
 fn parse_first_request(session: &Session) -> Option<authorize::Request> {
     let first_request = match session.get::<String>(authorize::SESSION_KEY) {
@@ -72,6 +74,10 @@ fn parse_first_request(session: &Session) -> Option<authorize::Request> {
     };
 
     Some(first_request)
+}
+
+fn parse_scope_names(names: &str) -> Vec<String> {
+    names.split(' ').map(str::to_string).collect()
 }
 
 #[derive(Serialize, Deserialize)]
@@ -132,7 +138,7 @@ fn render_template_with_context(
             .set_header("Content-Type", "text/html")
             .body(body),
         Err(e) => {
-            log::warn!("{}", e);
+            log::warn!("{}", render_tera_error(&e));
             server_error(tera)
         }
     }

@@ -25,6 +25,8 @@ use chrono::Duration;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
+use serde_json::Value;
+
 /// https://openid.net/specs/openid-connect-core-1_0.html#IDToken
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct Token {
@@ -65,6 +67,9 @@ pub struct Token {
 
     #[serde(rename = "azp")]
     authorized_party: String,
+
+    #[serde(flatten)]
+    attributes: Value,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde needs this API
@@ -91,6 +96,7 @@ impl Token {
             authentication_context_class_reference: "".to_string(),
             authentication_methods_request: vec![],
             authorized_party: client.client_id.to_string(),
+            attributes: Value::Object(Default::default()),
         }
     }
 

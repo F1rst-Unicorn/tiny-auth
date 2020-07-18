@@ -67,6 +67,9 @@ pub fn build(config: Config) -> Result<Server, Error> {
     let client_store = constructor
         .build_client_store()
         .ok_or(Error::LoggedBeforeError)?;
+    let scope_store = constructor
+        .build_scope_store()
+        .ok_or(Error::LoggedBeforeError)?;
     let auth_code_store = constructor
         .build_auth_code_store()
         .ok_or(Error::LoggedBeforeError)?;
@@ -83,6 +86,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .app_data(web::Data::new(tera.clone()))
             .app_data(web::Data::new(authenticator.clone()))
             .app_data(web::Data::new(client_store.clone()))
+            .app_data(web::Data::new(scope_store.clone()))
             .app_data(web::Data::new(user_store.clone()))
             .app_data(web::Data::new(auth_code_store.clone()))
             .app_data(web::Data::new(token_creator.clone()))

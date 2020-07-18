@@ -75,6 +75,13 @@ impl<'a> Constructor<'a> {
         }
     }
 
+    pub fn build_scope_store(&self) -> Option<Arc<dyn ScopeStore>> {
+        match &self.config.store {
+            None => None,
+            Some(Store::Config { base }) => Some(Arc::new(FileScopeStore::new(&base)?)),
+        }
+    }
+
     pub fn build_auth_code_store(&self) -> Option<Arc<dyn AuthorizationCodeStore>> {
         let result = Arc::new(MemoryAuthorizationCodeStore::default());
         let arg = result.clone();
@@ -181,6 +188,7 @@ pub mod tests {
     use crate::business::token::TokenValidator;
     use crate::store::AuthorizationCodeStore;
     use crate::store::ClientStore;
+    use crate::store::ScopeStore;
     use crate::store::UserStore;
 
     use std::sync::Arc;
@@ -226,6 +234,10 @@ pub mod tests {
 
     pub fn build_test_user_store() -> Data<Arc<dyn UserStore>> {
         Data::new(crate::store::tests::build_test_user_store())
+    }
+
+    pub fn build_test_scope_store() -> Data<Arc<dyn ScopeStore>> {
+        Data::new(crate::store::tests::build_test_scope_store())
     }
 
     pub fn build_test_auth_code_store() -> Data<Arc<dyn AuthorizationCodeStore>> {

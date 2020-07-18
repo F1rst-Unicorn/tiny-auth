@@ -1,0 +1,39 @@
+# tiny-auth: Tiny OIDC Provider
+# Copyright (C) 2019 The tiny-auth developers
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+---
+name: profile
+pretty name: Profile Information
+description: Access to your name, birthdate, gender and position
+
+mappings:
+  - structure:
+      name: "{{ user.given_name }} {{ user.middle_name }} {{ user.family_name }}"
+      family_name: "{{ user.family_name }}"
+      given_name: "{{ user.given_name }}"
+      middle_name: "{{ user.middle_name }}"
+      nickname: "{{ user.nickname | default(value=user.given_name) }}"
+      preferred_username: "{{ user.preferred_username }}"
+      profile: "{{ user.profile }}"
+      picture: "{{ user.picture }}"
+      website: "{{ user.website }}"
+      gender: "{{ user.gender }}"
+      birthdate: "{{ user.birthdate }}"
+      zoneinfo: "{{ user.zoneinfo }}"
+      locale: "{{ user.locale }}"
+      updated_at: "{{ user.updated_at }}"
+    type: template
+    optional: true
