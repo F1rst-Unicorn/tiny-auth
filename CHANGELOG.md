@@ -13,6 +13,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 * Fix wrong URLs in discovery endpoint
   ([#39](https://gitlab.com/veenj/tiny-auth/issues/39))
 
+### Maintenance
+
+* Update library dependencies
+
 ## [0.2.0]
 
 ### Fixed
