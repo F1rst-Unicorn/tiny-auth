@@ -31,9 +31,9 @@ store:
     base: /etc/tiny-auth/store
 ```
 
-Below the base directory defined in the configuration, tiny-auth expects two
-directories `users/` and `clients/`. Both contain yaml files where one file
-represents one user or client, respectively.
+Below the base directory defined in the configuration, tiny-auth expects
+three directories `users/`, `clients/` and `scopes/`. All contain yaml files
+where one file represents one entity, respectively.
 
 ### User Configuration
 
@@ -50,12 +50,12 @@ The file must be named the same as the `name` field, appended by `.yml`.
 
 In addition arbitrary properties may be added.
 
-#### `name`
+#### name
 
 This is the primary login name used for authentication. It must be unique
 between all users.
 
-#### `password`
+#### password
 
 The encoded password of the user. Use tiny-auth's password encoder (usually
 installed as `tiny-auth-password-encoder`) to generate a valid structure for
@@ -79,12 +79,12 @@ The file must be named the same as the `client_id` field, appended by `.yml`.
 
 In addition arbitrary properties may be added.
 
-#### `client_id`
+#### client_id
 
 This is the name under which tiny-auth knows the client when performing
 requests. It must be unique between all clients.
 
-#### `client_type`
+#### client_type
 
 The type of the client as defined in the [OAuth2 RFC](https://tools.ietf.org/html/rfc6749#section-2.1).
 
@@ -105,7 +105,11 @@ generate a valid password for the client. The tool will output a YAML object
 which must be put as a dictionary inside the `password` field. Mind the
 indentation.
 
-#### `redirect_uris`
+#### redirect_uris
 
 The URIs to which tiny-auth is allowed to redirect to. This is defined in the
 [OAuth2 RFC](https://tools.ietf.org/html/rfc6749#section-3.1.2).
+
+### Scope Configuration
+
+See the [Scopes](scopes.md) document for details.
