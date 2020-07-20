@@ -25,3 +25,6 @@ birthdate: 1991-09-11
 zoneinfo: Europe/Berlin
 locale: en-US
 updated_at: 0
+
+groups:
+  - test

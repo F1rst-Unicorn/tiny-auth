@@ -63,12 +63,22 @@ impl From<Scope> for ScopeDescription {
 pub enum Error {
     TemplateError,
 
+    AttributeSelectionError,
+
     MergeError(MergeError),
+
+    SerialisationError(serde_json::Error),
 }
 
 impl From<MergeError> for Error {
     fn from(e: MergeError) -> Self {
         Error::MergeError(e)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(e: serde_json::Error) -> Self {
+        Error::SerialisationError(e)
     }
 }
 
@@ -109,7 +119,7 @@ struct Mapping {
 
 impl Mapping {
     fn generate_claims(&self, user: &User, client: &Client) -> Result<Value, Error> {
-        match self.mapping_type {
+        match &self.mapping_type {
             Type::Plain => Ok(self.structure.clone()),
             Type::Template => {
                 let (value, errors) = template(&self.structure, user, client);
@@ -131,8 +141,86 @@ impl Mapping {
                     Ok(value.unwrap_or_else(|| Value::Object(Map::new())))
                 }
             }
-            _ => todo!(),
+            Type::UserAttribute(selector) => {
+                let value = serde_json::to_value(&user).map_err(Error::from)?;
+                let value_to_copy = copy_values(value, selector.clone(), &mut Vec::new())?;
+                insert_value(self.structure.clone(), value_to_copy)
+            }
+            Type::ClientAttribute(selector) => {
+                let value = serde_json::to_value(&client).map_err(Error::from)?;
+                let value_to_copy = copy_values(value, selector.clone(), &mut Vec::new())?;
+                insert_value(self.structure.clone(), value_to_copy)
+            }
         }
+    }
+}
+
+fn insert_value(structure: Value, value: Value) -> Result<Value, Error> {
+    match structure {
+        Value::Null => Ok(value),
+        Value::Object(mut map) => {
+            if map.len() != 1 {
+                error!("Exactly one attribute is allowed in selectors. Use 'null' to terminate your selector");
+                return Err(Error::AttributeSelectionError);
+            }
+            let key = map.keys().next().unwrap().clone();
+            match map.remove(&key) {
+                Some(Value::Null) => {
+                    map.insert(key, value);
+                    Ok(Value::Object(map))
+                }
+                Some(u) => {
+                    let result = insert_value(u, value)?;
+                    map.insert(key, result);
+                    Ok(Value::Object(map))
+                }
+                None => unreachable!("checked before"),
+            }
+        }
+        _ => {
+            error!("structure may only contain dicts with exactly one key");
+            Err(Error::AttributeSelectionError)
+        }
+    }
+}
+
+fn copy_values(value: Value, selector: Value, path: &mut Vec<String>) -> Result<Value, Error> {
+    match (value, selector) {
+        (Value::Object(mut value), Value::Object(mut map)) => {
+            if map.len() != 1 {
+                error!("Exactly one attribute is allowed in selectors. Use 'null' to terminate your selector");
+                return Err(Error::AttributeSelectionError);
+            }
+            let k = map.keys().next().unwrap().clone();
+            let v = map.remove(&k).unwrap();
+            let current_value = match value.remove(&k) {
+                None => {
+                    path.push(k);
+                    error!("attribute '{}' not found", path.join(" -> "));
+                    path.pop();
+                    return Err(Error::AttributeSelectionError);
+                }
+                Some(v) => v,
+            };
+            match v {
+                Value::Null => {
+                    let mut map = Map::new();
+                    map.insert(k, current_value);
+                    Ok(Value::Object(map))
+                }
+                v @ Value::Object(_) => {
+                    path.push(k);
+                    let result_value = copy_values(current_value, v, path)?;
+                    Ok(result_value)
+                }
+                _ => {
+                    error!("Use 'null' to terminate your selector. Only dict keys are allowed in selectors");
+                    Err(Error::AttributeSelectionError)
+                }
+            }
+        }
+        (v, Value::Null) => Ok(v),
+        _ => Err(Error::AttributeSelectionError),
     }
 }
 

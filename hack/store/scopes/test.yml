@@ -1,0 +1,12 @@
+---
+name: test
+pretty name: Address
+description: Access to your address
+
+mappings:
+  - structure:
+      user: null
+    type:
+      user_attribute:
+        password: null
+    optional: true

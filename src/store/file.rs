@@ -27,6 +27,8 @@ use crate::util::read_file;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use regex::Regex;
+
 use log::error;
 
 pub struct FileUserStore {
@@ -205,6 +207,12 @@ impl FileScopeStore {
                 }
                 Ok(scope) => scope,
             };
+
+            let pattern = Regex::new(r"^[\x21\x23-\x5B\x5D-\x7E]+$").unwrap();
+            if !pattern.is_match(&scope.name) {
+                error!("Invalid scope name {}", scope.name);
+                return None;
+            }
 
             if PathBuf::from(scope.name.clone() + ".yml") != file.file_name() {
                 error!(
