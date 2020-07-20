@@ -16,7 +16,7 @@
  */
 
 pub mod endpoints;
-mod state;
+pub mod state;
 mod tera;
 
 use crate::config::Config;

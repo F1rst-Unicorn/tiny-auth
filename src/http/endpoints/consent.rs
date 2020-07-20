@@ -16,6 +16,7 @@
  */
 
 use super::deserialise_empty_as_none;
+use super::parse_scope_names;
 use super::render_template;
 use super::server_error;
 use crate::business::token::TokenCreator;
@@ -25,7 +26,6 @@ use crate::domain::Token;
 use crate::http::endpoints::authenticate;
 use crate::http::endpoints::authorize;
 use crate::http::endpoints::parse_first_request;
-use crate::http::endpoints::parse_scope_names;
 use crate::http::endpoints::render_redirect_error;
 use crate::http::endpoints::render_template_with_context;
 use crate::protocol::oauth2;
@@ -94,6 +94,7 @@ pub async fn get(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn post(
     query: web::Form<Request>,
     session: Session,
@@ -102,6 +103,7 @@ pub async fn post(
     user_store: web::Data<Arc<dyn UserStore>>,
     auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
     token_creator: web::Data<TokenCreator>,
+    scope_store: web::Data<Arc<dyn ScopeStore>>,
 ) -> HttpResponse {
     if !super::is_csrf_valid(&query.csrftoken, &session) {
         debug!("CSRF protection violation detected");
@@ -150,6 +152,7 @@ pub async fn post(
                 client_name,
                 &username,
                 &redirect_uri,
+                &first_request.scope.clone().unwrap_or_default(),
                 Local::now(),
                 auth_time,
             )
@@ -187,7 +190,11 @@ pub async fn post(
             Ok(Some(req)) => req,
         };
 
-        let mut token = Token::build(&user, &client, Local::now(), expires_in, auth_time);
+        let scopes = first_request.scope.unwrap_or_default();
+        let scopes = parse_scope_names(&scopes);
+        let scopes = scope_store.get_all(&scopes);
+
+        let mut token = Token::build(&user, &client, &scopes, Local::now(), expires_in, auth_time);
         token.set_nonce(first_request.nonce);
 
         let encoded_token = match token_creator.create(token.clone()) {
@@ -205,7 +212,7 @@ pub async fn post(
         }
         if let oauth2::ClientType::Confidential { .. } = client.client_type {
             let encoded_refresh_token = match token_creator
-                .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), Vec::new()))
+                .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), &scopes))
             {
                 Err(e) => {
                     debug!("failed to encode refresh token: {}", e);
@@ -389,6 +396,7 @@ mod tests {
             build_test_user_store(),
             build_test_auth_code_store(),
             build_test_token_creator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -413,6 +421,7 @@ mod tests {
             build_test_user_store(),
             build_test_auth_code_store(),
             build_test_token_creator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -439,6 +448,7 @@ mod tests {
             build_test_user_store(),
             build_test_auth_code_store(),
             build_test_token_creator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -462,7 +472,7 @@ mod tests {
             prompt: None,
             response_mode: None,
             response_type: Some("code".to_string()),
-            scope: None,
+            scope: Some("".to_string()),
             ui_locales: None,
         };
         session
@@ -487,6 +497,7 @@ mod tests {
             build_test_user_store(),
             build_test_auth_code_store(),
             build_test_token_creator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -528,7 +539,7 @@ mod tests {
             prompt: None,
             response_mode: None,
             response_type: Some("id_token code".to_string()),
-            scope: None,
+            scope: Some("".to_string()),
             ui_locales: None,
         };
         session
@@ -553,6 +564,7 @@ mod tests {
             build_test_user_store(),
             build_test_auth_code_store(),
             build_test_token_creator(),
+            build_test_scope_store(),
         )
         .await;
 

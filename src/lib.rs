@@ -19,7 +19,7 @@ mod business;
 pub mod cli_parser;
 pub mod config;
 pub mod domain;
-mod http;
+pub mod http;
 pub mod logging;
 mod protocol;
 pub mod runtime;

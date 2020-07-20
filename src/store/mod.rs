@@ -24,6 +24,8 @@ use crate::domain::User;
 
 use async_trait::async_trait;
 
+use log::info;
+
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Local;
@@ -38,6 +40,21 @@ pub trait ClientStore: Send + Sync {
 
 pub trait ScopeStore: Send + Sync {
     fn get(&self, key: &str) -> Option<Scope>;
+
+    fn get_all(&self, keys: &[String]) -> Vec<Scope> {
+        keys.iter()
+            .map(|v| match self.get(v) {
+                None => {
+                    info!("requested unknown scope {}, ignoring", v);
+                    None
+                }
+                s => s,
+            })
+            .filter(Option::is_some)
+            .map(Option::unwrap)
+            .collect()
+    }
+
     fn get_scope_names(&self) -> Vec<String>;
 }
 
@@ -52,6 +69,8 @@ pub struct AuthorizationCodeRecord {
 
     pub username: String,
 
+    pub scopes: String,
+
     pub auth_time: DateTime<Local>,
 }
 
@@ -62,6 +81,7 @@ pub trait AuthorizationCodeStore: Send + Sync {
         client_id: &str,
         user: &str,
         redirect_uri: &str,
+        scope: &str,
         now: DateTime<Local>,
         auth_time: DateTime<Local>,
     ) -> String;
@@ -157,8 +177,9 @@ pub mod tests {
     }
 
     struct TestAuthorizationCodeStore {
-        store:
-            RefCell<HashMap<(String, String), (String, String, DateTime<Local>, DateTime<Local>)>>,
+        store: RefCell<
+            HashMap<(String, String), (String, String, String, DateTime<Local>, DateTime<Local>)>,
+        >,
     }
 
     unsafe impl Sync for TestAuthorizationCodeStore {}
@@ -171,12 +192,19 @@ pub mod tests {
             client_id: &str,
             user: &str,
             redirect_uri: &str,
+            scope: &str,
             now: DateTime<Local>,
             auth_time: DateTime<Local>,
         ) -> String {
             self.store.borrow_mut().insert(
                 (client_id.to_string(), now.to_rfc3339()),
-                (redirect_uri.to_string(), user.to_string(), now, auth_time),
+                (
+                    redirect_uri.to_string(),
+                    user.to_string(),
+                    scope.to_string(),
+                    now,
+                    auth_time,
+                ),
             );
             now.to_rfc3339()
         }
@@ -187,7 +215,7 @@ pub mod tests {
             authorization_code: &str,
             now: DateTime<Local>,
         ) -> Option<AuthorizationCodeRecord> {
-            let (redirect_uri, user, creation_datetime, auth_time) = self
+            let (redirect_uri, user, scope, creation_datetime, auth_time) = self
                 .store
                 .borrow_mut()
                 .remove(&(client_id.to_string(), authorization_code.to_string()))?;
@@ -195,6 +223,7 @@ pub mod tests {
                 redirect_uri,
                 stored_duration: now.signed_duration_since(creation_datetime),
                 username: user,
+                scopes: scope,
                 auth_time,
             })
         }

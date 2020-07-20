@@ -59,6 +59,7 @@ impl From<Scope> for ScopeDescription {
     }
 }
 
+#[derive(Debug)]
 pub enum Error {
     TemplateError,
 
@@ -112,17 +113,21 @@ impl Mapping {
             Type::Plain => Ok(self.structure.clone()),
             Type::Template => {
                 let (value, errors) = template(&self.structure, user, client);
-                if !errors.is_empty() && !self.optional {
-                    error!("failed to template claims:");
-                    for e in errors {
-                        error!("{}", render_tera_error(&e));
+                if !errors.is_empty() {
+                    if self.optional {
+                        debug!("failed to template optional claims:");
+                        for e in errors {
+                            debug!("{}", render_tera_error(&e));
+                        }
+                        Ok(value.unwrap_or_else(|| Value::Object(Map::new())))
+                    } else {
+                        error!("failed to template claims:");
+                        for e in errors {
+                            error!("{}", render_tera_error(&e));
+                        }
+                        Err(Error::TemplateError)
                     }
-                    Err(Error::TemplateError)
                 } else {
-                    debug!("failed to template optional claims:");
-                    for e in errors {
-                        debug!("{}", render_tera_error(&e));
-                    }
                     Ok(value.unwrap_or_else(|| Value::Object(Map::new())))
                 }
             }
@@ -236,7 +241,7 @@ impl std::fmt::Display for MergeError {
     }
 }
 
-fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
+pub fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
     match left {
         Value::Array(mut left) => match right {
             Value::Array(right) => {

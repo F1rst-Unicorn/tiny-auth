@@ -15,12 +15,16 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::domain::client::Client;
-use crate::domain::user::User;
+use crate::domain::scope::merge;
+use crate::domain::Client;
+use crate::domain::Scope;
+use crate::domain::User;
 
 use chrono::offset::Local;
 use chrono::DateTime;
 use chrono::Duration;
+
+use log::error;
 
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
@@ -69,7 +73,7 @@ pub struct Token {
     authorized_party: String,
 
     #[serde(flatten)]
-    attributes: Value,
+    scope_attributes: Value,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde needs this API
@@ -81,11 +85,12 @@ impl Token {
     pub fn build(
         user: &User,
         client: &Client,
+        scopes: &[Scope],
         now: DateTime<Local>,
         expiration: Duration,
         auth_time: i64,
     ) -> Self {
-        Self {
+        let mut result = Self {
             issuer: "".to_string(),
             subject: user.name.clone(),
             audience: Audience::Single(client.client_id.clone()),
@@ -96,8 +101,30 @@ impl Token {
             authentication_context_class_reference: "".to_string(),
             authentication_methods_request: vec![],
             authorized_party: client.client_id.to_string(),
-            attributes: Value::Object(Default::default()),
+            scope_attributes: Value::Null,
+        };
+
+        let mut claim_collector = Value::Object(Default::default());
+        for scope in scopes {
+            let claims = match scope.generate_claims(user, client) {
+                Err(_) => {
+                    error!("Failed to generate claims for scope '{}' on user '{}' and client '{}'. Skipping scope", scope.name, user.name, client.client_id);
+                    continue;
+                }
+                Ok(c) => c,
+            };
+
+            claim_collector = match merge(claim_collector.clone(), claims) {
+                Err(_) => {
+                    error!("Failed to merge claims for scope '{}' on user '{}' and client '{}'. Skipping scope", scope.name, user.name, client.client_id);
+                    continue;
+                }
+                Ok(c) => c,
+            };
         }
+
+        result.scope_attributes = claim_collector;
+        result
     }
 
     pub fn set_nonce(&mut self, nonce: Option<String>) {
@@ -137,12 +164,12 @@ pub struct RefreshToken {
 }
 
 impl RefreshToken {
-    pub fn from(token: Token, additional_expiration: Duration, scopes: Vec<String>) -> Self {
+    pub fn from(token: Token, additional_expiration: Duration, scopes: &[Scope]) -> Self {
         RefreshToken {
             issuer: token.issuer.clone(),
             expiration: token.expiration + additional_expiration.num_seconds(),
             access_token: token,
-            scopes,
+            scopes: scopes.iter().map(|v| v.name.to_string()).collect(),
         }
     }
 

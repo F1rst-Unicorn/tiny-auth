@@ -44,6 +44,8 @@ struct AuthCodeValue {
 
     user: String,
 
+    scope: String,
+
     insertion_time: DateTime<Local>,
 
     auth_time: DateTime<Local>,
@@ -87,6 +89,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
         client_id: &str,
         user: &str,
         redirect_uri: &str,
+        scope: &str,
         now: DateTime<Local>,
         auth_time: DateTime<Local>,
     ) -> String {
@@ -106,6 +109,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
                     AuthCodeValue {
                         redirect_uri: redirect_uri.to_string(),
                         user: user.to_string(),
+                        scope: scope.to_string(),
                         insertion_time: now,
                         auth_time,
                     },
@@ -132,6 +136,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
             redirect_uri: value.redirect_uri.clone(),
             stored_duration: now.signed_duration_since(value.insertion_time),
             username: value.user,
+            scopes: value.scope,
             auth_time: value.auth_time,
         })
     }
@@ -147,7 +152,7 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code("client", "user", "redirect_uri", date, date)
+            .get_authorization_code("client", "user", "redirect_uri", "", date, date)
             .await;
 
         let output = uut.validate("client", &auth_code, date + duration).await;
@@ -157,6 +162,7 @@ mod tests {
         assert_eq!("redirect_uri", &output.redirect_uri);
         assert_eq!("user", &output.username);
         assert_eq!(duration, output.stored_duration);
+        assert_eq!("", output.scopes);
     }
 
     #[tokio::test]
@@ -165,7 +171,7 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code("client", "user", "redirect_uri", date, date)
+            .get_authorization_code("client", "user", "redirect_uri", "", date, date)
             .await;
 
         uut.clear_expired_codes(date + duration + duration, duration)
@@ -182,7 +188,7 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code("client", "user", "redirect_uri", date, date)
+            .get_authorization_code("client", "user", "redirect_uri", "", date, date)
             .await;
 
         uut.clear_expired_codes(date + duration, duration).await;
@@ -194,6 +200,7 @@ mod tests {
         assert_eq!("redirect_uri", &output.redirect_uri);
         assert_eq!("user", &output.username);
         assert_eq!(duration, output.stored_duration);
+        assert_eq!("", output.scopes);
     }
 
     #[tokio::test]
@@ -202,7 +209,7 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code("client", "user", "redirect_uri", date, date)
+            .get_authorization_code("client", "user", "redirect_uri", "", date, date)
             .await;
 
         uut.clear_expired_codes(date + duration + Duration::nanoseconds(1), duration)

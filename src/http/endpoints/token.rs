@@ -17,13 +17,15 @@
 
 use super::deserialise_empty_as_none;
 use super::parse_basic_authorization;
+use super::parse_scope_names;
 use crate::business::token::TokenCreator;
 use crate::business::token::TokenValidator;
 use crate::business::Authenticator;
-use crate::domain::user::User;
 use crate::domain::Client;
 use crate::domain::RefreshToken;
+use crate::domain::Scope;
 use crate::domain::Token;
+use crate::domain::User;
 use crate::http::endpoints::render_json_error;
 use crate::protocol::oauth2;
 use crate::protocol::oauth2::ClientType;
@@ -31,10 +33,13 @@ use crate::protocol::oauth2::GrantType;
 use crate::protocol::oidc::ProtocolError;
 use crate::store::AuthorizationCodeStore;
 use crate::store::ClientStore;
+use crate::store::ScopeStore;
 use crate::store::UserStore;
 use crate::store::AUTH_CODE_LIFE_TIME;
 
+use std::collections::BTreeSet;
 use std::convert::TryInto;
+use std::iter::FromIterator;
 use std::sync::Arc;
 
 use actix_web::web;
@@ -111,6 +116,7 @@ pub async fn post(
     token_creator: web::Data<TokenCreator>,
     authenticator: web::Data<Authenticator>,
     token_validator: web::Data<TokenValidator>,
+    scope_store: web::Data<Arc<dyn ScopeStore>>,
 ) -> HttpResponse {
     let grant_type = match &request.grant_type {
         None => {
@@ -124,7 +130,7 @@ pub async fn post(
 
     let generate_refresh_token;
 
-    let token: Token = match grant_type {
+    let (token, scopes) = match grant_type {
         GrantType::RefreshToken => {
             generate_refresh_token = true;
             match grant_with_refresh_token(
@@ -133,6 +139,7 @@ pub async fn post(
                 client_store,
                 authenticator,
                 token_validator,
+                scope_store,
             )
             .await
             {
@@ -150,14 +157,23 @@ pub async fn post(
                         user_store,
                         auth_code_store,
                         authenticator,
+                        scope_store,
                     )
                     .await
                 }
                 GrantType::ClientCredentials => {
-                    grant_with_client_credentials(headers, client_store, authenticator).await
+                    grant_with_client_credentials(
+                        headers,
+                        request,
+                        client_store,
+                        authenticator,
+                        scope_store,
+                    )
+                    .await
                 }
                 GrantType::Password => {
-                    grant_with_password(headers, request, client_store, authenticator).await
+                    grant_with_password(headers, request, client_store, authenticator, scope_store)
+                        .await
                 }
                 _ => {
                     return render_json_error(
@@ -167,7 +183,7 @@ pub async fn post(
                 }
             };
 
-            let (user, client, auth_time) = match result {
+            let (user, client, scopes, auth_time) = match result {
                 Err(r) => return r,
                 Ok(x) => x,
             };
@@ -177,12 +193,16 @@ pub async fn post(
                 _ => false,
             };
 
-            Token::build(
-                &user,
-                &client,
-                Local::now(),
-                Duration::minutes(1),
-                auth_time,
+            (
+                Token::build(
+                    &user,
+                    &client,
+                    &scopes,
+                    Local::now(),
+                    Duration::minutes(1),
+                    auth_time,
+                ),
+                scopes,
             )
         }
     };
@@ -201,7 +221,7 @@ pub async fn post(
         match token_creator.create_refresh_token(RefreshToken::from(
             token,
             Duration::minutes(1),
-            Vec::new(),
+            &scopes,
         )) {
             Err(e) => {
                 debug!("failed to encode refresh token: {}", e);
@@ -221,7 +241,13 @@ pub async fn post(
         token_type: "bearer".to_string(),
         expires_in: Some(60),
         refresh_token,
-        scope: None,
+        scope: Some(
+            scopes
+                .into_iter()
+                .map(|v| v.name)
+                .collect::<Vec<String>>()
+                .join(" "),
+        ),
         id_token: Some(encoded_token),
     })
 }
@@ -233,7 +259,8 @@ async fn grant_with_authorization_code(
     user_store: web::Data<Arc<dyn UserStore>>,
     auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
     authenticator: web::Data<Authenticator>,
-) -> Result<(User, Client, i64), HttpResponse> {
+    scope_store: web::Data<Arc<dyn ScopeStore>>,
+) -> Result<(User, Client, Vec<Scope>, i64), HttpResponse> {
     if request.redirect_uri.is_none() {
         return Err(render_json_error(
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
@@ -327,18 +354,30 @@ async fn grant_with_authorization_code(
         Some(user) => user,
     };
 
-    Ok((user, client, record.auth_time.timestamp()))
+    let scopes = scope_store.get_all(&parse_scope_names(&record.scopes));
+
+    Ok((user, client, scopes, record.auth_time.timestamp()))
 }
 
 async fn grant_with_client_credentials(
     headers: HttpRequest,
+    request: web::Form<Request>,
     client_store: web::Data<Arc<dyn ClientStore>>,
     authenticator: web::Data<Authenticator>,
-) -> Result<(User, Client, i64), HttpResponse> {
+    scope_store: web::Data<Arc<dyn ScopeStore>>,
+) -> Result<(User, Client, Vec<Scope>, i64), HttpResponse> {
     let client = authenticate_client(headers, (*client_store).clone(), authenticator)?;
+    let scopes = scope_store.get_all(
+        &request
+            .scope
+            .as_deref()
+            .map(parse_scope_names)
+            .unwrap_or_default(),
+    );
     Ok((
         client.clone().try_into().unwrap(),
         client,
+        scopes,
         Local::now().timestamp(),
     ))
 }
@@ -348,7 +387,8 @@ async fn grant_with_password(
     request: web::Form<Request>,
     client_store: web::Data<Arc<dyn ClientStore>>,
     authenticator: web::Data<Authenticator>,
-) -> Result<(User, Client, i64), HttpResponse> {
+    scope_store: web::Data<Arc<dyn ScopeStore>>,
+) -> Result<(User, Client, Vec<Scope>, i64), HttpResponse> {
     let username = match &request.username {
         None => {
             return Err(render_json_error(
@@ -382,7 +422,15 @@ async fn grant_with_password(
             Some(user) => user,
         };
 
-        Ok((user, client, Local::now().timestamp()))
+        let scopes = scope_store.get_all(
+            &request
+                .scope
+                .as_deref()
+                .map(parse_scope_names)
+                .unwrap_or_default(),
+        );
+
+        Ok((user, client, scopes, Local::now().timestamp()))
     } else {
         Err(render_json_error(
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
@@ -397,7 +445,8 @@ async fn grant_with_refresh_token(
     client_store: web::Data<Arc<dyn ClientStore>>,
     authenticator: web::Data<Authenticator>,
     validator: web::Data<TokenValidator>,
-) -> Result<Token, HttpResponse> {
+    scope_store: web::Data<Arc<dyn ScopeStore>>,
+) -> Result<(Token, Vec<Scope>), HttpResponse> {
     let raw_token = match &request.refresh_token {
         None => {
             return Err(render_json_error(
@@ -422,7 +471,20 @@ async fn grant_with_refresh_token(
 
     let mut token = refresh_token.access_token;
     token.renew(Local::now(), Duration::minutes(1));
-    Ok(token)
+
+    let granted_scopes = BTreeSet::from_iter(refresh_token.scopes);
+    let requested_scopes = match &request.scope {
+        None => granted_scopes.clone(),
+        Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
+    };
+
+    let x = granted_scopes
+        .intersection(&requested_scopes)
+        .map(|v| scope_store.get(v))
+        .map(Option::unwrap)
+        .collect();
+
+    Ok((token, x))
 }
 
 fn authenticate_client(
@@ -493,6 +555,7 @@ mod tests {
     use crate::http::state::tests::build_test_auth_code_store;
     use crate::http::state::tests::build_test_authenticator;
     use crate::http::state::tests::build_test_client_store;
+    use crate::http::state::tests::build_test_scope_store;
     use crate::http::state::tests::build_test_token_creator;
     use crate::http::state::tests::build_test_token_issuer;
     use crate::http::state::tests::build_test_token_validator;
@@ -527,6 +590,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -561,6 +625,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -595,6 +660,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -629,6 +695,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -663,6 +730,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -698,6 +766,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -716,6 +785,7 @@ mod tests {
                 PUBLIC_CLIENT,
                 USER,
                 &redirect_uri,
+                "",
                 Local::now(),
                 Local::now(),
             )
@@ -740,6 +810,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -759,6 +830,7 @@ mod tests {
                 PUBLIC_CLIENT,
                 USER,
                 &redirect_uri,
+                "",
                 creation_time,
                 Local::now(),
             )
@@ -783,6 +855,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -801,6 +874,7 @@ mod tests {
                 PUBLIC_CLIENT,
                 USER,
                 &redirect_uri,
+                "",
                 Local::now(),
                 Local::now(),
             )
@@ -825,6 +899,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -834,7 +909,7 @@ mod tests {
         assert_eq!("bearer".to_string(), response.token_type);
         assert_eq!(Some(60), response.expires_in);
         assert_eq!(None, response.refresh_token);
-        assert_eq!(None, response.scope);
+        assert_eq!(Some("".to_string()), response.scope);
         assert!(!response.id_token.unwrap().is_empty());
     }
 
@@ -848,6 +923,7 @@ mod tests {
                 CONFIDENTIAL_CLIENT,
                 USER,
                 &redirect_uri,
+                "",
                 Local::now(),
                 Local::now(),
             )
@@ -872,6 +948,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -895,6 +972,7 @@ mod tests {
                 CONFIDENTIAL_CLIENT,
                 USER,
                 &redirect_uri,
+                "",
                 Local::now(),
                 Local::now(),
             )
@@ -919,6 +997,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -942,6 +1021,7 @@ mod tests {
                 CONFIDENTIAL_CLIENT,
                 USER,
                 &redirect_uri,
+                "",
                 Local::now(),
                 Local::now(),
             )
@@ -966,6 +1046,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -989,6 +1070,7 @@ mod tests {
                 CONFIDENTIAL_CLIENT,
                 USER,
                 &redirect_uri,
+                "",
                 Local::now(),
                 Local::now(),
             )
@@ -1013,6 +1095,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1039,6 +1122,7 @@ mod tests {
                 CONFIDENTIAL_CLIENT,
                 USER,
                 &redirect_uri,
+                "",
                 Local::now(),
                 Local::now(),
             )
@@ -1063,6 +1147,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1088,6 +1173,7 @@ mod tests {
                 CONFIDENTIAL_CLIENT,
                 USER,
                 &redirect_uri,
+                "",
                 Local::now(),
                 Local::now(),
             )
@@ -1112,6 +1198,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1121,7 +1208,7 @@ mod tests {
         assert_eq!("bearer".to_string(), response.token_type);
         assert_eq!(Some(60), response.expires_in);
         assert!(response.refresh_token.iter().any(|v| !v.is_empty()));
-        assert_eq!(None, response.scope);
+        assert_eq!(Some("".to_string()), response.scope);
         assert!(!response.id_token.unwrap().is_empty());
     }
 
@@ -1139,6 +1226,7 @@ mod tests {
                 CONFIDENTIAL_CLIENT,
                 USER,
                 &redirect_uri,
+                "",
                 Local::now(),
                 Local::now(),
             )
@@ -1163,6 +1251,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1172,7 +1261,7 @@ mod tests {
         assert_eq!("bearer".to_string(), response.token_type);
         assert_eq!(Some(60), response.expires_in);
         assert!(response.refresh_token.iter().any(|v| !v.is_empty()));
-        assert_eq!(None, response.scope);
+        assert_eq!(Some("".to_string()), response.scope);
         assert!(!response.id_token.unwrap().is_empty());
     }
 
@@ -1204,6 +1293,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1243,6 +1333,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1252,7 +1343,7 @@ mod tests {
         assert_eq!("bearer".to_string(), response.token_type);
         assert_eq!(Some(60), response.expires_in);
         assert!(response.refresh_token.iter().any(|v| !v.is_empty()));
-        assert_eq!(None, response.scope);
+        assert_eq!(Some("".to_string()), response.scope);
         assert!(!response.id_token.unwrap().is_empty());
     }
 
@@ -1284,6 +1375,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1323,6 +1415,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1362,6 +1455,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1401,6 +1495,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1410,7 +1505,7 @@ mod tests {
         assert_eq!("bearer".to_string(), response.token_type);
         assert_eq!(Some(60), response.expires_in);
         assert!(response.refresh_token.iter().any(|v| !v.is_empty()));
-        assert_eq!(None, response.scope);
+        assert_eq!(Some("".to_string()), response.scope);
         assert!(!response.id_token.unwrap().is_empty());
     }
 
@@ -1437,6 +1532,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1466,6 +1562,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1485,12 +1582,13 @@ mod tests {
         let token = Token::build(
             &build_test_user_store().get(USER).unwrap(),
             &build_test_client_store().get(CONFIDENTIAL_CLIENT).unwrap(),
+            &Vec::new(),
             Local::now(),
             Duration::minutes(3),
             0,
         );
         let refresh_token = token_creator
-            .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), Vec::new()))
+            .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), &Vec::new()))
             .unwrap();
         let form = Form(Request {
             grant_type: Some(GrantType::RefreshToken),
@@ -1512,6 +1610,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1531,13 +1630,14 @@ mod tests {
         let mut token = Token::build(
             &build_test_user_store().get(USER).unwrap(),
             &build_test_client_store().get(CONFIDENTIAL_CLIENT).unwrap(),
+            &Vec::new(),
             Local::now(),
             Duration::minutes(3),
             0,
         );
         token.set_issuer(&build_test_token_issuer());
         let refresh_token = token_creator
-            .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), Vec::new()))
+            .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), &Vec::new()))
             .unwrap();
         let form = Form(Request {
             grant_type: Some(GrantType::RefreshToken),
@@ -1559,6 +1659,7 @@ mod tests {
             build_test_token_creator(),
             build_test_authenticator(),
             build_test_token_validator(),
+            build_test_scope_store(),
         )
         .await;
 
@@ -1568,7 +1669,7 @@ mod tests {
         assert_eq!("bearer".to_string(), response.token_type);
         assert_eq!(Some(60), response.expires_in);
         assert!(response.refresh_token.iter().any(|v| !v.is_empty()));
-        assert_eq!(None, response.scope);
+        assert_eq!(Some("".to_string()), response.scope);
         assert!(!response.id_token.unwrap().is_empty());
     }
 }

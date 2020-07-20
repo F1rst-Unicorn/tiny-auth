@@ -19,6 +19,8 @@ use super::parse_bearer_authorization;
 use crate::business::token::TokenValidator;
 use crate::domain::Token;
 
+use log::debug;
+
 use actix_web::web::Data;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
@@ -28,12 +30,14 @@ pub async fn handle(headers: HttpRequest, validator: Data<TokenValidator>) -> Ht
         Some(header) => match parse_bearer_authorization(header) {
             Some(token) => token,
             None => {
+                debug!("Invalid authorization header");
                 return HttpResponse::Unauthorized()
                 .header("www-authenticate", "error=\"invalid_request\", error_description=\"Invalid authorization header\"")
                 .finish();
             }
         },
         None => {
+            debug!("Missing authorization header");
             return HttpResponse::BadRequest()
                 .header(
                     "www-authenticate",
@@ -45,6 +49,7 @@ pub async fn handle(headers: HttpRequest, validator: Data<TokenValidator>) -> Ht
 
     let token = match validator.validate::<Token>(&token) {
         None => {
+            debug!("Invalid token");
             return HttpResponse::Unauthorized()
                 .header(
                     "www-authenticate",
@@ -115,6 +120,7 @@ mod tests {
                         .create(Token::build(
                             &user,
                             &client,
+                            &Vec::new(),
                             Local::now() - expiration,
                             Duration::zero(),
                             0,
@@ -135,7 +141,14 @@ mod tests {
         let user = build_test_user_store().get(USER).unwrap();
         let client = build_test_client_store().get(PUBLIC_CLIENT).unwrap();
         let expiration = Duration::minutes(3);
-        let mut token = Token::build(&user, &client, Local::now() + expiration, expiration, 0);
+        let mut token = Token::build(
+            &user,
+            &client,
+            &Vec::new(),
+            Local::now() + expiration,
+            expiration,
+            0,
+        );
         token.set_issuer(&build_test_token_issuer());
         let request = test::TestRequest::post()
             .header(

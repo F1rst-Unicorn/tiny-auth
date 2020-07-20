@@ -29,6 +29,7 @@ package() {
 
     install -D -m 755 target/release/${pkgname} $pkgdir/usr/bin/${pkgname}
     install -D -m 755 target/release/${pkgname}-password-encoder $pkgdir/usr/bin/${pkgname}-password-encoder
+    install -D -m 755 target/release/${pkgname}-scope-debugger $pkgdir/usr/bin/${pkgname}-scope-debugger
     install -D -m 644 pkg/config.yml $pkgdir/etc/${pkgname}/config.yml
     install -D -m 644 pkg/log4rs.yml $pkgdir/etc/${pkgname}/log4rs.yml
     install -D -m 644 pkg/systemd.service $pkgdir/usr/lib/systemd/system/${pkgname}.service
