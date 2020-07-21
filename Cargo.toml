@@ -1,6 +1,6 @@
 [package]
 name = "tiny-auth"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Jan Veen <jan.veen@posteo.de>"]
 description = "Tiny OIDC Provider"
 homepage = "https://gitlab.com/veenj/tiny-auth/-/blob/master/doc/README.md"
