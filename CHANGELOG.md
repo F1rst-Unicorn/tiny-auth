@@ -5,6 +5,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+
+* Add [scope
+  mapper](https://gitlab.com/veenj/tiny-auth/-/blob/master/doc/scopes.md)
+  support ([#10](https://gitlab.com/veenj/tiny-auth/issues/10))
+
 ### Fixed
 
 * Fix standard compliance for confidential clients when requesting tokens
