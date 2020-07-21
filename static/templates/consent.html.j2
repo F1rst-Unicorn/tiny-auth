@@ -18,22 +18,25 @@
 {% extends "base.html.j2" %}
 {% block content %}
 <div class="form">
-<h2>{{ translate(term="Consent") }}</h2>
-<div class="username">{{ user }}</div>
-<div class="consent">
-Do you want to grant "{{ client }}" access to this?
-{% for scope in scopes %}
-<dl>
-  <dt>{{ scope.pretty_name }}</dt>
-  <dd>{{ scope.description }}</dd>
-</dl>
-{% endfor %}
-</div>
-<form action="{{ url(name="consent") }}" method="post">
+  <h2>{{ translate(term="Consent") }}</h2>
+  <div class="username">{{ user }}</div>
+  Do you want to grant "{{ client }}" access to this?
+  <form action="{{ url(name="consent") }}" method="post">
+    <div class="consent">
+      {% for scope in scopes %}
+        <dl>
+          <div class="scopetop">
+            <input type="checkbox" name="{{ scope.name }}" checked>
+            <dt>{{ scope.pretty_name }}</dt>
+          </div>
+          <dd>{{ scope.description }}</dd>
+        </dl>
+      {% endfor %}
+    </div>
     <input type="hidden" name="csrftoken" value="{{ csrftoken }}">
     <a class="btn btn-error" href="{{ url(name="consent/cancel") }}" >{{ translate(term="Cancel") }}</a>
     <input class="btn btn-success" type="submit" id="id_submit"
-           value="{{ translate(term="Agree") }}">
-</form>
+       value="{{ translate(term="Agree") }}">
+  </form>
 </div>
 {% endblock %}

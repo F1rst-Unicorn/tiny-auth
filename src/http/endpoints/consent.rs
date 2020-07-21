@@ -35,7 +35,10 @@ use crate::store::ClientStore;
 use crate::store::ScopeStore;
 use crate::store::UserStore;
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::iter::FromIterator;
 use std::sync::Arc;
 
 use actix_web::http::StatusCode;
@@ -63,6 +66,9 @@ pub struct Request {
     #[serde(default)]
     #[serde(deserialize_with = "deserialise_empty_as_none")]
     csrftoken: Option<String>,
+
+    #[serde(flatten)]
+    scopes: BTreeMap<String, String>,
 }
 
 pub async fn get(
@@ -146,13 +152,21 @@ pub async fn post(
     let mut response_parameters = HashMap::new();
     let mut encode_to_fragment = false;
 
+    let requested_scopes = parse_scope_names(&first_request.scope.clone().unwrap_or_default());
+    let requested_scopes = BTreeSet::from_iter(requested_scopes);
+    let allowed_scopes = BTreeSet::from_iter(query.scopes.keys().map(Clone::clone));
+    let scopes = allowed_scopes
+        .intersection(&requested_scopes)
+        .map(Clone::clone)
+        .collect::<Vec<String>>();
+
     if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Code)) {
         let code = auth_code_store
             .get_authorization_code(
                 client_name,
                 &username,
                 &redirect_uri,
-                &first_request.scope.clone().unwrap_or_default(),
+                &scopes.join(" "),
                 Local::now(),
                 auth_time,
             )
@@ -190,8 +204,6 @@ pub async fn post(
             Ok(Some(req)) => req,
         };
 
-        let scopes = first_request.scope.unwrap_or_default();
-        let scopes = parse_scope_names(&scopes);
         let scopes = scope_store.get_all(&scopes);
 
         let mut token = Token::build(&user, &client, &scopes, Local::now(), expires_in, auth_time);
@@ -386,6 +398,7 @@ mod tests {
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
             csrftoken: Some(csrftoken + "wrong"),
+            scopes: Default::default(),
         });
 
         let resp = post(
@@ -411,6 +424,7 @@ mod tests {
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
             csrftoken: Some(csrftoken),
+            scopes: Default::default(),
         });
 
         let resp = post(
@@ -438,6 +452,7 @@ mod tests {
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
             csrftoken: Some(csrftoken),
+            scopes: Default::default(),
         });
 
         let resp = post(
@@ -487,6 +502,7 @@ mod tests {
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
             csrftoken: Some(csrftoken),
+            scopes: Default::default(),
         });
 
         let resp = post(
@@ -554,6 +570,7 @@ mod tests {
         session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
             csrftoken: Some(csrftoken),
+            scopes: Default::default(),
         });
 
         let resp = post(

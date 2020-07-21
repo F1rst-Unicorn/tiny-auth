@@ -45,6 +45,8 @@ pub struct Scope {
 
 #[derive(Serialize)]
 pub struct ScopeDescription {
+    name: String,
+
     pretty_name: String,
 
     description: String,
@@ -53,6 +55,7 @@ pub struct ScopeDescription {
 impl From<Scope> for ScopeDescription {
     fn from(s: Scope) -> Self {
         Self {
+            name: s.name,
             pretty_name: s.pretty_name,
             description: s.description,
         }

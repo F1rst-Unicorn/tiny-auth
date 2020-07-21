@@ -82,13 +82,18 @@ input {
     box-sizing: border-box;
 }
 
+.scopetop > input {
+    width: min-content;
+    float: left;
+}
+
 .consent {
     margin-bottom: 20px;
     margin-left: auto;
     margin-right: auto;
 }
 
-dt {
+.scopetop {
     border-top-left-radius: 10px;
     border-top-right-radius: 10px;
 
@@ -97,6 +102,10 @@ dt {
     background-color: #efefefff;
 
     text-decoration: underline;
+}
+
+dt {
+    overflow: hidden;
 }
 
 dd {
