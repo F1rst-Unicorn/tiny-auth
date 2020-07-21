@@ -56,3 +56,27 @@ impl Client {
         }
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+
+    const CLIENT_1: &str = r#"
+---
+client_id: confidential
+client_type:
+  confidential:
+    password:
+      Pbkdf2HmacSha256:
+        credential: yIwGQgK7dU7LKxageOikUK1Ci8LekYLAUqsUQqKgBXk=
+        iterations: 100000
+        salt: GDyTkeq//lzzWvEd6JJn8Eu227floAeFemr+4oAsXA1jb25maWRlbnRpYWw=
+
+redirect_uris:
+  - http://localhost/confidential
+"#;
+
+    pub fn get_test_client() -> Client {
+        serde_yaml::from_str(CLIENT_1).unwrap()
+    }
+}

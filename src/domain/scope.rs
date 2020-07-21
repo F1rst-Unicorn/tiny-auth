@@ -323,15 +323,6 @@ pub enum MergeError {
     UnmergableTypes,
 }
 
-impl std::fmt::Display for MergeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MergeError::TypeMismatch => write!(f, "type mismatch"),
-            MergeError::UnmergableTypes => write!(f, "unmergable types"),
-        }
-    }
-}
-
 pub fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
     match left {
         Value::Array(mut left) => match right {
@@ -366,6 +357,199 @@ pub fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::client::tests::get_test_client;
+    use crate::domain::user::tests::get_test_user;
+
+    use serde_json::json;
+
+    #[test]
+    pub fn valid_inserting_works() {
+        let structure = json!({
+            "key": {
+                "key": null
+            }
+        });
+        let expected = json!({
+            "key": {
+                "key": 4
+            }
+        });
+
+        let result = insert_value(structure, json!(4));
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    pub fn inserting_to_null_returns_value() {
+        let result = insert_value(json!(null), json!(4));
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(json!(4), result);
+    }
+
+    #[test]
+    pub fn inserting_to_array_fails() {
+        let result = insert_value(json!({}), json!(null));
+
+        assert!(result.is_err());
+        if let Error::AttributeSelectionError = result.unwrap_err() {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    pub fn valid_copying_works() {
+        let selector = json!({
+            "key": {
+                "key": null,
+            }
+        });
+        let value = json!({
+            "key": {
+                "key": "value",
+            }
+        });
+
+        let result = copy_values(value, selector, &mut Vec::new());
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(json!({"key": "value"}), result);
+    }
+
+    #[test]
+    pub fn copying_with_unterminated_selector_gives_error() {
+        let selector = json!({
+            "key": {
+                "key": 1,
+            }
+        });
+        let value = json!({
+            "key": {
+                "key": "value",
+            }
+        });
+
+        let result = copy_values(value, selector, &mut Vec::new());
+
+        assert!(result.is_err());
+        if let Error::AttributeSelectionError = result.unwrap_err() {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    pub fn copying_with_unknown_attribute_gives_error() {
+        let selector = json!({
+            "key": {
+                "key": null,
+            }
+        });
+        let value = json!({
+            "key": {
+                "other_name": null,
+            }
+        });
+
+        let result = copy_values(value, selector, &mut Vec::new());
+
+        assert!(result.is_err());
+        if let Error::AttributeSelectionError = result.unwrap_err() {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    pub fn copying_with_invalid_selector_gives_error() {
+        let selector = json!({
+            "key": {
+                "key": null,
+                "invalid_second_key": null
+            }
+        });
+        let value = json!({
+            "key": {
+                "key": null,
+                "invalid_second_key": null
+            }
+        });
+
+        let result = copy_values(value, selector, &mut Vec::new());
+
+        assert!(result.is_err());
+        if let Error::AttributeSelectionError = result.unwrap_err() {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    pub fn copying_with_invalid_types_gives_error() {
+        let result = copy_values(json!(false), json!(false), &mut Vec::new());
+
+        assert!(result.is_err());
+        if let Error::AttributeSelectionError = result.unwrap_err() {
+        } else {
+            panic!();
+        }
+    }
+
+    #[test]
+    pub fn copying_with_null_selector_returns_value() {
+        let result = copy_values(json!(false), json!(null), &mut Vec::new());
+
+        assert!(result.is_ok());
+        assert_eq!(json!(false), result.unwrap());
+    }
+
+    #[test]
+    pub fn objects_are_templated() {
+        let user = get_test_user();
+        let client = get_test_client();
+        let value = json!({"key": "{{ user.name }}"});
+
+        let (result, errors) = template(&value, &user, &client);
+
+        assert!(errors.is_empty());
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(json!({"key": "john"}), result);
+    }
+
+    #[test]
+    pub fn arrays_are_templated() {
+        let user = get_test_user();
+        let client = get_test_client();
+        let value = json!(["{{ user.name }}"]);
+
+        let (result, errors) = template(&value, &user, &client);
+
+        assert!(errors.is_empty());
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(json!(["john"]), result);
+    }
+
+    #[test]
+    pub fn strings_are_templated() {
+        let user = get_test_user();
+        let client = get_test_client();
+        let value = Value::String("{{ user.name }}".to_string());
+
+        let (result, errors) = template(&value, &user, &client);
+
+        assert!(errors.is_empty());
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(Value::String("john".to_string()), result);
+    }
 
     #[test]
     pub fn two_arrays_are_merged() {
@@ -403,6 +587,20 @@ mod tests {
         assert!(result.is_err());
         let result = result.unwrap_err();
         assert_eq!(result, MergeError::TypeMismatch);
+    }
+
+    #[test]
+    pub fn merging_objects_with_overlapping_keys_fails() {
+        let mut first = Map::new();
+        first.insert("key".to_string(), Value::String("first".to_string()));
+        let mut second = Map::new();
+        second.insert("key".to_string(), Value::String("second".to_string()));
+
+        let result = merge(Value::Object(first), Value::Object(second));
+
+        assert!(result.is_err());
+        let result = result.unwrap_err();
+        assert_eq!(MergeError::UnmergableTypes, result);
     }
 
     #[test]
