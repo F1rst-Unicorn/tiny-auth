@@ -280,7 +280,7 @@ async fn grant_with_authorization_code(
             let client_id = match &request.client_id {
                 None => {
                     return Err(render_json_error(
-                        ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                        ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
                         "Missing parameter client_id",
                     ))
                 }
@@ -573,7 +573,7 @@ mod tests {
         let form = Form(Request {
             grant_type: None,
             code: Some("fdsa".to_string()),
-            client_id: Some("fdsa".to_string()),
+            client_id: None,
             redirect_uri: Some("fdsa".to_string()),
             scope: None,
             username: None,
@@ -608,7 +608,7 @@ mod tests {
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: None,
-            client_id: Some("fdsa".to_string()),
+            client_id: None,
             redirect_uri: Some("fdsa".to_string()),
             scope: None,
             username: None,
@@ -664,10 +664,10 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
         assert_eq!(
-            OidcError::from(ProtocolError::InvalidRequest),
+            OidcError::from(ProtocolError::UnauthorizedClient),
             response.error
         );
     }
@@ -678,7 +678,7 @@ mod tests {
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some("fdsa".to_string()),
-            client_id: Some("fdsa".to_string()),
+            client_id: None,
             redirect_uri: None,
             scope: None,
             username: None,
@@ -749,7 +749,7 @@ mod tests {
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some("fdsa".to_string()),
-            client_id: Some(PUBLIC_CLIENT.to_string()),
+            client_id: None,
             redirect_uri: Some("fdsa".to_string()),
             scope: None,
             username: None,
@@ -770,9 +770,12 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
-        assert_eq!(OidcError::from(ProtocolError::InvalidGrant), response.error);
+        assert_eq!(
+            OidcError::from(ProtocolError::UnauthorizedClient),
+            response.error
+        );
     }
 
     #[actix_rt::test]
@@ -931,7 +934,7 @@ mod tests {
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            client_id: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
@@ -980,7 +983,7 @@ mod tests {
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            client_id: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
@@ -1029,7 +1032,7 @@ mod tests {
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            client_id: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
@@ -1078,7 +1081,7 @@ mod tests {
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            client_id: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
@@ -1130,7 +1133,7 @@ mod tests {
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            client_id: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
@@ -1181,7 +1184,7 @@ mod tests {
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            client_id: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
@@ -1234,7 +1237,7 @@ mod tests {
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            client_id: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
