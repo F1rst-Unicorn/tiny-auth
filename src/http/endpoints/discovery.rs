@@ -199,13 +199,19 @@ pub async fn get(
         .json(response)
 }
 
-#[derive(Serialize)]
-struct Jwks {
+#[derive(Serialize, Clone)]
+pub struct Jwks {
     keys: Vec<Jwk>,
 }
 
-#[derive(Serialize)]
-struct Jwk {
+impl Jwks {
+    pub fn with_keys(keys: Vec<Jwk>) -> Self {
+        Self { keys }
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct Jwk {
     #[serde(rename = "kty")]
     key_type: String,
 
@@ -214,18 +220,45 @@ struct Jwk {
 
     #[serde(rename = "x5u")]
     url: String,
+
+    #[serde(rename = "key_ops")]
+    key_operations: Vec<String>,
+
+    #[serde(flatten)]
+    key: Key,
 }
 
-pub async fn jwks(config: Data<IssuerConfiguration>) -> HttpResponse {
-    let response = Jwks {
-        keys: vec![Jwk {
-            key_type: config.algorithm.clone(),
+impl Jwk {
+    pub fn new_rsa(url: String, n: String, e: String) -> Self {
+        Self {
+            key_type: "RSA".to_string(),
             usage: "sig".to_string(),
-            url: config.issuer_url.clone() + "/cert",
-        }],
-    };
+            url,
+            key_operations: vec!["sign".to_string(), "verify".to_string()],
+            key: Key::Rsa { n, e },
+        }
+    }
 
+    pub fn new_ecdsa(url: String, crv: String, x: String, y: String) -> Self {
+        Self {
+            key_type: "EC".to_string(),
+            usage: "sig".to_string(),
+            url,
+            key_operations: vec!["sign".to_string(), "verify".to_string()],
+            key: Key::Ecdsa { crv, x, y },
+        }
+    }
+}
+
+#[serde(untagged)]
+#[derive(Serialize, Clone)]
+enum Key {
+    Rsa { n: String, e: String },
+    Ecdsa { crv: String, x: String, y: String },
+}
+
+pub async fn jwks(jwks: Data<Jwks>) -> HttpResponse {
     HttpResponse::Ok()
         .content_type("application/json")
-        .json(response)
+        .json(jwks.get_ref())
 }

@@ -20,8 +20,8 @@ store:
     base: hack/store
 
 crypto:
-  key: hack/key.pem
-  public key: hack/pubkey.pem
+  key: hack/eckey.pem
+  public key: hack/ecpubkey.pem
   pepper: pepper
 
 web:

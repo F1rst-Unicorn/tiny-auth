@@ -48,6 +48,10 @@ rand = "0.7.3"
 async-trait = "0.1.36"
 rustls = "0.16.0"
 
+[dependencies.openssl]
+version = "0.10"
+features = ["v110"]
+
 [dependencies.ring]
 version = "0.16.15"
 features = ["alloc", "std"]

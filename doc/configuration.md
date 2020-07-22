@@ -64,12 +64,23 @@ users. Otherwise all passwords are invalidated.
 
 #### `key` and `public key`
 
-Paths to a keypair to sign JWT tokens. Generate them e.g. with openssl:
+Paths to a keypair to sign JWT tokens. Supported algorithms are RSA and ECDSA
+
+##### RSA
+
+Use a keysize of at least 4096 bits. Take a look at recent cryptographic
+recommendations for a more up-to-date size.
 
 ```bash
-openssl genrsa 4096 > key.pem
-openssl rsa -in key.pem -pubout > public_key.pem
+openssl genrsa 4096 -out key.pem
+openssl rsa -in key.pem -pubout -out public_key.pem
 ```
 
-The public key will be hosted by tiny-auth so clients can fetch it and verify
-tokens.
+##### ECDSA
+
+Currently only the curve named in the command is supported.
+
+```bash
+openssl ecparam -name secp384r1 -genkey -noout | openssl pkcs8 -topk8 -nocrypt -out key.pem
+openssl ec -in key.pem -pubout -out public_key.pem
+```

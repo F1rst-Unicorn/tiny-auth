@@ -21,6 +21,8 @@ use crate::systemd::notify_about_start;
 use crate::systemd::watchdog;
 use crate::terminate::terminator;
 
+use openssl::error::ErrorStack;
+
 use std::convert::From;
 use std::fmt::Display;
 
@@ -35,6 +37,7 @@ pub enum Error {
     StdIoError(std::io::Error),
     JwtError(jsonwebtoken::errors::Error),
     TeraError(tera::Error),
+    OpensslError(ErrorStack),
 }
 
 impl Display for Error {
@@ -44,6 +47,7 @@ impl Display for Error {
             Self::StdIoError(e) => write!(f, "IO error: {}", e),
             Self::JwtError(e) => write!(f, "JWT error: {}", e),
             Self::TeraError(e) => write!(f, "Template error: {}", e),
+            Self::OpensslError(e) => write!(f, "Crypto error: {}", e),
         }
     }
 }
@@ -51,6 +55,12 @@ impl Display for Error {
 impl From<std::io::Error> for Error {
     fn from(error: std::io::Error) -> Self {
         Self::StdIoError(error)
+    }
+}
+
+impl From<ErrorStack> for Error {
+    fn from(error: ErrorStack) -> Self {
+        Self::OpensslError(error)
     }
 }
 

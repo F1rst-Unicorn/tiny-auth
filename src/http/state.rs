@@ -22,6 +22,8 @@ use crate::business::token::TokenValidator;
 use crate::config::Config;
 use crate::config::Store;
 use crate::domain::IssuerConfiguration;
+use crate::http::endpoints::discovery::Jwk;
+use crate::http::endpoints::discovery::Jwks;
 use crate::runtime::Error;
 use crate::store::file::*;
 use crate::store::memory::*;
@@ -33,6 +35,12 @@ use std::sync::Arc;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::EncodingKey;
+
+use openssl::bn::BigNum;
+use openssl::bn::BigNumContext;
+use openssl::bn::BigNumRef;
+use openssl::ec::EcKey;
+use openssl::rsa::Rsa;
 
 use log::error;
 
@@ -99,8 +107,12 @@ impl<'a> Constructor<'a> {
         .map_err(Into::into)
     }
 
+    pub fn read_public_key(&self) -> Result<String, Error> {
+        Ok(read_file(&self.config.crypto.public_key)?)
+    }
+
     pub fn build_public_key(&self) -> Result<String, Error> {
-        let token_certificate = read_file(&self.config.crypto.public_key)?;
+        let token_certificate = self.read_public_key()?;
         let bytes = token_certificate.as_bytes();
         match DecodingKey::from_rsa_pem(bytes) {
             Err(_) => match DecodingKey::from_ec_pem(bytes) {
@@ -177,6 +189,50 @@ impl<'a> Constructor<'a> {
             family,
             self.build_token_issuer(),
         ))
+    }
+
+    // See https://tools.ietf.org/html/rfc7518#section-6
+    pub fn build_jwks(&self) -> Result<Jwks, Error> {
+        let key = self.read_public_key()?;
+        let key = key.as_bytes();
+        let url = self.build_token_issuer() + "/cert";
+        let jwk = if let Ok(key) = Rsa::public_key_from_pem_pkcs1(key) {
+            let n = Self::encode_bignum(key.n());
+            let e = Self::encode_bignum(key.e());
+            Jwk::new_rsa(url, n, e)
+        } else if let Ok(key) = Rsa::public_key_from_pem(key) {
+            let n = Self::encode_bignum(key.n());
+            let e = Self::encode_bignum(key.e());
+            Jwk::new_rsa(url, n, e)
+        } else if let Ok(key) = EcKey::public_key_from_pem(key) {
+            let crv = match key.group().curve_name() {
+                Some(openssl::nid::Nid::SECP384R1) => "P-384".to_string(),
+                Some(_) | None => {
+                    error!("Unsupported curve in token key");
+                    return Err(Error::LoggedBeforeError);
+                }
+            };
+
+            let mut context = BigNumContext::new()?;
+            let mut x = BigNum::new()?;
+            let mut y = BigNum::new()?;
+
+            key.public_key()
+                .affine_coordinates_gfp(key.group(), &mut x, &mut y, &mut context)?;
+
+            let x = Self::encode_bignum(&x);
+            let y = Self::encode_bignum(&y);
+            Jwk::new_ecdsa(url, crv, x, y)
+        } else {
+            error!("Token key has unknown type, tried RSA and ECDSA");
+            return Err(Error::LoggedBeforeError);
+        };
+
+        Ok(Jwks::with_keys(vec![jwk]))
+    }
+
+    fn encode_bignum(num: &BigNumRef) -> String {
+        base64::encode_config(num.to_vec(), base64::URL_SAFE_NO_PAD)
     }
 }
 

@@ -5,12 +5,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+* Serve correct JWKS format
+  ([#43](https://gitlab.com/veenj/tiny-auth/issues/43))
+
 ## [0.3.0]
 
 ### Added
 
 * Add [scope
-  mapper](https://gitlab.com/veenj/tiny-auth/-/blob/master/doc/scopes.md)
+  mapper](doc/scopes.md)
   support ([#10](https://gitlab.com/veenj/tiny-auth/issues/10))
 
 ### Fixed

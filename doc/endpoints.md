@@ -21,9 +21,7 @@ The Token endpoint to fetch a token from in the Authorization Code Flow.
 
 The discovery endpoint for automatic discovery
 
-## Custom endpoints
+### `/jwks`
 
-### `/cert`
-
-The [public key](configuration.md#key-and-public-key) used to verify JWT
-tokens from this instance.
+The JWK Set containing the [public key](configuration.md#key-and-public-key)
+used to verify tokens.

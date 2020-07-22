@@ -79,6 +79,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
     let issuer_config = constructor
         .build_issuer_config()
         .ok_or(Error::LoggedBeforeError)?;
+    let jwks = constructor.build_jwks()?;
 
     let server = HttpServer::new(move || {
         let token_certificate = token_certificate.clone();
@@ -92,6 +93,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .app_data(web::Data::new(token_creator.clone()))
             .app_data(web::Data::new(token_validator.clone()))
             .app_data(web::Data::new(issuer_config.clone()))
+            .app_data(web::Data::new(jwks.clone()))
             .wrap(
                 CookieSession::private(config.web.secret_key.as_bytes())
                     // ^- encryption is only needed to avoid encoding problems
