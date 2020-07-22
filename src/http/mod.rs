@@ -97,7 +97,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .wrap(
                 CookieSession::private(config.web.secret_key.as_bytes())
                     // ^- encryption is only needed to avoid encoding problems
-                    .domain(&config.web.domain)
+                    .domain(&config.web.public_host.domain)
                     .name("session")
                     .path(config.web.path.as_ref().expect("no default given"))
                     .secure(config.web.tls.is_some())

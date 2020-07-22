@@ -5,6 +5,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+
+* Allow public hosting behind different port. This is a breaking change in the
+  [configuration file format](doc/configuration.md#public_host)
+
 ### Fixed
 
 * Serve correct JWKS format

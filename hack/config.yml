@@ -26,7 +26,9 @@ crypto:
 
 web:
   bind: localhost:8088
-  domain: localhost
+  public_host:
+    domain: localhost
+    port: 8088
   static_files: static
   session_timeout: 60000
   secret_key: jxbvDbbsgJyh1x2HG8V8rqKsD4vW45aIYcNopFuYdPdSvyKSVB54CWmCinCC1iv912AIkEfWB9kVDeliANle5Acc

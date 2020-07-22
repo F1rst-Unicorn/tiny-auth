@@ -19,10 +19,18 @@ All features relating network connectivity and the HTTP protocol.
 The host / IP address and port to which tiny-auth will bind.
 E.g. `localhost:8080`.
 
-#### `domain`
+#### `public_host`
+
+Set where tiny-auth is reachable from client perspective.
+
+##### `domain`
 
 The domain under which clients and users can reach tiny-auth. Used for URLs
 and cookies.
+
+##### `port`
+
+The domain under which clients and users can reach tiny-auth. Used for URLs.
 
 #### `path`
 

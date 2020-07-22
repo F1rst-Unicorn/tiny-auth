@@ -50,7 +50,7 @@ pub enum Store {
 pub struct Web {
     pub bind: String,
 
-    pub domain: String,
+    pub public_host: Host,
 
     #[serde(default = "default_path")]
     pub path: Option<String>,
@@ -73,6 +73,13 @@ fn default_path() -> Option<String> {
 
 fn default_session_timeout() -> Option<i64> {
     Some(3600)
+}
+
+#[derive(Default, Clone, Debug, Deserialize)]
+pub struct Host {
+    pub domain: String,
+
+    pub port: Option<String>,
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]
