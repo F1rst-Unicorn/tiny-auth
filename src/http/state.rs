@@ -22,8 +22,8 @@ use crate::business::token::TokenValidator;
 use crate::config::Config;
 use crate::config::Store;
 use crate::domain::IssuerConfiguration;
-use crate::http::endpoints::discovery::Jwk;
-use crate::http::endpoints::discovery::Jwks;
+use crate::domain::Jwk;
+use crate::domain::Jwks;
 use crate::runtime::Error;
 use crate::store::file::*;
 use crate::store::memory::*;
@@ -40,6 +40,8 @@ use openssl::bn::BigNum;
 use openssl::bn::BigNumContext;
 use openssl::bn::BigNumRef;
 use openssl::ec::EcKey;
+use openssl::hash::Hasher;
+use openssl::hash::MessageDigest;
 use openssl::rsa::Rsa;
 
 use log::error;
@@ -48,43 +50,102 @@ use tera::Tera;
 
 pub struct Constructor<'a> {
     config: &'a Config,
+
+    user_store: Option<Arc<dyn UserStore>>,
+
+    client_store: Option<Arc<dyn ClientStore>>,
+
+    scope_store: Option<Arc<dyn ScopeStore>>,
+
+    tera: Option<Tera>,
+
+    issuer_url: String,
+
+    public_key: String,
+
+    issuer_configuration: IssuerConfiguration,
+
+    encoding_key: EncodingKey,
+
+    algorithm: Algorithm,
+
+    jwk: Jwk,
 }
 
 impl<'a> Constructor<'a> {
-    pub fn new(config: &'a Config) -> Self {
-        Self { config }
+    pub fn new(config: &'a Config) -> Result<Self, Error> {
+        let user_store = Self::build_user_store(config);
+        let client_store = Self::build_client_store(config);
+        let scope_store = Self::build_scope_store(config);
+        let tera = Some(Self::build_template_engine(config)?);
+        let issuer_url = Self::build_issuer_url(config);
+        let public_key = read_file(&config.crypto.public_key)?;
+        let private_key = read_file(&config.crypto.key)?;
+        let (encoding_key, algorithm) = Self::build_encoding_key(&private_key)?;
+        let issuer_configuration = Self::build_issuer_config(issuer_url.clone(), algorithm);
+        let jwk = Self::build_jwk(&public_key, &issuer_url)?;
+
+        Ok(Self {
+            config,
+            user_store,
+            client_store,
+            scope_store,
+            tera,
+            issuer_url,
+            public_key,
+            issuer_configuration,
+            encoding_key,
+            algorithm,
+            jwk,
+        })
     }
 
-    pub fn build_issuer_config(&self) -> Option<IssuerConfiguration> {
-        Some(IssuerConfiguration {
-            issuer_url: self.build_token_issuer(),
-            algorithm: self.build_token_creator().ok()?.get_key_type(),
-        })
+    pub fn get_issuer_config(&self) -> IssuerConfiguration {
+        self.issuer_configuration.clone()
+    }
+
+    fn build_issuer_config(issuer_url: String, algorithm: Algorithm) -> IssuerConfiguration {
+        IssuerConfiguration {
+            issuer_url,
+            algorithm,
+        }
     }
 
     pub fn build_authenticator(&self) -> Option<Authenticator> {
         Some(Authenticator::new(
-            self.build_user_store()?,
+            self.get_user_store()?,
             &self.config.crypto.pepper,
         ))
     }
 
-    pub fn build_user_store(&self) -> Option<Arc<dyn UserStore>> {
-        match &self.config.store {
+    pub fn get_user_store(&self) -> Option<Arc<dyn UserStore>> {
+        self.user_store.clone()
+    }
+
+    fn build_user_store(config: &'a Config) -> Option<Arc<dyn UserStore>> {
+        match &config.store {
             None => None,
             Some(Store::Config { base }) => Some(Arc::new(FileUserStore::new(&base)?)),
         }
     }
 
-    pub fn build_client_store(&self) -> Option<Arc<dyn ClientStore>> {
-        match &self.config.store {
+    pub fn get_client_store(&self) -> Option<Arc<dyn ClientStore>> {
+        self.client_store.clone()
+    }
+
+    fn build_client_store(config: &'a Config) -> Option<Arc<dyn ClientStore>> {
+        match &config.store {
             None => None,
             Some(Store::Config { base }) => Some(Arc::new(FileClientStore::new(&base)?)),
         }
     }
 
-    pub fn build_scope_store(&self) -> Option<Arc<dyn ScopeStore>> {
-        match &self.config.store {
+    pub fn get_scope_store(&self) -> Option<Arc<dyn ScopeStore>> {
+        self.scope_store.clone()
+    }
+
+    fn build_scope_store(config: &'a Config) -> Option<Arc<dyn ScopeStore>> {
+        match &config.store {
             None => None,
             Some(Store::Config { base }) => Some(Arc::new(FileScopeStore::new(&base)?)),
         }
@@ -99,45 +160,31 @@ impl<'a> Constructor<'a> {
         Some(result)
     }
 
-    pub fn build_template_engine(&self) -> Result<Tera, Error> {
-        load_template_engine(
-            &self.config.web.static_files,
-            self.config.web.path.as_ref().unwrap(),
-        )
-        .map_err(Into::into)
+    pub fn get_template_engine(&self) -> Option<Tera> {
+        self.tera.clone()
     }
 
-    pub fn read_public_key(&self) -> Result<String, Error> {
-        Ok(read_file(&self.config.crypto.public_key)?)
+    fn build_template_engine(config: &'a Config) -> Result<Tera, Error> {
+        load_template_engine(&config.web.static_files, config.web.path.as_ref().unwrap())
+            .map_err(Into::into)
     }
 
-    pub fn build_public_key(&self) -> Result<String, Error> {
-        let token_certificate = self.read_public_key()?;
-        let bytes = token_certificate.as_bytes();
-        match DecodingKey::from_rsa_pem(bytes) {
-            Err(_) => match DecodingKey::from_ec_pem(bytes) {
-                Err(e) => {
-                    error!("failed to read public token key: {}", e);
-                    Err(e.into())
-                }
-                Ok(_) => Ok(token_certificate),
-            },
-            Ok(_) => Ok(token_certificate),
-        }
+    pub fn get_public_key(&self) -> String {
+        self.public_key.clone()
     }
 
-    fn build_token_issuer(&self) -> String {
+    fn build_issuer_url(config: &'a Config) -> String {
         let mut token_issuer = "http".to_string();
-        if self.config.web.tls.is_some() {
+        if config.web.tls.is_some() {
             token_issuer += "s";
         }
         token_issuer += "://";
-        token_issuer += &self.config.web.public_host.domain;
-        if let Some(port) = &self.config.web.public_host.port {
+        token_issuer += &config.web.public_host.domain;
+        if let Some(port) = &config.web.public_host.port {
             token_issuer += ":";
             token_issuer += port;
         }
-        if let Some(path) = &self.config.web.path {
+        if let Some(path) = &config.web.path {
             if !path.is_empty() {
                 if !path.starts_with('/') {
                     token_issuer += "/";
@@ -153,61 +200,62 @@ impl<'a> Constructor<'a> {
         token_issuer
     }
 
-    pub fn build_token_creator(&self) -> Result<TokenCreator, Error> {
-        let file = read_file(&self.config.crypto.key)?;
-        let bytes = file.as_bytes();
-        let mut encoding_key_result = EncodingKey::from_rsa_pem(bytes);
-        let algorithm = if encoding_key_result.is_err() {
-            encoding_key_result = EncodingKey::from_ec_pem(bytes);
-            if let Err(e) = encoding_key_result {
-                error!("failed to read private token key: {}", e);
-                return Err(e.into());
-            }
-            Algorithm::ES384
-        } else {
-            Algorithm::PS512
-        };
+    fn build_encoding_key(private_key: &str) -> Result<(EncodingKey, Algorithm), Error> {
+        let bytes = private_key.as_bytes();
+        match EncodingKey::from_rsa_pem(bytes) {
+            Err(_) => match EncodingKey::from_ec_pem(bytes) {
+                Err(e) => {
+                    error!("failed to read private token key: {}", e);
+                    Err(e.into())
+                }
+                Ok(key) => Ok((key, Algorithm::ES384)),
+            },
+            Ok(key) => Ok((key, Algorithm::PS512)),
+        }
+    }
 
-        let encoding_key = encoding_key_result.unwrap();
-        let token_issuer = self.build_token_issuer();
-        Ok(TokenCreator::new(encoding_key, algorithm, token_issuer))
+    pub fn build_token_creator(&self) -> Result<TokenCreator, Error> {
+        Ok(TokenCreator::new(
+            self.encoding_key.clone(),
+            self.issuer_configuration.clone(),
+            self.jwk.clone(),
+        ))
     }
 
     pub fn build_token_validator(&self) -> Result<TokenValidator, Error> {
-        let public_key = self.build_public_key()?;
-
-        let family;
-        let key = match DecodingKey::from_rsa_pem(public_key.as_bytes()) {
-            Err(_) => {
-                family = Algorithm::ES384;
-                DecodingKey::from_ec_pem(public_key.as_bytes())?
-            }
-            Ok(key) => {
-                family = Algorithm::PS512;
-                key
-            }
+        let key = match DecodingKey::from_rsa_pem(self.public_key.as_bytes()) {
+            Err(_) => DecodingKey::from_ec_pem(self.public_key.as_bytes())?,
+            Ok(key) => key,
         };
 
         Ok(TokenValidator::new(
             key.into_static(),
-            family,
-            self.build_token_issuer(),
+            self.algorithm,
+            self.issuer_url.clone(),
         ))
     }
 
     // See https://tools.ietf.org/html/rfc7518#section-6
-    pub fn build_jwks(&self) -> Result<Jwks, Error> {
-        let key = self.read_public_key()?;
-        let key = key.as_bytes();
-        let url = self.build_token_issuer() + "/cert";
+    fn build_jwk(public_key: &str, issuer_url: &str) -> Result<Jwk, Error> {
+        let key = public_key.as_bytes();
+        let url = issuer_url.to_string() + "/cert";
         let jwk = if let Ok(key) = Rsa::public_key_from_pem_pkcs1(key) {
             let n = Self::encode_bignum(key.n());
             let e = Self::encode_bignum(key.e());
-            Jwk::new_rsa(url, n, e)
+
+            let mut hasher = Hasher::new(MessageDigest::sha1())?;
+            hasher.update(&key.n().to_vec())?;
+            hasher.update(&key.e().to_vec())?;
+            let id = base64::encode(hasher.finish()?);
+            Jwk::new_rsa(id, url, n, e)
         } else if let Ok(key) = Rsa::public_key_from_pem(key) {
             let n = Self::encode_bignum(key.n());
             let e = Self::encode_bignum(key.e());
-            Jwk::new_rsa(url, n, e)
+            let mut hasher = Hasher::new(MessageDigest::sha1())?;
+            hasher.update(&key.n().to_vec())?;
+            hasher.update(&key.e().to_vec())?;
+            let id = base64::encode(hasher.finish()?);
+            Jwk::new_rsa(id, url, n, e)
         } else if let Ok(key) = EcKey::public_key_from_pem(key) {
             let crv = match key.group().curve_name() {
                 Some(openssl::nid::Nid::SECP384R1) => "P-384".to_string(),
@@ -220,19 +268,28 @@ impl<'a> Constructor<'a> {
             let mut context = BigNumContext::new()?;
             let mut x = BigNum::new()?;
             let mut y = BigNum::new()?;
+            let mut hasher = Hasher::new(MessageDigest::sha1())?;
+            hasher.update(&x.to_vec())?;
+            hasher.update(&y.to_vec())?;
+            hasher.update(crv.as_bytes())?;
 
             key.public_key()
                 .affine_coordinates_gfp(key.group(), &mut x, &mut y, &mut context)?;
 
             let x = Self::encode_bignum(&x);
             let y = Self::encode_bignum(&y);
-            Jwk::new_ecdsa(url, crv, x, y)
+            let id = base64::encode(hasher.finish()?);
+            Jwk::new_ecdsa(id, url, crv, x, y)
         } else {
             error!("Token key has unknown type, tried RSA and ECDSA");
             return Err(Error::LoggedBeforeError);
         };
 
-        Ok(Jwks::with_keys(vec![jwk]))
+        Ok(jwk)
+    }
+
+    pub fn build_jwks(&self) -> Result<Jwks, Error> {
+        Ok(Jwks::with_keys(vec![self.jwk.clone()]))
     }
 
     fn encode_bignum(num: &BigNumRef) -> String {
@@ -246,6 +303,8 @@ pub mod tests {
     use crate::business::authenticator::Authenticator;
     use crate::business::token::TokenCreator;
     use crate::business::token::TokenValidator;
+    use crate::domain::IssuerConfiguration;
+    use crate::domain::Jwk;
     use crate::store::AuthorizationCodeStore;
     use crate::store::ClientStore;
     use crate::store::ScopeStore;
@@ -264,9 +323,16 @@ pub mod tests {
     pub fn build_test_token_creator() -> Data<TokenCreator> {
         Data::new(TokenCreator::new(
             build_test_encoding_key(),
-            build_test_algorithm(),
-            build_test_token_issuer(),
+            build_test_issuer_config(),
+            build_test_jwk(),
         ))
+    }
+
+    pub fn build_test_issuer_config() -> IssuerConfiguration {
+        IssuerConfiguration {
+            issuer_url: build_test_token_issuer(),
+            algorithm: build_test_algorithm(),
+        }
     }
 
     pub fn build_test_token_issuer() -> String {
@@ -318,8 +384,17 @@ pub mod tests {
     pub fn build_test_token_validator() -> Data<TokenValidator> {
         Data::new(TokenValidator::new(
             build_test_decoding_key(),
-            Algorithm::HS256,
+            build_test_algorithm(),
             build_test_token_issuer(),
         ))
+    }
+
+    pub fn build_test_jwk() -> Jwk {
+        Jwk::new_rsa(
+            "key_id".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "".to_string(),
+        )
     }
 }

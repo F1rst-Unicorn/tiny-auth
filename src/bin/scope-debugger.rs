@@ -54,9 +54,15 @@ fn main() {
     debug!("Parsing config");
     let config = parse_config(config_path);
 
-    let di = state::Constructor::new(&config);
+    let di = match state::Constructor::new(&config) {
+        Err(e) => {
+            error!("Failed to read config: {}", e);
+            return;
+        }
+        Ok(v) => v,
+    };
 
-    let store = match di.build_user_store() {
+    let store = match di.get_user_store() {
         None => {
             error!("Failed to read users");
             return;
@@ -72,7 +78,7 @@ fn main() {
         Some(v) => v,
     };
 
-    let store = match di.build_client_store() {
+    let store = match di.get_client_store() {
         None => {
             error!("Failed to read clients");
             return;
@@ -88,7 +94,7 @@ fn main() {
         Some(v) => v,
     };
 
-    let store = match di.build_scope_store() {
+    let store = match di.get_scope_store() {
         None => {
             error!("Failed to read scopes");
             return;
@@ -113,13 +119,7 @@ fn main() {
         0,
     );
 
-    let issuer = match di.build_issuer_config() {
-        None => {
-            error!("Could not form token issuer");
-            return;
-        }
-        Some(v) => v,
-    };
+    let issuer = di.get_issuer_config();
     token.set_issuer(&issuer.issuer_url);
 
     match serde_json::to_string_pretty(&token) {

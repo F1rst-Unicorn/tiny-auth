@@ -16,6 +16,7 @@
  */
 
 use crate::domain::IssuerConfiguration;
+use crate::domain::Jwks;
 use crate::store::ScopeStore;
 
 use std::sync::Arc;
@@ -197,64 +198,6 @@ pub async fn get(
     HttpResponse::Ok()
         .content_type("application/json")
         .json(response)
-}
-
-#[derive(Serialize, Clone)]
-pub struct Jwks {
-    keys: Vec<Jwk>,
-}
-
-impl Jwks {
-    pub fn with_keys(keys: Vec<Jwk>) -> Self {
-        Self { keys }
-    }
-}
-
-#[derive(Serialize, Clone)]
-pub struct Jwk {
-    #[serde(rename = "kty")]
-    key_type: String,
-
-    #[serde(rename = "use")]
-    usage: String,
-
-    #[serde(rename = "x5u")]
-    url: String,
-
-    #[serde(rename = "key_ops")]
-    key_operations: Vec<String>,
-
-    #[serde(flatten)]
-    key: Key,
-}
-
-impl Jwk {
-    pub fn new_rsa(url: String, n: String, e: String) -> Self {
-        Self {
-            key_type: "RSA".to_string(),
-            usage: "sig".to_string(),
-            url,
-            key_operations: vec!["sign".to_string(), "verify".to_string()],
-            key: Key::Rsa { n, e },
-        }
-    }
-
-    pub fn new_ecdsa(url: String, crv: String, x: String, y: String) -> Self {
-        Self {
-            key_type: "EC".to_string(),
-            usage: "sig".to_string(),
-            url,
-            key_operations: vec!["sign".to_string(), "verify".to_string()],
-            key: Key::Ecdsa { crv, x, y },
-        }
-    }
-}
-
-#[serde(untagged)]
-#[derive(Serialize, Clone)]
-enum Key {
-    Rsa { n: String, e: String },
-    Ecdsa { crv: String, x: String, y: String },
 }
 
 pub async fn jwks(jwks: Data<Jwks>) -> HttpResponse {

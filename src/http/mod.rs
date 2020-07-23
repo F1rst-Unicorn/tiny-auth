@@ -55,20 +55,22 @@ pub fn build(config: Config) -> Result<Server, Error> {
     let workers = config.web.workers;
     let tls = config.web.tls.clone();
 
-    let constructor = state::Constructor::new(&config);
+    let constructor = state::Constructor::new(&config)?;
 
-    let tera = constructor.build_template_engine()?;
-    let token_certificate = constructor.build_public_key()?;
+    let tera = constructor
+        .get_template_engine()
+        .ok_or(Error::LoggedBeforeError)?;
+    let token_certificate = constructor.get_public_key();
     let token_creator = constructor.build_token_creator()?;
     let token_validator = constructor.build_token_validator()?;
     let user_store = constructor
-        .build_user_store()
+        .get_user_store()
         .ok_or(Error::LoggedBeforeError)?;
     let client_store = constructor
-        .build_client_store()
+        .get_client_store()
         .ok_or(Error::LoggedBeforeError)?;
     let scope_store = constructor
-        .build_scope_store()
+        .get_scope_store()
         .ok_or(Error::LoggedBeforeError)?;
     let auth_code_store = constructor
         .build_auth_code_store()
@@ -76,10 +78,10 @@ pub fn build(config: Config) -> Result<Server, Error> {
     let authenticator = constructor
         .build_authenticator()
         .ok_or(Error::LoggedBeforeError)?;
-    let issuer_config = constructor
-        .build_issuer_config()
-        .ok_or(Error::LoggedBeforeError)?;
+    let issuer_config = constructor.get_issuer_config();
     let jwks = constructor.build_jwks()?;
+
+    std::mem::drop(constructor);
 
     let server = HttpServer::new(move || {
         let token_certificate = token_certificate.clone();

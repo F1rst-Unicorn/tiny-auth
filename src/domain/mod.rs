@@ -17,6 +17,7 @@
 
 pub mod client;
 pub mod issuer_configuration;
+pub mod jwk;
 pub mod password;
 pub mod scope;
 pub mod token;
@@ -24,6 +25,8 @@ pub mod user;
 
 pub use client::Client;
 pub use issuer_configuration::IssuerConfiguration;
+pub use jwk::Jwk;
+pub use jwk::Jwks;
 pub use password::Password;
 pub use scope::Scope;
 pub use scope::ScopeDescription;

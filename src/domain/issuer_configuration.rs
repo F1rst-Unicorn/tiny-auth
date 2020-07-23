@@ -15,9 +15,27 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use jsonwebtoken::Algorithm;
+
 #[derive(Clone)]
 pub struct IssuerConfiguration {
     pub issuer_url: String,
 
-    pub algorithm: String,
+    pub algorithm: Algorithm,
+}
+
+impl IssuerConfiguration {
+    pub fn jwks(&self) -> String {
+        self.issuer_url.clone() + "/jwks"
+    }
+
+    pub fn get_key_type(&self) -> String {
+        match self.algorithm {
+            Algorithm::ES384 => "EC".to_string(),
+            Algorithm::PS512 => "RSA".to_string(),
+            _ => {
+                unimplemented!("unsupported token algorithm");
+            }
+        }
+    }
 }

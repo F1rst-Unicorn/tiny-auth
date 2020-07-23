@@ -15,6 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::domain::IssuerConfiguration;
+use crate::domain::Jwk;
 use crate::domain::RefreshToken;
 use crate::domain::Token;
 
@@ -35,38 +37,30 @@ use log::debug;
 pub struct TokenCreator {
     key: EncodingKey,
 
-    algorithm: Algorithm,
+    issuer: IssuerConfiguration,
 
-    issuer: String,
+    jwk: Jwk,
 }
 
 impl TokenCreator {
-    pub fn new(key: EncodingKey, algorithm: Algorithm, issuer: String) -> Self {
-        Self {
-            key,
-            algorithm,
-            issuer,
-        }
+    pub fn new(key: EncodingKey, issuer: IssuerConfiguration, jwk: Jwk) -> Self {
+        Self { key, issuer, jwk }
     }
 
     pub fn create(&self, mut token: Token) -> Result<String> {
-        token.set_issuer(&self.issuer);
-        encode(&Header::new(self.algorithm), &token, &self.key)
+        token.set_issuer(&self.issuer.issuer_url);
+        let mut header = Header::new(self.issuer.algorithm);
+        header.kid = Some(self.jwk.key_id.clone());
+        header.jku = Some(self.issuer.jwks());
+        encode(&header, &token, &self.key)
     }
 
     pub fn create_refresh_token(&self, mut token: RefreshToken) -> Result<String> {
-        token.set_issuer(&self.issuer);
-        encode(&Header::new(self.algorithm), &token, &self.key)
-    }
-
-    pub fn get_key_type(&self) -> String {
-        match self.algorithm {
-            Algorithm::ES384 => "EC".to_string(),
-            Algorithm::PS512 => "RSA".to_string(),
-            _ => {
-                unimplemented!("unsupported token algorithm");
-            }
-        }
+        token.set_issuer(&self.issuer.issuer_url);
+        let mut header = Header::new(self.issuer.algorithm);
+        header.kid = Some(self.jwk.key_id.clone());
+        header.jku = Some(self.issuer.jwks());
+        encode(&header, &token, &self.key)
     }
 }
 
@@ -97,6 +91,7 @@ impl TokenValidator {
             .map(|v| v.claims)
             .map_err(|e| {
                 debug!("Token validation failed: {}", e);
+                println!("Token validation failed: {}", e);
                 e
             })
             .ok()
