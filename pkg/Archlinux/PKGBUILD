@@ -1,7 +1,7 @@
 # Maintainer: Jan Veen <jan.veen æt posteo.de>
 pkgname=tiny-auth
-pkgver=0.3.0
-pkgrel=2
+pkgver=0.4.0
+pkgrel=1
 pkgdesc="OIDC Provider"
 arch=('x86_64')
 url="https://gitlab.com/veenj/${pkgname}"

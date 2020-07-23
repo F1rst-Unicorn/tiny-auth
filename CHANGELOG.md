@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.4.0]
+
 ### Added
 
 * Allow public hosting behind different port. This is a breaking change in the
