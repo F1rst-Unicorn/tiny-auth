@@ -5,6 +5,14 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+* Respect nonce parameter of authorization requests correctly
+  ([#46](https://gitlab.com/veenj/tiny-auth/issues/46))
+
+* Fix missing kid in JWKS
+  ([#45](https://gitlab.com/veenj/tiny-auth/issues/45))
+
 ## [0.4.0]
 
 ### Added
