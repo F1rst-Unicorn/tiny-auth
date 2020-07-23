@@ -49,6 +49,8 @@ struct AuthCodeValue {
     insertion_time: DateTime<Local>,
 
     auth_time: DateTime<Local>,
+
+    nonce: Option<String>,
 }
 
 pub struct MemoryAuthorizationCodeStore {
@@ -84,6 +86,7 @@ pub async fn auth_code_clean_job(store: Arc<MemoryAuthorizationCodeStore>) {
 
 #[async_trait]
 impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
+    #[allow(clippy::too_many_arguments)]
     async fn get_authorization_code(
         &self,
         client_id: &str,
@@ -92,6 +95,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
         scope: &str,
         now: DateTime<Local>,
         auth_time: DateTime<Local>,
+        nonce: Option<String>,
     ) -> String {
         let mut store = self.store.write().await;
         let mut key = AuthCodeKey {
@@ -112,6 +116,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
                         scope: scope.to_string(),
                         insertion_time: now,
                         auth_time,
+                        nonce,
                     },
                 );
                 break auth_code;
@@ -138,6 +143,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
             username: value.user,
             scopes: value.scope,
             auth_time: value.auth_time,
+            nonce: value.nonce,
         })
     }
 }
@@ -152,7 +158,15 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code("client", "user", "redirect_uri", "", date, date)
+            .get_authorization_code(
+                "client",
+                "user",
+                "redirect_uri",
+                "",
+                date,
+                date,
+                Some("nonce".to_string()),
+            )
             .await;
 
         let output = uut.validate("client", &auth_code, date + duration).await;
@@ -171,7 +185,15 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code("client", "user", "redirect_uri", "", date, date)
+            .get_authorization_code(
+                "client",
+                "user",
+                "redirect_uri",
+                "",
+                date,
+                date,
+                Some("nonce".to_string()),
+            )
             .await;
 
         uut.clear_expired_codes(date + duration + duration, duration)
@@ -188,7 +210,15 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code("client", "user", "redirect_uri", "", date, date)
+            .get_authorization_code(
+                "client",
+                "user",
+                "redirect_uri",
+                "",
+                date,
+                date,
+                Some("nonce".to_string()),
+            )
             .await;
 
         uut.clear_expired_codes(date + duration, duration).await;
@@ -209,7 +239,15 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code("client", "user", "redirect_uri", "", date, date)
+            .get_authorization_code(
+                "client",
+                "user",
+                "redirect_uri",
+                "",
+                date,
+                date,
+                Some("nonce".to_string()),
+            )
             .await;
 
         uut.clear_expired_codes(date + duration + Duration::nanoseconds(1), duration)

@@ -72,10 +72,13 @@ pub struct AuthorizationCodeRecord {
     pub scopes: String,
 
     pub auth_time: DateTime<Local>,
+
+    pub nonce: Option<String>,
 }
 
 #[async_trait]
 pub trait AuthorizationCodeStore: Send + Sync {
+    #[allow(clippy::too_many_arguments)]
     async fn get_authorization_code(
         &self,
         client_id: &str,
@@ -84,6 +87,7 @@ pub trait AuthorizationCodeStore: Send + Sync {
         scope: &str,
         now: DateTime<Local>,
         auth_time: DateTime<Local>,
+        nonce: Option<String>,
     ) -> String;
 
     async fn validate(
@@ -178,7 +182,17 @@ pub mod tests {
 
     struct TestAuthorizationCodeStore {
         store: RefCell<
-            HashMap<(String, String), (String, String, String, DateTime<Local>, DateTime<Local>)>,
+            HashMap<
+                (String, String),
+                (
+                    String,
+                    String,
+                    String,
+                    DateTime<Local>,
+                    DateTime<Local>,
+                    Option<String>,
+                ),
+            >,
         >,
     }
 
@@ -187,6 +201,7 @@ pub mod tests {
 
     #[async_trait]
     impl AuthorizationCodeStore for TestAuthorizationCodeStore {
+        #[allow(clippy::too_many_arguments)]
         async fn get_authorization_code(
             &self,
             client_id: &str,
@@ -195,6 +210,7 @@ pub mod tests {
             scope: &str,
             now: DateTime<Local>,
             auth_time: DateTime<Local>,
+            nonce: Option<String>,
         ) -> String {
             self.store.borrow_mut().insert(
                 (client_id.to_string(), now.to_rfc3339()),
@@ -204,6 +220,7 @@ pub mod tests {
                     scope.to_string(),
                     now,
                     auth_time,
+                    nonce,
                 ),
             );
             now.to_rfc3339()
@@ -215,7 +232,7 @@ pub mod tests {
             authorization_code: &str,
             now: DateTime<Local>,
         ) -> Option<AuthorizationCodeRecord> {
-            let (redirect_uri, user, scope, creation_datetime, auth_time) = self
+            let (redirect_uri, user, scope, creation_datetime, auth_time, nonce) = self
                 .store
                 .borrow_mut()
                 .remove(&(client_id.to_string(), authorization_code.to_string()))?;
@@ -225,6 +242,7 @@ pub mod tests {
                 username: user,
                 scopes: scope,
                 auth_time,
+                nonce,
             })
         }
     }

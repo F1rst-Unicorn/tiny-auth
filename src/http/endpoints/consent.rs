@@ -169,6 +169,7 @@ pub async fn post(
                 &scopes.join(" "),
                 Local::now(),
                 auth_time,
+                first_request.nonce.clone(),
             )
             .await;
         response_parameters.insert("code", code);

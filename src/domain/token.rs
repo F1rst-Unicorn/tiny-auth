@@ -57,7 +57,7 @@ pub struct Token {
     #[serde(rename = "nonce")]
     #[serde(skip_serializing_if = "String::is_empty")]
     #[serde(default)]
-    nonce: String,
+    pub nonce: String,
 
     #[serde(rename = "acr")]
     #[serde(skip_serializing_if = "String::is_empty")]

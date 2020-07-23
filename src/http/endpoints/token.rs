@@ -161,19 +161,19 @@ pub async fn post(
                     )
                     .await
                 }
-                GrantType::ClientCredentials => {
-                    grant_with_client_credentials(
-                        headers,
-                        request,
-                        client_store,
-                        authenticator,
-                        scope_store,
-                    )
-                    .await
-                }
+                GrantType::ClientCredentials => grant_with_client_credentials(
+                    headers,
+                    request,
+                    client_store,
+                    authenticator,
+                    scope_store,
+                )
+                .await
+                .map(|(a, b, c, d)| (a, b, c, d, None)),
                 GrantType::Password => {
                     grant_with_password(headers, request, client_store, authenticator, scope_store)
                         .await
+                        .map(|(a, b, c, d)| (a, b, c, d, None))
                 }
                 _ => {
                     return render_json_error(
@@ -183,7 +183,7 @@ pub async fn post(
                 }
             };
 
-            let (user, client, scopes, auth_time) = match result {
+            let (user, client, scopes, auth_time, nonce) = match result {
                 Err(r) => return r,
                 Ok(x) => x,
             };
@@ -193,17 +193,17 @@ pub async fn post(
                 _ => false,
             };
 
-            (
-                Token::build(
-                    &user,
-                    &client,
-                    &scopes,
-                    Local::now(),
-                    Duration::minutes(1),
-                    auth_time,
-                ),
-                scopes,
-            )
+            let mut token = Token::build(
+                &user,
+                &client,
+                &scopes,
+                Local::now(),
+                Duration::minutes(1),
+                auth_time,
+            );
+            token.set_nonce(nonce);
+
+            (token, scopes)
         }
     };
 
@@ -260,7 +260,7 @@ async fn grant_with_authorization_code(
     auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
     authenticator: web::Data<Authenticator>,
     scope_store: web::Data<Arc<dyn ScopeStore>>,
-) -> Result<(User, Client, Vec<Scope>, i64), HttpResponse> {
+) -> Result<(User, Client, Vec<Scope>, i64, Option<String>), HttpResponse> {
     if request.redirect_uri.is_none() {
         return Err(render_json_error(
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
@@ -356,7 +356,13 @@ async fn grant_with_authorization_code(
 
     let scopes = scope_store.get_all(&parse_scope_names(&record.scopes));
 
-    Ok((user, client, scopes, record.auth_time.timestamp()))
+    Ok((
+        user,
+        client,
+        scopes,
+        record.auth_time.timestamp(),
+        record.nonce,
+    ))
 }
 
 async fn grant_with_client_credentials(
@@ -791,6 +797,7 @@ mod tests {
                 "",
                 Local::now(),
                 Local::now(),
+                Some("nonce".to_string()),
             )
             .await;
         let form = Form(Request {
@@ -836,6 +843,7 @@ mod tests {
                 "",
                 creation_time,
                 Local::now(),
+                Some("nonce".to_string()),
             )
             .await;
         let form = Form(Request {
@@ -880,6 +888,7 @@ mod tests {
                 "",
                 Local::now(),
                 Local::now(),
+                Some("nonce".to_string()),
             )
             .await;
         let form = Form(Request {
@@ -929,6 +938,7 @@ mod tests {
                 "",
                 Local::now(),
                 Local::now(),
+                Some("nonce".to_string()),
             )
             .await;
         let form = Form(Request {
@@ -978,6 +988,7 @@ mod tests {
                 "",
                 Local::now(),
                 Local::now(),
+                Some("nonce".to_string()),
             )
             .await;
         let form = Form(Request {
@@ -1027,6 +1038,7 @@ mod tests {
                 "",
                 Local::now(),
                 Local::now(),
+                Some("nonce".to_string()),
             )
             .await;
         let form = Form(Request {
@@ -1076,6 +1088,7 @@ mod tests {
                 "",
                 Local::now(),
                 Local::now(),
+                Some("nonce".to_string()),
             )
             .await;
         let form = Form(Request {
@@ -1128,6 +1141,7 @@ mod tests {
                 "",
                 Local::now(),
                 Local::now(),
+                Some("nonce".to_string()),
             )
             .await;
         let form = Form(Request {
@@ -1179,6 +1193,7 @@ mod tests {
                 "",
                 Local::now(),
                 Local::now(),
+                Some("nonce".to_string()),
             )
             .await;
         let form = Form(Request {
@@ -1232,6 +1247,7 @@ mod tests {
                 "",
                 Local::now(),
                 Local::now(),
+                Some("nonce".to_string()),
             )
             .await;
         let form = Form(Request {
@@ -1265,7 +1281,11 @@ mod tests {
         assert_eq!(Some(60), response.expires_in);
         assert!(response.refresh_token.iter().any(|v| !v.is_empty()));
         assert_eq!(Some("".to_string()), response.scope);
-        assert!(!response.id_token.unwrap().is_empty());
+
+        let token = build_test_token_validator().validate::<Token>(&response.id_token.unwrap());
+        assert!(token.is_some());
+        let token = token.unwrap();
+        assert_eq!("nonce".to_string(), token.nonce);
     }
 
     #[actix_rt::test]
