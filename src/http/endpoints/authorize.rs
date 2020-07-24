@@ -16,10 +16,13 @@
  */
 
 use super::deserialise_empty_as_none;
+use super::parse_prompt;
 use super::render_template;
 use crate::http::endpoints::server_error;
 use crate::protocol::oauth2;
+use crate::protocol::oidc::OidcProtocolError;
 use crate::protocol::oidc::OidcResponseType;
+use crate::protocol::oidc::Prompt;
 use crate::protocol::oidc::ProtocolError;
 use crate::protocol::oidc::ResponseType;
 use crate::store::ClientStore;
@@ -95,8 +98,7 @@ pub struct Request {
 
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub max_age: Option<String>,
+    pub max_age: Option<i64>,
 
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -170,7 +172,7 @@ pub async fn post(
 
     if query.scope.is_none() {
         debug!("Missing scope");
-        return missing_parameter(
+        return return_error(
             redirect_uri,
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Missing required parameter scope",
@@ -178,10 +180,35 @@ pub async fn post(
         );
     }
 
+    let prompts = parse_prompt(&query.prompt);
+    if (prompts.contains(&Prompt::Login)
+        || prompts.contains(&Prompt::Consent)
+        || prompts.contains(&Prompt::SelectAccount))
+        && prompts.contains(&Prompt::None)
+    {
+        debug!("Contradicting prompt requirements");
+        return return_error(
+            redirect_uri,
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+            "contradicting prompt requirements",
+            &client_state,
+        );
+    }
+
+    if prompts.contains(&Prompt::None) {
+        debug!("Authorization without consent not possible at the moment, issue #41");
+        return return_error(
+            redirect_uri,
+            ProtocolError::Oidc(OidcProtocolError::ConsentRequired),
+            "User has to agree to scopes",
+            &client_state,
+        );
+    }
+
     let response_type = match query.response_type.as_deref().map(parse_response_type) {
         None | Some(None) => {
             debug!("Missing or invalid response_type");
-            return missing_parameter(
+            return return_error(
                 redirect_uri,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
                 "Invalid required parameter response_type",
@@ -196,7 +223,7 @@ pub async fn post(
         && query.nonce.is_none()
     {
         debug!("Missing required parameter nonce for implicit flow");
-        return missing_parameter(
+        return return_error(
             redirect_uri,
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Invalid required parameter nonce",
@@ -241,7 +268,7 @@ fn render_invalid_redirect_uri_error(tera: &Tera) -> HttpResponse {
     )
 }
 
-pub fn missing_parameter(
+pub fn return_error(
     redirect_uri: &str,
     error: ProtocolError,
     description: &str,
@@ -428,6 +455,108 @@ mod tests {
         let expected_error = format!(
             "{}",
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
+        );
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("state".to_string(), client_state.to_string())));
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("error".to_string(), expected_error.to_string())));
+    }
+
+    #[actix_rt::test]
+    async fn contradicting_prompts_are_rejected() {
+        let req = test::TestRequest::post().to_http_request();
+        let session = req.get_session();
+        let client_store = build_test_client_store();
+        let redirect_uri =
+            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let client_state = "somestate".to_string();
+        let query = Query(Request {
+            scope: Some("email".to_string()),
+            response_type: None,
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri.to_string()),
+            state: Some(client_state.clone()),
+            response_mode: None,
+            nonce: None,
+            display: None,
+            prompt: Some("none login".to_string()),
+            max_age: None,
+            ui_locales: None,
+            id_token_hint: None,
+            login_hint: None,
+            acr_values: None,
+        });
+
+        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
+
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let url = Url::parse(url).unwrap();
+        let expected_url = Url::parse(&redirect_uri).unwrap();
+
+        assert_eq!(expected_url.scheme(), url.scheme());
+        assert_eq!(expected_url.domain(), url.domain());
+        assert_eq!(expected_url.port(), url.port());
+        assert_eq!(expected_url.path(), url.path());
+        let expected_error = format!(
+            "{}",
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
+        );
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("state".to_string(), client_state.to_string())));
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("error".to_string(), expected_error.to_string())));
+    }
+
+    #[actix_rt::test]
+    async fn no_prompt_is_unsupported() {
+        let req = test::TestRequest::post().to_http_request();
+        let session = req.get_session();
+        let client_store = build_test_client_store();
+        let redirect_uri =
+            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let client_state = "somestate".to_string();
+        let query = Query(Request {
+            scope: Some("email".to_string()),
+            response_type: None,
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri.to_string()),
+            state: Some(client_state.clone()),
+            response_mode: None,
+            nonce: None,
+            display: None,
+            prompt: Some("none".to_string()),
+            max_age: None,
+            ui_locales: None,
+            id_token_hint: None,
+            login_hint: None,
+            acr_values: None,
+        });
+
+        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
+
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let url = Url::parse(url).unwrap();
+        let expected_url = Url::parse(&redirect_uri).unwrap();
+
+        assert_eq!(expected_url.scheme(), url.scheme());
+        assert_eq!(expected_url.domain(), url.domain());
+        assert_eq!(expected_url.port(), url.port());
+        assert_eq!(expected_url.path(), url.path());
+        let expected_error = format!(
+            "{}",
+            ProtocolError::Oidc(OidcProtocolError::ConsentRequired)
         );
         assert!(url
             .query_pairs()

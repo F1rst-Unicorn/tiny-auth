@@ -37,7 +37,8 @@
         <input id="id_username" class="form-control" autofocus=""
                autocapitalize="none" autocomplete="username" maxlength="150"
                placeholder="{{ translate(term="Username") }}"
-               required="" type="text" name="username"/>
+               required="" type="text" name="username"
+               value="{{ login_hint | default(value='') }}"/>
     </div>
     <div class="form-group">
         <input id="id_password" class="form-control"

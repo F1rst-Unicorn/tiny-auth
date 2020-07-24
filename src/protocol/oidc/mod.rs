@@ -128,3 +128,24 @@ impl Display for OidcProtocolError {
         write!(f, "{}", value)
     }
 }
+
+#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
+pub enum Prompt {
+    None,
+    Login,
+    Consent,
+    SelectAccount,
+}
+
+impl TryFrom<&str> for Prompt {
+    type Error = ();
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "none" => Ok(Prompt::None),
+            "login" => Ok(Prompt::Login),
+            "consent" => Ok(Prompt::Consent),
+            "select_account" => Ok(Prompt::SelectAccount),
+            _ => Err(()),
+        }
+    }
+}

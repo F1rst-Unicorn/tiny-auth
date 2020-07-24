@@ -5,6 +5,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+
+* Support for optional parameters in authorization request
+  ([#19](https://gitlab.com/veenj/tiny-auth/issues/19))
+
 ### Fixed
 
 * Respect nonce parameter of authorization requests correctly

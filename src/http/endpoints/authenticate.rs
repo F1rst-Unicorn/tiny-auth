@@ -16,6 +16,7 @@
  */
 
 use super::deserialise_empty_as_none;
+use super::parse_prompt;
 use super::render_template;
 use super::server_error;
 use crate::business::authenticator::Authenticator;
@@ -77,11 +78,60 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
         _ => {}
     }
 
-    if let Ok(Some(username)) = session.get::<String>(SESSION_KEY) {
-        debug!("Recognised authenticated user '{}'", username);
-        return redirect_successfully(&tera, &session, &username);
-    }
+    let first_request = match parse_first_request(&session) {
+        None => {
+            return render_invalid_authentication_request(&tera);
+        }
+        Some(req) => req,
+    };
 
+    let prompts = parse_prompt(&first_request.prompt);
+
+    if let Ok(Some(username)) = session.get::<String>(SESSION_KEY) {
+        if prompts.contains(&oidc::Prompt::Login) || prompts.contains(&oidc::Prompt::SelectAccount)
+        {
+            debug!("Recognised user '{}' but client demands login", username);
+            render_login_form(session, tera)
+        } else if let Some(max_age) = first_request.max_age {
+            let auth_time = match session.get::<i64>(AUTH_TIME_SESSION_KEY) {
+                Err(_) | Ok(None) => {
+                    debug!("unsolicited authentication request, missing auth_time but username was present");
+                    return render_invalid_authentication_request(&tera);
+                }
+                Ok(Some(v)) => v,
+            };
+            let now = Local::now();
+            if now.timestamp() - auth_time <= max_age {
+                debug!(
+                    "Recognised authenticated user '{}' and max_age is still ok",
+                    username
+                );
+                redirect_successfully(&tera, &session, &username)
+            } else {
+                debug!(
+                    "Recognised authenticated user '{}' but client demands more recent login",
+                    username
+                );
+                render_login_form(session, tera)
+            }
+        } else {
+            debug!("Recognised authenticated user '{}'", username);
+            redirect_successfully(&tera, &session, &username)
+        }
+    } else if prompts.contains(&oidc::Prompt::None) {
+        debug!("No user recognised but client demands no interaction");
+        render_redirect_error(
+            session,
+            &tera,
+            oidc::ProtocolError::Oidc(oidc::OidcProtocolError::LoginRequired),
+            "No username found",
+        )
+    } else {
+        render_login_form(session, tera)
+    }
+}
+
+fn render_login_form(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     match build_context(&session) {
         Some(context) => {
             render_template_with_context("authenticate.html.j2", StatusCode::OK, &tera, &context)
@@ -192,6 +242,11 @@ fn build_context(session: &Session) -> Option<Context> {
         context.insert(super::TRIES_LEFT_CONTEXT, &tries_left);
     }
 
+    let first_request = parse_first_request(session)?;
+    if let Some(login_hint) = first_request.login_hint {
+        context.insert(super::LOGIN_HINT_CONTEXT, &login_hint);
+    }
+
     let csrftoken = super::generate_csrf_token();
     context.insert(super::CSRF_CONTEXT, &csrftoken);
 
@@ -279,6 +334,75 @@ mod tests {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
         session.set(authorize::SESSION_KEY, "dummy").unwrap();
+
+        let resp = get(session, build_test_tera()).await;
+
+        assert_eq!(resp.status(), http::StatusCode::OK);
+    }
+
+    #[actix_rt::test]
+    async fn recognising_user_redirects_to_consent() {
+        let req = test::TestRequest::get().to_http_request();
+        let session = req.get_session();
+        session.set(authorize::SESSION_KEY, "dummy").unwrap();
+        session.set(SESSION_KEY, "dummy").unwrap();
+
+        let resp = get(session, build_test_tera()).await;
+
+        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+    }
+
+    #[actix_rt::test]
+    async fn recognising_user_but_login_demanded_gives_form() {
+        let req = test::TestRequest::get().to_http_request();
+        let session = req.get_session();
+        session.set(authorize::SESSION_KEY, "prompt=login").unwrap();
+        session.set(SESSION_KEY, "dummy").unwrap();
+
+        let resp = get(session, build_test_tera()).await;
+
+        assert_eq!(resp.status(), http::StatusCode::OK);
+    }
+
+    #[actix_rt::test]
+    async fn recognising_user_but_account_selection_demanded_gives_form() {
+        let req = test::TestRequest::get().to_http_request();
+        let session = req.get_session();
+        session
+            .set(authorize::SESSION_KEY, "prompt=select_account")
+            .unwrap();
+        session.set(SESSION_KEY, "dummy").unwrap();
+
+        let resp = get(session, build_test_tera()).await;
+
+        assert_eq!(resp.status(), http::StatusCode::OK);
+    }
+
+    #[actix_rt::test]
+    async fn no_user_recognised_but_no_prompt_demanded_gives_error() {
+        let req = test::TestRequest::get().to_http_request();
+        let session = req.get_session();
+        session
+            .set(
+                authorize::SESSION_KEY,
+                "prompt=none&redirect_uri=http%3A%2F%2Flocalhost%2Fpublic",
+            )
+            .unwrap();
+
+        let resp = get(session, build_test_tera()).await;
+
+        assert_eq!(resp.status(), http::StatusCode::FOUND);
+    }
+
+    #[actix_rt::test]
+    async fn user_recognised_but_login_too_old_gives_login_form() {
+        let req = test::TestRequest::get().to_http_request();
+        let session = req.get_session();
+        session.set(authorize::SESSION_KEY, "max_age=0").unwrap();
+        session.set(SESSION_KEY, "dummy").unwrap();
+        session
+            .set(AUTH_TIME_SESSION_KEY, Local::now().timestamp() - 1)
+            .unwrap();
 
         let resp = get(session, build_test_tera()).await;
 

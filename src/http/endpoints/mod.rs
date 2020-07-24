@@ -23,9 +23,13 @@ pub mod token;
 pub mod userinfo;
 
 use crate::protocol::oauth2::ProtocolError as OAuthError;
+use crate::protocol::oidc::Prompt;
 use crate::protocol::oidc::ProtocolError;
 use crate::util::generate_random_string;
 use crate::util::render_tera_error;
+
+use std::collections::BTreeSet;
+use std::convert::TryFrom;
 
 use actix_web::http::HeaderValue;
 use actix_web::http::StatusCode;
@@ -55,6 +59,7 @@ const TRIES_LEFT_CONTEXT: &str = "tries";
 const CLIENT_ID_CONTEXT: &str = "client";
 const USER_NAME_CONTEXT: &str = "user";
 const SCOPES_CONTEXT: &str = "scopes";
+const LOGIN_HINT_CONTEXT: &str = "login_hint";
 
 fn parse_first_request(session: &Session) -> Option<authorize::Request> {
     let first_request = match session.get::<String>(authorize::SESSION_KEY) {
@@ -74,6 +79,18 @@ fn parse_first_request(session: &Session) -> Option<authorize::Request> {
     };
 
     Some(first_request)
+}
+
+fn parse_prompt(prompt: &Option<String>) -> BTreeSet<Prompt> {
+    match prompt {
+        None => Default::default(),
+        Some(value) => value
+            .split(' ')
+            .map(Prompt::try_from)
+            .filter(Result::is_ok)
+            .map(Result::unwrap)
+            .collect(),
+    }
 }
 
 fn parse_scope_names(names: &str) -> Vec<String> {
