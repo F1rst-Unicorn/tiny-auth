@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.5.0]
+
 ### Added
 
 * Support for optional parameters in authorization request
