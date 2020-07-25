@@ -103,7 +103,9 @@ pub mod tests {
     use super::*;
 
     use std::cell::RefCell;
+    use std::collections::BTreeSet;
     use std::collections::HashMap;
+    use std::iter::FromIterator;
     use std::sync::Arc;
 
     use crate::domain::Client;
@@ -148,12 +150,14 @@ pub mod tests {
                         password: Password::Plain("client1".to_string()),
                     },
                     redirect_uris: vec!["http://localhost/client1".to_string()],
+                    allowed_scopes: BTreeSet::from_iter(vec!["email".to_string()]),
                     attributes: HashMap::new(),
                 }),
                 "client2" => Some(Client {
                     client_id: key.to_string(),
                     client_type: ClientType::Public,
                     redirect_uris: vec!["http://localhost/client2".to_string()],
+                    allowed_scopes: BTreeSet::from_iter(vec!["email".to_string()]),
                     attributes: HashMap::new(),
                 }),
                 _ => None,

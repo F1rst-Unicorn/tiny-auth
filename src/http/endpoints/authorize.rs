@@ -17,6 +17,7 @@
 
 use super::deserialise_empty_as_none;
 use super::parse_prompt;
+use super::parse_scope_names;
 use super::render_template;
 use crate::http::endpoints::server_error;
 use crate::protocol::oauth2;
@@ -27,7 +28,9 @@ use crate::protocol::oidc::ProtocolError;
 use crate::protocol::oidc::ResponseType;
 use crate::store::ClientStore;
 
+use std::collections::BTreeSet;
 use std::convert::TryFrom;
+use std::iter::FromIterator;
 use std::sync::Arc;
 
 use actix_web::http::StatusCode;
@@ -131,7 +134,7 @@ pub async fn get(
 }
 
 pub async fn post(
-    query: web::Query<Request>,
+    mut query: web::Query<Request>,
     tera: web::Data<Tera>,
     client_store: web::Data<Arc<dyn ClientStore>>,
     session: Session,
@@ -141,7 +144,7 @@ pub async fn post(
             debug!("missing redirect_uri");
             return render_invalid_redirect_uri_error(&tera);
         }
-        Some(uri) => uri,
+        Some(uri) => uri.clone(),
     };
 
     let client_id = match query.client_id.as_ref() {
@@ -160,7 +163,7 @@ pub async fn post(
         Some(client) => client,
     };
 
-    if !client.is_redirect_uri_valid(redirect_uri) {
+    if !client.is_redirect_uri_valid(&redirect_uri) {
         info!(
             "invalid redirect_uri '{}' for client '{}'",
             redirect_uri, client_id
@@ -173,12 +176,21 @@ pub async fn post(
     if query.scope.is_none() {
         debug!("Missing scope");
         return return_error(
-            redirect_uri,
+            &redirect_uri,
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Missing required parameter scope",
             &client_state,
         );
     }
+
+    let scopes = parse_scope_names(query.scope.as_deref().unwrap());
+    let scopes = BTreeSet::from_iter(scopes.into_iter());
+    let scopes = scopes
+        .intersection(&client.allowed_scopes)
+        .map(Clone::clone)
+        .collect::<Vec<String>>()
+        .join(" ");
+    query.scope.replace(scopes);
 
     let prompts = parse_prompt(&query.prompt);
     if (prompts.contains(&Prompt::Login)
@@ -188,7 +200,7 @@ pub async fn post(
     {
         debug!("Contradicting prompt requirements");
         return return_error(
-            redirect_uri,
+            &redirect_uri,
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "contradicting prompt requirements",
             &client_state,
@@ -198,7 +210,7 @@ pub async fn post(
     if prompts.contains(&Prompt::None) {
         debug!("Authorization without consent not possible at the moment, issue #41");
         return return_error(
-            redirect_uri,
+            &redirect_uri,
             ProtocolError::Oidc(OidcProtocolError::ConsentRequired),
             "User has to agree to scopes",
             &client_state,
@@ -209,7 +221,7 @@ pub async fn post(
         None | Some(None) => {
             debug!("Missing or invalid response_type");
             return return_error(
-                redirect_uri,
+                &redirect_uri,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
                 "Invalid required parameter response_type",
                 &client_state,
@@ -224,7 +236,7 @@ pub async fn post(
     {
         debug!("Missing required parameter nonce for implicit flow");
         return return_error(
-            redirect_uri,
+            &redirect_uri,
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Invalid required parameter nonce",
             &client_state,
@@ -617,6 +629,44 @@ mod tests {
             .query_pairs()
             .into_owned()
             .any(|param| param == ("error".to_string(), expected_error.to_string())));
+    }
+
+    #[actix_rt::test]
+    async fn disallowed_scope_is_dropped() {
+        let req = test::TestRequest::post().to_http_request();
+        let client_store = build_test_client_store();
+        let session = req.get_session();
+        let redirect_uri =
+            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let client_state = "somestate".to_string();
+        let request = Request {
+            scope: Some("email profile".to_string()),
+            response_type: Some("code".to_string()),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: Some(redirect_uri.to_string()),
+            state: Some(client_state.clone()),
+            response_mode: None,
+            nonce: None,
+            display: None,
+            prompt: None,
+            max_age: None,
+            ui_locales: None,
+            id_token_hint: None,
+            login_hint: None,
+            acr_values: None,
+        };
+        let query = Query(request.clone());
+
+        let resp = post(query, build_test_tera(), client_store, session).await;
+
+        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+
+        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        assert_eq!("authenticate", url);
+
+        let session = req.get_session();
+        let first_request = parse_first_request(&session).unwrap();
+        assert_eq!(Some("email".to_string()), first_request.scope);
     }
 
     #[actix_rt::test]

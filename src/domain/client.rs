@@ -17,6 +17,7 @@
 
 use crate::protocol::oauth2::ClientType;
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 
 use serde::Deserialize;
@@ -33,6 +34,9 @@ pub struct Client {
     pub client_type: ClientType,
 
     pub redirect_uris: Vec<String>,
+
+    #[serde(default)]
+    pub allowed_scopes: BTreeSet<String>,
 
     #[serde(flatten)]
     pub attributes: HashMap<String, Value>,

@@ -70,9 +70,11 @@ A client configuration has at least the following properties:
 client_id: relyingparty
 client_type:
   confidential:
-    password: password
+    password: ...
 redirect_uris:
   - https://client.example/oidc
+allowed_scopes:
+  - email
 ```
 
 The file must be named the same as the `client_id` field, appended by `.yml`.
@@ -109,6 +111,12 @@ indentation.
 
 The URIs to which tiny-auth is allowed to redirect to. This is defined in the
 [OAuth2 RFC](https://tools.ietf.org/html/rfc6749#section-3.1.2).
+
+#### allowed_scopes
+
+Specify what scopes the client is allowed to request. tiny-auth will silently
+drop all disallowed scopes from authorization requests. The list SHOULD at
+least contain the `openid` scope.
 
 ### Scope Configuration
 

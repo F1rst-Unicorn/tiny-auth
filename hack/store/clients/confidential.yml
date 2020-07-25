@@ -10,3 +10,8 @@ client_type:
 
 redirect_uris:
   - http://localhost/confidential
+
+allowed_scopes:
+  - email
+  - openid
+  - profile

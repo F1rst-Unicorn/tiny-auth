@@ -5,6 +5,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+
+* Clients now need a list of allowed scopes, see
+  [documentation](doc/store.md#allowed_scopes).
+  ([#41](https://gitlab.com/veenj/tiny-auth/issues/41))
+
 ## [0.6.1]
 
 ## Fixed

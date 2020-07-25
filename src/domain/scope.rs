@@ -19,6 +19,8 @@ use crate::domain::Client;
 use crate::domain::User;
 use crate::util::render_tera_error;
 
+use std::cmp::Ord;
+
 use serde_json::Map;
 use serde_json::Value;
 
@@ -43,6 +45,25 @@ pub struct Scope {
     mappings: Vec<Mapping>,
 }
 
+impl PartialEq for Scope {
+    fn eq(&self, other: &Self) -> bool {
+        self.name.eq(&other.name)
+    }
+}
+
+impl Eq for Scope {}
+
+impl PartialOrd for Scope {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.name.partial_cmp(&other.name)
+    }
+}
+
+impl Ord for Scope {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.cmp(&other.name)
+    }
+}
 #[derive(Serialize)]
 pub struct ScopeDescription {
     name: String,

@@ -3,3 +3,8 @@ client_id: public
 client_type: public
 redirect_uris:
   - http://localhost/public
+
+allowed_scopes:
+  - email
+  - openid
+  - profile
