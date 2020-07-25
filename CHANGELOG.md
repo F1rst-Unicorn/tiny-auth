@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Allow more authentication options for the userinfo endpoint
+  ([#50](https://gitlab.com/veenj/tiny-auth/issues/50))
+
 * Allow authenticated users to return to login for a different account
   ([#47](https://gitlab.com/veenj/tiny-auth/issues/47))
 

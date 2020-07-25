@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use super::deserialise_empty_as_none;
 use super::parse_bearer_authorization;
 use crate::business::token::TokenValidator;
 use crate::domain::Token;
@@ -22,28 +23,46 @@ use crate::domain::Token;
 use log::debug;
 
 use actix_web::web::Data;
+use actix_web::web::Form;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 
-pub async fn handle(headers: HttpRequest, validator: Data<TokenValidator>) -> HttpResponse {
-    let token = match headers.headers().get("Authorization") {
-        Some(header) => match parse_bearer_authorization(header) {
-            Some(token) => token,
-            None => {
-                debug!("Invalid authorization header");
-                return HttpResponse::Unauthorized()
+use serde_derive::Deserialize;
+
+#[derive(Deserialize)]
+pub struct Request {
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    access_token: Option<String>,
+}
+
+pub async fn handle(
+    query: Form<Request>,
+    headers: HttpRequest,
+    validator: Data<TokenValidator>,
+) -> HttpResponse {
+    let token = if let Some(token) = &query.access_token {
+        token.to_string()
+    } else {
+        match headers.headers().get("Authorization") {
+            Some(header) => match parse_bearer_authorization(header) {
+                Some(token) => token,
+                None => {
+                    debug!("Invalid authorization header");
+                    return HttpResponse::Unauthorized()
                 .header("www-authenticate", "error=\"invalid_request\", error_description=\"Invalid authorization header\"")
                 .finish();
-            }
-        },
-        None => {
-            debug!("Missing authorization header");
-            return HttpResponse::BadRequest()
+                }
+            },
+            None => {
+                debug!("Missing authorization header");
+                return HttpResponse::BadRequest()
                 .header(
                     "www-authenticate",
                     "error=\"invalid_request\", error_description=\"Missing authorization header\"",
                 )
                 .finish();
+            }
         }
     };
 
@@ -87,8 +106,9 @@ mod tests {
     pub async fn missing_header_is_rejected() {
         let validator = build_test_token_validator();
         let request = test::TestRequest::post().to_http_request();
+        let query = Form(Request { access_token: None });
 
-        let resp = handle(request, validator).await;
+        let resp = handle(query, request, validator).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -99,8 +119,9 @@ mod tests {
         let request = test::TestRequest::post()
             .header("authorization", "invalid")
             .to_http_request();
+        let query = Form(Request { access_token: None });
 
-        let resp = handle(request, validator).await;
+        let resp = handle(query, request, validator).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
     }
@@ -128,8 +149,9 @@ mod tests {
                         .unwrap(),
             )
             .to_http_request();
+        let query = Form(Request { access_token: None });
 
-        let resp = handle(request, validator).await;
+        let resp = handle(query, request, validator).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
     }
@@ -156,8 +178,9 @@ mod tests {
                 "Bearer ".to_string() + &creator.create(token.clone()).unwrap(),
             )
             .to_http_request();
+        let query = Form(Request { access_token: None });
 
-        let resp = handle(request, validator).await;
+        let resp = handle(query, request, validator).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Token>(resp).await;
