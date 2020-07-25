@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.6.0]
+
 ### Added
 
 * Allow more authentication options for the userinfo endpoint
