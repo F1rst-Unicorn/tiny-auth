@@ -20,6 +20,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   claims!](https://openid.net/specs/openid-connect-core-1_0.html#AddressClaim)
   ([#51](https://gitlab.com/veenj/tiny-auth/issues/51))
 
+### Security
+
+* Bind refresh tokens to clients. It was possible for client A to obtain access
+  tokens from the token endpoint by presenting a refresh token issued to a
+  different client B.
+  ([#54](https://gitlab.com/veenj/tiny-auth/issues/54))
+
 ## [0.5.0]
 
 ### Added

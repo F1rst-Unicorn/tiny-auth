@@ -53,6 +53,7 @@ use chrono::offset::Local;
 use chrono::Duration;
 
 use log::debug;
+use log::warn;
 
 #[derive(Deserialize)]
 pub struct Request {
@@ -473,7 +474,18 @@ async fn grant_with_refresh_token(
         Some(token) => token,
     };
 
-    authenticate_client(headers, (*client_store).clone(), authenticator)?;
+    let client = authenticate_client(headers, (*client_store).clone(), authenticator)?;
+
+    if client.client_id != refresh_token.access_token.authorized_party {
+        warn!(
+            "client '{}' tried to use refresh_token issued to client '{}'",
+            client.client_id, refresh_token.access_token.authorized_party
+        );
+        return Err(render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
+            "Invalid refresh token",
+        ));
+    }
 
     let mut token = refresh_token.access_token;
     token.renew(Local::now(), Duration::minutes(1));
@@ -1610,6 +1622,55 @@ mod tests {
             Duration::minutes(3),
             0,
         );
+        let refresh_token = token_creator
+            .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), &Vec::new()))
+            .unwrap();
+        let form = Form(Request {
+            grant_type: Some(GrantType::RefreshToken),
+            code: None,
+            client_id: None,
+            redirect_uri: None,
+            scope: None,
+            username: None,
+            password: None,
+            refresh_token: Some(refresh_token),
+        });
+
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+            build_test_authenticator(),
+            build_test_token_validator(),
+            build_test_scope_store(),
+        )
+        .await;
+
+        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_rt::test]
+    async fn refresh_token_from_different_client_is_rejected() {
+        let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
+        let encoded_auth = base64::encode(auth);
+        let auth_code_store = build_test_auth_code_store();
+        let req = test::TestRequest::post()
+            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .to_http_request();
+
+        let token_creator = build_test_token_creator();
+        let mut token = Token::build(
+            &build_test_user_store().get(USER).unwrap(),
+            &build_test_client_store().get(PUBLIC_CLIENT).unwrap(),
+            &Vec::new(),
+            Local::now(),
+            Duration::minutes(3),
+            0,
+        );
+        token.set_issuer(&build_test_token_issuer());
         let refresh_token = token_creator
             .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), &Vec::new()))
             .unwrap();

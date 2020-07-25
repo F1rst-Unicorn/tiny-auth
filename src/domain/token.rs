@@ -70,7 +70,7 @@ pub struct Token {
     authentication_methods_request: Vec<String>,
 
     #[serde(rename = "azp")]
-    authorized_party: String,
+    pub authorized_party: String,
 
     #[serde(flatten)]
     scope_attributes: Value,
