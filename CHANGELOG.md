@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.7.0]
+
 ### Added
 
 * Clients now need a list of allowed scopes, see
