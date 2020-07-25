@@ -5,6 +5,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+
+* Allow authenticated users to return to login for a different account
+  ([#47](https://gitlab.com/veenj/tiny-auth/issues/47))
+
 ## [0.5.0]
 
 ### Added

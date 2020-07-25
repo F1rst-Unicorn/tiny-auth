@@ -213,6 +213,15 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     )
 }
 
+pub async fn select_account(session: Session) -> HttpResponse {
+    session.remove(SESSION_KEY);
+    session.remove(AUTH_TIME_SESSION_KEY);
+
+    HttpResponse::SeeOther()
+        .set_header("Location", "authenticate")
+        .finish()
+}
+
 fn render_redirect_error(
     session: Session,
     tera: &Tera,

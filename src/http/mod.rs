@@ -148,6 +148,11 @@ pub fn build(config: Config) -> Result<Server, Error> {
                         "/authenticate/cancel",
                         all().to(endpoints::method_not_allowed),
                     )
+                    .route(
+                        "/select_account",
+                        get().to(endpoints::authenticate::select_account),
+                    )
+                    .route("/select_account", all().to(endpoints::method_not_allowed))
                     .route("/consent", get().to(endpoints::consent::get))
                     .route("/consent", post().to(endpoints::consent::post))
                     .route("/consent", all().to(endpoints::method_not_allowed))
