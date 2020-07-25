@@ -10,6 +10,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 * Allow authenticated users to return to login for a different account
   ([#47](https://gitlab.com/veenj/tiny-auth/issues/47))
 
+### Fixed
+
+* Report correct `auth_time` in all tokens
+  ([#52](https://gitlab.com/veenj/tiny-auth/issues/52))
+
 ## [0.5.0]
 
 ### Added

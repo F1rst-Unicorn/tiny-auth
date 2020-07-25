@@ -106,7 +106,7 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
                     "Recognised authenticated user '{}' and max_age is still ok",
                     username
                 );
-                redirect_successfully(&tera, &session, &username)
+                redirect_successfully()
             } else {
                 debug!(
                     "Recognised authenticated user '{}' but client demands more recent login",
@@ -116,7 +116,7 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
             }
         } else {
             debug!("Recognised authenticated user '{}'", username);
-            redirect_successfully(&tera, &session, &username)
+            redirect_successfully()
         }
     } else if prompts.contains(&oidc::Prompt::None) {
         debug!("No user recognised but client demands no interaction");
@@ -187,7 +187,15 @@ pub async fn post(
     if authenticator.authenticate_user_and_forget(&username, &password) {
         session.remove(TRIES_LEFT_SESSION_KEY);
         session.remove(ERROR_CODE_SESSION_KEY);
-        redirect_successfully(&tera, &session, &username)
+        if let Err(e) = session.set(SESSION_KEY, &username) {
+            error!("Failed to serialise session: {}", e);
+            return server_error(&tera);
+        }
+        if let Err(e) = session.set(AUTH_TIME_SESSION_KEY, Local::now().timestamp()) {
+            error!("Failed to serialise auth_time: {}", e);
+            return server_error(&tera);
+        }
+        redirect_successfully()
     } else if tries_left > 0 {
         debug!("{} tries left", tries_left);
         render_invalid_input(3, &tera, &session, Some(tries_left))
@@ -266,15 +274,7 @@ fn build_context(session: &Session) -> Option<Context> {
     Some(context)
 }
 
-fn redirect_successfully(tera: &Tera, session: &Session, user: &str) -> HttpResponse {
-    if let Err(e) = session.set(SESSION_KEY, user) {
-        error!("Failed to serialise session: {}", e);
-        return server_error(tera);
-    }
-    if let Err(e) = session.set(AUTH_TIME_SESSION_KEY, Local::now().timestamp()) {
-        error!("Failed to serialise auth_time: {}", e);
-        return server_error(tera);
-    }
+fn redirect_successfully() -> HttpResponse {
     HttpResponse::SeeOther()
         .set_header("Location", "consent")
         .finish()
