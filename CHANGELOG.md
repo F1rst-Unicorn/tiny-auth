@@ -5,6 +5,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.6.1]
+
+## Fixed
+
+* Allow GET requests to userinfo endpoint again
+
 ## [0.6.0]
 
 ### Added

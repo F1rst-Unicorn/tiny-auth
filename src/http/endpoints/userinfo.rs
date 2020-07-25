@@ -36,7 +36,11 @@ pub struct Request {
     access_token: Option<String>,
 }
 
-pub async fn handle(
+pub async fn get(headers: HttpRequest, validator: Data<TokenValidator>) -> HttpResponse {
+    post(Form(Request { access_token: None }), headers, validator).await
+}
+
+pub async fn post(
     query: Form<Request>,
     headers: HttpRequest,
     validator: Data<TokenValidator>,
@@ -108,7 +112,7 @@ mod tests {
         let request = test::TestRequest::post().to_http_request();
         let query = Form(Request { access_token: None });
 
-        let resp = handle(query, request, validator).await;
+        let resp = post(query, request, validator).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -121,7 +125,7 @@ mod tests {
             .to_http_request();
         let query = Form(Request { access_token: None });
 
-        let resp = handle(query, request, validator).await;
+        let resp = post(query, request, validator).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
     }
@@ -151,7 +155,7 @@ mod tests {
             .to_http_request();
         let query = Form(Request { access_token: None });
 
-        let resp = handle(query, request, validator).await;
+        let resp = post(query, request, validator).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
     }
@@ -180,7 +184,7 @@ mod tests {
             .to_http_request();
         let query = Form(Request { access_token: None });
 
-        let resp = handle(query, request, validator).await;
+        let resp = post(query, request, validator).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Token>(resp).await;
