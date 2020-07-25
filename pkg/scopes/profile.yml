@@ -27,13 +27,18 @@ mappings:
       middle_name: "{{ user.middle_name | default(value='') }}"
       nickname: "{{ user.nickname | default(value=user.given_name) }}"
       preferred_username: "{{ user.preferred_username }}"
-      profile: "{{ user.profile }}"
-      picture: "{{ user.picture }}"
-      website: "{{ user.website }}"
+      profile: "{{ user.profile | default(value='') }}"
+      picture: "{{ user.picture | default(value='') }}"
+      website: "{{ user.website | default(value='') }}"
       gender: "{{ user.gender }}"
       birthdate: "{{ user.birthdate }}"
       zoneinfo: "{{ user.zoneinfo }}"
       locale: "{{ user.locale }}"
-      updated_at: "{{ user.updated_at }}"
     type: template
+    optional: true
+
+  - structure: null
+    type:
+      user_attribute:
+        updated_at: null
     optional: true

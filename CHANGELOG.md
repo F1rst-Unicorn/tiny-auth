@@ -15,6 +15,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 * Report correct `auth_time` in all tokens
   ([#52](https://gitlab.com/veenj/tiny-auth/issues/52))
 
+* Fix standard scopes. Make sure to align users supporting the `address` scope
+  to the [standard
+  claims!](https://openid.net/specs/openid-connect-core-1_0.html#AddressClaim)
+  ([#51](https://gitlab.com/veenj/tiny-auth/issues/51))
+
 ## [0.5.0]
 
 ### Added
