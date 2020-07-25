@@ -5,6 +5,13 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [0.7.1]
+
+### Fixed
+
+* Fix wrong behaviour if user has agreed to all requested scopes leading to
+  showing consent screen anyway
+
 ## [0.7.0]
 
 ### Added

@@ -109,7 +109,7 @@ pub async fn get(
     let allowed_scopes = user.get_allowed_scopes(&first_request.client_id.unwrap());
     let scopes = parse_scope_names(first_request.scope.as_ref().unwrap());
     let scopes = BTreeSet::from_iter(scopes);
-    if allowed_scopes == scopes {
+    if scopes.is_subset(&allowed_scopes) {
         if prompt.contains(&oidc::Prompt::Consent) {
             debug!(
                 "user '{}' gave consent to all scopes but client requires explicit consent",
