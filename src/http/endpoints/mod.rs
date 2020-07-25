@@ -64,7 +64,7 @@ const LOGIN_HINT_CONTEXT: &str = "login_hint";
 fn parse_first_request(session: &Session) -> Option<authorize::Request> {
     let first_request = match session.get::<String>(authorize::SESSION_KEY) {
         Err(_) | Ok(None) => {
-            debug!("unsolicited consent request");
+            debug!("unsolicited consent request, lacks authorization session key");
             return None;
         }
         Ok(Some(req)) => req,

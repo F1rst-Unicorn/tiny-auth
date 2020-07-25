@@ -150,6 +150,11 @@ impl FileClientStore {
                 );
                 return None;
             }
+
+            if !client.are_all_redirect_uris_valid() {
+                return None;
+            }
+
             clients.insert(client.client_id.clone(), client);
         }
 

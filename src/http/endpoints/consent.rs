@@ -16,6 +16,7 @@
  */
 
 use super::deserialise_empty_as_none;
+use super::parse_prompt;
 use super::parse_scope_names;
 use super::render_template;
 use super::server_error;
@@ -73,23 +74,75 @@ pub struct Request {
 
 pub async fn get(
     tera: web::Data<Tera>,
-    scope_store: web::Data<Arc<dyn ScopeStore>>,
     session: Session,
+    scope_store: web::Data<Arc<dyn ScopeStore>>,
+    user_store: web::Data<Arc<dyn UserStore>>,
+    client_store: web::Data<Arc<dyn ClientStore>>,
+    auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
+    token_creator: web::Data<TokenCreator>,
 ) -> HttpResponse {
-    match session.get::<String>(authorize::SESSION_KEY) {
-        Err(_) | Ok(None) => {
-            debug!("unsolicited consent request");
+    let first_request = match parse_first_request(&session) {
+        None => {
             return render_invalid_consent_request(&tera);
         }
-        _ => {}
-    }
+        Some(v) => v,
+    };
 
-    match session.get::<String>(authenticate::SESSION_KEY) {
+    let username = match session.get::<String>(authenticate::SESSION_KEY) {
         Err(_) | Ok(None) => {
-            debug!("unsolicited consent request");
+            debug!("unsolicited consent request, missing authentication session key");
             return render_invalid_consent_request(&tera);
         }
-        _ => {}
+        Ok(Some(v)) => v,
+    };
+
+    let user = match user_store.get(&username) {
+        None => {
+            debug!("authenticated user not found");
+            return render_invalid_consent_request(&tera);
+        }
+        Some(v) => v,
+    };
+
+    let prompt = parse_prompt(&first_request.prompt);
+
+    let allowed_scopes = user.get_allowed_scopes(&first_request.client_id.unwrap());
+    let scopes = parse_scope_names(first_request.scope.as_ref().unwrap());
+    let scopes = BTreeSet::from_iter(scopes);
+    if allowed_scopes == scopes {
+        if prompt.contains(&oidc::Prompt::Consent) {
+            debug!(
+                "user '{}' gave consent to all scopes but client requires explicit consent",
+                username
+            );
+        } else {
+            debug!(
+                "user '{}' gave consent to all scopes, skipping consent screen",
+                username
+            );
+            return process_skipping_csrf(
+                web::Form(Request {
+                    csrftoken: None,
+                    scopes: BTreeMap::from_iter(scopes.into_iter().map(|v| (v, String::new()))),
+                }),
+                session,
+                tera,
+                client_store,
+                user_store,
+                auth_code_store,
+                token_creator,
+                scope_store,
+            )
+            .await;
+        }
+    } else if prompt.contains(&oidc::Prompt::None) {
+        let mut url = Url::parse(&first_request.redirect_uri.unwrap())
+            .expect("Should have been validated upon registration");
+        return render_redirect_error(
+            &mut url,
+            oidc::ProtocolError::Oidc(oidc::OidcProtocolError::ConsentRequired),
+            "User didn't give consent to all scopes",
+        );
     }
 
     match build_context(&session, scope_store) {
@@ -115,7 +168,30 @@ pub async fn post(
         debug!("CSRF protection violation detected");
         return render_invalid_consent_request(&tera);
     }
+    process_skipping_csrf(
+        query,
+        session,
+        tera,
+        client_store,
+        user_store,
+        auth_code_store,
+        token_creator,
+        scope_store,
+    )
+    .await
+}
 
+#[allow(clippy::too_many_arguments)]
+async fn process_skipping_csrf(
+    query: web::Form<Request>,
+    session: Session,
+    tera: web::Data<Tera>,
+    client_store: web::Data<Arc<dyn ClientStore>>,
+    user_store: web::Data<Arc<dyn UserStore>>,
+    auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
+    token_creator: web::Data<TokenCreator>,
+    scope_store: web::Data<Arc<dyn ScopeStore>>,
+) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
             return render_invalid_consent_request(&tera);
@@ -341,7 +417,16 @@ mod tests {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
 
-        let resp = get(build_test_tera(), build_test_scope_store(), session).await;
+        let resp = get(
+            build_test_tera(),
+            session,
+            build_test_scope_store(),
+            build_test_user_store(),
+            build_test_client_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -352,7 +437,16 @@ mod tests {
         let session = req.get_session();
         session.set(authorize::SESSION_KEY, "dummy").unwrap();
 
-        let resp = get(build_test_tera(), build_test_scope_store(), session).await;
+        let resp = get(
+            build_test_tera(),
+            session,
+            build_test_scope_store(),
+            build_test_user_store(),
+            build_test_client_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -384,9 +478,18 @@ mod tests {
             )
             .unwrap();
 
-        session.set(authenticate::SESSION_KEY, "user").unwrap();
+        session.set(authenticate::SESSION_KEY, USER).unwrap();
 
-        let resp = get(build_test_tera(), build_test_scope_store(), session).await;
+        let resp = get(
+            build_test_tera(),
+            session,
+            build_test_scope_store(),
+            build_test_user_store(),
+            build_test_client_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
     }

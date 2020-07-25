@@ -11,6 +11,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   [documentation](doc/store.md#allowed_scopes).
   ([#41](https://gitlab.com/veenj/tiny-auth/issues/41))
 
+* Users can allow scopes to be accepted by default, skipping consent.
+  ([#41](https://gitlab.com/veenj/tiny-auth/issues/41))
+
+* Startup check for validity of all clients' redirect URIs
+
 ## [0.6.1]
 
 ## Fixed

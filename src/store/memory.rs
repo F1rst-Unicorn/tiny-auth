@@ -30,7 +30,7 @@ use chrono::DateTime;
 use chrono::Duration;
 use chrono::Local;
 
-use log::debug;
+use log::trace;
 
 #[derive(PartialEq, Eq, Hash)]
 struct AuthCodeKey {
@@ -77,7 +77,7 @@ pub async fn auth_code_clean_job(store: Arc<MemoryAuthorizationCodeStore>) {
 
     loop {
         clock.tick().await;
-        debug!("Purging expired auth codes");
+        trace!("Purging expired auth codes");
         store
             .clear_expired_codes(Local::now(), Duration::minutes(super::AUTH_CODE_LIFE_TIME))
             .await;

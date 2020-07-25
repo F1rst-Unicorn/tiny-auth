@@ -6,6 +6,16 @@ password:
     iterations: 100000
     salt: EkhhHSTv8lHJ0rICs1eRm88gw1KvyWs8D5x23M5+VYdqb2hu
 
+allowed_scopes:
+  confidential:
+    - email
+    - profile
+    - openid
+  public:
+    - email
+    - profile
+    - openid
+
 email: john@test.example
 email_verified: true
 phone_number: +123456789

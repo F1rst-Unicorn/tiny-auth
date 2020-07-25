@@ -20,6 +20,8 @@ use crate::protocol::oauth2::ClientType;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 
+use url::Url;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -43,6 +45,19 @@ pub struct Client {
 }
 
 impl Client {
+    pub fn are_all_redirect_uris_valid(&self) -> bool {
+        for url in &self.redirect_uris {
+            if let Err(e) = Url::parse(url) {
+                error!(
+                    "Client '{}' has invalid redirect_uri {}: {}",
+                    self.client_id, url, e
+                );
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn is_redirect_uri_valid(&self, uri: &str) -> bool {
         self.redirect_uris.contains(&uri.to_string())
     }

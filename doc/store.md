@@ -44,6 +44,10 @@ A user configuration has at least the following properties:
 name: johndoe
 password:
   ...
+allowed_scopes:
+  some_client:
+    - email
+    - openid
 ```
 
 The file must be named the same as the `name` field, appended by `.yml`.
@@ -61,6 +65,13 @@ The encoded password of the user. Use tiny-auth's password encoder (usually
 installed as `tiny-auth-password-encoder`) to generate a valid structure for
 the user. The tool will output a YAML object which must be put as a dictionary
 inside the `password` field. Mind the indentation.
+
+#### allowed_scopes
+
+A dictionary of clients where each client carries a list of scopes. The client
+is allowed to request the following scopes without explicit consent from this
+user. If the client initiates a request only consisting of allowed scopes, the
+consent screen is skipped. This field is optional.
 
 ### Client Configuration
 

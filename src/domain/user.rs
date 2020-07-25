@@ -19,6 +19,8 @@ use crate::domain::Client;
 use crate::domain::Password;
 use crate::protocol::oauth2::ClientType;
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
@@ -33,6 +35,9 @@ pub struct User {
 
     pub password: Password,
 
+    #[serde(default)]
+    pub allowed_scopes: BTreeMap<String, BTreeSet<String>>,
+
     #[serde(flatten)]
     pub attributes: HashMap<String, Value>,
 }
@@ -40,6 +45,13 @@ pub struct User {
 impl User {
     pub fn is_password_correct(&self, password: &str, pepper: &str) -> bool {
         self.password.verify(&self.name, password, pepper)
+    }
+
+    pub fn get_allowed_scopes(&self, client_id: &str) -> BTreeSet<String> {
+        self.allowed_scopes
+            .get(client_id)
+            .map(Clone::clone)
+            .unwrap_or_default()
     }
 }
 
@@ -51,6 +63,7 @@ impl TryFrom<Client> for User {
             ClientType::Confidential { password } => Ok(Self {
                 name: client.client_id,
                 password,
+                allowed_scopes: BTreeMap::default(),
                 attributes: client.attributes,
             }),
         }
