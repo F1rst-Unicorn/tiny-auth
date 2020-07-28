@@ -467,7 +467,7 @@ async fn grant_with_refresh_token(
     let refresh_token = match validator.validate::<RefreshToken>(&raw_token) {
         None => {
             return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
                 "Invalid refresh token",
             ));
         }
@@ -1601,7 +1601,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
+        assert_eq!(http::StatusCode::BAD_REQUEST, resp.status());
     }
 
     #[actix_rt::test]
@@ -1698,7 +1698,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
+        assert_eq!(http::StatusCode::UNAUTHORIZED, resp.status());
     }
 
     #[actix_rt::test]

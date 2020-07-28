@@ -5,6 +5,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+* Handle invalid refresh tokens with correct error code
+  ([#56](https://gitlab.com/veenj/tiny-auth/issues/56))
+
 ## [0.7.1]
 
 ### Fixed
