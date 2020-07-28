@@ -10,7 +10,7 @@ web:
   tls:
     key: path/key.pem
     certificate: path/cert.pem
-    client_ca: path/ca.pem
+    client ca: path/ca.pem
     versions:
       - 1.2
       - 1.3
@@ -27,7 +27,7 @@ of PEM-formatted certificates, the first being the leaf certificate, and
 the remainder forming the chain of certificates up to and including the
 trusted root certificate.
 
-## `client_ca`
+## `client ca`
 
 Optional. The file path to a list of PEM-formatted certificates. They will be
 used to verify client requests. If specified all client requests need to be

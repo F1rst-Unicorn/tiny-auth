@@ -19,6 +19,10 @@ store:
   configuration file:
     base: /etc/tiny-auth/store
 
+rate limit:
+  events: 3
+  period in seconds: 300
+
 crypto:
   key: /etc/tiny-auth/key.pem
   public key: /etc/tiny-auth/public-key.pem
@@ -26,9 +30,9 @@ crypto:
 
 web:
   bind: localhost:8088
-  public_host:
+  public host:
     domain: localhost
     port: 8088
-  static_files: /usr/share/tiny-auth/static
-  session_timeout: 300
-  secret_key: set-a-random-string-of-at-least-32-characters-here
+  static files: /usr/share/tiny-auth/static
+  session timeout: 300
+  secret key: set-a-random-string-of-at-least-32-characters-here

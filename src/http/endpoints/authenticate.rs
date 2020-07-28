@@ -19,7 +19,8 @@ use super::deserialise_empty_as_none;
 use super::parse_prompt;
 use super::render_template;
 use super::server_error;
-use crate::business::authenticator::Authenticator;
+use crate::business::authenticator::Error;
+use crate::business::Authenticator;
 use crate::http::endpoints::authorize;
 use crate::http::endpoints::parse_first_request;
 use crate::http::endpoints::render_template_with_context;
@@ -184,7 +185,11 @@ pub async fn post(
         query.password.clone().unwrap()
     };
 
-    if authenticator.authenticate_user_and_forget(&username, &password) {
+    let auth_result = authenticator
+        .authenticate_user_and_forget(&username, &password)
+        .await;
+
+    if auth_result.is_ok() {
         session.remove(TRIES_LEFT_SESSION_KEY);
         session.remove(ERROR_CODE_SESSION_KEY);
         if let Err(e) = session.set(SESSION_KEY, &username) {
@@ -196,6 +201,8 @@ pub async fn post(
             return server_error(&tera);
         }
         redirect_successfully()
+    } else if let Err(Error::RateLimited) = auth_result {
+        render_invalid_input(4, &tera, &session, None)
     } else if tries_left > 0 {
         debug!("{} tries left", tries_left);
         render_invalid_input(3, &tera, &session, Some(tries_left))

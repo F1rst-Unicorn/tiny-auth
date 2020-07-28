@@ -19,11 +19,17 @@ pub mod parser;
 
 use std::convert::Into;
 
+use chrono::Duration;
+
 use serde_derive::Deserialize;
 
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Config {
     pub store: Option<Store>,
+
+    #[serde(default)]
+    #[serde(alias = "rate limit")]
+    pub rate_limit: RateLimit,
 
     pub web: Web,
 
@@ -46,10 +52,28 @@ pub enum Store {
     Config { base: String },
 }
 
+#[derive(Clone, Debug, Deserialize)]
+pub struct RateLimit {
+    pub events: usize,
+
+    #[serde(alias = "period in seconds")]
+    pub period_in_seconds: i64,
+}
+
+impl Default for RateLimit {
+    fn default() -> Self {
+        Self {
+            events: 3,
+            period_in_seconds: Duration::minutes(5).num_seconds(),
+        }
+    }
+}
+
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Web {
     pub bind: String,
 
+    #[serde(alias = "public host")]
     pub public_host: Host,
 
     #[serde(default = "default_path")]
@@ -59,11 +83,14 @@ pub struct Web {
 
     pub workers: Option<usize>,
 
+    #[serde(alias = "static files")]
     pub static_files: String,
 
     #[serde(default = "default_session_timeout")]
+    #[serde(alias = "session timeout")]
     pub session_timeout: Option<i64>,
 
+    #[serde(alias = "secret key")]
     pub secret_key: String,
 }
 
@@ -85,7 +112,10 @@ pub struct Host {
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Tls {
     pub key: String,
+
     pub certificate: String,
+
+    #[serde(alias = "client ca")]
     pub client_ca: Option<String>,
 
     #[serde(default = "default_versions")]

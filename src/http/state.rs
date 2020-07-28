@@ -19,6 +19,7 @@ use super::tera::load_template_engine;
 use crate::business::authenticator::Authenticator;
 use crate::business::token::TokenCreator;
 use crate::business::token::TokenValidator;
+use crate::business::RateLimiter;
 use crate::config::Config;
 use crate::config::Store;
 use crate::domain::IssuerConfiguration;
@@ -35,6 +36,8 @@ use std::sync::Arc;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::EncodingKey;
+
+use chrono::Duration;
 
 use openssl::bn::BigNum;
 use openssl::bn::BigNumContext;
@@ -111,9 +114,17 @@ impl<'a> Constructor<'a> {
         }
     }
 
+    pub fn build_rate_limiter(&self) -> RateLimiter {
+        RateLimiter::new(
+            self.config.rate_limit.events,
+            Duration::seconds(self.config.rate_limit.period_in_seconds),
+        )
+    }
+
     pub fn build_authenticator(&self) -> Option<Authenticator> {
         Some(Authenticator::new(
             self.get_user_store()?,
+            self.build_rate_limiter(),
             &self.config.crypto.pepper,
         ))
     }
@@ -299,6 +310,8 @@ impl<'a> Constructor<'a> {
 
 #[cfg(test)]
 pub mod tests {
+    use super::*;
+
     use super::super::tera::load_template_engine;
     use crate::business::authenticator::Authenticator;
     use crate::business::token::TokenCreator;
@@ -370,9 +383,14 @@ pub mod tests {
         Data::new(crate::store::tests::build_test_auth_code_store())
     }
 
+    pub fn build_test_rate_limiter() -> RateLimiter {
+        RateLimiter::new(3, Duration::minutes(5))
+    }
+
     pub fn build_test_authenticator() -> Data<Authenticator> {
         Data::new(Authenticator::new(
             crate::store::tests::build_test_user_store(),
+            build_test_rate_limiter(),
             "pepper",
         ))
     }

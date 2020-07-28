@@ -419,14 +419,14 @@ async fn grant_with_password(
     if headers.headers().get("Authorization").is_some() {
         let client = authenticate_client(headers, (*client_store).clone(), authenticator.clone())?;
 
-        let user = match authenticator.authenticate_user(&username, &password) {
-            None => {
+        let user = match authenticator.authenticate_user(&username, &password).await {
+            Err(e) => {
                 return Err(render_json_error(
                     ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
-                    "usernmae or password wrong",
-                ))
+                    &format!("{}", e),
+                ));
             }
-            Some(user) => user,
+            Ok(user) => user,
         };
 
         let scopes = scope_store.get_all(

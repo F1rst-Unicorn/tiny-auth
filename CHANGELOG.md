@@ -5,10 +5,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+
+* All options in the config file can now carry spaces as word separator
+
 ### Fixed
 
 * Handle invalid refresh tokens with correct error code
   ([#56](https://gitlab.com/veenj/tiny-auth/issues/56))
+
+* [Rate-limit](doc/configuration.md#rate-limit) the number of failed logins per user.
+  ([#35](https://gitlab.com/veenj/tiny-auth/issues/35))
 
 ## [0.7.1]
 
