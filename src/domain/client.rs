@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::domain::Password;
 use crate::protocol::oauth2::ClientType;
 
 use std::collections::BTreeSet;
@@ -27,7 +28,11 @@ use serde::Serialize;
 
 use serde_json::Value;
 
+use jsonwebtoken::Algorithm;
+use jsonwebtoken::DecodingKey;
+
 use log::error;
+use log::warn;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Client {
@@ -71,7 +76,98 @@ impl Client {
 
             ClientType::Confidential {
                 password: stored_password,
+                ..
             } => stored_password.verify(&self.client_id, password, pepper),
+        }
+    }
+
+    pub fn get_decoding_key(&self, algorithm: Algorithm) -> Option<DecodingKey<'static>> {
+        match (algorithm, &self.client_type) {
+            (
+                Algorithm::HS256,
+                ClientType::Confidential {
+                    password: Password::Plain(secret),
+                    ..
+                },
+            )
+            | (
+                Algorithm::HS384,
+                ClientType::Confidential {
+                    password: Password::Plain(secret),
+                    ..
+                },
+            )
+            | (
+                Algorithm::HS512,
+                ClientType::Confidential {
+                    password: Password::Plain(secret),
+                    ..
+                },
+            ) => Some(DecodingKey::from_secret(secret.as_bytes()).into_static()),
+            (
+                Algorithm::ES256,
+                ClientType::Confidential {
+                    public_key: Some(key),
+                    ..
+                },
+            )
+            | (
+                Algorithm::ES384,
+                ClientType::Confidential {
+                    public_key: Some(key),
+                    ..
+                },
+            ) => DecodingKey::from_ec_pem(key.as_bytes())
+                .ok()
+                .map(|k| k.into_static()),
+            (
+                Algorithm::RS256,
+                ClientType::Confidential {
+                    public_key: Some(key),
+                    ..
+                },
+            )
+            | (
+                Algorithm::RS384,
+                ClientType::Confidential {
+                    public_key: Some(key),
+                    ..
+                },
+            )
+            | (
+                Algorithm::RS512,
+                ClientType::Confidential {
+                    public_key: Some(key),
+                    ..
+                },
+            )
+            | (
+                Algorithm::PS256,
+                ClientType::Confidential {
+                    public_key: Some(key),
+                    ..
+                },
+            )
+            | (
+                Algorithm::PS384,
+                ClientType::Confidential {
+                    public_key: Some(key),
+                    ..
+                },
+            )
+            | (
+                Algorithm::PS512,
+                ClientType::Confidential {
+                    public_key: Some(key),
+                    ..
+                },
+            ) => DecodingKey::from_rsa_pem(key.as_bytes())
+                .ok()
+                .map(|k| k.into_static()),
+            _ => {
+                warn!("client '{}' tried to authenticate with algorithm '{:?}' for which it is not configured", self.client_id, algorithm);
+                None
+            }
         }
     }
 }

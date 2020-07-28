@@ -42,6 +42,7 @@ pub enum Password {
         salt: String,
     },
 
+    #[serde(alias = "plain")]
     Plain(String),
 }
 

@@ -29,6 +29,10 @@ impl IssuerConfiguration {
         self.issuer_url.clone() + "/jwks"
     }
 
+    pub fn token(&self) -> String {
+        self.issuer_url.clone() + "/token"
+    }
+
     pub fn get_key_type(&self) -> String {
         match self.algorithm {
             Algorithm::ES384 => "EC".to_string(),

@@ -1,0 +1,21 @@
+---
+client_id: plain
+client_type:
+  confidential:
+    password:
+      plain: password
+    public_key: |
+      -----BEGIN PUBLIC KEY-----
+      MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEUAh2ZOG+wC7dqu+bEQ6OEtAAOVjw8sIb
+      zvWsJihEuB3fh/Y/2hHLB0u5pSECWIdidaRf6OBFFixW2jHWG64xxN18w2bu8IpI
+      4rY0absdgU5d4mqlpOdf7EcnvilAhweh
+      -----END PUBLIC KEY-----
+
+
+redirect_uris:
+  - http://localhost/plain
+
+allowed_scopes:
+  - email
+  - openid
+  - profile

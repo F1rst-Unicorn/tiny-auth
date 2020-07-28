@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Support all client authentication methods
+  ([#42](https://gitlab.com/veenj/tiny-auth/issues/42))
+
 * All options in the config file can now carry spaces as word separator
 
 ### Fixed

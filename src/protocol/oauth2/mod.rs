@@ -39,7 +39,12 @@ pub enum ClientType {
     Public,
 
     #[serde(rename = "confidential")]
-    Confidential { password: Password },
+    Confidential {
+        password: Password,
+
+        #[serde(alias = "public key")]
+        public_key: Option<String>,
+    },
 }
 
 #[derive(Deserialize, PartialEq, Eq)]

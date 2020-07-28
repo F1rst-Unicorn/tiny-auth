@@ -172,7 +172,12 @@ pub async fn get(
             "PS512".to_string(),
         ],
 
-        token_endpoint_auth_methods_supported: vec!["client_secret_basic".to_string()],
+        token_endpoint_auth_methods_supported: vec![
+            "client_secret_basic".to_string(),
+            "client_secret_post".to_string(),
+            "client_secret_jwt".to_string(),
+            "private_key_jwt".to_string(),
+        ],
 
         claims_supported: vec![
             "iss".to_string(),

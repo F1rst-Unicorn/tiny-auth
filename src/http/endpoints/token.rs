@@ -22,6 +22,7 @@ use crate::business::token::TokenCreator;
 use crate::business::token::TokenValidator;
 use crate::business::Authenticator;
 use crate::domain::Client;
+use crate::domain::IssuerConfiguration;
 use crate::domain::RefreshToken;
 use crate::domain::Scope;
 use crate::domain::Token;
@@ -55,6 +56,8 @@ use chrono::Duration;
 use log::debug;
 use log::warn;
 
+const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
+
 #[derive(Deserialize)]
 pub struct Request {
     grant_type: Option<GrantType>,
@@ -73,6 +76,10 @@ pub struct Request {
 
     #[serde(default)]
     #[serde(deserialize_with = "deserialise_empty_as_none")]
+    client_secret: Option<String>,
+
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
     scope: Option<String>,
 
     #[serde(default)]
@@ -86,6 +93,35 @@ pub struct Request {
     #[serde(default)]
     #[serde(deserialize_with = "deserialise_empty_as_none")]
     refresh_token: Option<String>,
+
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    client_assertion: Option<String>,
+
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    client_assertion_type: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ClientAssertion {
+    #[serde(rename = "iss")]
+    pub issuer: String,
+
+    #[serde(rename = "sub")]
+    pub subject: String,
+
+    #[serde(rename = "aud")]
+    pub audience: String,
+
+    #[serde(rename = "jti")]
+    pub id: String,
+
+    #[serde(rename = "exp")]
+    pub expiration_time: i64,
+
+    #[serde(rename = "iat")]
+    pub issuance_time: i64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -118,6 +154,7 @@ pub async fn post(
     authenticator: web::Data<Authenticator>,
     token_validator: web::Data<TokenValidator>,
     scope_store: web::Data<Arc<dyn ScopeStore>>,
+    issuer_configuration: web::Data<IssuerConfiguration>,
 ) -> HttpResponse {
     let grant_type = match &request.grant_type {
         None => {
@@ -141,6 +178,7 @@ pub async fn post(
                 authenticator,
                 token_validator,
                 scope_store,
+                issuer_configuration,
             )
             .await
             {
@@ -159,6 +197,7 @@ pub async fn post(
                         auth_code_store,
                         authenticator,
                         scope_store,
+                        issuer_configuration,
                     )
                     .await
                 }
@@ -168,14 +207,20 @@ pub async fn post(
                     client_store,
                     authenticator,
                     scope_store,
+                    issuer_configuration,
                 )
                 .await
                 .map(|(a, b, c, d)| (a, b, c, d, None)),
-                GrantType::Password => {
-                    grant_with_password(headers, request, client_store, authenticator, scope_store)
-                        .await
-                        .map(|(a, b, c, d)| (a, b, c, d, None))
-                }
+                GrantType::Password => grant_with_password(
+                    headers,
+                    request,
+                    client_store,
+                    authenticator,
+                    scope_store,
+                    issuer_configuration,
+                )
+                .await
+                .map(|(a, b, c, d)| (a, b, c, d, None)),
                 _ => {
                     return render_json_error(
                         ProtocolError::OAuth2(oauth2::ProtocolError::UnsupportedGrantType),
@@ -253,6 +298,7 @@ pub async fn post(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn grant_with_authorization_code(
     headers: HttpRequest,
     request: web::Form<Request>,
@@ -261,6 +307,7 @@ async fn grant_with_authorization_code(
     auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
     authenticator: web::Data<Authenticator>,
     scope_store: web::Data<Arc<dyn ScopeStore>>,
+    issuer_configuration: web::Data<IssuerConfiguration>,
 ) -> Result<(User, Client, Vec<Scope>, i64, Option<String>), HttpResponse> {
     if request.redirect_uri.is_none() {
         return Err(render_json_error(
@@ -276,7 +323,13 @@ async fn grant_with_authorization_code(
         ));
     }
 
-    let client = match authenticate_client(headers, (*client_store).clone(), authenticator) {
+    let client = match authenticate_client(
+        headers,
+        &request,
+        (*client_store).clone(),
+        authenticator,
+        issuer_configuration,
+    ) {
         Err(_) => {
             let client_id = match &request.client_id {
                 None => {
@@ -372,8 +425,15 @@ async fn grant_with_client_credentials(
     client_store: web::Data<Arc<dyn ClientStore>>,
     authenticator: web::Data<Authenticator>,
     scope_store: web::Data<Arc<dyn ScopeStore>>,
+    issuer_configuration: web::Data<IssuerConfiguration>,
 ) -> Result<(User, Client, Vec<Scope>, i64), HttpResponse> {
-    let client = authenticate_client(headers, (*client_store).clone(), authenticator)?;
+    let client = authenticate_client(
+        headers,
+        &request,
+        (*client_store).clone(),
+        authenticator,
+        issuer_configuration,
+    )?;
     let scopes = scope_store.get_all(
         &request
             .scope
@@ -395,6 +455,7 @@ async fn grant_with_password(
     client_store: web::Data<Arc<dyn ClientStore>>,
     authenticator: web::Data<Authenticator>,
     scope_store: web::Data<Arc<dyn ScopeStore>>,
+    issuer_configuration: web::Data<IssuerConfiguration>,
 ) -> Result<(User, Client, Vec<Scope>, i64), HttpResponse> {
     let username = match &request.username {
         None => {
@@ -416,34 +477,33 @@ async fn grant_with_password(
         Some(password) => password,
     };
 
-    if headers.headers().get("Authorization").is_some() {
-        let client = authenticate_client(headers, (*client_store).clone(), authenticator.clone())?;
+    let client = authenticate_client(
+        headers,
+        &request,
+        (*client_store).clone(),
+        authenticator.clone(),
+        issuer_configuration,
+    )?;
 
-        let user = match authenticator.authenticate_user(&username, &password).await {
-            Err(e) => {
-                return Err(render_json_error(
-                    ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
-                    &format!("{}", e),
-                ));
-            }
-            Ok(user) => user,
-        };
+    let user = match authenticator.authenticate_user(&username, &password).await {
+        Err(e) => {
+            return Err(render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
+                &format!("{}", e),
+            ));
+        }
+        Ok(user) => user,
+    };
 
-        let scopes = scope_store.get_all(
-            &request
-                .scope
-                .as_deref()
-                .map(parse_scope_names)
-                .unwrap_or_default(),
-        );
+    let scopes = scope_store.get_all(
+        &request
+            .scope
+            .as_deref()
+            .map(parse_scope_names)
+            .unwrap_or_default(),
+    );
 
-        Ok((user, client, scopes, Local::now().timestamp()))
-    } else {
-        Err(render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
-            "Missing authorization header",
-        ))
-    }
+    Ok((user, client, scopes, Local::now().timestamp()))
 }
 
 async fn grant_with_refresh_token(
@@ -453,6 +513,7 @@ async fn grant_with_refresh_token(
     authenticator: web::Data<Authenticator>,
     validator: web::Data<TokenValidator>,
     scope_store: web::Data<Arc<dyn ScopeStore>>,
+    issuer_configuration: web::Data<IssuerConfiguration>,
 ) -> Result<(Token, Vec<Scope>), HttpResponse> {
     let raw_token = match &request.refresh_token {
         None => {
@@ -474,7 +535,13 @@ async fn grant_with_refresh_token(
         Some(token) => token,
     };
 
-    let client = authenticate_client(headers, (*client_store).clone(), authenticator)?;
+    let client = authenticate_client(
+        headers,
+        &request,
+        (*client_store).clone(),
+        authenticator,
+        issuer_configuration,
+    )?;
 
     if client.client_id != refresh_token.access_token.authorized_party {
         warn!(
@@ -507,9 +574,15 @@ async fn grant_with_refresh_token(
 
 fn authenticate_client(
     headers: HttpRequest,
+    request: &web::Form<Request>,
     client_store: Arc<Arc<dyn ClientStore>>,
     authenticator: web::Data<Authenticator>,
+    issuer_configuration: web::Data<IssuerConfiguration>,
 ) -> Result<Client, HttpResponse> {
+    if request.client_assertion.is_some() && request.client_assertion_type.is_some() {
+        return authenticate_client_via_jwt(request, client_store.clone(), issuer_configuration);
+    }
+
     let (client_name, password) = match headers.headers().get("Authorization") {
         Some(value) => match parse_basic_authorization(value) {
             Some(x) => x,
@@ -521,10 +594,16 @@ fn authenticate_client(
             }
         },
         None => {
-            return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
-                "Missing authorization header",
-            ));
+            if let (Some(client_id), Some(client_secret)) =
+                (request.client_id.clone(), request.client_secret.clone())
+            {
+                (client_id, client_secret)
+            } else {
+                return Err(render_json_error(
+                    ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
+                    "Missing authorization header",
+                ));
+            }
         }
     };
 
@@ -558,6 +637,76 @@ fn authenticate_client(
     }
 }
 
+fn authenticate_client_via_jwt(
+    request: &web::Form<Request>,
+    client_store: Arc<Arc<dyn ClientStore>>,
+    issuer_configuration: web::Data<IssuerConfiguration>,
+) -> Result<Client, HttpResponse> {
+    let assertion_type = request.client_assertion_type.clone().unwrap();
+    if assertion_type != CLIENT_ASSERTION_TYPE {
+        return Err(render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+            "client_assertion_type is invalid",
+        ));
+    }
+
+    let assertion = request.client_assertion.clone().unwrap();
+
+    let unsafe_assertion =
+        match jsonwebtoken::dangerous_insecure_decode::<ClientAssertion>(&assertion) {
+            Err(e) => {
+                debug!("failed to decode authentication token unsafely: {}", e);
+                return Err(render_json_error(
+                    ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                    "token is invalid",
+                ));
+            }
+            Ok(token) => token,
+        };
+
+    let client = match client_store.get(&unsafe_assertion.claims.subject) {
+        None => {
+            debug!("Client '{}' not found", unsafe_assertion.claims.subject);
+            return Err(render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
+                "token is invalid",
+            ));
+        }
+        Some(v) => v,
+    };
+
+    let key = match client.get_decoding_key(unsafe_assertion.header.alg) {
+        None => {
+            return Err(render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
+                "token is invalid",
+            ));
+        }
+        Some(v) => v,
+    };
+
+    let mut validation = jsonwebtoken::Validation {
+        leeway: 5,
+        validate_exp: true,
+        validate_nbf: false,
+        iss: Some(unsafe_assertion.claims.subject),
+        algorithms: vec![unsafe_assertion.header.alg],
+        ..Default::default()
+    };
+
+    validation.set_audience(&[issuer_configuration.token()]);
+
+    if let Err(e) = jsonwebtoken::decode::<ClientAssertion>(&assertion, &key, &validation) {
+        debug!("failed to decode authentication token: {}", e);
+        return Err(render_json_error(
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+            "token is invalid",
+        ));
+    };
+
+    Ok(client)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -573,6 +722,7 @@ mod tests {
     use crate::http::state::tests::build_test_auth_code_store;
     use crate::http::state::tests::build_test_authenticator;
     use crate::http::state::tests::build_test_client_store;
+    use crate::http::state::tests::build_test_issuer_config_for_web as build_test_issuer_config;
     use crate::http::state::tests::build_test_scope_store;
     use crate::http::state::tests::build_test_token_creator;
     use crate::http::state::tests::build_test_token_issuer;
@@ -592,11 +742,14 @@ mod tests {
             grant_type: None,
             code: Some("fdsa".to_string()),
             client_id: None,
+            client_secret: None,
             redirect_uri: Some("fdsa".to_string()),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -609,6 +762,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -627,11 +781,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: None,
             client_id: None,
+            client_secret: None,
             redirect_uri: Some("fdsa".to_string()),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -644,6 +801,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -662,11 +820,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some("fdsa".to_string()),
             client_id: None,
+            client_secret: None,
             redirect_uri: Some("fdsa".to_string()),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -679,6 +840,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -697,11 +859,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some("fdsa".to_string()),
             client_id: None,
+            client_secret: None,
             redirect_uri: None,
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -714,6 +879,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -732,11 +898,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some("fdsa".to_string()),
             client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
+            client_secret: None,
             redirect_uri: Some("fdsa".to_string()),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -749,6 +918,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -768,11 +938,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some("fdsa".to_string()),
             client_id: None,
+            client_secret: None,
             redirect_uri: Some("fdsa".to_string()),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -785,6 +958,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -816,11 +990,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
             client_id: Some(PUBLIC_CLIENT.to_string()),
+            client_secret: None,
             redirect_uri: Some(redirect_uri + "/wrong"),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -833,6 +1010,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -862,11 +1040,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
             client_id: Some(PUBLIC_CLIENT.to_string()),
+            client_secret: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -879,6 +1060,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -907,11 +1089,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
             client_id: Some(PUBLIC_CLIENT.to_string()),
+            client_secret: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -924,6 +1109,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -957,11 +1143,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
             client_id: None,
+            client_secret: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -974,6 +1163,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1007,11 +1197,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
             client_id: None,
+            client_secret: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1024,6 +1217,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1057,11 +1251,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
             client_id: None,
+            client_secret: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1074,6 +1271,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1107,11 +1305,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
             client_id: None,
+            client_secret: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1124,6 +1325,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1160,11 +1362,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
             client_id: None,
+            client_secret: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1177,6 +1382,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1212,11 +1418,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
             client_id: None,
+            client_secret: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1229,6 +1438,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1266,11 +1476,14 @@ mod tests {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some(auth_code),
             client_id: None,
+            client_secret: None,
             redirect_uri: Some(redirect_uri),
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1283,6 +1496,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1312,11 +1526,14 @@ mod tests {
             grant_type: Some(GrantType::ClientCredentials),
             code: None,
             client_id: None,
+            client_secret: None,
             redirect_uri: None,
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1329,6 +1546,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1352,11 +1570,14 @@ mod tests {
             grant_type: Some(GrantType::ClientCredentials),
             code: None,
             client_id: None,
+            client_secret: None,
             redirect_uri: None,
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1369,6 +1590,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1394,11 +1616,14 @@ mod tests {
             grant_type: Some(GrantType::Password),
             code: None,
             client_id: None,
+            client_secret: None,
             redirect_uri: None,
             scope: None,
             username: None,
             password: Some(USER.to_string()),
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1411,6 +1636,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1434,11 +1660,14 @@ mod tests {
             grant_type: Some(GrantType::Password),
             code: None,
             client_id: None,
+            client_secret: None,
             redirect_uri: None,
             scope: None,
             username: Some(USER.to_string()),
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1451,6 +1680,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1474,11 +1704,14 @@ mod tests {
             grant_type: Some(GrantType::Password),
             code: None,
             client_id: None,
+            client_secret: None,
             redirect_uri: None,
             scope: None,
             username: Some(USER.to_string()),
             password: Some(USER.to_string()),
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1491,6 +1724,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1514,11 +1748,14 @@ mod tests {
             grant_type: Some(GrantType::Password),
             code: None,
             client_id: None,
+            client_secret: None,
             redirect_uri: None,
             scope: None,
             username: Some(USER.to_string()),
             password: Some(USER.to_string()),
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1531,6 +1768,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1551,11 +1789,14 @@ mod tests {
             grant_type: Some(GrantType::RefreshToken),
             code: None,
             client_id: None,
+            client_secret: None,
             redirect_uri: None,
             scope: None,
             username: None,
             password: None,
             refresh_token: None,
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1568,6 +1809,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1581,11 +1823,14 @@ mod tests {
             grant_type: Some(GrantType::RefreshToken),
             code: None,
             client_id: None,
+            client_secret: None,
             redirect_uri: None,
             scope: None,
             username: None,
             password: None,
             refresh_token: Some("dummy".to_string()),
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1598,6 +1843,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1629,11 +1875,14 @@ mod tests {
             grant_type: Some(GrantType::RefreshToken),
             code: None,
             client_id: None,
+            client_secret: None,
             redirect_uri: None,
             scope: None,
             username: None,
             password: None,
             refresh_token: Some(refresh_token),
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1646,6 +1895,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1678,11 +1928,14 @@ mod tests {
             grant_type: Some(GrantType::RefreshToken),
             code: None,
             client_id: None,
+            client_secret: None,
             redirect_uri: None,
             scope: None,
             username: None,
             password: None,
             refresh_token: Some(refresh_token),
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1695,6 +1948,7 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 
@@ -1727,11 +1981,14 @@ mod tests {
             grant_type: Some(GrantType::RefreshToken),
             code: None,
             client_id: None,
+            client_secret: None,
             redirect_uri: None,
             scope: None,
             username: None,
             password: None,
             refresh_token: Some(refresh_token),
+            client_assertion: None,
+            client_assertion_type: None,
         });
 
         let resp = post(
@@ -1744,6 +2001,63 @@ mod tests {
             build_test_authenticator(),
             build_test_token_validator(),
             build_test_scope_store(),
+            build_test_issuer_config(),
+        )
+        .await;
+
+        assert_eq!(resp.status(), http::StatusCode::OK);
+        let response = read_response::<Response>(resp).await;
+        assert!(!response.access_token.is_empty());
+        assert_eq!("bearer".to_string(), response.token_type);
+        assert_eq!(Some(60), response.expires_in);
+        assert!(response.refresh_token.iter().any(|v| !v.is_empty()));
+        assert_eq!(Some("".to_string()), response.scope);
+        assert!(!response.id_token.unwrap().is_empty());
+    }
+
+    #[actix_rt::test]
+    async fn successful_authentication_with_secret_as_post_parameter() {
+        let auth_code_store = build_test_auth_code_store();
+        let req = test::TestRequest::post().to_http_request();
+
+        let token_creator = build_test_token_creator();
+        let mut token = Token::build(
+            &build_test_user_store().get(USER).unwrap(),
+            &build_test_client_store().get(CONFIDENTIAL_CLIENT).unwrap(),
+            &Vec::new(),
+            Local::now(),
+            Duration::minutes(3),
+            0,
+        );
+        token.set_issuer(&build_test_token_issuer());
+        let refresh_token = token_creator
+            .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), &Vec::new()))
+            .unwrap();
+        let form = Form(Request {
+            grant_type: Some(GrantType::RefreshToken),
+            code: None,
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            client_secret: Some(CONFIDENTIAL_CLIENT.to_string()),
+            redirect_uri: None,
+            scope: None,
+            username: None,
+            password: None,
+            refresh_token: Some(refresh_token),
+            client_assertion: None,
+            client_assertion_type: None,
+        });
+
+        let resp = post(
+            req,
+            form,
+            build_test_client_store(),
+            build_test_user_store(),
+            auth_code_store,
+            build_test_token_creator(),
+            build_test_authenticator(),
+            build_test_token_validator(),
+            build_test_scope_store(),
+            build_test_issuer_config(),
         )
         .await;
 

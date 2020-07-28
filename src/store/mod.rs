@@ -149,6 +149,7 @@ pub mod tests {
                     client_id: key.to_string(),
                     client_type: ClientType::Confidential {
                         password: Password::Plain("client1".to_string()),
+                        public_key: None,
                     },
                     redirect_uris: vec!["http://localhost/client1".to_string()],
                     allowed_scopes: BTreeSet::from_iter(vec!["email".to_string()]),

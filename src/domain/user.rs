@@ -60,7 +60,7 @@ impl TryFrom<Client> for User {
     fn try_from(client: Client) -> Result<Self, Self::Error> {
         match client.client_type {
             ClientType::Public => Err("invalid client type".to_string()),
-            ClientType::Confidential { password } => Ok(Self {
+            ClientType::Confidential { password, .. } => Ok(Self {
                 name: client.client_id,
                 password,
                 allowed_scopes: BTreeMap::default(),

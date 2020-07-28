@@ -106,17 +106,37 @@ Either `client_type: public` or
 ```yaml
 client_type:
   confidential:
+    public key: <pem-key>
     password:
       ...
 ```
 
 are allowed.
 
+Confidential clients can register with a public key to support authentication
+via the [`private_key_jwt`](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication)
+method. The public key can be generated in the same way as the keys for
+tiny-auth's [own key material](configuration.md#key-and-public-key).
+
 The `...` is meant to be replaced by the output of tiny-auth's password
 encoder (usually installed as `tiny-auth-password-encoder`). Use it to
 generate a valid password for the client. The tool will output a YAML object
 which must be put as a dictionary inside the `password` field. Mind the
 indentation.
+
+The [`client_secret_jwt`](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication)
+method is supported by tiny-auth. However it is NOT RECOMMENDED as it requires
+tiny-auth to store the client secret in plain. Note that if the client is able
+to keep a secret password, it can also keep a secret key, making
+`private_key_jwt` the better authentication option. If the client really requires
+this authentication method, specify the password like this:
+
+```yaml
+client_type:
+  confidential:
+    password:
+      plain: <your client's password>
+```
 
 #### redirect_uris
 

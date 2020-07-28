@@ -341,6 +341,10 @@ pub mod tests {
         ))
     }
 
+    pub fn build_test_issuer_config_for_web() -> Data<IssuerConfiguration> {
+        Data::new(build_test_issuer_config())
+    }
+
     pub fn build_test_issuer_config() -> IssuerConfiguration {
         IssuerConfiguration {
             issuer_url: build_test_token_issuer(),
