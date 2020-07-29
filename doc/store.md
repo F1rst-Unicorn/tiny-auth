@@ -17,8 +17,8 @@ Feature glossary:
 
 Notes:
 
-1. Authorization codes issued for the authorization code flow are invalidated
-   on restart.
+1. Authorization codes issued for the authorization code flow and the
+   authentication rate limit enforcer are invalidated on restart.
 
 ## Configuration File Store
 
