@@ -20,6 +20,7 @@ variables:
 
 stages:
   - build
+  - test
 
 build-debug:
   stage: build
@@ -96,6 +97,23 @@ test:
     paths:
       - target
       - .cargo
+
+e2e test:
+  stage: test
+  image: openjdk:11-jdk
+  variables:
+    GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+  script:
+    - export GRADLE_USER_HOME=`pwd`/.gradle
+    - cd test
+    - ./gradlew check
+  dependencies:
+    - build-debug
+  cache:
+    key: ${CI_JOB_NAME}
+    paths:
+      - .gradle
+      - build
 
 archlinux:
   stage: build
