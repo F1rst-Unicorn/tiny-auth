@@ -14,21 +14,22 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-
-# See https://openid.net/specs/openid-connect-core-1_0.html#AddressClaim
-# on how a standard-conform address block looks like
-
 ---
-name: email
-pretty name: Email Address
-description: Access to your email address
+refresh_rate: 5 seconds
 
-mappings:
-  - structure:
-      email: "{{ user.email }}"
-    type: template
-    optional: true
+appenders:
+  stdout:
+    kind: console
 
-  - structure:
-      email_verified: true
-    type: plain
+    encoder:
+      kind: pattern
+      pattern: "{level:>5} {file}:{line} {message}{n}"
+
+root:
+  level: warn
+  appenders:
+    - stdout
+
+loggers:
+  tiny_auth:
+    level: trace

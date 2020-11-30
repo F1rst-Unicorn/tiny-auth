@@ -19,16 +19,12 @@
 # on how a standard-conform address block looks like
 
 ---
-name: email
-pretty name: Email Address
-description: Access to your email address
+name: address
+pretty name: Address
+description: Access to your address
 
 mappings:
-  - structure:
-      email: "{{ user.email }}"
-    type: template
-    optional: true
-
-  - structure:
-      email_verified: true
-    type: plain
+  - structure: null
+    type:
+      user_attribute:
+        address: null

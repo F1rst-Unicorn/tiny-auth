@@ -10,3 +10,5 @@ pkg/Archlinux/*.pkg.tar*
 .vscode
 
 static/img/favicon.png
+
+*.code-workspace

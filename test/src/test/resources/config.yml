@@ -14,21 +14,25 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-
-# See https://openid.net/specs/openid-connect-core-1_0.html#AddressClaim
-# on how a standard-conform address block looks like
-
 ---
-name: email
-pretty name: Email Address
-description: Access to your email address
+store:
+  configuration file:
+    base: src/test/resources/store
 
-mappings:
-  - structure:
-      email: "{{ user.email }}"
-    type: template
-    optional: true
+crypto:
+  key: src/test/resources/keys/key.pem
+  public key: src/test/resources/keys/public_key.pem
+  pepper: x5ePiX0TmUF2HzuraKuab9exzumu2sO54bnlVhgCS5AAXxqyhSSuHbCiUmx0FxmjZH9Gb2obp0ff2imMS6z40Qcc
 
-  - structure:
-      email_verified: true
-    type: plain
+rate limit:
+  events: 3
+  period in seconds: 10
+
+web:
+  bind: localhost:34344
+  public_host:
+    domain: localhost
+    port: 34344
+  static_files: ../static
+  session_timeout: 60000
+  secret_key: 6nwYoK0L9J5ADFQE74CkkuLmTGMSd1skxHso9XwZNbsCbVmLIVH6L2aBIi2veuia3aQ3fnBzfwwlIuzCmWTEjAcc
