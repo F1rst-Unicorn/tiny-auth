@@ -234,10 +234,7 @@ pub async fn post(
                 Ok(x) => x,
             };
 
-            generate_refresh_token = match client.client_type {
-                ClientType::Confidential { .. } => true,
-                _ => false,
-            };
+            generate_refresh_token = matches!(client.client_type, ClientType::Confidential { .. });
 
             let mut token = Token::build(
                 &user,
