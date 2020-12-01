@@ -21,6 +21,7 @@ variables:
 stages:
   - build
   - test
+  - package
 
 build-debug:
   stage: build
@@ -106,7 +107,7 @@ e2e test:
   script:
     - export GRADLE_USER_HOME=`pwd`/.gradle
     - cd test
-    - ./gradlew check
+    - ./gradlew --debug check
   dependencies:
     - build-debug
   cache:
@@ -116,7 +117,7 @@ e2e test:
       - build
 
 archlinux:
-  stage: build
+  stage: package
   image: archlinux:latest
   script:
     - pacman -Syu --noconfirm sudo binutils fakeroot

@@ -17,15 +17,12 @@
 
 package de.njsm.tinyauth.test;
 
-import de.njsm.tinyauth.test.runtime.UutLifecycleManager;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import static de.njsm.tinyauth.test.RestUtil.given;
 
-@ExtendWith(UutLifecycleManager.class)
-public class HealthTest {
+public class HealthTest implements TinyAuthTest {
 
     @Test
     void fetchJwks() {

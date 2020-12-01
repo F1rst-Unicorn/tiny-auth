@@ -23,7 +23,10 @@ import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
+import java.io.File;
 import java.io.IOException;
+import java.net.ConnectException;
+import java.net.URL;
 
 public class UutLifecycleManager implements BeforeAllCallback, AfterAllCallback {
 
@@ -37,6 +40,9 @@ public class UutLifecycleManager implements BeforeAllCallback, AfterAllCallback 
 
     @Override
     public void beforeAll(ExtensionContext extensionContext) throws Exception {
+        new File("src/test/resources/store/users").mkdirs();
+        new File("src/test/resources/store/clients").mkdirs();
+
         String[] command = new String[] {
                 Config.getBinaryPath(),
                 "-c",
@@ -60,7 +66,24 @@ public class UutLifecycleManager implements BeforeAllCallback, AfterAllCallback 
             } catch (IOException e) {}
         });
         stderrForwarder.start();
-        Thread.sleep(1000);
+
+        waitForStartup();
+    }
+
+    private void waitForStartup() {
+        while (true) {
+            try {
+                Thread.sleep(1000);
+                URL u = new URL(Config.getBaseUri() + "jwks");
+                u.openConnection();
+                LOG.debug("tiny-auth is up");
+                return;
+            } catch (ConnectException e) {
+                LOG.debug("Waiting for tiny-auth...");
+            } catch (InterruptedException | IOException e) {
+                LOG.error("Failed to connect", e);
+            }
+        }
     }
 
     @Override
