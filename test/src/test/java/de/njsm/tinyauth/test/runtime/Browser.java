@@ -23,6 +23,8 @@ import de.njsm.tinyauth.test.runtime.webpage.AuthenticationPage;
 import okhttp3.HttpUrl;
 import org.openqa.selenium.firefox.FirefoxDriver;
 
+import java.util.Set;
+
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
 
 public class Browser {
@@ -33,13 +35,13 @@ public class Browser {
         this.driver = driver;
     }
 
-    public AuthenticationPage startAuthentication(Client client, String state, String nonce) {
+    public AuthenticationPage startAuthentication(Client client, String state, Set<String> scopes, String nonce) {
         HttpUrl url = HttpUrl.get(Endpoints.getAuthorizationUrl())
                 .newBuilder()
                 .addQueryParameter(CLIENT_ID, client.getClientId())
                 .addQueryParameter(STATE, state)
                 .addQueryParameter(NONCE, nonce)
-                .addQueryParameter(SCOPE, "openid")
+                .addQueryParameter(SCOPE, String.join(" ", scopes))
                 .addQueryParameter(RESPONSE_TYPE, ResponseType.CODE.get())
                 .addQueryParameter(REDIRECT_URI, client.getRedirectUri())
                 .build();

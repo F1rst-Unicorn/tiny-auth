@@ -23,6 +23,8 @@ public class Identifiers {
 
     public static final String STATE = "state";
 
+    public static final String ERROR = "error";
+
     public static final String NONCE = "nonce";
 
     public static final String ISSUER = "iss";

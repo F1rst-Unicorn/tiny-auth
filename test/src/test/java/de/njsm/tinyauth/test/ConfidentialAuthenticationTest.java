@@ -29,7 +29,8 @@ import org.mockserver.model.HttpRequest;
 import java.util.Set;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
-import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
@@ -38,24 +39,28 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     void simple(Browser browser) throws Exception {
         User user = Users.getUser();
         Client client = Clients.getConfidentialClient();
+        Set<String> scopes = Set.of("openid");
 
-        browser.startAuthentication(client, getStateParameter(), getNonceParameter())
+        browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
                 .withUser(user)
                 .login()
                 .confirm();
 
         HttpRequest oidcRedirect = getLastOidcRedirect();
         assertTrue(oidcRedirect.getQueryStringParameters().containsEntry(STATE, getStateParameter()));
+        assertTrue(oidcRedirect.getQueryStringParameters().getValues(ERROR).isEmpty());
+
         String authorizationCode = oidcRedirect.getFirstQueryStringParameter(ResponseType.CODE.get());
+        assertThat(authorizationCode.length(), is(greaterThanOrEqualTo(16)));
 
         JsonPath extractor = tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(client, authorizationCode)
-                .body(SCOPE, equalTo("openid"))
+                .body(SCOPE, equalTo(String.join(" ", scopes)))
                 .body(EXPIRES_IN, equalTo(60))
                 .body(TOKEN_TYPE, equalTo(TOKEN_TYPE_CONTENT))
                 .extract().body().jsonPath();
 
         tokenAsserter().verifyAccessToken(extractor.getString(ACCESS_TOKEN), client, user, getNonceParameter());
         tokenAsserter().verifyAccessToken(extractor.getString(ID_TOKEN), client, user, getNonceParameter());
-        tokenAsserter().verifyRefreshToken(extractor.getString(REFRESH_TOKEN), client, user, getNonceParameter(), Set.of("openid"));
+        tokenAsserter().verifyRefreshToken(extractor.getString(REFRESH_TOKEN), client, user, getNonceParameter(), scopes);
     }
 }
