@@ -10,6 +10,11 @@ repositories {
 }
 
 dependencies {
+    testImplementation('com.google.guava:guava') {
+        version {
+            strictly '25.0-jre'
+        }
+    }
     testImplementation 'com.google.code.gson:gson:2.8.6'
     testImplementation 'org.apache.logging.log4j:log4j-api:2.13.3'
     testImplementation 'org.apache.logging.log4j:log4j-core:2.13.3'
@@ -19,8 +24,12 @@ dependencies {
     testImplementation 'io.burt:jmespath-core:0.5.0'
     testImplementation 'io.burt:jmespath-gson:0.5.0'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.0'
-    testImplementation 'org.mock-server:mockserver-junit-jupiter:5.11.1'
     testImplementation 'io.rest-assured:rest-assured:4.3.1'
+    testImplementation 'org.mock-server:mockserver-junit-jupiter:5.11.2'
+    testImplementation 'org.seleniumhq.selenium:selenium-java:3.141.59'
+    testImplementation 'org.seleniumhq.selenium:selenium-firefox-driver:3.141.59'
+    testImplementation 'com.squareup.okhttp3:okhttp:4.9.0'
+    testImplementation 'com.nimbusds:nimbus-jose-jwt:9.1.4'
 }
 
 group = 'de.njsm.tiny-auth'

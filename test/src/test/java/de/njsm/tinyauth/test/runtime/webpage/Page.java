@@ -15,25 +15,27 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.njsm.tinyauth.test;
+package de.njsm.tinyauth.test.runtime.webpage;
 
-import de.njsm.tinyauth.test.repository.Endpoints;
-import io.restassured.http.ContentType;
-import org.junit.jupiter.api.Test;
+import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.support.ui.ExpectedCondition;
+import org.openqa.selenium.support.ui.WebDriverWait;
 
-import static io.restassured.RestAssured.given;
+public abstract class Page {
 
-public class HealthTest implements TinyAuthTest {
+    FirefoxDriver driver;
 
-    @Test
-    void fetchJwks() {
-        given()
-                .log().everything().
-        when()
-                .get(Endpoints.getJwksUrl()).
-        then()
-                .log().everything()
-                .statusCode(200)
-                .contentType(ContentType.JSON);
+    public Page(FirefoxDriver driver) {
+        this.driver = driver;
+        initialise();
+        assertDriverIsOnThisPage();
+    }
+
+    void initialise() {}
+
+    void assertDriverIsOnThisPage() {}
+
+    <T> T waitUntil(ExpectedCondition<T> condition) {
+        return new WebDriverWait(driver, 10).until(condition::apply);
     }
 }

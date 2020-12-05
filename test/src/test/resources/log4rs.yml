@@ -23,7 +23,7 @@ appenders:
 
     encoder:
       kind: pattern
-      pattern: "{level:>5} {file}:{line} {message}{n}"
+      pattern: "tiny-auth {level:>5} {file}:{line} {message}{n}"
 
 root:
   level: warn

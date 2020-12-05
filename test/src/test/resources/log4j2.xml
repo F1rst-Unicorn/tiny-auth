@@ -24,7 +24,7 @@
         <Console
                 name="console"
                 target="SYSTEM_OUT">
-            <PatternLayout pattern="%p %C:%L %m%n" />
+            <PatternLayout pattern="driver    %p %C:%L %m%n" />
         </Console>
     </Appenders>
     <Loggers>

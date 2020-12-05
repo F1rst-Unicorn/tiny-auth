@@ -14,25 +14,24 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+
+# See https://openid.net/specs/openid-connect-core-1_0.html#AddressClaim
+# on how a standard-conform address block looks like
+
 ---
-store:
-  configuration file:
-    base: test/src/test/resources/store
+client_id: confidential
+client_type:
+  confidential:
+    password:
+      Pbkdf2HmacSha256:
+        credential: dTOj50cJDq6lmwatEhupyefqkIzm34U+zg7Ybe9jLB8=
+        iterations: 100000
+        salt: 7WeGcR2fdMnFHN1a5aSCA7tTtj+pHEH6Ij8ClWscgM9jb25maWRlbnRpYWw=
 
-crypto:
-  key: test/src/test/resources/keys/key.pem
-  public key: test/src/test/resources/keys/public_key.pem
-  pepper: x5ePiX0TmUF2HzuraKuab9exzumu2sO54bnlVhgCS5AAXxqyhSSuHbCiUmx0FxmjZH9Gb2obp0ff2imMS6z40Qcc
+redirect_uris:
+  - http://localhost:34345/redirect/confidential
 
-rate limit:
-  events: 3
-  period in seconds: 10
-
-web:
-  bind: localhost:34344
-  public host:
-    domain: localhost
-    port: 34344
-  static files: static
-  session timeout: 60000
-  secret key: 6nwYoK0L9J5ADFQE74CkkuLmTGMSd1skxHso9XwZNbsCbVmLIVH6L2aBIi2veuia3aQ3fnBzfwwlIuzCmWTEjAcc
+allowed_scopes:
+  - email
+  - openid
+  - profile

@@ -105,6 +105,12 @@ e2e test:
   variables:
     GRADLE_OPTS: "-Dorg.gradle.daemon=false"
   script:
+    - apt-get update
+    - apt-get -y --no-install-recommends install firefox-esr
+    - curl -L -O https://github.com/mozilla/geckodriver/releases/download/v0.28.0/geckodriver-v0.28.0-linux64.tar.gz
+    - tar -xvzf geckodriver*.tar.gz
+    - chmod a+x geckodriver
+    - mv geckodriver /bin
     - export GRADLE_USER_HOME=`pwd`/.gradle
     - cd test
     - ./gradlew --debug check

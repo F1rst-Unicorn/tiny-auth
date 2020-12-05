@@ -15,19 +15,31 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.njsm.tinyauth.test;
+package de.njsm.tinyauth.test.data;
 
-import de.njsm.tinyauth.test.runtime.Config;
-import io.restassured.RestAssured;
-import io.restassured.specification.RequestSpecification;
+public class Client {
 
-public class RestUtil {
+    private String clientId;
 
-    public static RequestSpecification given() {
-        return RestAssured.given()
-                .baseUri(Config.getBaseUri())
-                .log().ifValidationFails();
+    private String password;
+
+    private String redirectUri;
+
+    public Client(String clientId, String password, String redirectUri) {
+        this.clientId = clientId;
+        this.password = password;
+        this.redirectUri = redirectUri;
     }
 
+    public String getClientId() {
+        return clientId;
+    }
 
+    public String getPassword() {
+        return password;
+    }
+
+    public String getRedirectUri() {
+        return redirectUri;
+    }
 }

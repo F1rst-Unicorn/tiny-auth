@@ -15,25 +15,24 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.njsm.tinyauth.test;
+package de.njsm.tinyauth.test.data;
 
-import de.njsm.tinyauth.test.repository.Endpoints;
-import io.restassured.http.ContentType;
-import org.junit.jupiter.api.Test;
+public class User {
 
-import static io.restassured.RestAssured.given;
+    private String username;
 
-public class HealthTest implements TinyAuthTest {
+    private String password;
 
-    @Test
-    void fetchJwks() {
-        given()
-                .log().everything().
-        when()
-                .get(Endpoints.getJwksUrl()).
-        then()
-                .log().everything()
-                .statusCode(200)
-                .contentType(ContentType.JSON);
+    public User(String username, String password) {
+        this.username = username;
+        this.password = password;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public String getPassword() {
+        return password;
     }
 }

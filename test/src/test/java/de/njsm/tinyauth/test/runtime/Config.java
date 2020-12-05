@@ -36,8 +36,4 @@ public class Config {
     static String getLogConfigPath() {
         return System.getProperty(LOG_CONFIG_PATH);
     }
-
-    public static String getBaseUri() {
-        return "http://localhost:34344/";
-    }
 }

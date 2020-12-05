@@ -17,6 +17,7 @@
 
 package de.njsm.tinyauth.test.runtime;
 
+import de.njsm.tinyauth.test.repository.Endpoints;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.extension.AfterAllCallback;
@@ -40,9 +41,6 @@ public class UutLifecycleManager implements BeforeAllCallback, AfterAllCallback 
 
     @Override
     public void beforeAll(ExtensionContext extensionContext) throws Exception {
-        new File("src/test/resources/store/users").mkdirs();
-        new File("src/test/resources/store/clients").mkdirs();
-
         String[] command = new String[] {
                 Config.getBinaryPath(),
                 "-c",
@@ -51,7 +49,7 @@ public class UutLifecycleManager implements BeforeAllCallback, AfterAllCallback 
                 Config.getLogConfigPath()
         };
 
-        tinyAuth = Runtime.getRuntime().exec(command);
+        tinyAuth = Runtime.getRuntime().exec(command, null, new File(".."));
 
         stdoutForwarder = new Thread(() -> {
             try {
@@ -74,7 +72,7 @@ public class UutLifecycleManager implements BeforeAllCallback, AfterAllCallback 
         while (true) {
             try {
                 Thread.sleep(1000);
-                URL u = new URL(Config.getBaseUri() + "jwks");
+                URL u = new URL(Endpoints.getJwksUrl());
                 u.openConnection();
                 LOG.debug("tiny-auth is up");
                 return;
