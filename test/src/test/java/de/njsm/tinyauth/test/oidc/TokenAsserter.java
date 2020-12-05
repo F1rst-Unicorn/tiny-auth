@@ -29,12 +29,11 @@ import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.User;
 import de.njsm.tinyauth.test.repository.Endpoints;
+import io.restassured.path.json.JsonPath;
 
 import java.net.URL;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
 import static java.util.Collections.singletonList;
@@ -80,6 +79,28 @@ public class TokenAsserter {
         assertTrue(expirationTime.after(now), expirationTime + " < " + now);
         assertTrue(issuanceTime.before(now), issuanceTime + " > " + now);
         assertTrue(issuanceTime.after(authTime), issuanceTime + " < " + authTime);
+    }
+
+    public void verifyUserinfo(JsonPath userinfo, String accessToken) throws Exception {
+        JWTClaimsSet claims = verifyToken(accessToken);
+        Map<String, Object> convertedClaims = new HashMap<>(claims.getClaims());
+        convertedClaims.put(EXPIRATION_TIME, ((Date) convertedClaims.get(EXPIRATION_TIME)).getTime() / 1000);
+        convertedClaims.put(ISSUANCE_TIME, ((Date) convertedClaims.get(ISSUANCE_TIME)).getTime() / 1000);
+
+        Map<String, Object> convertedUserinfo = new HashMap<>(userinfo.getMap(""));
+        Object audience = convertedUserinfo.get(AUDIENCE);
+        if (audience instanceof String)
+            convertedUserinfo.put(AUDIENCE, singletonList(audience));
+        else
+            convertedUserinfo.put(AUDIENCE, audience);
+        convertedUserinfo = convertedUserinfo.entrySet().stream()
+                .peek(e -> {
+                    if (e.getValue() instanceof Integer) {
+                        e.setValue(Long.valueOf((Integer) e.getValue()));
+                    }
+                }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        assertEquals(convertedClaims, convertedUserinfo);
     }
 
     private Date castToDate(Object rawDate) {

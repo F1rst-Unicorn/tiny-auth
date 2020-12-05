@@ -23,6 +23,7 @@ import de.njsm.tinyauth.test.repository.Clients;
 import de.njsm.tinyauth.test.repository.Users;
 import de.njsm.tinyauth.test.runtime.Browser;
 import io.restassured.path.json.JsonPath;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockserver.model.HttpRequest;
 
@@ -33,10 +34,39 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Tag("response_type.code")
 public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
 
     @Test
-    void simple(Browser browser) throws Exception {
+    @Tag("oidcc-basic-certification-test-plan.oidcc-server")
+    void authenticateSuccessfully(Browser browser) throws Exception {
+        authenticate(browser);
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-response-type-missing")
+    void missingResponseTypeIsReported(Browser browser) {
+        Client client = Clients.getConfidentialClient();
+        Set<String> scopes = Set.of("openid");
+
+        browser.startAuthenticationWithMissingResponseType(client, getStateParameter(), scopes, getNonceParameter());
+
+        HttpRequest oidcRedirect = getLastOidcRedirect();
+        assertTrue(oidcRedirect.getQueryStringParameters().containsEntry(STATE, getStateParameter()));
+        assertTrue(oidcRedirect.getQueryStringParameters().containsEntry(ERROR, "invalid_request"));
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-userinfo-get")
+    void authenticateAndQueryUserinfoEndpoint(Browser browser) throws Exception {
+        String accessToken = authenticate(browser);
+
+        JsonPath userinfo = userinfoEndpoint().fetchUserinfo(accessToken);
+
+        tokenAsserter().verifyUserinfo(userinfo, accessToken);
+    }
+
+    private String authenticate(Browser browser) throws Exception {
         User user = Users.getUser();
         Client client = Clients.getConfidentialClient();
         Set<String> scopes = Set.of("openid");
@@ -56,11 +86,13 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
         JsonPath extractor = tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(client, authorizationCode)
                 .body(SCOPE, equalTo(String.join(" ", scopes)))
                 .body(EXPIRES_IN, equalTo(60))
-                .body(TOKEN_TYPE, equalTo(TOKEN_TYPE_CONTENT))
+                .body(TOKEN_TYPE, equalToIgnoringCase(TOKEN_TYPE_CONTENT))
                 .extract().body().jsonPath();
 
         tokenAsserter().verifyAccessToken(extractor.getString(ACCESS_TOKEN), client, user, getNonceParameter());
         tokenAsserter().verifyAccessToken(extractor.getString(ID_TOKEN), client, user, getNonceParameter());
         tokenAsserter().verifyRefreshToken(extractor.getString(REFRESH_TOKEN), client, user, getNonceParameter(), scopes);
+
+        return extractor.getString(ACCESS_TOKEN);
     }
 }

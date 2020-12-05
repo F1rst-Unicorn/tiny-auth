@@ -20,6 +20,7 @@ package de.njsm.tinyauth.test;
 import de.njsm.tinyauth.test.oidc.TokenAsserter;
 import de.njsm.tinyauth.test.runtime.SeleniumLifecycleManager;
 import de.njsm.tinyauth.test.runtime.TokenEndpoint;
+import de.njsm.tinyauth.test.runtime.UserinfoEndpoint;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockserver.client.MockServerClient;
@@ -88,6 +89,10 @@ public class TinyAuthBrowserTest implements TinyAuthTest {
 
     TokenEndpoint tokenEndpoint() {
         return new TokenEndpoint();
+    }
+
+    UserinfoEndpoint userinfoEndpoint() {
+        return new UserinfoEndpoint();
     }
 
     TokenAsserter tokenAsserter() {

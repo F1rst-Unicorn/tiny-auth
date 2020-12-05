@@ -51,7 +51,7 @@ public class Identifiers {
 
     public static final String TOKEN_TYPE = "token_type";
 
-    public static final String TOKEN_TYPE_CONTENT = "bearer";
+    public static final String TOKEN_TYPE_CONTENT = "Bearer";
 
     public static final String EXPIRES_IN = "expires_in";
 

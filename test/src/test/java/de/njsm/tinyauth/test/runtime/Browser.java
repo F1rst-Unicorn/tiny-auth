@@ -21,6 +21,7 @@ import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.repository.Endpoints;
 import de.njsm.tinyauth.test.runtime.webpage.AuthenticationPage;
 import okhttp3.HttpUrl;
+import org.jetbrains.annotations.NotNull;
 import org.openqa.selenium.firefox.FirefoxDriver;
 
 import java.util.Set;
@@ -36,7 +37,23 @@ public class Browser {
     }
 
     public AuthenticationPage startAuthentication(Client client, String state, Set<String> scopes, String nonce) {
-        HttpUrl url = HttpUrl.get(Endpoints.getAuthorizationUrl())
+        HttpUrl url = generateUrlForHappyPath(client, state, scopes, nonce);
+        driver.navigate().to(url.url());
+        return new AuthenticationPage(driver);
+    }
+
+    public void startAuthenticationWithMissingResponseType(Client client, String state, Set<String> scopes, String nonce) {
+        HttpUrl url = generateUrlForHappyPath(client, state, scopes, nonce)
+                .newBuilder()
+                .removeAllQueryParameters(RESPONSE_TYPE)
+                .build();
+
+        driver.navigate().to(url.url());
+    }
+
+    @NotNull
+    private HttpUrl generateUrlForHappyPath(Client client, String state, Set<String> scopes, String nonce) {
+        return HttpUrl.get(Endpoints.getAuthorizationUrl())
                 .newBuilder()
                 .addQueryParameter(CLIENT_ID, client.getClientId())
                 .addQueryParameter(STATE, state)
@@ -45,8 +62,5 @@ public class Browser {
                 .addQueryParameter(RESPONSE_TYPE, ResponseType.CODE.get())
                 .addQueryParameter(REDIRECT_URI, client.getRedirectUri())
                 .build();
-
-        driver.navigate().to(url.url());
-        return new AuthenticationPage(driver);
     }
 }
