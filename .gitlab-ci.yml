@@ -113,9 +113,12 @@ e2e test:
     - mv geckodriver /bin
     - export GRADLE_USER_HOME=`pwd`/.gradle
     - cd test
-    - ./gradlew --debug check
+    - ./gradlew check --info
   dependencies:
     - build-debug
+  artifacts:
+    paths:
+      - test/build/reports/tests/test
   cache:
     key: ${CI_JOB_NAME}
     paths:
