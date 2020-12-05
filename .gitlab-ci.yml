@@ -139,3 +139,4 @@ archlinux:
   artifacts:
     paths:
       - pkg/Archlinux/tiny-auth*.pkg.tar.xz*
+      - pkg/Archlinux/tiny-auth*.pkg.tar.zst*

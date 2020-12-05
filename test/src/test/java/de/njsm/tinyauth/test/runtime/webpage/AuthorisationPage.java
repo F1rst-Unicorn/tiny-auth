@@ -39,7 +39,7 @@ public class AuthorisationPage extends Page {
     @Override
     void assertDriverIsOnThisPage() {
         waitUntil(ExpectedConditions.presenceOfElementLocated(submit));
-        assertTrue(driver.findElement(submit).isDisplayed());
+        assertTrue(driver.findElement(submit).isDisplayed(), "field <submit> not found");
     }
 
     public void confirm() {

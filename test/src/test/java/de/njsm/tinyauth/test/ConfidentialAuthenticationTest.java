@@ -23,10 +23,12 @@ import de.njsm.tinyauth.test.repository.Clients;
 import de.njsm.tinyauth.test.repository.Users;
 import de.njsm.tinyauth.test.runtime.Browser;
 import io.restassured.path.json.JsonPath;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockserver.model.HttpRequest;
 
+import java.util.List;
 import java.util.Set;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
@@ -52,8 +54,8 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
         browser.startAuthenticationWithMissingResponseType(client, getStateParameter(), scopes, getNonceParameter());
 
         HttpRequest oidcRedirect = getLastOidcRedirect();
-        assertTrue(oidcRedirect.getQueryStringParameters().containsEntry(STATE, getStateParameter()));
-        assertTrue(oidcRedirect.getQueryStringParameters().containsEntry(ERROR, "invalid_request"));
+        assertTrue(oidcRedirect.getQueryStringParameters().containsEntry(STATE, getStateParameter()), "state <" + getStateParameter() + "> not found");
+        assertTrue(oidcRedirect.getQueryStringParameters().containsEntry(ERROR, "invalid_request"), "error not set or wrong value");
     }
 
     @Test
@@ -61,9 +63,62 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     void authenticateAndQueryUserinfoEndpoint(Browser browser) throws Exception {
         String accessToken = authenticate(browser);
 
-        JsonPath userinfo = userinfoEndpoint().fetchUserinfo(accessToken);
+        JsonPath userinfo = userinfoEndpoint().getUserinfo(accessToken);
 
         tokenAsserter().verifyUserinfo(userinfo, accessToken);
+    }
+
+    /**
+     * Omits doing a GET request to userinfo as well. This is different from the
+     * official conformance test.
+     */
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-userinfo-post-header")
+    void authenticateAndQueryUserinfoEndpointWithPost(Browser browser) throws Exception {
+        String accessToken = authenticate(browser);
+
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken);
+
+        tokenAsserter().verifyUserinfo(userinfo, accessToken);
+    }
+
+    /**
+     * Omits doing a GET request to userinfo as well. This is different from the
+     * official conformance test.
+     */
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-userinfo-post-body")
+    void authenticateAndQueryUserinfoEndpointWithPostBody(Browser browser) throws Exception {
+        String accessToken = authenticate(browser);
+
+        JsonPath userinfo = userinfoEndpoint().postUserinfoWithTokenInBody(accessToken);
+
+        tokenAsserter().verifyUserinfo(userinfo, accessToken);
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-ensure-request-without-nonce-succeeds-for-code-flow")
+    void authenticateWithoutNonce(Browser browser) throws Exception {
+        User user = Users.getUser();
+        Client client = Clients.getConfidentialClient();
+        Set<String> scopes = Set.of("openid");
+
+        browser.startAuthenticationWithoutNonce(client, getStateParameter(), scopes)
+                .withUser(user)
+                .login()
+                .confirm();
+
+        String authorizationCode = assertOnRedirect();
+
+        JsonPath tokenResponse = tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(client, authorizationCode)
+                .body(SCOPE, equalTo(String.join(" ", scopes)))
+                .body(EXPIRES_IN, equalTo(60))
+                .body(TOKEN_TYPE, equalToIgnoringCase(TOKEN_TYPE_CONTENT))
+                .extract().body().jsonPath();
+
+        tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), client, user);
+        tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), client, user);
+        tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), client, user, scopes);
     }
 
     private String authenticate(Browser browser) throws Exception {
@@ -76,23 +131,31 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
                 .login()
                 .confirm();
 
-        HttpRequest oidcRedirect = getLastOidcRedirect();
-        assertTrue(oidcRedirect.getQueryStringParameters().containsEntry(STATE, getStateParameter()));
-        assertTrue(oidcRedirect.getQueryStringParameters().getValues(ERROR).isEmpty());
+        String authorizationCode = assertOnRedirect();
 
-        String authorizationCode = oidcRedirect.getFirstQueryStringParameter(ResponseType.CODE.get());
-        assertThat(authorizationCode.length(), is(greaterThanOrEqualTo(16)));
-
-        JsonPath extractor = tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(client, authorizationCode)
+        JsonPath tokenResponse = tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(client, authorizationCode)
                 .body(SCOPE, equalTo(String.join(" ", scopes)))
                 .body(EXPIRES_IN, equalTo(60))
                 .body(TOKEN_TYPE, equalToIgnoringCase(TOKEN_TYPE_CONTENT))
                 .extract().body().jsonPath();
 
-        tokenAsserter().verifyAccessToken(extractor.getString(ACCESS_TOKEN), client, user, getNonceParameter());
-        tokenAsserter().verifyAccessToken(extractor.getString(ID_TOKEN), client, user, getNonceParameter());
-        tokenAsserter().verifyRefreshToken(extractor.getString(REFRESH_TOKEN), client, user, getNonceParameter(), scopes);
+        tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), client, user, getNonceParameter());
+        tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), client, user, getNonceParameter());
+        tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), client, user, getNonceParameter(), scopes);
 
-        return extractor.getString(ACCESS_TOKEN);
+        return tokenResponse.getString(ACCESS_TOKEN);
+    }
+
+    @NotNull
+    private String assertOnRedirect() {
+        HttpRequest oidcRedirect = getLastOidcRedirect();
+        assertTrue(oidcRedirect.getQueryStringParameters().containsEntry(STATE, getStateParameter()), "state <" + getStateParameter() + "> not found");
+
+        List<String> errors = oidcRedirect.getQueryStringParameters().getValues(ERROR);
+        assertTrue(errors.isEmpty(), "server returned error: " + String.join(" ", errors));
+
+        String authorizationCode = oidcRedirect.getFirstQueryStringParameter(ResponseType.CODE.get());
+        assertThat(authorizationCode.length(), is(greaterThanOrEqualTo(16)));
+        return authorizationCode;
     }
 }

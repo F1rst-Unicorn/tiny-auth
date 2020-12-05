@@ -49,9 +49,9 @@ public class AuthenticationPage extends Page {
     @Override
     void assertDriverIsOnThisPage() {
         waitUntil(ExpectedConditions.presenceOfElementLocated(username));
-        assertTrue(driver.findElement(username).isDisplayed());
-        assertTrue(driver.findElement(password).isDisplayed());
-        assertTrue(driver.findElement(submit).isDisplayed());
+        assertTrue(driver.findElement(username).isDisplayed(), "field <username> not found");
+        assertTrue(driver.findElement(password).isDisplayed(), "field <password> not found");
+        assertTrue(driver.findElement(submit).isDisplayed(), "field <submit> not found");
     }
 
     public AuthenticationPage withUser(User user) {

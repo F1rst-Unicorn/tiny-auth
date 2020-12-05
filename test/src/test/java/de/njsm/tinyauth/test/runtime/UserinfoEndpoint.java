@@ -21,19 +21,42 @@ import de.njsm.tinyauth.test.repository.Endpoints;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.path.json.JsonPath;
+import io.restassured.response.Response;
+import io.restassured.specification.RequestSpecification;
 
+import static de.njsm.tinyauth.test.oidc.Identifiers.ACCESS_TOKEN;
 import static de.njsm.tinyauth.test.oidc.Identifiers.TOKEN_TYPE_CONTENT;
 
 public class UserinfoEndpoint {
 
-    public JsonPath fetchUserinfo(String accessToken) {
+    public JsonPath getUserinfo(String accessToken) {
+        return verifyBasics(when()
+                .header("Authorization", TOKEN_TYPE_CONTENT + " " + accessToken)
+                .get());
+    }
+
+    public JsonPath postUserinfo(String accessToken) {
+        return verifyBasics(when()
+                .header("Authorization", TOKEN_TYPE_CONTENT + " " + accessToken)
+                .post());
+    }
+
+    public JsonPath postUserinfoWithTokenInBody(String accessToken) {
+        return verifyBasics(when()
+                .contentType(ContentType.URLENC)
+                .formParam(ACCESS_TOKEN, accessToken)
+                .post());
+    }
+
+    private RequestSpecification when() {
         return RestAssured.given()
                 .log().everything()
                 .baseUri(Endpoints.getUserinfoUrl())
-        .when()
-                .header("Authorization", TOKEN_TYPE_CONTENT + " " + accessToken)
-                .get()
-        .then()
+                .when();
+    }
+
+    private JsonPath verifyBasics(Response response) {
+        return response.then()
                 .log().everything()
                 .statusCode(200)
                 .contentType(ContentType.JSON)

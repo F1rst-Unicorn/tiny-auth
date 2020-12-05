@@ -51,6 +51,16 @@ public class Browser {
         driver.navigate().to(url.url());
     }
 
+    public AuthenticationPage startAuthenticationWithoutNonce(Client client, String state, Set<String> scopes) {
+        HttpUrl url = generateUrlForHappyPath(client, state, scopes, "")
+                .newBuilder()
+                .removeAllQueryParameters(NONCE)
+                .build();
+
+        driver.navigate().to(url.url());
+        return new AuthenticationPage(driver);
+    }
+
     @NotNull
     private HttpUrl generateUrlForHappyPath(Client client, String state, Set<String> scopes, String nonce) {
         return HttpUrl.get(Endpoints.getAuthorizationUrl())
