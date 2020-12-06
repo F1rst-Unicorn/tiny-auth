@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.mockserver.model.HttpRequest;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
@@ -115,11 +116,11 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
         String authorizationCode = assertOnRedirect();
 
         JsonPath tokenResponse = tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(client, authorizationCode)
-                .body(SCOPE, equalTo(String.join(" ", scopes)))
                 .body(EXPIRES_IN, equalTo(60))
                 .body(TOKEN_TYPE, equalToIgnoringCase(TOKEN_TYPE_CONTENT))
                 .extract().body().jsonPath();
 
+        assertEquals(scopes, Set.of(tokenResponse.getString(SCOPE).split(" ")));
         tokenAsserter().verifyAccessTokenWithoutNonce(tokenResponse.getString(ACCESS_TOKEN), client, user);
         tokenAsserter().verifyAccessTokenWithoutNonce(tokenResponse.getString(ID_TOKEN), client, user);
         tokenAsserter().verifyRefreshTokenWithoutNonce(tokenResponse.getString(REFRESH_TOKEN), client, user, scopes);
@@ -173,6 +174,44 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
         tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
     }
 
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-display-page")
+    void authenticateWithDisplayPage(Browser browser) throws Exception {
+        OidcToken accessToken = authenticateWithAdditionalParameters(browser, Map.of("display", "page"));
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
+        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-display-popup")
+    void authenticateWithDisplayPopup(Browser browser) throws Exception {
+        OidcToken accessToken = authenticateWithAdditionalParameters(browser, Map.of("display", "popup"));
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
+        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-prompt-login")
+    void authenticateTwiceWithForcedLogin(Browser browser) throws Exception {
+        OidcToken tokenFromFirstLogin = authenticate(browser);
+        OidcToken tokenFromSecondLogin = authenticateWithAdditionalParameters(browser, Map.of("prompt", "login"));
+
+        long firstAuthTime = tokenFromFirstLogin.getClaims().getLongClaim(AUTH_TIME);
+        long secondAuthTime = tokenFromSecondLogin.getClaims().getLongClaim(AUTH_TIME);
+        assertThat(firstAuthTime, is(lessThan(secondAuthTime)));
+    }
+
+    private OidcToken authenticateWithAdditionalParameters(Browser browser, Map<String, String> additionalParameters) throws Exception {
+        Set<String> scopes = Set.of("openid");
+        browser.startAuthenticationWithAdditionalParameters(client, getStateParameter(), scopes, getNonceParameter(), additionalParameters)
+                .withUser(user)
+                .login()
+                .confirm();
+
+        String authorizationCode = assertOnRedirect();
+        return verifyTokensFromAuthorizationCode(scopes, authorizationCode);
+    }
+
     private OidcToken authenticate(Browser browser, Set<String> scopes) throws Exception {
         browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
                 .withUser(user)
@@ -180,7 +219,10 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
                 .confirm();
 
         String authorizationCode = assertOnRedirect();
+        return verifyTokensFromAuthorizationCode(scopes, authorizationCode);
+    }
 
+    private OidcToken verifyTokensFromAuthorizationCode(Set<String> scopes, String authorizationCode) throws Exception {
         JsonPath tokenResponse = tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(client, authorizationCode)
                 .body(EXPIRES_IN, equalTo(60))
                 .body(TOKEN_TYPE, equalToIgnoringCase(TOKEN_TYPE_CONTENT))
@@ -191,7 +233,6 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
         OidcToken oidcToken = tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), client, user, getNonceParameter());
         tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), client, user, getNonceParameter());
         tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), client, user, getNonceParameter(), scopes);
-
         return oidcToken;
     }
 

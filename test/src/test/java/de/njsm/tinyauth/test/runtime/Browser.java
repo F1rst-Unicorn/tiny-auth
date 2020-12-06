@@ -24,6 +24,7 @@ import okhttp3.HttpUrl;
 import org.jetbrains.annotations.NotNull;
 import org.openqa.selenium.firefox.FirefoxDriver;
 
+import java.util.Map;
 import java.util.Set;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
@@ -38,6 +39,17 @@ public class Browser {
 
     public AuthenticationPage startAuthentication(Client client, String state, Set<String> scopes, String nonce) {
         HttpUrl url = generateUrlForHappyPath(client, state, scopes, nonce);
+        driver.navigate().to(url.url());
+        return new AuthenticationPage(driver);
+    }
+
+    public AuthenticationPage startAuthenticationWithAdditionalParameters(Client client, String state, Set<String> scopes, String nonce, Map<String, String> additionalParameters) {
+        HttpUrl url = generateUrlForHappyPath(client, state, scopes, nonce);
+
+        HttpUrl.Builder builder = url.newBuilder();
+        additionalParameters.forEach(builder::addQueryParameter);
+        url = builder.build();
+
         driver.navigate().to(url.url());
         return new AuthenticationPage(driver);
     }
