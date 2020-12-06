@@ -15,30 +15,31 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.njsm.tinyauth.test.repository;
+package de.njsm.tinyauth.test.data.scopes;
 
+import com.nimbusds.jwt.JWTClaimsSet;
+import de.njsm.tinyauth.test.data.Scope;
 import de.njsm.tinyauth.test.data.User;
 
-public class Users {
-    public static User getUser() {
-        return new User("john",
-                "password",
-                "John Horatio Doe",
-                "Doe",
-                "John",
-                "Horatio",
-                "Jonny",
-                "doej",
-                "profiles.example/doej",
-                ":-)",
-                "profiles.example/doej/profile",
-                "diverse",
-                "1991-09-11",
-                "Europe/Berlin",
-                "en-US",
-                1409,
-                "john@test.example",
-                "Main Street 14\n11111 Portland\n",
-                "+123456789");
+import java.text.ParseException;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+public class Phone extends Scope {
+
+    private static final Phone INSTANCE = new Phone();
+
+    public static Phone get() {
+        return INSTANCE;
+    }
+
+    @Override
+    public void verifyClaimsFor(User user, JWTClaimsSet claims) {
+        try {
+            assertEquals(user.getPhone(), claims.getStringClaim("phone_number"));
+            assertTrue(claims.getBooleanClaim("phone_number_verified"), "phone number is not marked verified");
+        } catch (ParseException e) {
+            fail(e);
+        }
     }
 }

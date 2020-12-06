@@ -27,7 +27,6 @@ mappings:
   - structure:
       email: "{{ user.email }}"
     type: template
-    optional: true
 
   - structure:
       email_verified: true

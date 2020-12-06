@@ -23,7 +23,6 @@ mappings:
   - structure:
       phone_number: "{{ user.phone_number }}"
     type: template
-    optional: true
 
   - structure:
       phone_number_verified: true

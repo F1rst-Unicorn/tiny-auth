@@ -35,3 +35,5 @@ allowed_scopes:
   - email
   - openid
   - profile
+  - phone
+  - address

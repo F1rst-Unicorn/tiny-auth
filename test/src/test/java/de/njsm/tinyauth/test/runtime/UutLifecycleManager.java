@@ -20,7 +20,6 @@ package de.njsm.tinyauth.test.runtime;
 import de.njsm.tinyauth.test.repository.Endpoints;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
@@ -29,9 +28,13 @@ import java.io.IOException;
 import java.net.ConnectException;
 import java.net.URL;
 
-public class UutLifecycleManager implements BeforeAllCallback, AfterAllCallback {
+import static org.junit.jupiter.api.extension.ExtensionContext.Namespace.GLOBAL;
+
+public class UutLifecycleManager implements BeforeAllCallback, ExtensionContext.Store.CloseableResource {
 
     private static final Logger LOG = LogManager.getLogger(UutLifecycleManager.class);
+
+    private static boolean started = false;
 
     private Process tinyAuth;
 
@@ -41,6 +44,14 @@ public class UutLifecycleManager implements BeforeAllCallback, AfterAllCallback 
 
     @Override
     public void beforeAll(ExtensionContext extensionContext) throws Exception {
+        if (!started) {
+            started = true;
+            startTinyAuth();
+            extensionContext.getRoot().getStore(GLOBAL).put(this.getClass().getCanonicalName(), this);
+        }
+    }
+
+    private void startTinyAuth() throws Exception {
         String[] command = new String[] {
                 Config.getBinaryPath(),
                 "-c",
@@ -85,7 +96,7 @@ public class UutLifecycleManager implements BeforeAllCallback, AfterAllCallback 
     }
 
     @Override
-    public void afterAll(ExtensionContext extensionContext) throws Exception {
+    public void close() throws Throwable {
         tinyAuth.destroy();
         stdoutForwarder.join();
         stderrForwarder.join();

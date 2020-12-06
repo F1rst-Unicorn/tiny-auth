@@ -26,6 +26,7 @@ import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
+import de.njsm.tinyauth.test.data.OidcToken;
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.User;
 import de.njsm.tinyauth.test.repository.Endpoints;
@@ -42,68 +43,32 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TokenAsserter {
 
-    public void verifyAccessToken(String token, Client client, User user) throws Exception {
+    public OidcToken verifyAccessTokenWithoutNonce(String token, Client client, User user) throws Exception {
         JWTClaimsSet claims = verifyToken(token);
-        verifyTokenClaims(claims.getClaims(), client, user);
+        verifyAccessTokenClaimsWithoutNonce(claims.getClaims(), client, user);
+        return new OidcToken(token, claims);
     }
 
-    public void verifyAccessToken(String token, Client client, User user, String nonce) throws Exception {
+    public OidcToken verifyAccessToken(String token, Client client, User user, String nonce) throws Exception {
         JWTClaimsSet claims = verifyToken(token);
-        verifyTokenClaims(claims.getClaims(), client, user, nonce);
+        verifyAccessTokenClaims(claims.getClaims(), client, user, nonce);
+        return new OidcToken(token, claims);
     }
 
-    public void verifyRefreshToken(String token, Client client, User user, String nonce, Set<String> scopes) throws Exception {
-        Map<String, Object> accessTokenClaims = verifyRefreshTokenSpecificClaims(token, scopes);
-        verifyTokenClaims(accessTokenClaims, client, user, nonce);
+    public OidcToken verifyRefreshToken(String token, Client client, User user, String nonce, Set<String> scopes) throws Exception {
+        JWTClaimsSet claims = verifyRefreshTokenSpecificClaims(token, scopes);
+        verifyAccessTokenClaims(claims.getJSONObjectClaim(ACCESS_TOKEN), client, user, nonce);
+        return new OidcToken(token, claims);
     }
 
-    public void verifyRefreshToken(String token, Client client, User user, Set<String> scopes) throws Exception {
-        Map<String, Object> accessTokenClaims = verifyRefreshTokenSpecificClaims(token, scopes);
-        verifyTokenClaims(accessTokenClaims, client, user);
+    public OidcToken verifyRefreshTokenWithoutNonce(String token, Client client, User user, Set<String> scopes) throws Exception {
+        JWTClaimsSet claims = verifyRefreshTokenSpecificClaims(token, scopes);
+        verifyAccessTokenClaimsWithoutNonce(claims.getJSONObjectClaim(ACCESS_TOKEN), client, user);
+        return new OidcToken(token, claims);
     }
 
-    private Map<String, Object> verifyRefreshTokenSpecificClaims(String token, Set<String> scopes) throws Exception {
-        JWTClaimsSet claims = verifyToken(token);
-        Map<String, Object> accessTokenClaims = claims.getJSONObjectClaim(ACCESS_TOKEN);
-
-        assertEquals(Endpoints.getIssuer(), claims.getStringClaim(ISSUER));
-        assertEquals(scopes, new HashSet<>(claims.getStringListClaim(SCOPES)));
-        assertTrue(claims.getExpirationTime().after(new Date()), "token has already expired");
-
-        return accessTokenClaims;
-    }
-
-    private void verifyTokenClaims(Map<String, Object> claims, Client client, User user, String nonce) {
-        verifyTokenClaims(claims, client, user);
-        assertEquals(nonce, claims.get(NONCE));
-    }
-
-    private void verifyTokenClaims(Map<String, Object> claims, Client client, User user) {
-        Date now = new Date();
-
-        assertEquals(Endpoints.getIssuer(), claims.get(ISSUER));
-        assertEquals(client.getClientId(), claims.get(AUTHORIZED_PARTY));
-        assertEquals(user.getUsername(), claims.get(SUBJECT));
-
-        Object audience = claims.get(AUDIENCE);
-        if (audience instanceof String)
-            assertEquals(client.getClientId(), audience);
-        else
-            assertEquals(singletonList(client.getClientId()), audience);
-
-        Date expirationTime = castToDate(claims.get(EXPIRATION_TIME));
-        Date issuanceTime = castToDate(claims.get(ISSUANCE_TIME));
-        Date authTime = castToDate(claims.get(AUTH_TIME));
-
-        assertTrue(expirationTime.after(now), "token has already expired");
-        assertTrue(issuanceTime.before(now), "token was issued in the future");
-        assertTrue(issuanceTime.after(authTime), "token was issued before authentication");
-    }
-
-    public void verifyUserinfo(JsonPath userinfo, String accessToken) throws Exception {
-        JWTClaimsSet claims = verifyToken(accessToken);
-
-        Map<String, Object> convertedClaims = new HashMap<>(claims.getClaims());
+    public void verifyUserinfo(JsonPath userinfo, JWTClaimsSet accessTokenClaims) throws Exception {
+        Map<String, Object> convertedClaims = new HashMap<>(accessTokenClaims.getClaims());
         convertedClaims.put(EXPIRATION_TIME, ((Date) convertedClaims.get(EXPIRATION_TIME)).getTime() / 1000);
         convertedClaims.put(ISSUANCE_TIME, ((Date) convertedClaims.get(ISSUANCE_TIME)).getTime() / 1000);
 
@@ -121,6 +86,43 @@ public class TokenAsserter {
                 }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         assertEquals(convertedClaims, convertedUserinfo);
+    }
+
+    private JWTClaimsSet verifyRefreshTokenSpecificClaims(String token, Set<String> scopes) throws Exception {
+        JWTClaimsSet claims = verifyToken(token);
+
+        assertEquals(Endpoints.getIssuer(), claims.getStringClaim(ISSUER));
+        assertEquals(scopes, new HashSet<>(claims.getStringListClaim(SCOPES)));
+        assertTrue(claims.getExpirationTime().after(new Date()), "token has already expired");
+
+        return claims;
+    }
+
+    private void verifyAccessTokenClaims(Map<String, Object> claims, Client client, User user, String nonce) {
+        verifyAccessTokenClaimsWithoutNonce(claims, client, user);
+        assertEquals(nonce, claims.get(NONCE));
+    }
+
+    private void verifyAccessTokenClaimsWithoutNonce(Map<String, Object> claims, Client client, User user) {
+        Date now = new Date();
+
+        assertEquals(Endpoints.getIssuer(), claims.get(ISSUER));
+        assertEquals(client.getClientId(), claims.get(AUTHORIZED_PARTY));
+        assertEquals(user.getUsername(), claims.get(SUBJECT));
+
+        Object audience = claims.get(AUDIENCE);
+        if (audience instanceof String)
+            assertEquals(client.getClientId(), audience);
+        else
+            assertEquals(singletonList(client.getClientId()), audience);
+
+        Date expirationTime = castToDate(claims.get(EXPIRATION_TIME));
+        Date issuanceTime = castToDate(claims.get(ISSUANCE_TIME));
+        Date authTime = castToDate(claims.get(AUTH_TIME));
+
+        assertTrue(now.compareTo(expirationTime) < 1, "token has already expired");
+        assertTrue(issuanceTime.compareTo(now) < 1, "token was issued in the future");
+        assertTrue(authTime.compareTo(issuanceTime) < 1, "token was issued (" + issuanceTime + ") before authentication (" + authTime + ")");
     }
 
     private Date castToDate(Object rawDate) {

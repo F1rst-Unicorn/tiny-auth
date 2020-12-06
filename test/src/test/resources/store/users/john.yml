@@ -28,23 +28,24 @@ password:
 
 email: john@test.example
 email_verified: true
-phone_number: +123456789
+
+phone_number: "+123456789"
 phone_number_verified: true
+
 address: |
   Main Street 14
   11111 Portland
+
 given_name: John
+middle_name: Horatio
 family_name: Doe
 nickname: Jonny
 preferred_username: doej
-profile: ""
-picture: ""
-website: ""
+profile: "profiles.example/doej"
+picture: ":-)"
+website: "profiles.example/doej/profile"
 gender: diverse
 birthdate: 1991-09-11
 zoneinfo: Europe/Berlin
 locale: en-US
-updated_at: 0
-
-groups:
-  - test
+updated_at: 1409

@@ -17,28 +17,28 @@
 
 package de.njsm.tinyauth.test.repository;
 
-import de.njsm.tinyauth.test.data.User;
+import de.njsm.tinyauth.test.data.Scope;
+import de.njsm.tinyauth.test.data.scopes.Address;
+import de.njsm.tinyauth.test.data.scopes.Email;
+import de.njsm.tinyauth.test.data.scopes.Phone;
+import de.njsm.tinyauth.test.data.scopes.Profile;
 
-public class Users {
-    public static User getUser() {
-        return new User("john",
-                "password",
-                "John Horatio Doe",
-                "Doe",
-                "John",
-                "Horatio",
-                "Jonny",
-                "doej",
-                "profiles.example/doej",
-                ":-)",
-                "profiles.example/doej/profile",
-                "diverse",
-                "1991-09-11",
-                "Europe/Berlin",
-                "en-US",
-                1409,
-                "john@test.example",
-                "Main Street 14\n11111 Portland\n",
-                "+123456789");
+
+public class Scopes {
+
+    public static Scope getProfile() {
+        return Profile.get();
+    }
+
+    public static Scope getEmail() {
+        return Email.get();
+    }
+
+    public static Scope getAddress() {
+        return Address.get();
+    }
+
+    public static Scope getPhone() {
+        return Phone.get();
     }
 }

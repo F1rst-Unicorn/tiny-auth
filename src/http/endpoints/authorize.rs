@@ -48,6 +48,8 @@ use url::Url;
 use log::debug;
 use log::error;
 use log::info;
+use log::log_enabled;
+use log::Level::Debug;
 
 pub const SESSION_KEY: &str = "a";
 
@@ -184,11 +186,27 @@ pub async fn post(
 
     let scopes = parse_scope_names(query.scope.as_deref().unwrap());
     let scopes = BTreeSet::from_iter(scopes.into_iter());
+
+    if log_enabled!(Debug) {
+        let forbidden_scopes = scopes
+            .difference(&client.allowed_scopes)
+            .map(Clone::clone)
+            .collect::<Vec<String>>()
+            .join(" ");
+        if !forbidden_scopes.is_empty() {
+            debug!(
+                "Client '{}' requested forbidden scopes '{}'. These are dropped silently",
+                client.client_id, forbidden_scopes
+            );
+        }
+    }
+
     let scopes = scopes
         .intersection(&client.allowed_scopes)
         .map(Clone::clone)
         .collect::<Vec<String>>()
         .join(" ");
+
     query.scope.replace(scopes);
 
     let prompts = parse_prompt(&query.prompt);
