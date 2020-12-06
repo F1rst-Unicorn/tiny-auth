@@ -130,6 +130,8 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     void authenticateWithProfileScope(Browser browser) throws Exception {
         OidcToken accessToken = authenticate(browser, Set.of("openid", "profile"));
         Scopes.getProfile().verifyClaimsFor(user, accessToken.getClaims());
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
+        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
     }
 
     @Test
@@ -137,6 +139,8 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     void authenticateWithEmailScope(Browser browser) throws Exception {
         OidcToken accessToken = authenticate(browser, Set.of("openid", "email"));
         Scopes.getEmail().verifyClaimsFor(user, accessToken.getClaims());
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
+        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
     }
 
     @Test
@@ -144,6 +148,8 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     void authenticateWithAddressScope(Browser browser) throws Exception {
         OidcToken accessToken = authenticate(browser, Set.of("openid", "address"));
         Scopes.getAddress().verifyClaimsFor(user, accessToken.getClaims());
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
+        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
     }
 
     @Test
@@ -151,6 +157,8 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     void authenticateWithPhoneScope(Browser browser) throws Exception {
         OidcToken accessToken = authenticate(browser, Set.of("openid", "phone"));
         Scopes.getPhone().verifyClaimsFor(user, accessToken.getClaims());
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
+        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
     }
 
     @Test
@@ -161,6 +169,8 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
         Scopes.getEmail().verifyClaimsFor(user, accessToken.getClaims());
         Scopes.getAddress().verifyClaimsFor(user, accessToken.getClaims());
         Scopes.getPhone().verifyClaimsFor(user, accessToken.getClaims());
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
+        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
     }
 
     private OidcToken authenticate(Browser browser, Set<String> scopes) throws Exception {
