@@ -19,37 +19,21 @@
 # on how a standard-conform address block looks like
 
 ---
-name: john
-password:
-  Pbkdf2HmacSha256:
-    credential: vaRTgy6/CjHICBWJvD0Bt/Pb+V8NnzMkaBH00pFe/qU=
-    iterations: 100000
-    salt: tZS242auaGQQDg/yefhFWphhdTqMmWcyYCIDcRR9qvRqb2hu
+client_id: client-for-no-prompt-test
+client_type:
+  confidential:
+    password:
+      Pbkdf2HmacSha256:
+        credential: L6Su4zMpQp9COazAWT/VIkilOWQSmtEotvoYhlUg0/c=
+        iterations: 100000
+        salt: bqcKUBMEn0zc6qEjbRsJda9Q2Y2FhQdR6gWat3F7KmhjbGllbnQtZm9yLW5vLXByb21wdC10ZXN0
+
+redirect_uris:
+  - http://localhost:34345/redirect/client-for-no-prompt-test
 
 allowed_scopes:
-  client-for-no-prompt-test:
-    - openid
-
-email: john@test.example
-email_verified: true
-
-phone_number: "+123456789"
-phone_number_verified: true
-
-address: |
-  Main Street 14
-  11111 Portland
-
-given_name: John
-middle_name: Horatio
-family_name: Doe
-nickname: Jonny
-preferred_username: doej
-profile: "profiles.example/doej"
-picture: ":-)"
-website: "profiles.example/doej/profile"
-gender: diverse
-birthdate: 1991-09-11
-zoneinfo: Europe/Berlin
-locale: en-US
-updated_at: 1409
+  - email
+  - openid
+  - profile
+  - phone
+  - address

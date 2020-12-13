@@ -44,7 +44,7 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
 
     private final User user = Users.getUser();
 
-    private final Client client = Clients.getConfidentialClient();
+    private Client client = Clients.getConfidentialClient();
 
     @Test
     @Tag("oidcc-basic-certification-test-plan.oidcc-server")
@@ -205,12 +205,41 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     @Tag("oidcc-basic-certification-test-plan.oidcc-prompt-none-not-logged-in")
     void authenticateWithForcedPasswordless(Browser browser) {
         Set<String> scopes = Set.of("openid");
-        browser.startAuthenticationImmediateErrorRedirect(client, getStateParameter(), scopes, getNonceParameter(), Map.of("prompt", "none"));
+        browser.startAuthenticationWithoutInteraction(client, getStateParameter(), scopes, getNonceParameter(), Map.of("prompt", "none"));
 
         HttpRequest oidcRedirect = getLastOidcRedirect();
         assertUrlParameter(oidcRedirect, STATE, getStateParameter());
         assertUrlParameter(oidcRedirect, ERROR, "login_required");
         assertUrlParameter(oidcRedirect, ERROR_DESCRIPTION, "No username found");
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-prompt-none-logged-in")
+    void authenticateTwiceWithPasswordless(Browser browser) throws Exception {
+        client = Clients.getClientForNoPromptTest();
+        Set<String> scopes = Set.of("openid");
+
+        browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
+                .withUser(user)
+                .loginAndAssumeScopesAreGranted();
+        String authorizationCode = assertOnRedirect();
+        OidcToken tokenFromFirstLogin = verifyTokensFromAuthorizationCode(scopes, authorizationCode);
+
+        browser.startAuthenticationWithoutInteraction(client, getStateParameter(), scopes, getNonceParameter(), Map.of("prompt", "none"));
+        authorizationCode = assertOnRedirect();
+        OidcToken tokenFromSecondLogin = verifyTokensFromAuthorizationCode(scopes, authorizationCode);
+
+        long firstAuthTime = tokenFromFirstLogin.getClaims().getLongClaim(AUTH_TIME);
+        long secondAuthTime = tokenFromSecondLogin.getClaims().getLongClaim(AUTH_TIME);
+        assertThat(firstAuthTime, is(equalTo(secondAuthTime)));
+
+        String firstSubject = tokenFromFirstLogin.getClaims().getSubject();
+        String secondSubject = tokenFromSecondLogin.getClaims().getSubject();
+        assertThat(firstSubject, is(equalTo(secondSubject)));
+    }
+
+    private OidcToken authenticate(Browser browser) throws Exception {
+        return authenticate(browser, Set.of("openid"));
     }
 
     private OidcToken authenticateWithAdditionalParameters(Browser browser, Map<String, String> additionalParameters) throws Exception {
@@ -246,10 +275,6 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
         tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), client, user, getNonceParameter());
         tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), client, user, getNonceParameter(), scopes);
         return oidcToken;
-    }
-
-    private OidcToken authenticate(Browser browser) throws Exception {
-        return authenticate(browser, Set.of("openid"));
     }
 
     private String assertOnRedirect() {

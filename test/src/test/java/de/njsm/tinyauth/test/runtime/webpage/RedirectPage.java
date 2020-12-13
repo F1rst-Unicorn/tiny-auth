@@ -23,27 +23,26 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class AuthorisationPage extends Page {
+public class RedirectPage extends Page {
 
-    private By submit;
+    private By result;
 
-    public AuthorisationPage(FirefoxDriver driver) {
+    public RedirectPage(FirefoxDriver driver) {
         super(driver);
+    }
+
+    public static void assertRedirect(FirefoxDriver driver) {
+        new RedirectPage(driver);
     }
 
     @Override
     void initialise() {
-        submit = By.id("id_submit");
+        result = By.id("result");
     }
 
     @Override
     void assertDriverIsOnThisPage() {
-        waitUntil(ExpectedConditions.presenceOfElementLocated(submit));
-        assertTrue(driver.findElement(submit).isDisplayed(), "field <submit> not found");
-    }
-
-    public void confirm() {
-        driver.findElement(submit).click();
-        RedirectPage.assertRedirect(driver);
+        waitUntil(ExpectedConditions.presenceOfElementLocated(result));
+        assertTrue(driver.findElement(result).isDisplayed(), "field <result> not found");
     }
 }

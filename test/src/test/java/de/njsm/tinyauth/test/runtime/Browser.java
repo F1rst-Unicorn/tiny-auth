@@ -20,10 +20,12 @@ package de.njsm.tinyauth.test.runtime;
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.repository.Endpoints;
 import de.njsm.tinyauth.test.runtime.webpage.AuthenticationPage;
+import de.njsm.tinyauth.test.runtime.webpage.RedirectPage;
 import okhttp3.HttpUrl;
 import org.jetbrains.annotations.NotNull;
 import org.openqa.selenium.firefox.FirefoxDriver;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
@@ -38,17 +40,20 @@ public class Browser {
     }
 
     public AuthenticationPage startAuthentication(Client client, String state, Set<String> scopes, String nonce) {
-        HttpUrl url = generateUrlForHappyPath(client, state, scopes, nonce);
-        driver.navigate().to(url.url());
-        return new AuthenticationPage(driver);
+        return startAuthenticationWithAdditionalParameters(client, state, scopes, nonce, Collections.emptyMap());
     }
 
     public AuthenticationPage startAuthenticationWithAdditionalParameters(Client client, String state, Set<String> scopes, String nonce, Map<String, String> additionalParameters) {
-        startAuthenticationImmediateErrorRedirect(client, state, scopes, nonce, additionalParameters);
+        startAuthentication(client, state, scopes, nonce, additionalParameters);
         return new AuthenticationPage(driver);
     }
 
-    public void startAuthenticationImmediateErrorRedirect(Client client, String state, Set<String> scopes, String nonce, Map<String, String> additionalParameters) {
+    public void startAuthenticationWithoutInteraction(Client client, String state, Set<String> scopes, String nonce, Map<String, String> additionalParameters) {
+        startAuthentication(client, state, scopes, nonce, additionalParameters);
+        RedirectPage.assertRedirect(driver);
+    }
+
+    private void startAuthentication(Client client, String state, Set<String> scopes, String nonce, Map<String, String> additionalParameters) {
         HttpUrl url = generateUrlForHappyPath(client, state, scopes, nonce);
 
         HttpUrl.Builder builder = url.newBuilder();
@@ -65,6 +70,7 @@ public class Browser {
                 .build();
 
         driver.navigate().to(url.url());
+        RedirectPage.assertRedirect(driver);
     }
 
     public AuthenticationPage startAuthenticationWithoutNonce(Client client, String state, Set<String> scopes) {

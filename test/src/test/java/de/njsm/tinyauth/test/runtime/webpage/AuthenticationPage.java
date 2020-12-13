@@ -74,4 +74,9 @@ public class AuthenticationPage extends Page {
         driver.findElement(submit).click();
         return new AuthorisationPage(driver);
     }
+
+    public void loginAndAssumeScopesAreGranted() {
+        driver.findElement(submit).click();
+        RedirectPage.assertRedirect(driver);
+    }
 }

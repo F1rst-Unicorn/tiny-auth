@@ -23,4 +23,8 @@ public class Clients {
     public static Client getConfidentialClient() {
         return new Client("confidential", "password", "http://localhost:34345/redirect/confidential");
     }
+
+    public static Client getClientForNoPromptTest() {
+        return new Client("client-for-no-prompt-test", "password", "http://localhost:34345/redirect/client-for-no-prompt-test");
+    }
 }
