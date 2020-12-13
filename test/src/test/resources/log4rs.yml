@@ -33,3 +33,5 @@ root:
 loggers:
   tiny_auth:
     level: trace
+  tiny_auth::config::parser:
+    level: info

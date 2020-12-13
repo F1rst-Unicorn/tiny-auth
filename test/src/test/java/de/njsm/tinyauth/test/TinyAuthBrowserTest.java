@@ -37,7 +37,7 @@ import static org.mockserver.model.HttpRequest.request;
 import static org.mockserver.model.HttpResponse.response;
 
 @ExtendWith(MockServerExtension.class)
-@MockServerSettings(ports = {34345})
+@MockServerSettings(ports = {34345}, perTestSuite = true)
 @ExtendWith(SeleniumLifecycleManager.class)
 public class TinyAuthBrowserTest implements TinyAuthTest {
 

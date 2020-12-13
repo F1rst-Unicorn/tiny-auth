@@ -98,6 +98,7 @@ public class UutLifecycleManager implements BeforeAllCallback, ExtensionContext.
     @Override
     public void close() throws Throwable {
         tinyAuth.destroy();
+        tinyAuth.waitFor();
         stdoutForwarder.join();
         stderrForwarder.join();
     }

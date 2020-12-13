@@ -17,9 +17,11 @@
 
 package de.njsm.tinyauth.test;
 
+import de.njsm.tinyauth.test.runtime.RestAssuredConfiguration;
 import de.njsm.tinyauth.test.runtime.UutLifecycleManager;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 @ExtendWith(UutLifecycleManager.class)
+@ExtendWith(RestAssuredConfiguration.class)
 public interface TinyAuthTest {
 }
