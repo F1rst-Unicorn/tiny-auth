@@ -25,6 +25,8 @@ public class Identifiers {
 
     public static final String ERROR = "error";
 
+    public static final String ERROR_DESCRIPTION = "error_description";
+
     public static final String NONCE = "nonce";
 
     public static final String ISSUER = "iss";

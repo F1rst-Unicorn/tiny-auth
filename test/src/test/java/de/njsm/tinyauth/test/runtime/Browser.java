@@ -44,6 +44,11 @@ public class Browser {
     }
 
     public AuthenticationPage startAuthenticationWithAdditionalParameters(Client client, String state, Set<String> scopes, String nonce, Map<String, String> additionalParameters) {
+        startAuthenticationImmediateErrorRedirect(client, state, scopes, nonce, additionalParameters);
+        return new AuthenticationPage(driver);
+    }
+
+    public void startAuthenticationImmediateErrorRedirect(Client client, String state, Set<String> scopes, String nonce, Map<String, String> additionalParameters) {
         HttpUrl url = generateUrlForHappyPath(client, state, scopes, nonce);
 
         HttpUrl.Builder builder = url.newBuilder();
@@ -51,7 +56,6 @@ public class Browser {
         url = builder.build();
 
         driver.navigate().to(url.url());
-        return new AuthenticationPage(driver);
     }
 
     public void startAuthenticationWithMissingResponseType(Client client, String state, Set<String> scopes, String nonce) {

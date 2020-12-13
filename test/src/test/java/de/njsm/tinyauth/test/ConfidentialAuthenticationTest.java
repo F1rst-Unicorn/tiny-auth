@@ -61,8 +61,8 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
         browser.startAuthenticationWithMissingResponseType(client, getStateParameter(), scopes, getNonceParameter());
 
         HttpRequest oidcRedirect = getLastOidcRedirect();
-        assertTrue(oidcRedirect.getQueryStringParameters().containsEntry(STATE, getStateParameter()), "state <" + getStateParameter() + "> not found");
-        assertTrue(oidcRedirect.getQueryStringParameters().containsEntry(ERROR, "invalid_request"), "error not set or wrong value");
+        assertUrlParameter(oidcRedirect, STATE, getStateParameter());
+        assertUrlParameter(oidcRedirect, ERROR, "invalid_request");
     }
 
     @Test
@@ -201,6 +201,18 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
         assertThat(firstAuthTime, is(lessThan(secondAuthTime)));
     }
 
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-prompt-none-not-logged-in")
+    void authenticateWithForcedPasswordless(Browser browser) {
+        Set<String> scopes = Set.of("openid");
+        browser.startAuthenticationImmediateErrorRedirect(client, getStateParameter(), scopes, getNonceParameter(), Map.of("prompt", "none"));
+
+        HttpRequest oidcRedirect = getLastOidcRedirect();
+        assertUrlParameter(oidcRedirect, STATE, getStateParameter());
+        assertUrlParameter(oidcRedirect, ERROR, "login_required");
+        assertUrlParameter(oidcRedirect, ERROR_DESCRIPTION, "No username found");
+    }
+
     private OidcToken authenticateWithAdditionalParameters(Browser browser, Map<String, String> additionalParameters) throws Exception {
         Set<String> scopes = Set.of("openid");
         browser.startAuthenticationWithAdditionalParameters(client, getStateParameter(), scopes, getNonceParameter(), additionalParameters)
@@ -242,7 +254,7 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
 
     private String assertOnRedirect() {
         HttpRequest oidcRedirect = getLastOidcRedirect();
-        assertTrue(oidcRedirect.getQueryStringParameters().containsEntry(STATE, getStateParameter()), "state <" + getStateParameter() + "> not found");
+        assertUrlParameter(oidcRedirect, STATE, getStateParameter());
 
         List<String> errors = oidcRedirect.getQueryStringParameters().getValues(ERROR);
         assertTrue(errors.isEmpty(), "server returned error: " + String.join(" ", errors));
@@ -250,5 +262,10 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
         String authorizationCode = oidcRedirect.getFirstQueryStringParameter(ResponseType.CODE.get());
         assertThat(authorizationCode.length(), is(greaterThanOrEqualTo(16)));
         return authorizationCode;
+    }
+
+    private void assertUrlParameter(HttpRequest oidcRedirect, String key, String value) {
+        assertTrue(oidcRedirect.getQueryStringParameters().containsEntry(key, value),
+                key + " was '" + oidcRedirect.getFirstQueryStringParameter(key) + "'");
     }
 }

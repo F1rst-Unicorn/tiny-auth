@@ -136,12 +136,11 @@ pub async fn get(
             .await;
         }
     } else if prompt.contains(&oidc::Prompt::None) {
-        let mut url = Url::parse(&first_request.redirect_uri.unwrap())
-            .expect("Should have been validated upon registration");
         return render_redirect_error(
-            &mut url,
+            first_request.redirect_uri.as_ref().unwrap(),
             oidc::ProtocolError::Oidc(oidc::OidcProtocolError::ConsentRequired),
             "User didn't give consent to all scopes",
+            &first_request.state,
         );
     }
 
@@ -344,13 +343,12 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     };
 
     session.remove(authorize::SESSION_KEY);
-    let redirect_uri = first_request.redirect_uri.unwrap();
-    let mut url = Url::parse(&redirect_uri).expect("should have been validated upon registration");
 
     render_redirect_error(
-        &mut url,
+        first_request.redirect_uri.as_ref().unwrap(),
         oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
         "user denied consent",
+        &first_request.state,
     )
 }
 

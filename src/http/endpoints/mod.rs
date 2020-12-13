@@ -31,6 +31,7 @@ use crate::util::render_tera_error;
 use std::collections::BTreeSet;
 use std::convert::TryFrom;
 
+use actix_web::dev::HttpResponseBuilder;
 use actix_web::http::HeaderValue;
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
@@ -125,14 +126,39 @@ fn render_json_error(error: ProtocolError, description: &str) -> HttpResponse {
     })
 }
 
-fn render_redirect_error(url: &mut Url, error: ProtocolError, description: &str) -> HttpResponse {
+fn render_redirect_error(
+    redirect_uri: &str,
+    error: ProtocolError,
+    description: &str,
+    state: &Option<String>,
+) -> HttpResponse {
+    render_redirect_error_with_base(
+        HttpResponse::Found(),
+        redirect_uri,
+        error,
+        description,
+        state,
+    )
+}
+
+fn render_redirect_error_with_base(
+    mut base_response: HttpResponseBuilder,
+    redirect_uri: &str,
+    error: ProtocolError,
+    description: &str,
+    state: &Option<String>,
+) -> HttpResponse {
+    let mut url = Url::parse(redirect_uri).expect("should have been validated upon registration");
+
     url.query_pairs_mut()
         .append_pair("error", &format!("{}", error))
         .append_pair("error_description", description);
 
-    HttpResponse::Found()
-        .header("Location", url.as_str())
-        .finish()
+    if let Some(state) = state {
+        url.query_pairs_mut().append_pair("state", state);
+    }
+
+    base_response.header("Location", url.as_str()).finish()
 }
 
 fn server_error(tera: &Tera) -> HttpResponse {

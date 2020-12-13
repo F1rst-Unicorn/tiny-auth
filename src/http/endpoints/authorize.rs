@@ -43,8 +43,6 @@ use serde_derive::Serialize;
 
 use tera::Tera;
 
-use url::Url;
-
 use log::debug;
 use log::error;
 use log::info;
@@ -293,19 +291,13 @@ pub fn return_error(
     description: &str,
     state: &Option<String>,
 ) -> HttpResponse {
-    let mut url = Url::parse(redirect_uri).expect("should have been validated upon registration");
-
-    url.query_pairs_mut()
-        .append_pair("error", &format!("{}", error))
-        .append_pair("error_description", description);
-
-    if let Some(state) = state {
-        url.query_pairs_mut().append_pair("state", state);
-    }
-
-    HttpResponse::TemporaryRedirect()
-        .set_header("Location", url.as_str())
-        .finish()
+    super::render_redirect_error_with_base(
+        HttpResponse::TemporaryRedirect(),
+        redirect_uri,
+        error,
+        description,
+        state,
+    )
 }
 
 #[cfg(test)]

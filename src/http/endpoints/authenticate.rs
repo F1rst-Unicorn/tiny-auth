@@ -33,8 +33,6 @@ use actix_web::HttpResponse;
 
 use actix_session::Session;
 
-use url::Url;
-
 use chrono::Local;
 
 use tera::Context;
@@ -173,14 +171,14 @@ pub async fn post(
 
     let username = if query.username.is_none() {
         debug!("missing username");
-        return render_invalid_input(1, &tera, &session, None);
+        return render_invalid_login_attempt_error(1, &tera, &session, None);
     } else {
         query.username.clone().unwrap()
     };
 
     let password = if query.password.is_none() {
         debug!("missing password");
-        return render_invalid_input(2, &tera, &session, None);
+        return render_invalid_login_attempt_error(2, &tera, &session, None);
     } else {
         query.password.clone().unwrap()
     };
@@ -202,10 +200,10 @@ pub async fn post(
         }
         redirect_successfully()
     } else if let Err(Error::RateLimited) = auth_result {
-        render_invalid_input(4, &tera, &session, None)
+        render_invalid_login_attempt_error(4, &tera, &session, None)
     } else if tries_left > 0 {
         debug!("{} tries left", tries_left);
-        render_invalid_input(3, &tera, &session, Some(tries_left))
+        render_invalid_login_attempt_error(3, &tera, &session, Some(tries_left))
     } else {
         debug!("no tries left");
         session.remove(TRIES_LEFT_SESSION_KEY);
@@ -251,9 +249,7 @@ fn render_redirect_error(
     };
 
     let redirect_uri = first_request.redirect_uri.unwrap();
-    let mut url = Url::parse(&redirect_uri).expect("should have been validated upon registration");
-
-    super::render_redirect_error(&mut url, error, description)
+    super::render_redirect_error(&redirect_uri, error, description, &first_request.state)
 }
 
 fn build_context(session: &Session) -> Option<Context> {
@@ -287,7 +283,7 @@ fn redirect_successfully() -> HttpResponse {
         .finish()
 }
 
-fn render_invalid_input(
+fn render_invalid_login_attempt_error(
     error: u64,
     tera: &Tera,
     session: &Session,
@@ -327,6 +323,8 @@ mod tests {
     use actix_web::http;
     use actix_web::test;
     use actix_web::web::Form;
+
+    use url::Url;
 
     use super::super::generate_csrf_token;
     use super::super::CSRF_SESSION_KEY;
