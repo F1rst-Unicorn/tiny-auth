@@ -238,6 +238,41 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
         assertThat(firstSubject, is(equalTo(secondSubject)));
     }
 
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-max-age-1")
+    void authenticateWithMaxAge(Browser browser) throws Exception {
+        OidcToken firstToken = authenticate(browser);
+
+        Thread.sleep(1000);
+        OidcToken secondToken = authenticateWithAdditionalParameters(browser, Map.of("max_age", "1"));
+
+        long firstAuthTime = firstToken.getClaims().getLongClaim(AUTH_TIME);
+        long secondAuthTime = secondToken.getClaims().getLongClaim(AUTH_TIME);
+        assertThat(firstAuthTime, is(lessThan(secondAuthTime)));
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-max-age-10000")
+    void authenticateWithMaxAgeWithoutLogin(Browser browser) throws Exception {
+        OidcToken firstToken = authenticateWithAdditionalParameters(browser, Map.of("max_age", "15000"));
+
+        Set<String> scopes = Set.of("openid");
+        browser.startAuthenticationWithConsent(client, getStateParameter(), scopes, getNonceParameter(), Map.of("max_age", "10000"))
+                .confirm();
+        String authorizationCode = assertOnRedirect();
+        OidcToken secondToken = verifyTokensFromAuthorizationCode(scopes, authorizationCode);
+
+        long firstAuthTime = firstToken.getClaims().getLongClaim(AUTH_TIME);
+        long secondAuthTime = secondToken.getClaims().getLongClaim(AUTH_TIME);
+        assertThat(firstAuthTime, is(equalTo(secondAuthTime)));
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-ensure-request-with-unknown-parameter-succeeds")
+    void authenticateWithUnknownExtraParameter(Browser browser) throws Exception {
+        authenticateWithAdditionalParameters(browser, Map.of("extra", "foobar"));
+    }
+
     private OidcToken authenticate(Browser browser) throws Exception {
         return authenticate(browser, Set.of("openid"));
     }

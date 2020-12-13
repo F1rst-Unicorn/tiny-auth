@@ -20,6 +20,7 @@ package de.njsm.tinyauth.test.runtime;
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.repository.Endpoints;
 import de.njsm.tinyauth.test.runtime.webpage.AuthenticationPage;
+import de.njsm.tinyauth.test.runtime.webpage.AuthorisationPage;
 import de.njsm.tinyauth.test.runtime.webpage.RedirectPage;
 import okhttp3.HttpUrl;
 import org.jetbrains.annotations.NotNull;
@@ -46,6 +47,11 @@ public class Browser {
     public AuthenticationPage startAuthenticationWithAdditionalParameters(Client client, String state, Set<String> scopes, String nonce, Map<String, String> additionalParameters) {
         startAuthentication(client, state, scopes, nonce, additionalParameters);
         return new AuthenticationPage(driver);
+    }
+
+    public AuthorisationPage startAuthenticationWithConsent(Client client, String state, Set<String> scopes, String nonce, Map<String, String> additionalParameters) {
+        startAuthentication(client, state, scopes, nonce, additionalParameters);
+        return new AuthorisationPage(driver);
     }
 
     public void startAuthenticationWithoutInteraction(Client client, String state, Set<String> scopes, String nonce, Map<String, String> additionalParameters) {
