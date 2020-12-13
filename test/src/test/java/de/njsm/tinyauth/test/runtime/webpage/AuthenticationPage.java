@@ -22,6 +22,7 @@ import org.openqa.selenium.By;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AuthenticationPage extends Page {
@@ -67,6 +68,11 @@ public class AuthenticationPage extends Page {
 
     public AuthenticationPage withPassword(String password) {
         driver.findElement(this.password).sendKeys(password);
+        return this;
+    }
+
+    public AuthenticationPage assertUserIsPrefilled(String prefilledContent) {
+        assertEquals(prefilledContent, driver.findElement(username).getAttribute("value"));
         return this;
     }
 

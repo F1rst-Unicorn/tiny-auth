@@ -25,6 +25,7 @@ import de.njsm.tinyauth.test.repository.Scopes;
 import de.njsm.tinyauth.test.repository.Users;
 import de.njsm.tinyauth.test.runtime.Browser;
 import io.restassured.path.json.JsonPath;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockserver.model.HttpRequest;
@@ -36,8 +37,7 @@ import java.util.Set;
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 @Tag("response_type.code")
 public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
@@ -271,6 +271,58 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     @Tag("oidcc-basic-certification-test-plan.oidcc-ensure-request-with-unknown-parameter-succeeds")
     void authenticateWithUnknownExtraParameter(Browser browser) throws Exception {
         authenticateWithAdditionalParameters(browser, Map.of("extra", "foobar"));
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-id-token-hint")
+    @Disabled("https://gitlab.com/veenj/tiny-auth/-/issues/53")
+    void authenticateWithIdTokenHint() {
+        fail("This test calls the authorization endpoint test twice. " +
+                "The second time it will include prompt=none with the " +
+                "id_token_hint set to the id token from the first " +
+                "authorization, and the authorization server must return " +
+                "successfully immediately without interacting with the user. " +
+                "The test verifies that auth_time (if present) and sub are " +
+                "consistent between the id_tokens from the first and second " +
+                "authorizations.");
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-login-hint")
+    void authenticateWithLoginHint(Browser browser) throws Exception {
+        Set<String> scopes = Set.of("openid");
+        String loginHint = user.getUsername();
+        browser.startAuthenticationWithAdditionalParameters(client, getStateParameter(), scopes, getNonceParameter(), Map.of("login_hint", loginHint))
+                .assertUserIsPrefilled(loginHint)
+                .withPassword(user.getPassword())
+                .login()
+                .confirm();
+
+        String authorizationCode = assertOnRedirect();
+        verifyTokensFromAuthorizationCode(scopes, authorizationCode);
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-ui-locales")
+    @Disabled("https://gitlab.com/veenj/tiny-auth/-/issues/22")
+    void authenticateWithUiLocale() {
+        fail("This test includes the ui_locales parameter in the request to " +
+                "the authorization endpoint, with the value set to that " +
+                "provided in the configuration (or 'se' if no value " +
+                "probably). Use of this parameter in the request must not " +
+                "cause an error at the OP. Please remove any cookies you " +
+                "may have received from the OpenID Provider before " +
+                "proceeding. You need to do this so you can check that the " +
+                "login page is displayed using one of the requested locales.");
+    }
+
+    /**
+     * This will likely never get more sophisticated semantics than to be ignored
+     */
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-claims-locales")
+    void authenticateWithClaimsLocales(Browser browser) throws Exception {
+        authenticateWithAdditionalParameters(browser, Map.of("claims_locale", "se"));
     }
 
     private OidcToken authenticate(Browser browser) throws Exception {
