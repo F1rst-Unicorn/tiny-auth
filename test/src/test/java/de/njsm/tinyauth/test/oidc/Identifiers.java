@@ -81,6 +81,13 @@ public class Identifiers {
     }
 
     public enum ResponseType {
+        ID_TOKEN {
+            @Override
+            public String get() {
+                return "id_token token";
+            }
+        },
+
         CODE {
             @Override
             public String get() {

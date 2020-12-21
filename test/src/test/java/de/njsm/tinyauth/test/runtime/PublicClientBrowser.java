@@ -15,24 +15,28 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.njsm.tinyauth.test.repository;
+package de.njsm.tinyauth.test.runtime;
 
 import de.njsm.tinyauth.test.data.Client;
+import okhttp3.HttpUrl;
+import org.openqa.selenium.firefox.FirefoxDriver;
 
-public class Clients {
-    public static Client getConfidentialClient() {
-        return new Client("confidential", "password", "http://localhost:34345/redirect/confidential");
+import java.util.Set;
+
+import static de.njsm.tinyauth.test.oidc.Identifiers.*;
+
+public class PublicClientBrowser extends Browser {
+
+    public PublicClientBrowser(FirefoxDriver driver) {
+        super(driver);
     }
 
-    public static Client getClientForNoPromptTest() {
-        return new Client("client-for-no-prompt-test", "password", "http://localhost:34345/redirect/client-for-no-prompt-test");
-    }
-
-    public static Client getClientForTokenSwitchAttack() {
-        return new Client("needed-for-token-switch-attack", "password", "http://localhost:34345/redirect/needed-for-token-switch-attack");
-    }
-
-    public static Client getPublicClient() {
-        return new Client("public", "", "http://localhost:34345/redirect/public");
+    @Override
+    HttpUrl generateUrlForHappyPath(Client client, String state, Set<String> scopes, String nonce) {
+        return super.generateUrlForHappyPath(client, state, scopes, nonce)
+                .newBuilder()
+                .removeAllQueryParameters(RESPONSE_TYPE)
+                .addQueryParameter(RESPONSE_TYPE, ResponseType.ID_TOKEN.get())
+                .build();
     }
 }

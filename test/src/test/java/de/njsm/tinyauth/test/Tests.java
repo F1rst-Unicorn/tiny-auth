@@ -15,19 +15,19 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.njsm.tinyauth.test.runtime;
+package de.njsm.tinyauth.test;
 
-import io.restassured.RestAssured;
-import io.restassured.config.RestAssuredConfig;
-import org.junit.jupiter.api.extension.BeforeAllCallback;
-import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.Test;
 
-import static io.restassured.config.ConnectionConfig.connectionConfig;
+public class Tests extends TinyAuthBrowserTest {
 
-public class RestAssuredConfiguration implements BeforeAllCallback {
-    @Override
-    public void beforeAll(ExtensionContext context) {
-        RestAssured.config = RestAssuredConfig.config()
-                .connectionConfig(connectionConfig().closeIdleConnectionsAfterEachResponse());
+    @Test
+    void testFailingLoginRateLimits() {
+
+    }
+
+    @Test
+    void testNonGrantedScopeIsWithdrawn() {
+
     }
 }

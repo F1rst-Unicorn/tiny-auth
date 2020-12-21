@@ -24,7 +24,6 @@ import de.njsm.tinyauth.test.runtime.webpage.AuthorisationPage;
 import de.njsm.tinyauth.test.runtime.webpage.InvalidRedirectUriPage;
 import de.njsm.tinyauth.test.runtime.webpage.RedirectPage;
 import okhttp3.HttpUrl;
-import org.jetbrains.annotations.NotNull;
 import org.openqa.selenium.firefox.FirefoxDriver;
 
 import java.util.Collections;
@@ -85,13 +84,17 @@ public class Browser {
     }
 
     public AuthenticationPage startAuthenticationWithoutNonce(Client client, String state, Set<String> scopes) {
+        startAuthenticationWithoutNonceGivingError(client, state, scopes);
+        return new AuthenticationPage(driver);
+    }
+
+    public void startAuthenticationWithoutNonceGivingError(Client client, String state, Set<String> scopes) {
         HttpUrl url = generateUrlForHappyPath(client, state, scopes, "")
                 .newBuilder()
                 .removeAllQueryParameters(NONCE)
                 .build();
 
         driver.navigate().to(url.url());
-        return new AuthenticationPage(driver);
     }
 
     public void startAuthenticationWithInvalidRedirectUri(Client client, String state, Set<String> scopes, String nonce, String redirectUri) {
@@ -105,8 +108,7 @@ public class Browser {
         InvalidRedirectUriPage.assertShown(driver);
     }
 
-    @NotNull
-    private HttpUrl generateUrlForHappyPath(Client client, String state, Set<String> scopes, String nonce) {
+    HttpUrl generateUrlForHappyPath(Client client, String state, Set<String> scopes, String nonce) {
         return HttpUrl.get(Endpoints.getAuthorizationUrl())
                 .newBuilder()
                 .addQueryParameter(CLIENT_ID, client.getClientId())
@@ -116,5 +118,9 @@ public class Browser {
                 .addQueryParameter(RESPONSE_TYPE, ResponseType.CODE.get())
                 .addQueryParameter(REDIRECT_URI, client.getRedirectUri())
                 .build();
+    }
+
+    public String getCurrentlUrl() {
+        return driver.getCurrentUrl();
     }
 }

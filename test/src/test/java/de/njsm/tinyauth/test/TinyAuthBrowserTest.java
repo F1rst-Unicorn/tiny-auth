@@ -18,28 +18,29 @@
 package de.njsm.tinyauth.test;
 
 import de.njsm.tinyauth.test.oidc.TokenAsserter;
+import de.njsm.tinyauth.test.runtime.Browser;
 import de.njsm.tinyauth.test.runtime.SeleniumLifecycleManager;
 import de.njsm.tinyauth.test.runtime.TokenEndpoint;
 import de.njsm.tinyauth.test.runtime.UserinfoEndpoint;
+import okhttp3.HttpUrl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockserver.client.MockServerClient;
 import org.mockserver.junit.jupiter.MockServerExtension;
 import org.mockserver.junit.jupiter.MockServerSettings;
-import org.mockserver.model.HttpRequest;
 import org.mockserver.model.MediaType;
-import org.mockserver.model.RequestDefinition;
 
 import java.security.SecureRandom;
 import java.util.Base64;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockserver.model.HttpRequest.request;
 import static org.mockserver.model.HttpResponse.response;
 
 @ExtendWith(MockServerExtension.class)
 @MockServerSettings(ports = {34345}, perTestSuite = true)
 @ExtendWith(SeleniumLifecycleManager.class)
-public class TinyAuthBrowserTest implements TinyAuthTest {
+public abstract class TinyAuthBrowserTest implements TinyAuthTest {
 
     private String state;
 
@@ -99,8 +100,12 @@ public class TinyAuthBrowserTest implements TinyAuthTest {
         return new TokenAsserter();
     }
 
-    HttpRequest getLastOidcRedirect() {
-        RequestDefinition[] requests = mockServerClient.retrieveRecordedRequests(request().withPath("/redirect/.*").withMethod("GET"));
-        return (HttpRequest) requests[requests.length - 1];
+    protected HttpUrl getLastOidcRedirect(Browser browser) {
+        return HttpUrl.get(browser.getCurrentlUrl());
+    }
+
+    protected void assertUrlParameter(HttpUrl oidcRedirect, String key, String value) {
+        assertTrue(oidcRedirect.queryParameterValues(key).contains(value),
+                key + " was '" + oidcRedirect.queryParameter(key) + "', expected '" + value + "'");
     }
 }
