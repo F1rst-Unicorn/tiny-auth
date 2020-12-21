@@ -21,6 +21,8 @@ public class Identifiers {
 
     public static final String CLIENT_ID = "client_id";
 
+    public static final String CLIENT_SECRET = "client_secret";
+
     public static final String STATE = "state";
 
     public static final String ERROR = "error";
@@ -64,6 +66,8 @@ public class Identifiers {
     public static final String REFRESH_TOKEN = "refresh_token";
 
     public static final String ID_TOKEN = "id_token";
+
+    public static final String INVALID_GRANT = "invalid_grant";
 
     public enum GrantType {
         AUTHORIZATION_CODE {

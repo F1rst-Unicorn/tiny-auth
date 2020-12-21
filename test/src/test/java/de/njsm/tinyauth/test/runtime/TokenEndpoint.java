@@ -18,26 +18,30 @@
 package de.njsm.tinyauth.test.runtime;
 
 import de.njsm.tinyauth.test.data.Client;
+import de.njsm.tinyauth.test.data.OidcToken;
 import de.njsm.tinyauth.test.repository.Endpoints;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.ValidatableResponse;
+import io.restassured.specification.RequestSpecification;
+
+import java.util.Set;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
 
 public class TokenEndpoint {
 
     public ValidatableResponse requestWithAuthorizationCodeAndBasicAuth(Client client, String authorizationCode) {
-        return RestAssured.given()
-                .log().everything()
-                .baseUri(Endpoints.getTokenUrl())
-        .when()
-                .auth().preemptive().basic(client.getClientId(), client.getPassword())
-                .contentType(ContentType.URLENC)
-                .formParam(ResponseType.CODE.get(), authorizationCode)
-                .formParam(GRANT_TYPE, GrantType.AUTHORIZATION_CODE.get())
-                .formParam(REDIRECT_URI, client.getRedirectUri())
-                .formParam(CLIENT_ID, client.getClientId())
+        return request(client, authorizationCode)
+                .statusCode(200)
+                .contentType(ContentType.JSON)
+                .header("Cache-Control", "no-store")
+                .header("Pragma", "no-cache");
+    }
+
+    public ValidatableResponse requestWithAuthorizationCodeAndClientSecretPost(Client client, String authorizationCode) {
+        return formAuthCodeRequest(client, authorizationCode)
+                .formParam(CLIENT_SECRET, client.getPassword())
                 .post()
         .then()
                 .log().everything()
@@ -45,5 +49,50 @@ public class TokenEndpoint {
                 .contentType(ContentType.JSON)
                 .header("Cache-Control", "no-store")
                 .header("Pragma", "no-cache");
+    }
+
+    public ValidatableResponse request(Client client, String authorizationCode) {
+        return formAuthCodeRequest(client, authorizationCode)
+                .auth().preemptive().basic(client.getClientId(), client.getPassword())
+                .post()
+        .then()
+                .log().everything();
+    }
+
+    public ValidatableResponse requestWithRefreshToken(Client client, OidcToken refreshToken, Set<String> scopes) {
+        return request(client, refreshToken, scopes)
+                .statusCode(200)
+                .contentType(ContentType.JSON)
+                .header("Cache-Control", "no-store")
+                .header("Pragma", "no-cache");
+    }
+
+    public ValidatableResponse request(Client client, OidcToken refreshToken, Set<String> scopes) {
+        return given()
+                .contentType(ContentType.URLENC)
+                .formParam(GRANT_TYPE, REFRESH_TOKEN)
+                .formParam(REFRESH_TOKEN, refreshToken.getRawToken())
+                .formParam(SCOPES, String.join(" ", scopes))
+                .formParam(CLIENT_ID, client.getClientId())
+                .formParam(CLIENT_SECRET, client.getPassword())
+                .post()
+        .then()
+                .log().everything();
+    }
+
+    private RequestSpecification formAuthCodeRequest(Client client, String authorizationCode) {
+        return given()
+                .contentType(ContentType.URLENC)
+                .formParam(ResponseType.CODE.get(), authorizationCode)
+                .formParam(GRANT_TYPE, GrantType.AUTHORIZATION_CODE.get())
+                .formParam(REDIRECT_URI, client.getRedirectUri())
+                .formParam(CLIENT_ID, client.getClientId());
+    }
+
+    private RequestSpecification given() {
+        return RestAssured.given()
+                .log().everything()
+                .baseUri(Endpoints.getTokenUrl())
+        .when();
     }
 }

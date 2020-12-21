@@ -5,6 +5,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+* Refresh tokens issued for different clients now return the correct HTTP
+  response code.
+
 ## [0.8.1]
 
 ### Maintenance

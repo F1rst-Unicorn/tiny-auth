@@ -27,4 +27,8 @@ public class Clients {
     public static Client getClientForNoPromptTest() {
         return new Client("client-for-no-prompt-test", "password", "http://localhost:34345/redirect/client-for-no-prompt-test");
     }
+
+    public static Client getClientForTokenSwitchAttack() {
+        return new Client("needed-for-token-switch-attack", "password", "http://localhost:34345/redirect/needed-for-token-switch-attack");
+    }
 }

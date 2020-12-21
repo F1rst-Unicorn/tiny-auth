@@ -546,7 +546,7 @@ async fn grant_with_refresh_token(
             client.client_id, refresh_token.access_token.authorized_party
         );
         return Err(render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
             "Invalid refresh token",
         ));
     }
@@ -1949,7 +1949,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(http::StatusCode::UNAUTHORIZED, resp.status());
+        assert_eq!(http::StatusCode::BAD_REQUEST, resp.status());
     }
 
     #[actix_rt::test]

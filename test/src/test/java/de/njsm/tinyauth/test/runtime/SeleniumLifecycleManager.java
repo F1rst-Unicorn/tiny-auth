@@ -47,7 +47,7 @@ public class SeleniumLifecycleManager extends TypeBasedParameterResolver<Browser
 
     @Override
     public void beforeEach(ExtensionContext extensionContext) {
-        driver.manage().deleteAllCookies();
+        browser.resetCookies();
     }
 
     @Override

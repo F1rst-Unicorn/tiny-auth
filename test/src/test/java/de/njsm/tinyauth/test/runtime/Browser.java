@@ -21,6 +21,7 @@ import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.repository.Endpoints;
 import de.njsm.tinyauth.test.runtime.webpage.AuthenticationPage;
 import de.njsm.tinyauth.test.runtime.webpage.AuthorisationPage;
+import de.njsm.tinyauth.test.runtime.webpage.InvalidRedirectUriPage;
 import de.njsm.tinyauth.test.runtime.webpage.RedirectPage;
 import okhttp3.HttpUrl;
 import org.jetbrains.annotations.NotNull;
@@ -38,6 +39,10 @@ public class Browser {
 
     public Browser(FirefoxDriver driver) {
         this.driver = driver;
+    }
+
+    public void resetCookies() {
+        driver.manage().deleteAllCookies();
     }
 
     public AuthenticationPage startAuthentication(Client client, String state, Set<String> scopes, String nonce) {
@@ -87,6 +92,17 @@ public class Browser {
 
         driver.navigate().to(url.url());
         return new AuthenticationPage(driver);
+    }
+
+    public void startAuthenticationWithInvalidRedirectUri(Client client, String state, Set<String> scopes, String nonce, String redirectUri) {
+        HttpUrl url = generateUrlForHappyPath(client, state, scopes, nonce)
+                .newBuilder()
+                .removeAllQueryParameters(REDIRECT_URI)
+                .addQueryParameter(REDIRECT_URI, redirectUri)
+                .build();
+
+        driver.navigate().to(url.url());
+        InvalidRedirectUriPage.assertShown(driver);
     }
 
     @NotNull

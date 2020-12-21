@@ -25,6 +25,7 @@ import de.njsm.tinyauth.test.repository.Scopes;
 import de.njsm.tinyauth.test.repository.Users;
 import de.njsm.tinyauth.test.runtime.Browser;
 import io.restassured.path.json.JsonPath;
+import io.restassured.response.ValidatableResponse;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,8 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
 
     private Client client = Clients.getConfidentialClient();
 
+    private final Set<String> scopes = Set.of("openid");
+
     @Test
     @Tag("oidcc-basic-certification-test-plan.oidcc-server")
     void authenticateSuccessfully(Browser browser) throws Exception {
@@ -55,9 +58,6 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     @Test
     @Tag("oidcc-basic-certification-test-plan.oidcc-response-type-missing")
     void missingResponseTypeIsReported(Browser browser) {
-        Client client = Clients.getConfidentialClient();
-        Set<String> scopes = Set.of("openid");
-
         browser.startAuthenticationWithMissingResponseType(client, getStateParameter(), scopes, getNonceParameter());
 
         HttpRequest oidcRedirect = getLastOidcRedirect();
@@ -106,8 +106,6 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     @Test
     @Tag("oidcc-basic-certification-test-plan.oidcc-ensure-request-without-nonce-succeeds-for-code-flow")
     void authenticateWithoutNonce(Browser browser) throws Exception {
-        Set<String> scopes = Set.of("openid");
-
         browser.startAuthenticationWithoutNonce(client, getStateParameter(), scopes)
                 .withUser(user)
                 .login()
@@ -217,7 +215,6 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     @Tag("oidcc-basic-certification-test-plan.oidcc-prompt-none-logged-in")
     void authenticateTwiceWithPasswordless(Browser browser) throws Exception {
         client = Clients.getClientForNoPromptTest();
-        Set<String> scopes = Set.of("openid");
 
         browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
                 .withUser(user)
@@ -256,7 +253,6 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     void authenticateWithMaxAgeWithoutLogin(Browser browser) throws Exception {
         OidcToken firstToken = authenticateWithAdditionalParameters(browser, Map.of("max_age", "15000"));
 
-        Set<String> scopes = Set.of("openid");
         browser.startAuthenticationWithConsent(client, getStateParameter(), scopes, getNonceParameter(), Map.of("max_age", "10000"))
                 .confirm();
         String authorizationCode = assertOnRedirect();
@@ -290,7 +286,6 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     @Test
     @Tag("oidcc-basic-certification-test-plan.oidcc-login-hint")
     void authenticateWithLoginHint(Browser browser) throws Exception {
-        Set<String> scopes = Set.of("openid");
         String loginHint = user.getUsername();
         browser.startAuthenticationWithAdditionalParameters(client, getStateParameter(), scopes, getNonceParameter(), Map.of("login_hint", loginHint))
                 .assertUserIsPrefilled(loginHint)
@@ -325,12 +320,76 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
         authenticateWithAdditionalParameters(browser, Map.of("claims_locale", "se"));
     }
 
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-ensure-request-with-acr-values-succeeds")
+    void authenticateWithAcrValues(Browser browser) throws Exception {
+        authenticateWithAdditionalParameters(browser, Map.of("acr_values", "1 2"));
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-codereuse")
+    void authenticateAndTryToUseTheSameAuthorizationCodeTwice(Browser browser) throws Exception {
+        String authorizationCode = authenticateReturningAuthCode(browser);
+        assertAuthCodeIsRejected(authorizationCode);
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-codereuse-30seconds")
+    void authenticateAndTryToUseTheSameAuthorizationCodeTwiceWithDelay(Browser browser) throws Exception {
+        String authorizationCode = authenticateReturningAuthCode(browser);
+        Thread.sleep(30000);
+        assertAuthCodeIsRejected(authorizationCode);
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-ensure-registered-redirect-uri")
+    void authenticateWithInvalidRedirectUri(Browser browser) {
+        String redirectUri = "http://invalid.example/invalid";
+        browser.startAuthenticationWithInvalidRedirectUri(client, getStateParameter(), scopes, getNonceParameter(), redirectUri);
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-server-client-secret-post")
+    void authenticateWithClientPasswordPostBody(Browser browser) throws Exception {
+        String authCode = fetchAuthCode(browser, scopes);
+        verifyTokensFromAuthorizationCodeWithClientPost(scopes, authCode);
+    }
+
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-refresh-token")
+    void authenticateAndTryRefreshToken(Browser browser) throws Exception {
+        Client client1 = client;
+        Client client2 = Clients.getClientForTokenSwitchAttack();
+
+        String authCode = fetchAuthCode(browser, scopes);
+        OidcToken firstRefreshToken = verifyTokensFromAuthorizationCodeReturningRefreshToken(scopes, authCode);
+        verifyTokensFromAuthorizationCode(scopes, tokenEndpoint().requestWithRefreshToken(client, firstRefreshToken, scopes));
+
+        client = client2;
+        browser.resetCookies();
+
+        authCode = fetchAuthCode(browser, scopes);
+        OidcToken secondRefreshToken = verifyTokensFromAuthorizationCodeReturningRefreshToken(scopes, authCode);
+        verifyTokensFromAuthorizationCode(scopes, tokenEndpoint().requestWithRefreshToken(client, secondRefreshToken, scopes));
+
+        client = client1;
+        tokenEndpoint().request(client, secondRefreshToken, scopes)
+                .statusCode(400)
+                .body(ERROR, equalTo(INVALID_GRANT))
+                .body(ERROR_DESCRIPTION, equalTo("Invalid refresh token"));
+    }
+
     private OidcToken authenticate(Browser browser) throws Exception {
-        return authenticate(browser, Set.of("openid"));
+        return authenticate(browser, scopes);
+    }
+
+    private String authenticateReturningAuthCode(Browser browser) throws Exception {
+        String authorizationCode = fetchAuthCode(browser, scopes);
+        verifyTokensFromAuthorizationCode(scopes, authorizationCode);
+        return authorizationCode;
     }
 
     private OidcToken authenticateWithAdditionalParameters(Browser browser, Map<String, String> additionalParameters) throws Exception {
-        Set<String> scopes = Set.of("openid");
         browser.startAuthenticationWithAdditionalParameters(client, getStateParameter(), scopes, getNonceParameter(), additionalParameters)
                 .withUser(user)
                 .login()
@@ -341,27 +400,56 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
     }
 
     private OidcToken authenticate(Browser browser, Set<String> scopes) throws Exception {
+        String authorizationCode = fetchAuthCode(browser, scopes);
+        return verifyTokensFromAuthorizationCode(scopes, authorizationCode);
+    }
+
+    private String fetchAuthCode(Browser browser, Set<String> scopes) {
         browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
                 .withUser(user)
                 .login()
                 .confirm();
 
-        String authorizationCode = assertOnRedirect();
-        return verifyTokensFromAuthorizationCode(scopes, authorizationCode);
+        return assertOnRedirect();
     }
 
-    private OidcToken verifyTokensFromAuthorizationCode(Set<String> scopes, String authorizationCode) throws Exception {
-        JsonPath tokenResponse = tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(client, authorizationCode)
+    private OidcToken verifyTokensFromAuthorizationCode(Set<String> scopes, String authCode) throws Exception {
+        return verifyTokensFromAuthorizationCode(scopes, tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(client, authCode));
+    }
+
+    private void verifyTokensFromAuthorizationCodeWithClientPost(Set<String> scopes, String authCode) throws Exception {
+        verifyTokensFromAuthorizationCode(scopes, tokenEndpoint().requestWithAuthorizationCodeAndClientSecretPost(client, authCode));
+    }
+
+    private OidcToken verifyTokensFromAuthorizationCodeReturningRefreshToken(Set<String> scopes, String authCode) throws Exception {
+        JsonPath tokenResponse = fetchTokensAndVerifyBasics(scopes, tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(client, authCode));
+        tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), client, user, getNonceParameter());
+        return tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), client, user, getNonceParameter(), scopes);
+    }
+
+    private OidcToken verifyTokensFromAuthorizationCode(Set<String> scopes, ValidatableResponse response) throws Exception {
+        JsonPath tokenResponse = fetchTokensAndVerifyBasics(scopes, response);
+        tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), client, user, getNonceParameter(), scopes);
+        return tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), client, user, getNonceParameter());
+    }
+
+    private JsonPath fetchTokensAndVerifyBasics(Set<String> scopes, ValidatableResponse response) throws Exception {
+        JsonPath tokenResponse = response
                 .body(EXPIRES_IN, equalTo(60))
                 .body(TOKEN_TYPE, equalToIgnoringCase(TOKEN_TYPE_CONTENT))
                 .extract().body().jsonPath();
 
         assertEquals(scopes, Set.of(tokenResponse.getString(SCOPE).split(" ")));
         assertEquals(tokenResponse.getString(ACCESS_TOKEN), tokenResponse.getString(ID_TOKEN), "access token different from id token");
-        OidcToken oidcToken = tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), client, user, getNonceParameter());
         tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), client, user, getNonceParameter());
-        tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), client, user, getNonceParameter(), scopes);
-        return oidcToken;
+        return tokenResponse;
+    }
+
+    private void assertAuthCodeIsRejected(String authorizationCode) {
+        tokenEndpoint().request(client, authorizationCode)
+                .statusCode(400)
+                .body(ERROR, equalTo(INVALID_GRANT))
+                .body(ERROR_DESCRIPTION, equalTo("Invalid code"));
     }
 
     private String assertOnRedirect() {
