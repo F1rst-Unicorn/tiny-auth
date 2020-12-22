@@ -31,8 +31,6 @@ public class SeleniumLifecycleManager extends TypeBasedParameterResolver<Browser
 
     private Browser browser;
 
-    private Browser publicClientBrowser;
-
     @Override
     public void beforeAll(ExtensionContext extensionContext) {
         FirefoxProfile profile = new FirefoxProfile(new File(Config.getProfilePath()));
@@ -42,7 +40,6 @@ public class SeleniumLifecycleManager extends TypeBasedParameterResolver<Browser
         options.setProfile(profile);
         driver = new FirefoxDriver(options);
         browser = new Browser(driver);
-        publicClientBrowser = new PublicClientBrowser(driver);
     }
 
     @Override
@@ -57,12 +54,6 @@ public class SeleniumLifecycleManager extends TypeBasedParameterResolver<Browser
 
     @Override
     public Browser resolveParameter(ParameterContext parameterContext, ExtensionContext extensionContext) throws ParameterResolutionException {
-        if (extensionContext.getTags().contains("response_type.code")) {
-            return browser;
-        } else if (extensionContext.getTags().contains("response_type.token_id_token")) {
-            return publicClientBrowser;
-        } else {
-            throw new ParameterResolutionException("Could not resolve browser");
-        }
+        return browser;
     }
 }

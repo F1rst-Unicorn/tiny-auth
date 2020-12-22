@@ -40,7 +40,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-@Tag("response_type.code")
 public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
 
     private final User user = Users.getUser();
@@ -462,5 +461,10 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
         String authorizationCode = oidcRedirect.queryParameter(ResponseType.CODE.get());
         assertThat(authorizationCode.length(), is(greaterThanOrEqualTo(16)));
         return authorizationCode;
+    }
+
+    @Override
+    Set<ResponseType> getResponseTypes() {
+        return Set.of(ResponseType.CODE);
     }
 }

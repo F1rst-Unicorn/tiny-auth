@@ -17,7 +17,10 @@
 
 package de.njsm.tinyauth.test;
 
+import de.njsm.tinyauth.test.oidc.Identifiers;
 import org.junit.jupiter.api.Test;
+
+import java.util.Set;
 
 public class Tests extends TinyAuthBrowserTest {
 
@@ -29,5 +32,10 @@ public class Tests extends TinyAuthBrowserTest {
     @Test
     void testNonGrantedScopeIsWithdrawn() {
 
+    }
+
+    @Override
+    Set<Identifiers.ResponseType> getResponseTypes() {
+        return Set.of(Identifiers.ResponseType.CODE);
     }
 }

@@ -29,6 +29,7 @@ import org.openqa.selenium.firefox.FirefoxDriver;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
 
@@ -36,8 +37,14 @@ public class Browser {
 
     private final FirefoxDriver driver;
 
+    private Set<ResponseType> responseType;
+
     public Browser(FirefoxDriver driver) {
         this.driver = driver;
+    }
+
+    public void setResponseType(Set<ResponseType> responseTypes) {
+        this.responseType = responseTypes;
     }
 
     public void resetCookies() {
@@ -115,7 +122,7 @@ public class Browser {
                 .addQueryParameter(STATE, state)
                 .addQueryParameter(NONCE, nonce)
                 .addQueryParameter(SCOPE, String.join(" ", scopes))
-                .addQueryParameter(RESPONSE_TYPE, ResponseType.CODE.get())
+                .addQueryParameter(RESPONSE_TYPE, responseType.stream().map(ResponseType::get).collect(Collectors.joining(" ")))
                 .addQueryParameter(REDIRECT_URI, client.getRedirectUri())
                 .build();
     }

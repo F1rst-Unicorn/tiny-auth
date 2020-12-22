@@ -84,7 +84,14 @@ public class Identifiers {
         ID_TOKEN {
             @Override
             public String get() {
-                return "id_token token";
+                return "id_token";
+            }
+        },
+
+        TOKEN {
+            @Override
+            public String get() {
+                return "token";
             }
         },
 

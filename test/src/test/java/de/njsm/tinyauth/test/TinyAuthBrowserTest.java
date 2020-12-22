@@ -17,6 +17,7 @@
 
 package de.njsm.tinyauth.test;
 
+import de.njsm.tinyauth.test.oidc.Identifiers;
 import de.njsm.tinyauth.test.oidc.TokenAsserter;
 import de.njsm.tinyauth.test.runtime.Browser;
 import de.njsm.tinyauth.test.runtime.SeleniumLifecycleManager;
@@ -32,6 +33,7 @@ import org.mockserver.model.MediaType;
 
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockserver.model.HttpRequest.request;
@@ -49,7 +51,7 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
     private MockServerClient mockServerClient;
 
     @BeforeEach
-    public void resetMockServer(MockServerClient client) {
+    public void resetMockServer(MockServerClient client, Browser browser) {
         client.reset();
         client.when(
                 request().withPath("/redirect/.*")
@@ -68,6 +70,8 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
                                 "</html>")
         );
         mockServerClient = client;
+
+        browser.setResponseType(getResponseTypes());
     }
 
     @BeforeEach
@@ -99,6 +103,8 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
     TokenAsserter tokenAsserter() {
         return new TokenAsserter();
     }
+
+    abstract Set<Identifiers.ResponseType> getResponseTypes();
 
     protected HttpUrl getLastOidcRedirect(Browser browser) {
         return HttpUrl.get(browser.getCurrentlUrl());
