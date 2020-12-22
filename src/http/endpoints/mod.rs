@@ -113,6 +113,7 @@ pub fn method_not_allowed() -> HttpResponse {
     HttpResponse::MethodNotAllowed().body("method not allowed")
 }
 
+/// When which HTTP code: https://tools.ietf.org/html/rfc6749#section-5.2
 fn render_json_error(error: ProtocolError, description: &str) -> HttpResponse {
     match error {
         ProtocolError::OAuth2(OAuthError::InvalidClient) => HttpResponse::Unauthorized(),

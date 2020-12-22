@@ -71,13 +71,17 @@ public class Identifiers {
 
     public static final String INVALID_GRANT = "invalid_grant";
 
-    public static final String INVALID_CLIENT = "invalid_client";
-
     public static final String USERNAME = "username";
 
     public static final String PASSWORD = "password";
 
     public static final String AUTHORIZATION_CODE = "authorization_code";
+
+    public static final String CLIENT_ASSERTION = "client_assertion";
+
+    public static final String CLIENT_ASSERTION_TYPE = "client_assertion_type";
+
+    public static final String CLIENT_ASSERTION_TYPE_VALUE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
     public enum ResponseType {
         ID_TOKEN {

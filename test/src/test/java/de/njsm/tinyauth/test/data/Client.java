@@ -21,9 +21,18 @@ public class Client extends User {
 
     private final String redirectUri;
 
+    private final String publicKey;
+
     public Client(String clientId, String password, String redirectUri) {
         super(clientId, password);
         this.redirectUri = redirectUri;
+        this.publicKey = "";
+    }
+
+    public Client(String username, String password, String redirectUri, String publicKey) {
+        super(username, password);
+        this.redirectUri = redirectUri;
+        this.publicKey = publicKey;
     }
 
     public String getClientId() {
@@ -32,5 +41,9 @@ public class Client extends User {
 
     public String getRedirectUri() {
         return redirectUri;
+    }
+
+    public String getPublicKey() {
+        return publicKey;
     }
 }

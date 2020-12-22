@@ -431,13 +431,18 @@ async fn grant_with_client_credentials(
         authenticator,
         issuer_configuration,
     )?;
-    let scopes = scope_store.get_all(
-        &request
-            .scope
-            .as_deref()
-            .map(parse_scope_names)
-            .unwrap_or_default(),
-    );
+    let allowed_scopes = BTreeSet::from_iter(client.allowed_scopes.clone());
+    let requested_scopes = match &request.scope {
+        None => Default::default(),
+        Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
+    };
+
+    let scopes = allowed_scopes
+        .intersection(&requested_scopes)
+        .map(|v| scope_store.get(v))
+        .map(Option::unwrap)
+        .collect();
+
     Ok((
         client.clone().try_into().unwrap(),
         client,
@@ -492,13 +497,17 @@ async fn grant_with_password(
         Ok(user) => user,
     };
 
-    let scopes = scope_store.get_all(
-        &request
-            .scope
-            .as_deref()
-            .map(parse_scope_names)
-            .unwrap_or_default(),
-    );
+    let allowed_scopes = BTreeSet::from_iter(client.allowed_scopes.clone());
+    let requested_scopes = match &request.scope {
+        None => Default::default(),
+        Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
+    };
+
+    let scopes = allowed_scopes
+        .intersection(&requested_scopes)
+        .map(|v| scope_store.get(v))
+        .map(Option::unwrap)
+        .collect();
 
     Ok((user, client, scopes, Local::now().timestamp()))
 }

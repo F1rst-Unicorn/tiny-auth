@@ -71,7 +71,7 @@ impl Client {
         match &self.client_type {
             ClientType::Public => {
                 error!("verified password on public client '{}'", self.client_id);
-                panic!("verified password on public client");
+                false
             }
 
             ClientType::Confidential {
@@ -103,7 +103,7 @@ impl Client {
                     password: Password::Plain(secret),
                     ..
                 },
-            ) => Some(DecodingKey::from_secret(secret.as_bytes()).into_static()),
+            ) => Some(DecodingKey::from_secret(secret.as_bytes())),
             (
                 Algorithm::ES256,
                 ClientType::Confidential {
@@ -118,8 +118,7 @@ impl Client {
                     ..
                 },
             ) => DecodingKey::from_ec_pem(key.as_bytes())
-                .ok()
-                .map(|k| k.into_static()),
+                .ok(),
             (
                 Algorithm::RS256,
                 ClientType::Confidential {
@@ -162,13 +161,12 @@ impl Client {
                     ..
                 },
             ) => DecodingKey::from_rsa_pem(key.as_bytes())
-                .ok()
-                .map(|k| k.into_static()),
+                .ok(),
             _ => {
                 warn!("client '{}' tried to authenticate with algorithm '{:?}' for which it is not configured", self.client_id, algorithm);
                 None
             }
-        }
+        }.map(|k| k.into_static())
     }
 }
 

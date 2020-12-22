@@ -92,6 +92,18 @@ public class TokenEndpoint {
                 .log().everything();
     }
 
+    public ValidatableResponse requestWithClientCredentialsToken(String token, Set<String> scopes) {
+        return given()
+                .contentType(ContentType.URLENC)
+                .formParam(GRANT_TYPE, CLIENT_CREDENTIALS)
+                .formParam(SCOPE, String.join(" ", scopes))
+                .formParam(CLIENT_ASSERTION, token)
+                .formParam(CLIENT_ASSERTION_TYPE, CLIENT_ASSERTION_TYPE_VALUE)
+                .post()
+        .then()
+                .log().everything();
+    }
+
     public ValidatableResponse requestWithPassword(Client client, User user, Set<String> scopes) {
         return requestWithPassword(client, user, user.getPassword(), scopes);
     }

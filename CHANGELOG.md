@@ -10,6 +10,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 * Refresh tokens issued for different clients now return the correct HTTP
   response code.
 
+* Prevent clients from requesting scopes which they are not allowed via client
+  credentials or password grant.
+
 ## [0.8.1]
 
 ### Maintenance

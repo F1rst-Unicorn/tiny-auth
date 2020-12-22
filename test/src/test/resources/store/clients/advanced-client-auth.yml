@@ -1,0 +1,42 @@
+# tiny-auth: Tiny OIDC Provider
+# Copyright (C) 2019 The tiny-auth developers
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
+# See https://openid.net/specs/openid-connect-core-1_0.html#AddressClaim
+# on how a standard-conform address block looks like
+
+---
+client_id: advanced-client-auth
+client_type:
+  confidential:
+    password:
+      plain: passwordpasswordpasswordpasswordpasswordpassword
+    public key: |
+      -----BEGIN PUBLIC KEY-----
+      MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEXwRakTosT7bK5YEORlQjLzpHehkuLDEu
+      /0pF2axbHyAGatD2QCf0KfmuylBldoyapSj8mCY11Envp0oZ4S1kYmbhfgIEwX16
+      uDkKrMsaTeI/ttvgR01xzMfPXyjA4Ifs
+      -----END PUBLIC KEY-----
+
+redirect_uris:
+  - http://localhost:34345/redirect/advanced-client-auth
+
+allowed_scopes:
+  - email
+  - openid
+  - profile
+  - phone
+  - address
