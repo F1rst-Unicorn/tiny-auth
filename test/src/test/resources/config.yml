@@ -36,3 +36,10 @@ web:
   static files: static
   session timeout: 60000
   secret key: 6nwYoK0L9J5ADFQE74CkkuLmTGMSd1skxHso9XwZNbsCbVmLIVH6L2aBIi2veuia3aQ3fnBzfwwlIuzCmWTEjAcc
+  tls:
+    key: test/src/test/resources/keys/tls-key.pem
+    certificate: test/src/test/resources/keys/tls-chain.pem
+    client ca: test/src/test/resources/keys/ca.pem
+    versions:
+      - 1.2
+      - 1.3

@@ -25,6 +25,8 @@ public class Config {
 
     static final String LOG_CONFIG_PATH = "de.njsm.tinyauth.test.config.logconfigfile";
 
+    static final String PROFILE_PATH = "de.njsm.tinyauth.test.selenium.profile";
+
     static String getBinaryPath() {
         return System.getProperty(BINARY_PATH);
     }
@@ -35,5 +37,9 @@ public class Config {
 
     static String getLogConfigPath() {
         return System.getProperty(LOG_CONFIG_PATH);
+    }
+
+    static String getProfilePath() {
+        return System.getProperty(PROFILE_PATH);
     }
 }

@@ -20,7 +20,7 @@ package de.njsm.tinyauth.test.repository;
 public class Endpoints {
 
     public static String getBaseUri() {
-        return "http://localhost:34344/";
+        return "https://localhost:34344/";
     }
 
     public static String getIssuer() {

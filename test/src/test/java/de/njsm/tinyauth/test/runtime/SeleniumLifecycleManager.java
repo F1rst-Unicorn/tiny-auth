@@ -23,6 +23,8 @@ import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.firefox.FirefoxOptions;
 import org.openqa.selenium.firefox.FirefoxProfile;
 
+import java.io.File;
+
 public class SeleniumLifecycleManager extends TypeBasedParameterResolver<Browser> implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback {
 
     private FirefoxDriver driver;
@@ -33,7 +35,7 @@ public class SeleniumLifecycleManager extends TypeBasedParameterResolver<Browser
 
     @Override
     public void beforeAll(ExtensionContext extensionContext) {
-        FirefoxProfile profile = new FirefoxProfile();
+        FirefoxProfile profile = new FirefoxProfile(new File(Config.getProfilePath()));
         profile.setPreference("intl.accept_languages", "de");
         FirefoxOptions options = new FirefoxOptions();
         options.setHeadless(true);

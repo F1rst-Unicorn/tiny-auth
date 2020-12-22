@@ -23,11 +23,20 @@ import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 import static io.restassured.config.ConnectionConfig.connectionConfig;
+import static io.restassured.config.SSLConfig.sslConfig;
 
 public class RestAssuredConfiguration implements BeforeAllCallback {
     @Override
     public void beforeAll(ExtensionContext context) {
         RestAssured.config = RestAssuredConfig.config()
-                .connectionConfig(connectionConfig().closeIdleConnectionsAfterEachResponse());
+                .connectionConfig(connectionConfig().closeIdleConnectionsAfterEachResponse())
+                .sslConfig(sslConfig()
+                        .keyStore(System.getProperty("javax.net.ssl.keyStore"),
+                                System.getProperty("javax.net.ssl.keyStorePassword"))
+                        .keystoreType(System.getProperty("javax.net.ssl.keyStoreType"))
+                        .trustStore(System.getProperty("javax.net.ssl.trustStore"),
+                                System.getProperty("javax.net.ssl.trustStorePassword"))
+                        .trustStoreType(System.getProperty("javax.net.ssl.trustStoreType"))
+                );
     }
 }

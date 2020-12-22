@@ -47,4 +47,12 @@ test {
     systemProperty 'de.njsm.tinyauth.test.config.binary', "$projectDir/../target/debug/tiny-auth"
     systemProperty 'de.njsm.tinyauth.test.config.configfile', "$projectDir/src/test/resources/config.yml"
     systemProperty 'de.njsm.tinyauth.test.config.logconfigfile', "$projectDir/src/test/resources/log4rs.yml"
+    systemProperty 'de.njsm.tinyauth.test.selenium.profile', "$projectDir/src/test/resources/firefox/"
+
+    systemProperty 'javax.net.ssl.keyStore', "$projectDir/src/test/resources/keys/client-store.jks"
+    systemProperty 'javax.net.ssl.keyStorePassword', "password"
+    systemProperty 'javax.net.ssl.keyStoreType', "JKS"
+    systemProperty 'javax.net.ssl.trustStore', "$projectDir/src/test/resources/keys/client-store.jks"
+    systemProperty 'javax.net.ssl.trustStorePassword', "password"
+    systemProperty 'javax.net.ssl.trustStoreType', "JKS"
 }
