@@ -45,4 +45,8 @@ public class Users {
     public static User getRateLimitTestUser() {
         return new User("password-rate-limit", "password");
     }
+
+    public static User getSecondRateLimitTestUser() {
+        return new User("password-rate-limit-2", "password");
+    }
 }

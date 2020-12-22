@@ -19,34 +19,25 @@ package de.njsm.tinyauth.test;
 
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.OidcToken;
-import de.njsm.tinyauth.test.data.User;
 import de.njsm.tinyauth.test.repository.Clients;
 import de.njsm.tinyauth.test.repository.Scopes;
-import de.njsm.tinyauth.test.repository.Users;
 import de.njsm.tinyauth.test.runtime.Browser;
 import io.restassured.path.json.JsonPath;
-import io.restassured.response.ValidatableResponse;
 import okhttp3.HttpUrl;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
-public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
-
-    private final User user = Users.getUser();
-
-    private Client client = Clients.getConfidentialClient();
-
-    private final Set<String> scopes = Set.of("openid");
+public class ConfidentialAuthenticationTest extends AuthorizationCodeTest {
 
     @Test
     @Tag("oidcc-basic-certification-test-plan.oidcc-server")
@@ -376,95 +367,5 @@ public class ConfidentialAuthenticationTest extends TinyAuthBrowserTest {
                 .statusCode(400)
                 .body(ERROR, equalTo(INVALID_GRANT))
                 .body(ERROR_DESCRIPTION, equalTo("Invalid refresh token"));
-    }
-
-    private OidcToken authenticate(Browser browser) throws Exception {
-        return authenticate(browser, scopes);
-    }
-
-    private String authenticateReturningAuthCode(Browser browser) throws Exception {
-        String authorizationCode = fetchAuthCode(browser, scopes);
-        verifyTokensFromAuthorizationCode(scopes, authorizationCode);
-        return authorizationCode;
-    }
-
-    private OidcToken authenticateWithAdditionalParameters(Browser browser, Map<String, String> additionalParameters) throws Exception {
-        browser.startAuthenticationWithAdditionalParameters(client, getStateParameter(), scopes, getNonceParameter(), additionalParameters)
-                .withUser(user)
-                .login()
-                .confirm();
-
-        String authorizationCode = assertOnRedirect(browser);
-        return verifyTokensFromAuthorizationCode(scopes, authorizationCode);
-    }
-
-    private OidcToken authenticate(Browser browser, Set<String> scopes) throws Exception {
-        String authorizationCode = fetchAuthCode(browser, scopes);
-        return verifyTokensFromAuthorizationCode(scopes, authorizationCode);
-    }
-
-    private String fetchAuthCode(Browser browser, Set<String> scopes) {
-        browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
-                .withUser(user)
-                .login()
-                .confirm();
-
-        return assertOnRedirect(browser);
-    }
-
-    private OidcToken verifyTokensFromAuthorizationCode(Set<String> scopes, String authCode) throws Exception {
-        return verifyTokensFromResponse(scopes, tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(client, authCode));
-    }
-
-    private void verifyTokensFromAuthorizationCodeWithClientPost(Set<String> scopes, String authCode) throws Exception {
-        verifyTokensFromResponse(scopes, tokenEndpoint().requestWithAuthorizationCodeAndClientSecretPost(client, authCode));
-    }
-
-    private OidcToken verifyTokensFromAuthorizationCodeReturningRefreshToken(Set<String> scopes, String authCode) throws Exception {
-        JsonPath tokenResponse = fetchTokensAndVerifyBasics(scopes, tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(client, authCode));
-        tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), client, user, getNonceParameter());
-        return tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), client, user, getNonceParameter(), scopes);
-    }
-
-    private OidcToken verifyTokensFromResponse(Set<String> scopes, ValidatableResponse response) throws Exception {
-        JsonPath tokenResponse = fetchTokensAndVerifyBasics(scopes, response);
-        tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), client, user, getNonceParameter(), scopes);
-        return tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), client, user, getNonceParameter());
-    }
-
-    private JsonPath fetchTokensAndVerifyBasics(Set<String> scopes, ValidatableResponse response) throws Exception {
-        JsonPath tokenResponse = response
-                .body(EXPIRES_IN, equalTo(60))
-                .body(TOKEN_TYPE, equalToIgnoringCase(TOKEN_TYPE_CONTENT))
-                .extract().body().jsonPath();
-
-        assertEquals(scopes, Set.of(tokenResponse.getString(SCOPE).split(" ")));
-        assertEquals(tokenResponse.getString(ACCESS_TOKEN), tokenResponse.getString(ID_TOKEN), "access token different from id token");
-        tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), client, user, getNonceParameter());
-        return tokenResponse;
-    }
-
-    private void assertAuthCodeIsRejected(String authorizationCode) {
-        tokenEndpoint().request(client, authorizationCode)
-                .statusCode(400)
-                .body(ERROR, equalTo(INVALID_GRANT))
-                .body(ERROR_DESCRIPTION, equalTo("Invalid code"));
-    }
-
-    private String assertOnRedirect(Browser browser) {
-        HttpUrl oidcRedirect = getLastOidcRedirect(browser);
-        assertUrlParameter(oidcRedirect, STATE, getStateParameter());
-
-        List<String> errors = oidcRedirect.queryParameterValues(ERROR);
-        assertTrue(errors.isEmpty(), "server returned error: " + String.join(" ", errors));
-
-        String authorizationCode = oidcRedirect.queryParameter(ResponseType.CODE.get());
-        assertThat(authorizationCode.length(), is(greaterThanOrEqualTo(16)));
-        return authorizationCode;
-    }
-
-    @Override
-    Set<ResponseType> getResponseTypes() {
-        return Set.of(ResponseType.CODE);
     }
 }

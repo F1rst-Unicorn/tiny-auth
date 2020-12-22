@@ -18,20 +18,58 @@
 package de.njsm.tinyauth.test;
 
 import de.njsm.tinyauth.test.oidc.Identifiers;
+import de.njsm.tinyauth.test.repository.Users;
+import de.njsm.tinyauth.test.runtime.Browser;
+import okhttp3.HttpUrl;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 
-public class Tests extends TinyAuthBrowserTest {
+import static de.njsm.tinyauth.test.oidc.Identifiers.*;
+
+public class Tests extends AuthorizationCodeTest {
 
     @Test
-    void testFailingLoginRateLimits() {
+    void testFailingLoginRateLimits(Browser browser) {
+        user = Users.getSecondRateLimitTestUser();
+        String wrongPassword = "wrong password";
 
+        browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
+                .withUsername(user.getUsername())
+                .withPassword(wrongPassword)
+                .loginWithError()
+                .assertPasswordWrongError(2)
+                .withUsername(user.getUsername())
+                .withPassword(wrongPassword)
+                .loginWithError()
+                .assertPasswordWrongError(1)
+                .withUsername(user.getUsername())
+                .withPassword(wrongPassword)
+                .loginWithErrorAndRedirect();
+
+        HttpUrl oidcRedirect = getLastOidcRedirect(browser);
+
+        assertUrlParameter(oidcRedirect, ERROR, ACCESS_DENIED);
+        assertUrlParameter(oidcRedirect, ERROR_DESCRIPTION, "user failed to authenticate");
+        assertUrlParameter(oidcRedirect, STATE, getStateParameter());
+
+        browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
+                .withUser(user)
+                .loginWithError()
+                .assertRateLimitedError();
     }
 
     @Test
-    void testNonGrantedScopeIsWithdrawn() {
+    void testNonGrantedScopeIsWithdrawn(Browser browser) throws Exception {
+        scopes = Set.of("openid", "email", "phone");
+        browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
+                .withUser(user)
+                .login()
+                .toggleScope("phone")
+                .confirm();
 
+        String authorizationCode = assertOnRedirect(browser);
+        fetchTokensAndVerifyBasics(Set.of("openid", "email"), tokenEndpoint().request(client, authorizationCode));
     }
 
     @Override

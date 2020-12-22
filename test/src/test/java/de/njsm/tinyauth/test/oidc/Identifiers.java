@@ -71,6 +71,8 @@ public class Identifiers {
 
     public static final String INVALID_GRANT = "invalid_grant";
 
+    public static final String ACCESS_DENIED = "access_denied";
+
     public static final String USERNAME = "username";
 
     public static final String PASSWORD = "password";

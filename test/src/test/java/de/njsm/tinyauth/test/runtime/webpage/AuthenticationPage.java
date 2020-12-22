@@ -76,9 +76,32 @@ public class AuthenticationPage extends Page {
         return this;
     }
 
+    public AuthenticationPage assertPasswordWrongError(int triesLeft) {
+        assertEquals("Username or password wrong\nTries left: " + triesLeft,
+                driver.findElement(error).getText());
+        return this;
+    }
+
+    public AuthenticationPage assertRateLimitedError() {
+        assertEquals("You tried to log in too often.\nPlease come back again later.",
+                driver.findElement(error).getText());
+        return this;
+    }
+
     public AuthorisationPage login() {
         driver.findElement(submit).click();
         return new AuthorisationPage(driver);
+    }
+
+    public AuthenticationPage loginWithError() {
+        driver.findElement(submit).click();
+        assertDriverIsOnThisPage();
+        return this;
+    }
+
+    public RedirectPage loginWithErrorAndRedirect() {
+        driver.findElement(submit).click();
+        return new RedirectPage(driver);
     }
 
     public void loginAndAssumeScopesAreGranted() {

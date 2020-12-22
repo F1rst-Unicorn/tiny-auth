@@ -42,6 +42,11 @@ public class AuthorisationPage extends Page {
         assertTrue(driver.findElement(submit).isDisplayed(), "field <submit> not found");
     }
 
+    public AuthorisationPage toggleScope(String scope) {
+        driver.findElement(By.name(scope)).click();
+        return this;
+    }
+
     public void confirm() {
         driver.findElement(submit).click();
         RedirectPage.assertRedirect(driver);
