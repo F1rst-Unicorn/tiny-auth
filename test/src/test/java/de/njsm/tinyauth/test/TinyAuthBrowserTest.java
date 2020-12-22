@@ -18,11 +18,8 @@
 package de.njsm.tinyauth.test;
 
 import de.njsm.tinyauth.test.oidc.Identifiers;
-import de.njsm.tinyauth.test.oidc.TokenAsserter;
 import de.njsm.tinyauth.test.runtime.Browser;
 import de.njsm.tinyauth.test.runtime.SeleniumLifecycleManager;
-import de.njsm.tinyauth.test.runtime.TokenEndpoint;
-import de.njsm.tinyauth.test.runtime.UserinfoEndpoint;
 import okhttp3.HttpUrl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,8 +45,6 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
 
     private String nonce;
 
-    private MockServerClient mockServerClient;
-
     @BeforeEach
     public void resetMockServer(MockServerClient client, Browser browser) {
         client.reset();
@@ -69,7 +64,6 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
                                 "</body>" +
                                 "</html>")
         );
-        mockServerClient = client;
 
         browser.setResponseType(getResponseTypes());
     }
@@ -90,18 +84,6 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
 
     String getNonceParameter() {
         return nonce;
-    }
-
-    TokenEndpoint tokenEndpoint() {
-        return new TokenEndpoint();
-    }
-
-    UserinfoEndpoint userinfoEndpoint() {
-        return new UserinfoEndpoint();
-    }
-
-    TokenAsserter tokenAsserter() {
-        return new TokenAsserter();
     }
 
     abstract Set<Identifiers.ResponseType> getResponseTypes();

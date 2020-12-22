@@ -41,4 +41,8 @@ public class Users {
                 "Main Street 14\n11111 Portland\n",
                 "+123456789");
     }
+
+    public static User getRateLimitTestUser() {
+        return new User("password-rate-limit", "password");
+    }
 }

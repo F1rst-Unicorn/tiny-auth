@@ -67,7 +67,7 @@ public class TokenAsserter {
         return new OidcToken(token, claims);
     }
 
-    public void verifyUserinfo(JsonPath userinfo, JWTClaimsSet accessTokenClaims) throws Exception {
+    public void verifyUserinfo(JsonPath userinfo, JWTClaimsSet accessTokenClaims) {
         Map<String, Object> convertedClaims = new HashMap<>(accessTokenClaims.getClaims());
         convertedClaims.put(EXPIRATION_TIME, ((Date) convertedClaims.get(EXPIRATION_TIME)).getTime() / 1000);
         convertedClaims.put(ISSUANCE_TIME, ((Date) convertedClaims.get(ISSUANCE_TIME)).getTime() / 1000);

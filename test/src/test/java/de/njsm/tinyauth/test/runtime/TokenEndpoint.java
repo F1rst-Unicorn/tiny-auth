@@ -19,6 +19,7 @@ package de.njsm.tinyauth.test.runtime;
 
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.OidcToken;
+import de.njsm.tinyauth.test.data.User;
 import de.njsm.tinyauth.test.repository.Endpoints;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
@@ -72,9 +73,37 @@ public class TokenEndpoint {
                 .contentType(ContentType.URLENC)
                 .formParam(GRANT_TYPE, REFRESH_TOKEN)
                 .formParam(REFRESH_TOKEN, refreshToken.getRawToken())
-                .formParam(SCOPES, String.join(" ", scopes))
+                .formParam(SCOPE, String.join(" ", scopes))
                 .formParam(CLIENT_ID, client.getClientId())
                 .formParam(CLIENT_SECRET, client.getPassword())
+                .post()
+        .then()
+                .log().everything();
+    }
+
+    public ValidatableResponse requestWithClientCredentials(Client client, Set<String> scopes) {
+        return given()
+                .auth().preemptive().basic(client.getClientId(), client.getPassword())
+                .contentType(ContentType.URLENC)
+                .formParam(GRANT_TYPE, CLIENT_CREDENTIALS)
+                .formParam(SCOPE, String.join(" ", scopes))
+                .post()
+        .then()
+                .log().everything();
+    }
+
+    public ValidatableResponse requestWithPassword(Client client, User user, Set<String> scopes) {
+        return requestWithPassword(client, user, user.getPassword(), scopes);
+    }
+
+    public ValidatableResponse requestWithPassword(Client client, User user, String password, Set<String> scopes) {
+        return given()
+                .auth().preemptive().basic(client.getClientId(), client.getPassword())
+                .contentType(ContentType.URLENC)
+                .formParam(GRANT_TYPE, PASSWORD)
+                .formParam(USERNAME, user.getUsername())
+                .formParam(PASSWORD, password)
+                .formParam(SCOPE, String.join(" ", scopes))
                 .post()
         .then()
                 .log().everything();
@@ -84,7 +113,7 @@ public class TokenEndpoint {
         return given()
                 .contentType(ContentType.URLENC)
                 .formParam(ResponseType.CODE.get(), authorizationCode)
-                .formParam(GRANT_TYPE, GrantType.AUTHORIZATION_CODE.get())
+                .formParam(GRANT_TYPE, AUTHORIZATION_CODE)
                 .formParam(REDIRECT_URI, client.getRedirectUri())
                 .formParam(CLIENT_ID, client.getClientId());
     }

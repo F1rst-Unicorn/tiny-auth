@@ -17,26 +17,17 @@
 
 package de.njsm.tinyauth.test.data;
 
-public class Client {
+public class Client extends User {
 
-    private String clientId;
-
-    private String password;
-
-    private String redirectUri;
+    private final String redirectUri;
 
     public Client(String clientId, String password, String redirectUri) {
-        this.clientId = clientId;
-        this.password = password;
+        super(clientId, password);
         this.redirectUri = redirectUri;
     }
 
     public String getClientId() {
-        return clientId;
-    }
-
-    public String getPassword() {
-        return password;
+        return getUsername();
     }
 
     public String getRedirectUri() {

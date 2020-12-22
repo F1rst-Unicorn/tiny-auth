@@ -26,7 +26,7 @@ crypto:
 
 rate limit:
   events: 3
-  period in seconds: 10
+  period in seconds: 30
 
 web:
   bind: localhost:34344

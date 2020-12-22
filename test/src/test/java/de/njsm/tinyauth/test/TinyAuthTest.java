@@ -17,11 +17,26 @@
 
 package de.njsm.tinyauth.test;
 
+import de.njsm.tinyauth.test.oidc.TokenAsserter;
 import de.njsm.tinyauth.test.runtime.RestAssuredConfiguration;
+import de.njsm.tinyauth.test.runtime.TokenEndpoint;
+import de.njsm.tinyauth.test.runtime.UserinfoEndpoint;
 import de.njsm.tinyauth.test.runtime.UutLifecycleManager;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 @ExtendWith(UutLifecycleManager.class)
 @ExtendWith(RestAssuredConfiguration.class)
 public interface TinyAuthTest {
+
+    default TokenEndpoint tokenEndpoint() {
+        return new TokenEndpoint();
+    }
+
+    default UserinfoEndpoint userinfoEndpoint() {
+        return new UserinfoEndpoint();
+    }
+
+    default TokenAsserter tokenAsserter() {
+        return new TokenAsserter();
+    }
 }

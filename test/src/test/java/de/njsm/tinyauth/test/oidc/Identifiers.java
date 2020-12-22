@@ -65,20 +65,19 @@ public class Identifiers {
 
     public static final String REFRESH_TOKEN = "refresh_token";
 
+    public static final String CLIENT_CREDENTIALS = "client_credentials";
+
     public static final String ID_TOKEN = "id_token";
 
     public static final String INVALID_GRANT = "invalid_grant";
 
-    public enum GrantType {
-        AUTHORIZATION_CODE {
-            @Override
-            public String get() {
-                return "authorization_code";
-            }
-        };
+    public static final String INVALID_CLIENT = "invalid_client";
 
-        public abstract String get();
-    }
+    public static final String USERNAME = "username";
+
+    public static final String PASSWORD = "password";
+
+    public static final String AUTHORIZATION_CODE = "authorization_code";
 
     public enum ResponseType {
         ID_TOKEN {
