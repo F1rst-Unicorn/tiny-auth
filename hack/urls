@@ -1,8 +1,0 @@
-http://localhost:8088/authorize?client_id=public&redirect_uri=http%3A%2F%2Flocalhost%2Fpublic&state=state&scope=openid+profile+email&response_type=token+id_token&nonce=nonce
-http://localhost:8088/authorize?client_id=confidential&redirect_uri=http%3A%2F%2Flocalhost%2Fconfidential&state=state&scope=openid+profile+email&response_type=code&nonce=nonce
-
-curl http://localhost:8088/token --data-urlencode grant_type=authorization_code --data-urlencode redirect_uri=http://localhost/confidential --data-urlencode client_id=confidential --basic --user confidential:password --data-urlencode code=
-
-curl http://localhost:8088/token --data-urlencode grant_type=refresh_token --basic --user confidential:password --data-urlencode refresh_token=
-curl http://localhost:8088/token --data-urlencode grant_type=client_credentials --basic --user confidential:password
-curl http://localhost:8088/userinfo -H 'Authorization: Bearer '
