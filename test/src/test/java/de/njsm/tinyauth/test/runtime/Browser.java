@@ -24,6 +24,8 @@ import de.njsm.tinyauth.test.runtime.webpage.AuthorisationPage;
 import de.njsm.tinyauth.test.runtime.webpage.InvalidRedirectUriPage;
 import de.njsm.tinyauth.test.runtime.webpage.RedirectPage;
 import okhttp3.HttpUrl;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.firefox.FirefoxDriver;
 
 import java.util.Collections;
@@ -34,6 +36,8 @@ import java.util.stream.Collectors;
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
 
 public class Browser {
+
+    private static final Logger LOG = LogManager.getLogger(Browser.class);
 
     private final FirefoxDriver driver;
 
@@ -77,6 +81,7 @@ public class Browser {
         additionalParameters.forEach(builder::addQueryParameter);
         url = builder.build();
 
+        LOG.info("Going to " + url.url());
         driver.navigate().to(url.url());
     }
 
@@ -86,6 +91,7 @@ public class Browser {
                 .removeAllQueryParameters(RESPONSE_TYPE)
                 .build();
 
+        LOG.info("Going to " + url.url());
         driver.navigate().to(url.url());
         RedirectPage.assertRedirect(driver);
     }
@@ -101,6 +107,7 @@ public class Browser {
                 .removeAllQueryParameters(NONCE)
                 .build();
 
+        LOG.info("Going to " + url.url());
         driver.navigate().to(url.url());
     }
 
@@ -111,6 +118,7 @@ public class Browser {
                 .addQueryParameter(REDIRECT_URI, redirectUri)
                 .build();
 
+        LOG.info("Going to " + url.url());
         driver.navigate().to(url.url());
         InvalidRedirectUriPage.assertShown(driver);
     }

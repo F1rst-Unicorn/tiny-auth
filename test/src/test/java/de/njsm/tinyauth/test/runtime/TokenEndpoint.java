@@ -25,6 +25,8 @@ import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.ValidatableResponse;
 import io.restassured.specification.RequestSpecification;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.Set;
 
@@ -32,7 +34,10 @@ import static de.njsm.tinyauth.test.oidc.Identifiers.*;
 
 public class TokenEndpoint {
 
+    private static final Logger LOG = LogManager.getLogger(TokenEndpoint.class);
+
     public ValidatableResponse requestWithAuthorizationCodeAndBasicAuth(Client client, String authorizationCode) {
+        LOG.info("getting token with authorization code");
         return request(client, authorizationCode)
                 .statusCode(200)
                 .contentType(ContentType.JSON)
@@ -41,6 +46,7 @@ public class TokenEndpoint {
     }
 
     public ValidatableResponse requestWithAuthorizationCodeAndClientSecretPost(Client client, String authorizationCode) {
+        LOG.info("getting token with authorization code");
         return formAuthCodeRequest(client, authorizationCode)
                 .formParam(CLIENT_SECRET, client.getPassword())
                 .post()
@@ -53,6 +59,7 @@ public class TokenEndpoint {
     }
 
     public ValidatableResponse request(Client client, String authorizationCode) {
+        LOG.info("getting token with authorization code");
         return formAuthCodeRequest(client, authorizationCode)
                 .auth().preemptive().basic(client.getClientId(), client.getPassword())
                 .post()
@@ -61,6 +68,7 @@ public class TokenEndpoint {
     }
 
     public ValidatableResponse requestWithRefreshToken(Client client, OidcToken refreshToken, Set<String> scopes) {
+        LOG.info("getting token with refresh token");
         return request(client, refreshToken, scopes)
                 .statusCode(200)
                 .contentType(ContentType.JSON)
@@ -69,6 +77,7 @@ public class TokenEndpoint {
     }
 
     public ValidatableResponse request(Client client, OidcToken refreshToken, Set<String> scopes) {
+        LOG.info("getting token with refresh token");
         return given()
                 .contentType(ContentType.URLENC)
                 .formParam(GRANT_TYPE, REFRESH_TOKEN)
@@ -82,6 +91,7 @@ public class TokenEndpoint {
     }
 
     public ValidatableResponse requestWithClientCredentials(Client client, Set<String> scopes) {
+        LOG.info("getting token with client credentials");
         return given()
                 .auth().preemptive().basic(client.getClientId(), client.getPassword())
                 .contentType(ContentType.URLENC)
@@ -93,6 +103,7 @@ public class TokenEndpoint {
     }
 
     public ValidatableResponse requestWithClientCredentialsToken(String token, Set<String> scopes) {
+        LOG.info("getting token with client credentials token");
         return given()
                 .contentType(ContentType.URLENC)
                 .formParam(GRANT_TYPE, CLIENT_CREDENTIALS)
@@ -105,10 +116,12 @@ public class TokenEndpoint {
     }
 
     public ValidatableResponse requestWithPassword(Client client, User user, Set<String> scopes) {
+        LOG.info("getting token with password");
         return requestWithPassword(client, user, user.getPassword(), scopes);
     }
 
     public ValidatableResponse requestWithPassword(Client client, User user, String password, Set<String> scopes) {
+        LOG.info("getting token with password");
         return given()
                 .auth().preemptive().basic(client.getClientId(), client.getPassword())
                 .contentType(ContentType.URLENC)

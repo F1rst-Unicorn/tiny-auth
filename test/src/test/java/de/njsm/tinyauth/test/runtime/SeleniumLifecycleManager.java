@@ -35,6 +35,7 @@ public class SeleniumLifecycleManager extends TypeBasedParameterResolver<Browser
     public void beforeAll(ExtensionContext extensionContext) {
         FirefoxProfile profile = new FirefoxProfile(new File(Config.getProfilePath()));
         profile.setPreference("intl.accept_languages", "de");
+        profile.setPreference("security.default_personal_cert", "Select Automatically");
         FirefoxOptions options = new FirefoxOptions();
         options.setHeadless(true);
         options.setProfile(profile);

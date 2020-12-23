@@ -18,6 +18,8 @@
 package de.njsm.tinyauth.test.runtime.webpage;
 
 import de.njsm.tinyauth.test.data.User;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.By;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -26,6 +28,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AuthenticationPage extends Page {
+
+    private static final Logger LOG = LogManager.getLogger(AuthenticationPage.class);
 
     private By username;
 
@@ -53,6 +57,7 @@ public class AuthenticationPage extends Page {
         assertTrue(driver.findElement(username).isDisplayed(), "field <username> not found");
         assertTrue(driver.findElement(password).isDisplayed(), "field <password> not found");
         assertTrue(driver.findElement(submit).isDisplayed(), "field <submit> not found");
+        LOG.info("on this page");
     }
 
     public AuthenticationPage withUser(User user) {

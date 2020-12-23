@@ -23,25 +23,32 @@ import io.restassured.http.ContentType;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.ACCESS_TOKEN;
 import static de.njsm.tinyauth.test.oidc.Identifiers.TOKEN_TYPE_CONTENT;
 
 public class UserinfoEndpoint {
 
+    private static final Logger LOG = LogManager.getLogger(UserinfoEndpoint.class);
+
     public JsonPath getUserinfo(String accessToken) {
+        LOG.info("getting userinfo");
         return verifyBasics(when()
                 .header("Authorization", TOKEN_TYPE_CONTENT + " " + accessToken)
                 .get());
     }
 
     public JsonPath postUserinfo(String accessToken) {
+        LOG.info("posting userinfo");
         return verifyBasics(when()
                 .header("Authorization", TOKEN_TYPE_CONTENT + " " + accessToken)
                 .post());
     }
 
     public JsonPath postUserinfoWithTokenInBody(String accessToken) {
+        LOG.info("posting userinfo");
         return verifyBasics(when()
                 .contentType(ContentType.URLENC)
                 .formParam(ACCESS_TOKEN, accessToken)

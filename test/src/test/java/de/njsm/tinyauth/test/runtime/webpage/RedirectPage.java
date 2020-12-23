@@ -17,6 +17,8 @@
 
 package de.njsm.tinyauth.test.runtime.webpage;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.By;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -24,6 +26,8 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RedirectPage extends Page {
+
+    private static final Logger LOG = LogManager.getLogger(RedirectPage.class);
 
     private By result;
 
@@ -44,5 +48,6 @@ public class RedirectPage extends Page {
     void assertDriverIsOnThisPage() {
         waitUntil(ExpectedConditions.presenceOfElementLocated(result));
         assertTrue(driver.findElement(result).isDisplayed(), "field <result> not found");
+        LOG.info("on this page");
     }
 }

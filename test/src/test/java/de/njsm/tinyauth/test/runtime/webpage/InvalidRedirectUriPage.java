@@ -17,6 +17,8 @@
 
 package de.njsm.tinyauth.test.runtime.webpage;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.By;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -24,6 +26,8 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class InvalidRedirectUriPage extends Page {
+
+    private static final Logger LOG = LogManager.getLogger(InvalidRedirectUriPage.class);
 
     private By headline;
 
@@ -44,5 +48,6 @@ public class InvalidRedirectUriPage extends Page {
     void assertDriverIsOnThisPage() {
         waitUntil(ExpectedConditions.presenceOfElementLocated(headline));
         assertTrue(driver.findElement(headline).isDisplayed(), "field <h1 id=\"invalid_redirect_uri\"> not found");
+        LOG.info("on this page");
     }
 }

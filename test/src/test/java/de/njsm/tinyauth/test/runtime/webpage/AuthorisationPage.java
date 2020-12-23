@@ -17,6 +17,8 @@
 
 package de.njsm.tinyauth.test.runtime.webpage;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.By;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -24,6 +26,8 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AuthorisationPage extends Page {
+
+    private static final Logger LOG = LogManager.getLogger(AuthorisationPage.class);
 
     private By submit;
 
@@ -40,6 +44,7 @@ public class AuthorisationPage extends Page {
     void assertDriverIsOnThisPage() {
         waitUntil(ExpectedConditions.presenceOfElementLocated(submit));
         assertTrue(driver.findElement(submit).isDisplayed(), "field <submit> not found");
+        LOG.info("on this page");
     }
 
     public AuthorisationPage toggleScope(String scope) {
