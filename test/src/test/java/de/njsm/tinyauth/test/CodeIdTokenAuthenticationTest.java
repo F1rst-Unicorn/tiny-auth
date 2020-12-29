@@ -17,13 +17,17 @@
 
 package de.njsm.tinyauth.test;
 
+import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.OidcToken;
+import de.njsm.tinyauth.test.oidc.Identifiers;
 import de.njsm.tinyauth.test.repository.Clients;
 import de.njsm.tinyauth.test.repository.Scopes;
 import de.njsm.tinyauth.test.runtime.Browser;
 import io.restassured.path.json.JsonPath;
 import okhttp3.HttpUrl;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 import java.util.Set;
@@ -33,18 +37,53 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
+public class CodeIdTokenAuthenticationTest extends HybridAuthenticationTest {
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-server")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-server")
     void authenticateSuccessfully(Browser browser) throws Exception {
         authenticate(browser);
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-ensure-request-without-nonce-fails")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-response-type-missing")
     @Disabled("https://gitlab.com/veenj/tiny-auth/-/issues/68")
-    void authenticateWithoutNonceFails(Browser browser) {
+    void authenticateWithoutResponseType(Browser browser) {
+        browser.startAuthenticationWithMissingResponseType(client, getState(), scopes, getNonce());
+
+        HttpUrl oidcRedirect = getLastOidcRedirect(browser);
+        assertUrlParameter(oidcRedirect, STATE, getState());
+        assertUrlParameter(oidcRedirect, ERROR, "invalid_request");
+    }
+
+    @Test
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-userinfo-get")
+    void authenticateAndGetUserinfo(Browser browser) throws Exception {
+        OidcToken accessToken = authenticate(browser);
+        JsonPath userinfo = userinfoEndpoint().getUserinfo(accessToken.getRawToken());
+        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+    }
+
+    @Test
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-userinfo-post-header")
+    void authenticateAndPostUserinfo(Browser browser) throws Exception {
+        OidcToken accessToken = authenticate(browser);
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
+        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+    }
+
+    @Test
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-userinfo-post-body")
+    void authenticateAndPostUserinfoInBody(Browser browser) throws Exception {
+        OidcToken accessToken = authenticate(browser);
+        JsonPath userinfo = userinfoEndpoint().postUserinfoWithTokenInBody(accessToken.getRawToken());
+        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+    }
+
+    @Test
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-ensure-request-without-nonce-fails")
+    @Disabled("https://gitlab.com/veenj/tiny-auth/-/issues/68")
+    void authenticateWithoutNonceAndFail(Browser browser) {
         browser.startAuthenticationWithoutNonceGivingError(client, getState(), scopes);
 
         HttpUrl oidcRedirect = getLastOidcRedirect(browser);
@@ -53,7 +92,7 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-scope-profile")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-scope-profile")
     void authenticateWithProfileScope(Browser browser) throws Exception {
         OidcToken accessToken = authenticate(browser, Set.of("openid", "profile"));
         Scopes.getProfile().verifyClaimsFor(user, accessToken.getClaims());
@@ -62,7 +101,7 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-scope-email")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-scope-email")
     void authenticateWithEmailScope(Browser browser) throws Exception {
         OidcToken accessToken = authenticate(browser, Set.of("openid", "email"));
         Scopes.getEmail().verifyClaimsFor(user, accessToken.getClaims());
@@ -71,7 +110,7 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-scope-address")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-scope-address")
     void authenticateWithAddressScope(Browser browser) throws Exception {
         OidcToken accessToken = authenticate(browser, Set.of("openid", "address"));
         Scopes.getAddress().verifyClaimsFor(user, accessToken.getClaims());
@@ -80,7 +119,7 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-scope-phone")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-scope-phone")
     void authenticateWithPhoneScope(Browser browser) throws Exception {
         OidcToken accessToken = authenticate(browser, Set.of("openid", "phone"));
         Scopes.getPhone().verifyClaimsFor(user, accessToken.getClaims());
@@ -89,7 +128,7 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-scope-all")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-scope-all")
     void authenticateWithAllScopes(Browser browser) throws Exception {
         OidcToken accessToken = authenticate(browser, Set.of("openid", "profile", "email", "address", "phone"));
         Scopes.getProfile().verifyClaimsFor(user, accessToken.getClaims());
@@ -101,16 +140,16 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-ensure-other-scope-order-succeeds")
-    void authenticateWithScopesInDifferentOrder(Browser browser) throws Exception {
-        OidcToken accessToken = authenticate(browser, Set.of("openid", "email"));
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-ensure-other-scope-order-succeeds")
+    void authenticateWithDifferentScopeOrder(Browser browser) throws Exception {
+        OidcToken accessToken = authenticate(browser, Set.of("email", "openid"));
         Scopes.getEmail().verifyClaimsFor(user, accessToken.getClaims());
         JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
         tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-display-page")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-display-page")
     void authenticateWithDisplayPage(Browser browser) throws Exception {
         OidcToken accessToken = authenticateWithAdditionalParameters(browser, Map.of("display", "page"));
         JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
@@ -118,7 +157,7 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-display-popup")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-display-popup")
     void authenticateWithDisplayPopup(Browser browser) throws Exception {
         OidcToken accessToken = authenticateWithAdditionalParameters(browser, Map.of("display", "popup"));
         JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
@@ -126,7 +165,7 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-prompt-login")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-prompt-login")
     void authenticateTwiceWithForcedLogin(Browser browser) throws Exception {
         OidcToken tokenFromFirstLogin = authenticate(browser);
         OidcToken tokenFromSecondLogin = authenticateWithAdditionalParameters(browser, Map.of("prompt", "login"));
@@ -137,7 +176,7 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-prompt-none-not-logged-in")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-prompt-none-not-logged-in")
     @Disabled("https://gitlab.com/veenj/tiny-auth/-/issues/68")
     void authenticateWithForcedPasswordless(Browser browser) {
         Set<String> scopes = Set.of("openid");
@@ -150,17 +189,19 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-prompt-none-logged-in")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-prompt-none-logged-in")
     void authenticateTwiceWithPasswordless(Browser browser) throws Exception {
         client = Clients.getClientForNoPromptTest();
 
         browser.startAuthentication(client, getState(), scopes, getNonce())
                 .withUser(user)
                 .loginAndAssumeScopesAreGranted();
-        OidcToken tokenFromFirstLogin = extractTokenFromRedirect(browser);
+        String authorizationCode = assertOnRedirect(browser);
+        OidcToken tokenFromFirstLogin = verifyTokensFromAuthorizationCode(scopes, authorizationCode);
 
         browser.startAuthenticationWithoutInteraction(client, getState(), scopes, getNonce(), Map.of("prompt", "none"));
-        OidcToken tokenFromSecondLogin = extractTokenFromRedirect(browser);
+        authorizationCode = assertOnRedirect(browser);
+        OidcToken tokenFromSecondLogin = verifyTokensFromAuthorizationCode(scopes, authorizationCode);
 
         long firstAuthTime = tokenFromFirstLogin.getClaims().getLongClaim(AUTH_TIME);
         long secondAuthTime = tokenFromSecondLogin.getClaims().getLongClaim(AUTH_TIME);
@@ -172,7 +213,7 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-max-age-1")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-max-age-1")
     void authenticateWithMaxAge(Browser browser) throws Exception {
         OidcToken firstToken = authenticate(browser);
 
@@ -185,13 +226,14 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-max-age-10000")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-max-age-10000")
     void authenticateWithMaxAgeWithoutLogin(Browser browser) throws Exception {
         OidcToken firstToken = authenticateWithAdditionalParameters(browser, Map.of("max_age", "15000"));
 
         browser.startAuthenticationWithConsent(client, getState(), scopes, getNonce(), Map.of("max_age", "10000"))
                 .confirm();
-        OidcToken secondToken = extractTokenFromRedirect(browser);
+        String authorizationCode = assertOnRedirect(browser);
+        OidcToken secondToken = verifyTokensFromAuthorizationCode(scopes, authorizationCode);
 
         long firstAuthTime = firstToken.getClaims().getLongClaim(AUTH_TIME);
         long secondAuthTime = secondToken.getClaims().getLongClaim(AUTH_TIME);
@@ -199,13 +241,13 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-ensure-request-with-unknown-parameter-succeeds")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-ensure-request-with-unknown-parameter-succeeds")
     void authenticateWithUnknownExtraParameter(Browser browser) throws Exception {
         authenticateWithAdditionalParameters(browser, Map.of("extra", "foobar"));
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-id-token-hint")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-id-token-hint")
     @Disabled("https://gitlab.com/veenj/tiny-auth/-/issues/53")
     void authenticateWithIdTokenHint() {
         fail("This test calls the authorization endpoint test twice. " +
@@ -219,7 +261,7 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-login-hint")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-login-hint")
     void authenticateWithLoginHint(Browser browser) throws Exception {
         String loginHint = user.getUsername();
         browser.startAuthenticationWithAdditionalParameters(client, getState(), scopes, getNonce(), Map.of("login_hint", loginHint))
@@ -228,11 +270,12 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
                 .login()
                 .confirm();
 
-        extractTokenFromRedirect(browser);
+        String authorizationCode = assertOnRedirect(browser);
+        verifyTokensFromAuthorizationCode(scopes, authorizationCode);
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-ui-locales")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-ui-locales")
     @Disabled("https://gitlab.com/veenj/tiny-auth/-/issues/22")
     void authenticateWithUiLocale() {
         fail("This test includes the ui_locales parameter in the request to " +
@@ -249,36 +292,72 @@ public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest {
      * This will likely never get more sophisticated semantics than to be ignored
      */
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-claims-locales")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-claims-locales")
     void authenticateWithClaimsLocales(Browser browser) throws Exception {
         authenticateWithAdditionalParameters(browser, Map.of("claims_locale", "se"));
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-ensure-request-with-acr-values-succeeds")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-ensure-request-with-acr-values-succeeds")
     void authenticateWithAcrValues(Browser browser) throws Exception {
         authenticateWithAdditionalParameters(browser, Map.of("acr_values", "1 2"));
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-ensure-registered-redirect-uri")
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-codereuse")
+    void authenticateAndTryToUseTheSameAuthorizationCodeTwice(Browser browser) throws Exception {
+        String authorizationCode = authenticateReturningAuthCode(browser);
+        assertAuthCodeIsRejected(authorizationCode);
+    }
+
+    @Test
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-codereuse-30seconds")
+    void authenticateAndTryToUseTheSameAuthorizationCodeTwiceWithDelay(Browser browser) throws Exception {
+        String authorizationCode = authenticateReturningAuthCode(browser);
+        Thread.sleep(30000);
+        assertAuthCodeIsRejected(authorizationCode);
+    }
+
+    @Test
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-ensure-registered-redirect-uri")
     void authenticateWithInvalidRedirectUri(Browser browser) {
         String redirectUri = "http://invalid.example/invalid";
         browser.startAuthenticationWithInvalidRedirectUri(client, getState(), scopes, getNonce(), redirectUri);
     }
 
     @Test
-    @Tag("oidcc-implicit-certification-test-plan.oidcc-userinfo-get")
-    void authenticateAndQueryUserinfoEndpoint(Browser browser) throws Exception {
-        OidcToken accessToken = authenticate(browser);
+    @Tag("oidcc-hybrid-certification-test-plan.oidcc-server-client-secret-post")
+    void authenticateWithClientPasswordPostBody(Browser browser) throws Exception {
+        String authCode = fetchAuthCode(browser, scopes);
+        verifyTokensFromAuthorizationCodeWithClientPost(scopes, authCode);
+    }
 
-        JsonPath userinfo = userinfoEndpoint().getUserinfo(accessToken.getRawToken());
+    @Test
+    @Tag("oidcc-basic-certification-test-plan.oidcc-refresh-token")
+    void authenticateAndTryRefreshToken(Browser browser) throws Exception {
+        Client client1 = client;
+        Client client2 = Clients.getClientForTokenSwitchAttack();
 
-        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+        String authCode = fetchAuthCode(browser, scopes);
+        OidcToken firstRefreshToken = verifyTokensFromAuthorizationCodeReturningRefreshToken(scopes, authCode);
+        verifyTokensFromResponse(scopes, tokenEndpoint().requestWithRefreshToken(client, firstRefreshToken, scopes));
+
+        client = client2;
+        browser.resetCookies();
+
+        authCode = fetchAuthCode(browser, scopes);
+        OidcToken secondRefreshToken = verifyTokensFromAuthorizationCodeReturningRefreshToken(scopes, authCode);
+        verifyTokensFromResponse(scopes, tokenEndpoint().requestWithRefreshToken(client, secondRefreshToken, scopes));
+
+        client = client1;
+        tokenEndpoint().request(client, secondRefreshToken, scopes)
+                .statusCode(400)
+                .body(ERROR, equalTo(INVALID_GRANT))
+                .body(ERROR_DESCRIPTION, equalTo("Invalid refresh token"));
     }
 
     @Override
-    Set<ResponseType> getResponseTypes() {
-        return Set.of(ResponseType.ID_TOKEN);
+    Set<Identifiers.ResponseType> getResponseTypes() {
+        return Set.of(Identifiers.ResponseType.CODE, Identifiers.ResponseType.ID_TOKEN);
     }
 }

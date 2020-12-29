@@ -17,7 +17,11 @@
 
 package de.njsm.tinyauth.test;
 
+import de.njsm.tinyauth.test.data.Client;
+import de.njsm.tinyauth.test.data.OidcToken;
+import de.njsm.tinyauth.test.data.User;
 import de.njsm.tinyauth.test.oidc.Identifiers;
+import de.njsm.tinyauth.test.repository.Users;
 import de.njsm.tinyauth.test.runtime.Browser;
 import de.njsm.tinyauth.test.runtime.SeleniumLifecycleManager;
 import okhttp3.HttpUrl;
@@ -44,6 +48,12 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
     private String state;
 
     private String nonce;
+
+    User user;
+
+    Client client;
+
+    Set<String> scopes;
 
     @BeforeEach
     public void resetMockServer(MockServerClient client, Browser browser) {
@@ -78,21 +88,33 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
         nonce = Base64.getEncoder().encodeToString(randomness);
     }
 
-    String getStateParameter() {
+    @BeforeEach
+    public void setupParameters() {
+        user = Users.getUser();
+        scopes = Set.of("openid");
+    }
+
+    String getState() {
         return state;
     }
 
-    String getNonceParameter() {
+    String getNonce() {
         return nonce;
     }
 
     abstract Set<Identifiers.ResponseType> getResponseTypes();
 
-    protected HttpUrl getLastOidcRedirect(Browser browser) {
+    abstract OidcToken authenticate(Browser browser, Set<String> scopes) throws Exception;
+
+    OidcToken authenticate(Browser browser) throws Exception {
+        return authenticate(browser, scopes);
+    }
+
+    HttpUrl getLastOidcRedirect(Browser browser) {
         return HttpUrl.get(browser.getCurrentlUrl());
     }
 
-    protected void assertUrlParameter(HttpUrl oidcRedirect, String key, String value) {
+    void assertUrlParameter(HttpUrl oidcRedirect, String key, String value) {
         assertTrue(oidcRedirect.queryParameterValues(key).contains(value),
                 key + " was '" + oidcRedirect.queryParameter(key) + "', expected '" + value + "'");
     }

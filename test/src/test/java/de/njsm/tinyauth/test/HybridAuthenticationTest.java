@@ -18,6 +18,7 @@
 package de.njsm.tinyauth.test;
 
 import de.njsm.tinyauth.test.data.OidcToken;
+import de.njsm.tinyauth.test.oidc.Identifiers;
 import de.njsm.tinyauth.test.repository.Clients;
 import de.njsm.tinyauth.test.runtime.Browser;
 import io.restassured.path.json.JsonPath;
@@ -34,11 +35,16 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-public class AuthorizationCodeTest extends TinyAuthBrowserTest {
+public abstract class HybridAuthenticationTest extends TinyAuthBrowserTest {
 
     @BeforeEach
     void setUp() {
         client = Clients.getConfidentialClient();
+    }
+
+    @Override
+    OidcToken authenticate(Browser browser) throws Exception {
+        return authenticate(browser, scopes);
     }
 
     String authenticateReturningAuthCode(Browser browser) throws Exception {
@@ -62,7 +68,7 @@ public class AuthorizationCodeTest extends TinyAuthBrowserTest {
         return verifyTokensFromAuthorizationCode(scopes, authorizationCode);
     }
 
-    String fetchAuthCode(Browser browser, Set<String> scopes) {
+    String fetchAuthCode(Browser browser, Set<String> scopes) throws Exception {
         browser.startAuthentication(client, getState(), scopes, getNonce())
                 .withUser(user)
                 .login()
@@ -110,9 +116,12 @@ public class AuthorizationCodeTest extends TinyAuthBrowserTest {
                 .body(ERROR_DESCRIPTION, equalTo("Invalid code"));
     }
 
-    String assertOnRedirect(Browser browser) {
+    String assertOnRedirect(Browser browser) throws Exception {
         HttpUrl oidcRedirect = getLastOidcRedirect(browser);
+
         assertUrlParameter(oidcRedirect, STATE, getState());
+        assertUrlParameter(oidcRedirect, EXPIRES_IN, "60");
+        assertUrlParameter(oidcRedirect, TOKEN_TYPE, "bearer");
 
         List<String> errors = oidcRedirect.queryParameterValues(ERROR);
         assertTrue(errors.isEmpty(), "server returned error: " + String.join(" ", errors));
@@ -120,11 +129,23 @@ public class AuthorizationCodeTest extends TinyAuthBrowserTest {
         String authorizationCode = oidcRedirect.queryParameter(ResponseType.CODE.get());
         assertNotNull(authorizationCode);
         assertThat(authorizationCode.length(), is(greaterThanOrEqualTo(16)));
+
+        if (getResponseTypes().contains(ResponseType.ID_TOKEN)) {
+            tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(Identifiers.ID_TOKEN), client, user, getNonce());
+        }
+        if (getResponseTypes().contains(ResponseType.TOKEN)) {
+            tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(ACCESS_TOKEN), client, user, getNonce());
+        }
+
         return authorizationCode;
     }
 
     @Override
-    Set<ResponseType> getResponseTypes() {
-        return Set.of(ResponseType.CODE);
+    protected HttpUrl getLastOidcRedirect(Browser browser) {
+        HttpUrl oidcRedirect = HttpUrl.get(browser.getCurrentlUrl());
+        oidcRedirect = oidcRedirect.newBuilder()
+                .query(oidcRedirect.fragment())
+                .build();
+        return oidcRedirect;
     }
 }

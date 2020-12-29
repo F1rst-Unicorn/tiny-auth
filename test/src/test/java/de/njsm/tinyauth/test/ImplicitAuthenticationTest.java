@@ -17,14 +17,12 @@
 
 package de.njsm.tinyauth.test;
 
-import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.OidcToken;
-import de.njsm.tinyauth.test.data.User;
 import de.njsm.tinyauth.test.oidc.Identifiers;
 import de.njsm.tinyauth.test.repository.Clients;
-import de.njsm.tinyauth.test.repository.Users;
 import de.njsm.tinyauth.test.runtime.Browser;
 import okhttp3.HttpUrl;
+import org.junit.jupiter.api.BeforeEach;
 
 import java.util.List;
 import java.util.Map;
@@ -35,18 +33,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public abstract class ImplicitAuthenticationTest extends TinyAuthBrowserTest {
 
-    final User user = Users.getUser();
-
-    Client client = Clients.getPublicClient();
-
-    final Set<String> scopes = Set.of("openid");
-
-    OidcToken authenticate(Browser browser) throws Exception {
-        return authenticate(browser, scopes);
+    @BeforeEach
+    void setUp() {
+        client = Clients.getPublicClient();
     }
 
     OidcToken authenticateWithAdditionalParameters(Browser browser, Map<String, String> additionalParameters) throws Exception {
-        browser.startAuthenticationWithAdditionalParameters(client, getStateParameter(), scopes, getNonceParameter(), additionalParameters)
+        browser.startAuthenticationWithAdditionalParameters(client, getState(), scopes, getNonce(), additionalParameters)
                 .withUser(user)
                 .login()
                 .confirm();
@@ -55,7 +48,7 @@ public abstract class ImplicitAuthenticationTest extends TinyAuthBrowserTest {
     }
 
     OidcToken authenticate(Browser browser, Set<String> scopes) throws Exception {
-        browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
+        browser.startAuthentication(client, getState(), scopes, getNonce())
                 .withUser(user)
                 .login()
                 .confirm();
@@ -68,17 +61,17 @@ public abstract class ImplicitAuthenticationTest extends TinyAuthBrowserTest {
 
         assertUrlParameter(oidcRedirect, EXPIRES_IN, "60");
         assertUrlParameter(oidcRedirect, TOKEN_TYPE, "bearer");
-        assertUrlParameter(oidcRedirect, STATE, getStateParameter());
+        assertUrlParameter(oidcRedirect, STATE, getState());
 
         List<String> errors = oidcRedirect.queryParameterValues(ERROR);
         assertTrue(errors.isEmpty(), "server returned error: " + String.join(" ", errors));
 
         OidcToken returnToken = null;
         if (getResponseTypes().contains(ResponseType.ID_TOKEN)) {
-            returnToken = tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(Identifiers.ID_TOKEN), client, user, getNonceParameter());
+            returnToken = tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(Identifiers.ID_TOKEN), client, user, getNonce());
         }
         if (getResponseTypes().contains(ResponseType.TOKEN)) {
-            returnToken = tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(ACCESS_TOKEN), client, user, getNonceParameter());
+            returnToken = tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(ACCESS_TOKEN), client, user, getNonce());
         }
 
         return returnToken;

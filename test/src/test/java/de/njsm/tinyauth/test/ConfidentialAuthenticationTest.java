@@ -48,10 +48,10 @@ public class ConfidentialAuthenticationTest extends AuthorizationCodeTest {
     @Test
     @Tag("oidcc-basic-certification-test-plan.oidcc-response-type-missing")
     void missingResponseTypeIsReported(Browser browser) {
-        browser.startAuthenticationWithMissingResponseType(client, getStateParameter(), scopes, getNonceParameter());
+        browser.startAuthenticationWithMissingResponseType(client, getState(), scopes, getNonce());
 
         HttpUrl oidcRedirect = getLastOidcRedirect(browser);
-        assertUrlParameter(oidcRedirect, STATE, getStateParameter());
+        assertUrlParameter(oidcRedirect, STATE, getState());
         assertUrlParameter(oidcRedirect, ERROR, "invalid_request");
     }
 
@@ -96,7 +96,7 @@ public class ConfidentialAuthenticationTest extends AuthorizationCodeTest {
     @Test
     @Tag("oidcc-basic-certification-test-plan.oidcc-ensure-request-without-nonce-succeeds-for-code-flow")
     void authenticateWithoutNonce(Browser browser) throws Exception {
-        browser.startAuthenticationWithoutNonce(client, getStateParameter(), scopes)
+        browser.startAuthenticationWithoutNonce(client, getState(), scopes)
                 .withUser(user)
                 .login()
                 .confirm();
@@ -193,10 +193,10 @@ public class ConfidentialAuthenticationTest extends AuthorizationCodeTest {
     @Tag("oidcc-basic-certification-test-plan.oidcc-prompt-none-not-logged-in")
     void authenticateWithForcedPasswordless(Browser browser) {
         Set<String> scopes = Set.of("openid");
-        browser.startAuthenticationWithoutInteraction(client, getStateParameter(), scopes, getNonceParameter(), Map.of("prompt", "none"));
+        browser.startAuthenticationWithoutInteraction(client, getState(), scopes, getNonce(), Map.of("prompt", "none"));
 
         HttpUrl oidcRedirect = getLastOidcRedirect(browser);
-        assertUrlParameter(oidcRedirect, STATE, getStateParameter());
+        assertUrlParameter(oidcRedirect, STATE, getState());
         assertUrlParameter(oidcRedirect, ERROR, "login_required");
         assertUrlParameter(oidcRedirect, ERROR_DESCRIPTION, "No username found");
     }
@@ -206,13 +206,13 @@ public class ConfidentialAuthenticationTest extends AuthorizationCodeTest {
     void authenticateTwiceWithPasswordless(Browser browser) throws Exception {
         client = Clients.getClientForNoPromptTest();
 
-        browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
+        browser.startAuthentication(client, getState(), scopes, getNonce())
                 .withUser(user)
                 .loginAndAssumeScopesAreGranted();
         String authorizationCode = assertOnRedirect(browser);
         OidcToken tokenFromFirstLogin = verifyTokensFromAuthorizationCode(scopes, authorizationCode);
 
-        browser.startAuthenticationWithoutInteraction(client, getStateParameter(), scopes, getNonceParameter(), Map.of("prompt", "none"));
+        browser.startAuthenticationWithoutInteraction(client, getState(), scopes, getNonce(), Map.of("prompt", "none"));
         authorizationCode = assertOnRedirect(browser);
         OidcToken tokenFromSecondLogin = verifyTokensFromAuthorizationCode(scopes, authorizationCode);
 
@@ -243,7 +243,7 @@ public class ConfidentialAuthenticationTest extends AuthorizationCodeTest {
     void authenticateWithMaxAgeWithoutLogin(Browser browser) throws Exception {
         OidcToken firstToken = authenticateWithAdditionalParameters(browser, Map.of("max_age", "15000"));
 
-        browser.startAuthenticationWithConsent(client, getStateParameter(), scopes, getNonceParameter(), Map.of("max_age", "10000"))
+        browser.startAuthenticationWithConsent(client, getState(), scopes, getNonce(), Map.of("max_age", "10000"))
                 .confirm();
         String authorizationCode = assertOnRedirect(browser);
         OidcToken secondToken = verifyTokensFromAuthorizationCode(scopes, authorizationCode);
@@ -277,7 +277,7 @@ public class ConfidentialAuthenticationTest extends AuthorizationCodeTest {
     @Tag("oidcc-basic-certification-test-plan.oidcc-login-hint")
     void authenticateWithLoginHint(Browser browser) throws Exception {
         String loginHint = user.getUsername();
-        browser.startAuthenticationWithAdditionalParameters(client, getStateParameter(), scopes, getNonceParameter(), Map.of("login_hint", loginHint))
+        browser.startAuthenticationWithAdditionalParameters(client, getState(), scopes, getNonce(), Map.of("login_hint", loginHint))
                 .assertUserIsPrefilled(loginHint)
                 .withPassword(user.getPassword())
                 .login()
@@ -335,7 +335,7 @@ public class ConfidentialAuthenticationTest extends AuthorizationCodeTest {
     @Tag("oidcc-basic-certification-test-plan.oidcc-ensure-registered-redirect-uri")
     void authenticateWithInvalidRedirectUri(Browser browser) {
         String redirectUri = "http://invalid.example/invalid";
-        browser.startAuthenticationWithInvalidRedirectUri(client, getStateParameter(), scopes, getNonceParameter(), redirectUri);
+        browser.startAuthenticationWithInvalidRedirectUri(client, getState(), scopes, getNonce(), redirectUri);
     }
 
     @Test

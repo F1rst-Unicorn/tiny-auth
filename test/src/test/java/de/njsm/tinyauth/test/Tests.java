@@ -17,7 +17,6 @@
 
 package de.njsm.tinyauth.test;
 
-import de.njsm.tinyauth.test.oidc.Identifiers;
 import de.njsm.tinyauth.test.repository.Users;
 import de.njsm.tinyauth.test.runtime.Browser;
 import okhttp3.HttpUrl;
@@ -34,7 +33,7 @@ public class Tests extends AuthorizationCodeTest {
         user = Users.getSecondRateLimitTestUser();
         String wrongPassword = "wrong password";
 
-        browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
+        browser.startAuthentication(client, getState(), scopes, getNonce())
                 .withUsername(user.getUsername())
                 .withPassword(wrongPassword)
                 .loginWithError()
@@ -51,9 +50,9 @@ public class Tests extends AuthorizationCodeTest {
 
         assertUrlParameter(oidcRedirect, ERROR, ACCESS_DENIED);
         assertUrlParameter(oidcRedirect, ERROR_DESCRIPTION, "user failed to authenticate");
-        assertUrlParameter(oidcRedirect, STATE, getStateParameter());
+        assertUrlParameter(oidcRedirect, STATE, getState());
 
-        browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
+        browser.startAuthentication(client, getState(), scopes, getNonce())
                 .withUser(user)
                 .loginWithError()
                 .assertRateLimitedError();
@@ -62,7 +61,7 @@ public class Tests extends AuthorizationCodeTest {
     @Test
     void testNonGrantedScopeIsWithdrawn(Browser browser) throws Exception {
         scopes = Set.of("openid", "email", "phone");
-        browser.startAuthentication(client, getStateParameter(), scopes, getNonceParameter())
+        browser.startAuthentication(client, getState(), scopes, getNonce())
                 .withUser(user)
                 .login()
                 .toggleScope("phone")
@@ -70,10 +69,5 @@ public class Tests extends AuthorizationCodeTest {
 
         String authorizationCode = assertOnRedirect(browser);
         fetchTokensAndVerifyBasics(Set.of("openid", "email"), tokenEndpoint().request(client, authorizationCode));
-    }
-
-    @Override
-    Set<Identifiers.ResponseType> getResponseTypes() {
-        return Set.of(Identifiers.ResponseType.CODE);
     }
 }
