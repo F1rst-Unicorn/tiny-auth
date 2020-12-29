@@ -28,14 +28,14 @@ fn main() {
     logging::initialise(
         arguments
             .value_of(cli_parser::FLAG_LOG_CONFIG)
-            .expect("Missing default value in cli_parser"),
+            .unwrap_or(cli_parser::FLAG_LOG_DEFAULT),
     );
 
     info!("Starting up");
 
     let config_path = arguments
         .value_of(cli_parser::FLAG_CONFIG)
-        .expect("Missing default value in cli_parser");
+        .unwrap_or(cli_parser::FLAG_CONFIG_DEFAULT);
     info!("Config is at {}", config_path);
 
     info!("Parsing config");

@@ -16,5 +16,8 @@
  */
 
 pub fn initialise(file_path: &str) {
-    log4rs::init_file(file_path, Default::default()).expect("Could not configure logging");
+    if let Err(e) = log4rs::init_file(file_path, Default::default()) {
+        eprintln!("Could not configure logging: {}", e);
+        std::process::exit(1);
+    }
 }

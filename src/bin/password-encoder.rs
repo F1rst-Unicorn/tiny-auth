@@ -43,7 +43,7 @@ fn main() {
 
     let config_path = args
         .value_of(FLAG_CONFIG)
-        .expect("Missing default value in cli_parser");
+        .unwrap_or(tiny_auth::cli_parser::FLAG_CONFIG_DEFAULT);
     debug!("Config is at {}", config_path);
 
     debug!("Parsing config");
@@ -123,9 +123,11 @@ pub fn initialise_logging(verbosity_level: u64) {
 
     let config = Config::builder().appender(Appender::builder().build("stdout", Box::new(stdout)));
 
-    let config = config
+    if let Err(e) = config
         .build(Root::builder().appender("stdout").build(level))
-        .expect("Could not configure logging");
-
-    log4rs::init_config(config).expect("Could not apply log config");
+        .map(log4rs::init_config)
+    {
+        eprintln!("could not configure logging: {}", e);
+        std::process::exit(1);
+    }
 }

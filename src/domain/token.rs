@@ -199,9 +199,12 @@ mod tests {
             "azp":""
         }"#;
 
-        let token = from_str::<Token>(input).expect("invalid input");
-
-        assert_eq!(Audience::Single("audience".to_string()), token.audience);
+        match from_str::<Token>(input) {
+            Err(_) => unreachable!(),
+            Ok(token) => {
+                assert_eq!(Audience::Single("audience".to_string()), token.audience);
+            }
+        }
     }
 
     #[test]
@@ -219,11 +222,14 @@ mod tests {
             "azp":""
         }"#;
 
-        let token = from_str::<Token>(input).expect("invalid input");
-
-        assert_eq!(
-            Audience::Several(vec!["audience1".to_string(), "audience2".to_string()]),
-            token.audience
-        );
+        match from_str::<Token>(input) {
+            Err(_) => unreachable!(),
+            Ok(token) => {
+                assert_eq!(
+                    Audience::Several(vec!["audience1".to_string(), "audience2".to_string()]),
+                    token.audience
+                );
+            }
+        }
     }
 }

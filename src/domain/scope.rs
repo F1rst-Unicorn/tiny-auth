@@ -419,7 +419,7 @@ mod tests {
         assert!(result.is_err());
         if let Error::AttributeSelectionError = result.unwrap_err() {
         } else {
-            panic!();
+            unreachable!();
         }
     }
 
@@ -461,7 +461,7 @@ mod tests {
         assert!(result.is_err());
         if let Error::AttributeSelectionError = result.unwrap_err() {
         } else {
-            panic!();
+            unreachable!();
         }
     }
 
@@ -483,7 +483,7 @@ mod tests {
         assert!(result.is_err());
         if let Error::AttributeSelectionError = result.unwrap_err() {
         } else {
-            panic!();
+            unreachable!();
         }
     }
 
@@ -507,7 +507,7 @@ mod tests {
         assert!(result.is_err());
         if let Error::AttributeSelectionError = result.unwrap_err() {
         } else {
-            panic!();
+            unreachable!();
         }
     }
 
@@ -518,7 +518,7 @@ mod tests {
         assert!(result.is_err());
         if let Error::AttributeSelectionError = result.unwrap_err() {
         } else {
-            panic!();
+            unreachable!();
         }
     }
 

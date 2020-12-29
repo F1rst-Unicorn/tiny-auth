@@ -19,7 +19,10 @@ use clap::App;
 use clap::Arg;
 
 pub const FLAG_CONFIG: &str = "config";
+pub const FLAG_CONFIG_DEFAULT: &str = "/etc/tiny-auth/config.yml";
+
 pub const FLAG_LOG_CONFIG: &str = "log";
+pub const FLAG_LOG_DEFAULT: &str = "/etc/tiny-auth/log4rs.yml";
 
 pub fn parse_arguments<'a>() -> clap::ArgMatches<'a> {
     let app = App::new(env!("CARGO_PKG_NAME"))
@@ -38,7 +41,7 @@ pub fn parse_arguments<'a>() -> clap::ArgMatches<'a> {
                 .value_name("PATH")
                 .help("The config file to run with")
                 .takes_value(true)
-                .default_value("/etc/tiny-auth/config.yml"),
+                .default_value(FLAG_CONFIG_DEFAULT),
         )
         .arg(
             Arg::with_name("log")
@@ -47,7 +50,7 @@ pub fn parse_arguments<'a>() -> clap::ArgMatches<'a> {
                 .value_name("PATH")
                 .help("The log4rs logging configuration")
                 .takes_value(true)
-                .default_value("/etc/tiny-auth/log4rs.yml"),
+                .default_value(FLAG_LOG_DEFAULT),
         );
     app.get_matches()
 }
