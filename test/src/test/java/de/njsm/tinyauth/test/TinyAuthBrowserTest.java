@@ -18,13 +18,11 @@
 package de.njsm.tinyauth.test;
 
 import de.njsm.tinyauth.test.data.Client;
-import de.njsm.tinyauth.test.data.OidcToken;
 import de.njsm.tinyauth.test.data.User;
 import de.njsm.tinyauth.test.oidc.Identifiers;
 import de.njsm.tinyauth.test.repository.Users;
 import de.njsm.tinyauth.test.runtime.Browser;
 import de.njsm.tinyauth.test.runtime.SeleniumLifecycleManager;
-import okhttp3.HttpUrl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockserver.client.MockServerClient;
@@ -36,7 +34,6 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockserver.model.HttpRequest.request;
 import static org.mockserver.model.HttpResponse.response;
 
@@ -94,28 +91,25 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
         scopes = Set.of("openid");
     }
 
-    String getState() {
+    public String getState() {
         return state;
     }
 
-    String getNonce() {
+    public String getNonce() {
         return nonce;
     }
 
-    abstract Set<Identifiers.ResponseType> getResponseTypes();
-
-    abstract OidcToken authenticate(Browser browser, Set<String> scopes) throws Exception;
-
-    OidcToken authenticate(Browser browser) throws Exception {
-        return authenticate(browser, scopes);
+    public User getUser() {
+        return user;
     }
 
-    HttpUrl getLastOidcRedirect(Browser browser) {
-        return HttpUrl.get(browser.getCurrentlUrl());
+    public Client getClient() {
+        return client;
     }
 
-    void assertUrlParameter(HttpUrl oidcRedirect, String key, String value) {
-        assertTrue(oidcRedirect.queryParameterValues(key).contains(value),
-                key + " was '" + oidcRedirect.queryParameter(key) + "', expected '" + value + "'");
+    public Set<String> getScopes() {
+        return scopes;
     }
+
+    public abstract Set<Identifiers.ResponseType> getResponseTypes();
 }

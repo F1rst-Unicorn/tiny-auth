@@ -17,14 +17,28 @@
 
 package de.njsm.tinyauth.test;
 
+import de.njsm.tinyauth.test.data.Client;
+import de.njsm.tinyauth.test.repository.Clients;
+import org.junit.jupiter.api.BeforeEach;
+
 import java.util.Set;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.ResponseType;
 
-public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest implements ConformanceTest, MissingNonceFailureTest {
+public class CodeAuthenticationTest extends TinyAuthBrowserTest implements ConformanceTest, RefreshTokenTest, MissingNonceSuccessTest, AuthorizationCodeTests {
+
+    @BeforeEach
+    void setUp() {
+        client = Clients.getConfidentialClient();
+    }
 
     @Override
     public Set<ResponseType> getResponseTypes() {
-        return Set.of(ResponseType.ID_TOKEN);
+        return Set.of(ResponseType.CODE);
+    }
+
+    @Override
+    public void setClient(Client client) {
+        this.client = client;
     }
 }

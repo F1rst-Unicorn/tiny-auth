@@ -17,14 +17,9 @@
 
 package de.njsm.tinyauth.test;
 
-import java.util.Set;
+import de.njsm.tinyauth.test.data.Client;
 
-import static de.njsm.tinyauth.test.oidc.Identifiers.ResponseType;
+public interface ClientSetter {
 
-public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest implements ConformanceTest, MissingNonceFailureTest {
-
-    @Override
-    public Set<ResponseType> getResponseTypes() {
-        return Set.of(ResponseType.ID_TOKEN);
-    }
+    void setClient(Client client);
 }

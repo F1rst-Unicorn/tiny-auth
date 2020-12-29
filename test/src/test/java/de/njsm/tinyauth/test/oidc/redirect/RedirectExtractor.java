@@ -15,16 +15,11 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.njsm.tinyauth.test;
+package de.njsm.tinyauth.test.oidc.redirect;
 
-import java.util.Set;
+import de.njsm.tinyauth.test.runtime.Browser;
+import okhttp3.HttpUrl;
 
-import static de.njsm.tinyauth.test.oidc.Identifiers.ResponseType;
-
-public class IdTokenAuthenticationTest extends ImplicitAuthenticationTest implements ConformanceTest, MissingNonceFailureTest {
-
-    @Override
-    public Set<ResponseType> getResponseTypes() {
-        return Set.of(ResponseType.ID_TOKEN);
-    }
+public interface RedirectExtractor {
+    HttpUrl getLastOidcRedirect(Browser browser);
 }

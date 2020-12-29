@@ -17,16 +17,28 @@
 
 package de.njsm.tinyauth.test;
 
+import de.njsm.tinyauth.test.repository.Clients;
 import de.njsm.tinyauth.test.repository.Users;
 import de.njsm.tinyauth.test.runtime.Browser;
 import okhttp3.HttpUrl;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
 
-public class Tests extends AuthorizationCodeTest {
+public class Tests extends TinyAuthBrowserTest implements AuthorizationCodeGadgets {
+
+    @BeforeEach
+    void setUp() {
+        client = Clients.getConfidentialClient();
+    }
+
+    @Override
+    public Set<ResponseType> getResponseTypes() {
+        return Set.of(ResponseType.CODE);
+    }
 
     @Test
     void testFailingLoginRateLimits(Browser browser) {
