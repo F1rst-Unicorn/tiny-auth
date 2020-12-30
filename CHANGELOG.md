@@ -12,6 +12,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+* Send error redirects via URL Fragment for token-containing response types
+  ([#68](https://gitlab.com/veenj/tiny-auth/issues/68))
+
 * Refresh tokens issued for different clients now return the correct HTTP
   response code.
 

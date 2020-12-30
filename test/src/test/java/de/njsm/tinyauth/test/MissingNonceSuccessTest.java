@@ -17,9 +17,10 @@
 
 package de.njsm.tinyauth.test;
 
+import de.njsm.tinyauth.test.oidc.TokenAsserter;
+import de.njsm.tinyauth.test.oidc.TokenAsserterWithoutNonce;
 import de.njsm.tinyauth.test.runtime.Browser;
 import io.restassured.path.json.JsonPath;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -32,10 +33,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public interface MissingNonceSuccessTest extends AuthorizationCodeGadgets {
 
+    @Override
+    default TokenAsserter tokenAsserter() {
+        return new TokenAsserterWithoutNonce();
+    }
+
     @Test
     @Tag("oidcc-basic-certification-test-plan.oidcc-ensure-request-without-nonce-succeeds-for-code-flow")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-ensure-request-without-nonce-succeeds-for-code-flow")
-    @Disabled("https://gitlab.com/veenj/tiny-auth/-/issues/68")
     default void authenticateWithoutNonce(Browser browser) throws Exception {
         browser.startAuthenticationWithoutNonce(getClient(), getState(), getScopes())
                 .withUser(getUser())
@@ -50,8 +55,8 @@ public interface MissingNonceSuccessTest extends AuthorizationCodeGadgets {
                 .extract().body().jsonPath();
 
         assertEquals(getScopes(), Set.of(tokenResponse.getString(SCOPE).split(" ")));
-        tokenAsserter().verifyAccessTokenWithoutNonce(tokenResponse.getString(ACCESS_TOKEN), getClient(), getUser());
-        tokenAsserter().verifyAccessTokenWithoutNonce(tokenResponse.getString(ID_TOKEN), getClient(), getUser());
-        tokenAsserter().verifyRefreshTokenWithoutNonce(tokenResponse.getString(REFRESH_TOKEN), getClient(), getUser(), getScopes());
+        tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), getClient(), getUser());
+        tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), getClient(), getUser());
+        tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), getClient(), getUser(), getScopes());
     }
 }

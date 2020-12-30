@@ -106,7 +106,7 @@ pub async fn get(
 
     let prompt = parse_prompt(&first_request.prompt);
 
-    let allowed_scopes = user.get_allowed_scopes(&first_request.client_id.unwrap());
+    let allowed_scopes = user.get_allowed_scopes(&first_request.client_id.clone().unwrap());
     let scopes = parse_scope_names(first_request.scope.as_ref().unwrap());
     let scopes = BTreeSet::from_iter(scopes);
     if scopes.is_subset(&allowed_scopes) {
@@ -141,6 +141,7 @@ pub async fn get(
             oidc::ProtocolError::Oidc(oidc::OidcProtocolError::ConsentRequired),
             "User didn't give consent to all scopes",
             &first_request.state,
+            first_request.encode_redirect_to_fragment(),
         );
     }
 
@@ -215,17 +216,12 @@ async fn process_skipping_csrf(
     };
     let auth_time = Local.timestamp(auth_time, 0);
 
+    let encode_to_fragment = first_request.encode_redirect_to_fragment();
     let client_name = first_request.client_id.as_ref().unwrap();
-    let response_type = first_request
-        .response_type
-        .as_deref()
-        .map(authorize::parse_response_type)
-        .flatten()
-        .unwrap();
+    let response_type = first_request.get_response_types();
     let redirect_uri = first_request.redirect_uri.unwrap();
     let mut url = Url::parse(&redirect_uri).expect("should have been validated upon registration");
     let mut response_parameters = HashMap::new();
-    let mut encode_to_fragment = false;
 
     let requested_scopes = parse_scope_names(&first_request.scope.clone().unwrap_or_default());
     let requested_scopes = BTreeSet::from_iter(requested_scopes);
@@ -253,7 +249,6 @@ async fn process_skipping_csrf(
     if response_type.contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken))
         || response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token))
     {
-        encode_to_fragment = true;
         let user = match user_store.get(&username) {
             None => {
                 debug!("user {} not found", username);
@@ -349,6 +344,7 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
         oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
         "user denied consent",
         &first_request.state,
+        first_request.encode_redirect_to_fragment(),
     )
 }
 

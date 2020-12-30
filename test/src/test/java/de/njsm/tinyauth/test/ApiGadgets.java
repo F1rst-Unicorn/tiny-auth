@@ -15,19 +15,14 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.njsm.tinyauth.test.oidc.redirect;
+package de.njsm.tinyauth.test;
 
-import de.njsm.tinyauth.test.runtime.Browser;
-import okhttp3.HttpUrl;
+import de.njsm.tinyauth.test.oidc.TokenAsserter;
+import de.njsm.tinyauth.test.oidc.TokenAsserterWithoutNonce;
 
-public interface RedirectFragmentExtractor extends RedirectQueryExtractor {
+public interface ApiGadgets {
 
-    @Override
-    default HttpUrl getLastOidcRedirect(Browser browser) {
-        HttpUrl oidcRedirect = HttpUrl.get(browser.getCurrentlUrl());
-        oidcRedirect = oidcRedirect.newBuilder()
-                .encodedQuery(oidcRedirect.encodedFragment())
-                .build();
-        return oidcRedirect;
+    default TokenAsserter tokenAsserter() {
+        return new TokenAsserterWithoutNonce();
     }
 }

@@ -28,6 +28,7 @@ use crate::protocol::oidc::ProtocolError;
 use crate::util::generate_random_string;
 use crate::util::render_tera_error;
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::convert::TryFrom;
 
@@ -132,6 +133,7 @@ fn render_redirect_error(
     error: ProtocolError,
     description: &str,
     state: &Option<String>,
+    encode_to_fragment: bool,
 ) -> HttpResponse {
     render_redirect_error_with_base(
         HttpResponse::Found(),
@@ -139,6 +141,7 @@ fn render_redirect_error(
         error,
         description,
         state,
+        encode_to_fragment,
     )
 }
 
@@ -148,15 +151,23 @@ fn render_redirect_error_with_base(
     error: ProtocolError,
     description: &str,
     state: &Option<String>,
+    encode_to_fragment: bool,
 ) -> HttpResponse {
     let mut url = Url::parse(redirect_uri).expect("should have been validated upon registration");
 
-    url.query_pairs_mut()
-        .append_pair("error", &format!("{}", error))
-        .append_pair("error_description", description);
+    let mut response_parameters = BTreeMap::new();
+    response_parameters.insert("error", format!("{}", error));
+    response_parameters.insert("error_description", description.to_string());
+    state
+        .clone()
+        .map(|v| response_parameters.insert("state", v));
 
-    if let Some(state) = state {
-        url.query_pairs_mut().append_pair("state", state);
+    if encode_to_fragment {
+        let fragment =
+            serde_urlencoded::to_string(response_parameters).expect("failed to serialize");
+        url.set_fragment(Some(&fragment));
+    } else {
+        url.query_pairs_mut().extend_pairs(response_parameters);
     }
 
     base_response.header("Location", url.as_str()).finish()
@@ -329,11 +340,20 @@ mod tests {
     use serde::de::DeserializeOwned;
     use serde_derive::Deserialize;
 
-    #[derive(Debug, Deserialize)]
+    #[derive(Debug, Deserialize, Serialize)]
     struct Test {
         #[serde(default)]
         #[serde(deserialize_with = "deserialise_empty_as_none")]
         pub value: Option<String>,
+    }
+
+    #[test]
+    pub fn plus_is_encoded() {
+        let input = Test {
+            value: Some("AI4qNF5I6XA+HH8b0KFobQ".to_string()),
+        };
+        let result = serde_urlencoded::to_string(&input).expect("invalid input");
+        assert_eq!("value=AI4qNF5I6XA%2BHH8b0KFobQ", result);
     }
 
     #[test]

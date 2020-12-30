@@ -124,6 +124,7 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
             &tera,
             oidc::ProtocolError::Oidc(oidc::OidcProtocolError::LoginRequired),
             "No username found",
+            first_request.encode_redirect_to_fragment(),
         )
     } else {
         render_login_form(session, tera)
@@ -151,6 +152,13 @@ pub async fn post(
         debug!("CSRF protection violation detected");
         return render_invalid_authentication_request(&tera);
     }
+
+    let first_request = match parse_first_request(&session) {
+        None => {
+            return render_invalid_authentication_request(&tera);
+        }
+        Some(req) => req,
+    };
 
     match session.get::<String>(authorize::SESSION_KEY) {
         Err(_) | Ok(None) => {
@@ -213,16 +221,25 @@ pub async fn post(
             &tera,
             oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
             "user failed to authenticate",
+            first_request.encode_redirect_to_fragment(),
         )
     }
 }
 
 pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
+    let first_request = match parse_first_request(&session) {
+        None => {
+            return render_invalid_authentication_request(&tera);
+        }
+        Some(req) => req,
+    };
+
     render_redirect_error(
         session,
         &tera,
         oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
         "user denied authentication",
+        first_request.encode_redirect_to_fragment(),
     )
 }
 
@@ -240,6 +257,7 @@ fn render_redirect_error(
     tera: &Tera,
     error: oidc::ProtocolError,
     description: &str,
+    encode_to_fragment: bool,
 ) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
@@ -249,7 +267,13 @@ fn render_redirect_error(
     };
 
     let redirect_uri = first_request.redirect_uri.unwrap();
-    super::render_redirect_error(&redirect_uri, error, description, &first_request.state)
+    super::render_redirect_error(
+        &redirect_uri,
+        error,
+        description,
+        &first_request.state,
+        encode_to_fragment,
+    )
 }
 
 fn build_context(session: &Session) -> Option<Context> {
@@ -399,7 +423,7 @@ mod tests {
         session
             .set(
                 authorize::SESSION_KEY,
-                "prompt=none&redirect_uri=http%3A%2F%2Flocalhost%2Fpublic",
+                "response_type=code&prompt=none&redirect_uri=http%3A%2F%2Flocalhost%2Fpublic",
             )
             .unwrap();
 
@@ -622,6 +646,7 @@ mod tests {
                 authorize::SESSION_KEY,
                 serde_urlencoded::to_string(authorize::Request {
                     redirect_uri: Some("http://redirect_uri.example".to_string()),
+                    response_type: Some("code".to_string()),
                     ..Default::default()
                 })
                 .unwrap(),

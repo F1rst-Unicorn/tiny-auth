@@ -18,6 +18,7 @@
 package de.njsm.tinyauth.test;
 
 import de.njsm.tinyauth.test.data.OidcToken;
+import de.njsm.tinyauth.test.oidc.redirect.RedirectQueryExtractor;
 import de.njsm.tinyauth.test.repository.Scopes;
 import de.njsm.tinyauth.test.runtime.Browser;
 import io.restassured.path.json.JsonPath;
@@ -49,11 +50,10 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-basic-certification-test-plan.oidcc-response-type-missing")
     @Tag("oidcc-implicit-certification-test-plan.oidcc-response-type-missing")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-response-type-missing")
-    @Disabled("https://gitlab.com/veenj/tiny-auth/-/issues/68")
     default void missingResponseTypeIsReported(Browser browser) {
         browser.startAuthenticationWithMissingResponseType(getClient(), getState(), getScopes(), getNonce());
 
-        HttpUrl oidcRedirect = getLastOidcRedirect(browser);
+        HttpUrl oidcRedirect = new RedirectQueryExtractor(){}.getLastOidcRedirect(browser);
         assertUrlParameter(oidcRedirect, STATE, getState());
         assertUrlParameter(oidcRedirect, ERROR, "invalid_request");
     }
@@ -253,7 +253,6 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-basic-certification-test-plan.oidcc-prompt-none-not-logged-in")
     @Tag("oidcc-implicit-certification-test-plan.oidcc-prompt-none-not-logged-in")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-prompt-none-not-logged-in")
-    @Disabled("https://gitlab.com/veenj/tiny-auth/-/issues/68")
     default void authenticateWithForcedPasswordless(Browser browser) {
         browser.startAuthenticationWithoutInteraction(getClient(), getState(), getScopes(), getNonce(), Map.of("prompt", "none"));
 

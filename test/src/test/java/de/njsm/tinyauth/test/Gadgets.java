@@ -21,6 +21,8 @@ import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.OidcToken;
 import de.njsm.tinyauth.test.data.User;
 import de.njsm.tinyauth.test.oidc.Identifiers;
+import de.njsm.tinyauth.test.oidc.TokenAsserter;
+import de.njsm.tinyauth.test.oidc.TokenAsserterWithNonce;
 import de.njsm.tinyauth.test.oidc.redirect.RedirectExtractor;
 import de.njsm.tinyauth.test.runtime.Browser;
 import okhttp3.HttpUrl;
@@ -30,7 +32,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public interface Gadgets extends TinyAuthTest, RedirectExtractor {
+public interface Gadgets extends TinyAuthTest, RedirectExtractor, ApiGadgets {
 
     OidcToken authenticate(Browser brower) throws Exception;
 
@@ -51,6 +53,10 @@ public interface Gadgets extends TinyAuthTest, RedirectExtractor {
     default void assertUrlParameter(HttpUrl oidcRedirect, String key, String value) {
         assertTrue(oidcRedirect.queryParameterValues(key).contains(value),
                 key + " was '" + oidcRedirect.queryParameter(key) + "', expected '" + value + "'");
+    }
+
+    default TokenAsserter tokenAsserter() {
+        return new TokenAsserterWithNonce(getNonce());
     }
 
     Set<Identifiers.ResponseType> getResponseTypes();

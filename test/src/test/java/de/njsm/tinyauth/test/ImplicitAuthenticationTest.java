@@ -138,10 +138,10 @@ public abstract class ImplicitAuthenticationTest extends TinyAuthBrowserTest imp
 
         OidcToken returnToken = null;
         if (getResponseTypes().contains(ResponseType.ID_TOKEN)) {
-            returnToken = tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(Identifiers.ID_TOKEN), client, user, getNonce());
+            returnToken = tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(Identifiers.ID_TOKEN), client, user);
         }
         if (getResponseTypes().contains(ResponseType.TOKEN)) {
-            returnToken = tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(ACCESS_TOKEN), client, user, getNonce());
+            returnToken = tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(ACCESS_TOKEN), client, user);
         }
 
         return returnToken;

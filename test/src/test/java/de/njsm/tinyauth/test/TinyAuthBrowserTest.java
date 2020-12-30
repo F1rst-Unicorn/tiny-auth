@@ -80,7 +80,7 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
         byte[] randomness = new byte[16];
         SecureRandom rng = new SecureRandom();
         rng.nextBytes(randomness);
-        state = Base64.getEncoder().encodeToString(randomness);
+        state = "+" + Base64.getEncoder().encodeToString(randomness);
         rng.nextBytes(randomness);
         nonce = Base64.getEncoder().encodeToString(randomness);
     }

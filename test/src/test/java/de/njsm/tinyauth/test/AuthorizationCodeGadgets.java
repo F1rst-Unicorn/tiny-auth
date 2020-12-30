@@ -90,10 +90,10 @@ public interface AuthorizationCodeGadgets extends Gadgets, RedirectQueryExtracto
         assertThat(authorizationCode.length(), is(greaterThanOrEqualTo(16)));
 
         if (getResponseTypes().contains(ResponseType.ID_TOKEN)) {
-            tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(Identifiers.ID_TOKEN), getClient(), getUser(), getNonce());
+            tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(Identifiers.ID_TOKEN), getClient(), getUser());
         }
         if (getResponseTypes().contains(ResponseType.TOKEN)) {
-            tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(ACCESS_TOKEN), getClient(), getUser(), getNonce());
+            tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(ACCESS_TOKEN), getClient(), getUser());
         }
 
         return authorizationCode;
@@ -109,14 +109,14 @@ public interface AuthorizationCodeGadgets extends Gadgets, RedirectQueryExtracto
 
     default OidcToken verifyTokensFromAuthorizationCodeReturningRefreshToken(Set<String> scopes, String authCode) throws Exception {
         JsonPath tokenResponse = fetchTokensAndVerifyBasics(scopes, tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(getClient(), authCode));
-        tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), getClient(), getUser(), getNonce());
-        return tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), getClient(), getUser(), getNonce(), scopes);
+        tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), getClient(), getUser());
+        return tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), getClient(), getUser(), scopes);
     }
 
     default OidcToken verifyTokensFromResponse(Set<String> scopes, ValidatableResponse response) throws Exception {
         JsonPath tokenResponse = fetchTokensAndVerifyBasics(scopes, response);
-        tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), getClient(), getUser(), getNonce(), scopes);
-        return tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), getClient(), getUser(), getNonce());
+        tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), getClient(), getUser(), scopes);
+        return tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), getClient(), getUser());
     }
 
     default JsonPath fetchTokensAndVerifyBasics(Set<String> scopes, ValidatableResponse response) throws Exception {
@@ -127,7 +127,7 @@ public interface AuthorizationCodeGadgets extends Gadgets, RedirectQueryExtracto
 
         assertEquals(scopes, Set.of(tokenResponse.getString(SCOPE).split(" ")));
         assertEquals(tokenResponse.getString(ACCESS_TOKEN), tokenResponse.getString(ID_TOKEN), "access token different from id token");
-        tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), getClient(), getUser(), getNonce());
+        tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), getClient(), getUser());
         return tokenResponse;
     }
 

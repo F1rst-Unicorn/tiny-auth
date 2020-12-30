@@ -19,7 +19,6 @@ package de.njsm.tinyauth.test;
 
 import de.njsm.tinyauth.test.runtime.Browser;
 import okhttp3.HttpUrl;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -32,7 +31,6 @@ public interface MissingNonceFailureTest extends Gadgets {
     @Tag("oidcc-basic-certification-test-plan.oidcc-ensure-request-without-nonce-fails")
     @Tag("oidcc-implicit-certification-test-plan.oidcc-ensure-request-without-nonce-fails")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-ensure-request-without-nonce-fails")
-    @Disabled("https://gitlab.com/veenj/tiny-auth/-/issues/68")
     default void authenticateWithoutNonceAndFail(Browser browser) {
         browser.startAuthenticationWithoutNonceGivingError(getClient(), getState(), getScopes());
 

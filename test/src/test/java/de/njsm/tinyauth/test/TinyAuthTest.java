@@ -17,7 +17,6 @@
 
 package de.njsm.tinyauth.test;
 
-import de.njsm.tinyauth.test.oidc.TokenAsserter;
 import de.njsm.tinyauth.test.runtime.RestAssuredConfiguration;
 import de.njsm.tinyauth.test.runtime.TokenEndpoint;
 import de.njsm.tinyauth.test.runtime.UserinfoEndpoint;
@@ -34,9 +33,5 @@ public interface TinyAuthTest {
 
     default UserinfoEndpoint userinfoEndpoint() {
         return new UserinfoEndpoint();
-    }
-
-    default TokenAsserter tokenAsserter() {
-        return new TokenAsserter();
     }
 }

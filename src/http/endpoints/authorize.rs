@@ -123,16 +123,23 @@ pub struct Request {
     pub acr_values: Option<String>,
 }
 
-pub async fn get(
-    query: web::Query<Request>,
-    tera: web::Data<Tera>,
-    client_store: web::Data<Arc<dyn ClientStore>>,
-    session: Session,
-) -> HttpResponse {
-    post(query, tera, client_store, session).await
+impl Request {
+    pub fn get_response_types(&self) -> Vec<ResponseType> {
+        self.response_type
+            .as_deref()
+            .map(parse_response_type)
+            .flatten()
+            .unwrap()
+    }
+
+    pub fn encode_redirect_to_fragment(&self) -> bool {
+        let response_types = self.get_response_types();
+        response_types.contains(&ResponseType::Oidc(OidcResponseType::IdToken))
+            || response_types.contains(&ResponseType::OAuth2(oauth2::ResponseType::Token))
+    }
 }
 
-pub async fn post(
+pub async fn handle(
     mut query: web::Query<Request>,
     tera: web::Data<Tera>,
     client_store: web::Data<Arc<dyn ClientStore>>,
@@ -179,6 +186,7 @@ pub async fn post(
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Missing required parameter scope",
             &client_state,
+            query.encode_redirect_to_fragment(),
         );
     }
 
@@ -219,6 +227,7 @@ pub async fn post(
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "contradicting prompt requirements",
             &client_state,
+            query.encode_redirect_to_fragment(),
         );
     }
 
@@ -230,6 +239,7 @@ pub async fn post(
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
                 "Invalid required parameter response_type",
                 &client_state,
+                false,
             );
         }
         Some(Some(response_type)) => response_type,
@@ -245,6 +255,7 @@ pub async fn post(
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Invalid required parameter nonce",
             &client_state,
+            query.encode_redirect_to_fragment(),
         );
     }
 
@@ -270,6 +281,7 @@ pub fn parse_response_type(input: &str) -> Option<Vec<ResponseType>> {
             Ok(response_type) => result.push(response_type),
         }
     }
+
     Some(result)
 }
 
@@ -290,6 +302,7 @@ pub fn return_error(
     error: ProtocolError,
     description: &str,
     state: &Option<String>,
+    encode_to_fragment: bool,
 ) -> HttpResponse {
     super::render_redirect_error_with_base(
         HttpResponse::TemporaryRedirect(),
@@ -297,6 +310,7 @@ pub fn return_error(
         error,
         description,
         state,
+        encode_to_fragment,
     )
 }
 
@@ -343,7 +357,7 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -369,7 +383,7 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -395,7 +409,7 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -421,7 +435,7 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -436,7 +450,7 @@ mod tests {
         let client_state = "somestate".to_string();
         let query = Query(Request {
             scope: None,
-            response_type: None,
+            response_type: Some("code".to_string()),
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri.to_string()),
             state: Some(client_state.clone()),
@@ -451,7 +465,7 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
 
@@ -487,7 +501,7 @@ mod tests {
         let client_state = "somestate".to_string();
         let query = Query(Request {
             scope: Some("email".to_string()),
-            response_type: None,
+            response_type: Some("code".to_string()),
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri.to_string()),
             state: Some(client_state.clone()),
@@ -502,7 +516,7 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
 
@@ -553,7 +567,7 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = post(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
 
@@ -605,7 +619,7 @@ mod tests {
         };
         let query = Query(request.clone());
 
-        let resp = post(query, build_test_tera(), client_store, session).await;
+        let resp = handle(query, build_test_tera(), client_store, session).await;
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
 
@@ -643,7 +657,7 @@ mod tests {
         };
         let query = Query(request.clone());
 
-        let resp = post(query, build_test_tera(), client_store, session).await;
+        let resp = handle(query, build_test_tera(), client_store, session).await;
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
 
