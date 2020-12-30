@@ -15,27 +15,17 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-package de.njsm.tinyauth.test;
+use actix_web::HttpResponse;
 
-import de.njsm.tinyauth.test.repository.Endpoints;
-import io.restassured.http.ContentType;
-import org.junit.jupiter.api.Test;
+use serde::Serialize;
 
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.equalTo;
+#[derive(Serialize)]
+struct Health {
+    ok: bool,
+}
 
-public class HealthTest implements TinyAuthTest {
+pub async fn get() -> HttpResponse {
+    let health = Health { ok: true };
 
-    @Test
-    void getHealth() {
-        given()
-                .log().everything().
-        when()
-                .get(Endpoints.getHealthUrl()).
-        then()
-                .log().everything()
-                .statusCode(200)
-                .contentType(ContentType.JSON)
-                .body("ok", equalTo(true));
-    }
+    HttpResponse::Ok().json(health)
 }

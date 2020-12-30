@@ -37,6 +37,10 @@ public class Endpoints {
         return getBaseUri() + getJwksPath();
     }
 
+    public static String getHealthUrl() {
+        return getBaseUri() + getHealthPath();
+    }
+
     public static String getDiscoveryUrl() {
         return getBaseUri() + getDiscoveryPath();
     }
@@ -67,5 +71,9 @@ public class Endpoints {
 
     public static String getJwksPath() {
         return "jwks";
+    }
+
+    public static String getHealthPath() {
+        return "health";
     }
 }

@@ -83,7 +83,7 @@ public class UutLifecycleManager implements BeforeAllCallback, ExtensionContext.
         while (true) {
             try {
                 Thread.sleep(1000);
-                URL u = new URL(Endpoints.getJwksUrl());
+                URL u = new URL(Endpoints.getHealthUrl());
                 u.openConnection();
                 LOG.debug("tiny-auth is up");
                 return;

@@ -163,6 +163,8 @@ pub fn build(config: Config) -> Result<Server, Error> {
                         get().to(move || HttpResponse::Ok().body(token_certificate.clone())),
                     )
                     .route("/cert", all().to(endpoints::method_not_allowed))
+                    .route("/health", get().to(endpoints::health::get))
+                    .route("/health", all().to(endpoints::method_not_allowed))
                     .default_service(all().to(|| HttpResponse::NotFound().body("not found"))),
             )
     })

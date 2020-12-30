@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* HTTP health endpoint for monitoring
+  ([#59](https://gitlab.com/veenj/tiny-auth/issues/59))
+
 * System test suite mirroring [official OpenID Connect Conformance
   tests](https://www.certification.openid.net/login.html)
 

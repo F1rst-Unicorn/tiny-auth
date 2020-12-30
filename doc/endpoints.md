@@ -3,6 +3,12 @@
 All endpoints are relative to the configured
 [domain](configuration.md#domain) and [path](configuration.md#path).
 
+## Other
+
+### `/health`
+
+Report health status of the system.
+
 ## OIDC Endpoints
 
 ### `/authorize`
