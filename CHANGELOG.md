@@ -5,6 +5,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+
+* System test suite mirroring [official OpenID Connect Conformance
+  tests](https://www.certification.openid.net/login.html)
+
 ### Fixed
 
 * Refresh tokens issued for different clients now return the correct HTTP
