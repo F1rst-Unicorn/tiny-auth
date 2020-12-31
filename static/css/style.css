@@ -72,7 +72,6 @@ body {
 .btn-success {
     background-color: #1daf20ff;
 
-
     max-width: 60%;
     min-width: min-content;
 }
@@ -81,6 +80,19 @@ body {
     background-color: #ff4444ff;
     min-width: min-content;
     max-width: 25%;
+}
+
+pre {
+    margin-top: 10px;
+    overflow: scroll scroll;
+    font-size: 8pt;
+    background-color: #eeeeee;
+    color: #333333;
+    display: inline-block;
+    text-align: left;
+    max-height: 150px;
+    max-width: 100%;
+    word-wrap: break-word;
 }
 
 a {
@@ -173,5 +185,10 @@ dd {
     background-color: #f6ceceff;
     color: rgb(114, 28, 36);
     align-self: inherit;
+    font-size: small;
+}
+
+#output-container {
+    display: none;
     font-size: small;
 }

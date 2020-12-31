@@ -80,6 +80,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
         .ok_or(Error::LoggedBeforeError)?;
     let issuer_config = constructor.get_issuer_config();
     let jwks = constructor.build_jwks()?;
+    let u2f = constructor.build_u2f();
 
     std::mem::drop(constructor);
 
@@ -96,6 +97,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .app_data(web::Data::new(token_validator.clone()))
             .app_data(web::Data::new(issuer_config.clone()))
             .app_data(web::Data::new(jwks.clone()))
+            .app_data(web::Data::new(u2f.clone()))
             .wrap(
                 CookieSession::private(config.web.secret_key.as_bytes())
                     // ^- encryption is only needed to avoid encoding problems
@@ -116,6 +118,10 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .service(actix_files::Files::new(
                 &(config.web.path.clone().unwrap() + "/static/img"),
                 &(config.web.static_files.clone() + "/img"),
+            ))
+            .service(actix_files::Files::new(
+                &(config.web.path.clone().unwrap() + "/static/js"),
+                &(config.web.static_files.clone() + "/js"),
             ))
             .service(
                 web::scope(&config.web.path.as_ref().unwrap())
@@ -165,6 +171,17 @@ pub fn build(config: Config) -> Result<Server, Error> {
                     .route("/cert", all().to(endpoints::method_not_allowed))
                     .route("/health", get().to(endpoints::health::get))
                     .route("/health", all().to(endpoints::method_not_allowed))
+                    .route("/u2f", get().to(endpoints::u2f::get))
+                    .route("/u2f", all().to(endpoints::method_not_allowed))
+                    .route("/u2f/register", get().to(endpoints::u2f::register_request))
+                    .route(
+                        "/u2f/register",
+                        post().to(endpoints::u2f::register_response),
+                    )
+                    .route("/u2f/register", all().to(endpoints::method_not_allowed))
+                    //                    .route("/u2f/sign", get().to(endpoints::u2f::sign_request))
+                    //                    .route("/u2f/sign", post().to(endpoints::u2f::sign_request))
+                    //                    .route("/u2f/sign", all().to(endpoints::method_not_allowed))
                     .default_service(all().to(|| HttpResponse::NotFound().body("not found"))),
             )
     })

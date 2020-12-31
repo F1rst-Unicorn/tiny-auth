@@ -39,6 +39,8 @@ use jsonwebtoken::EncodingKey;
 
 use chrono::Duration;
 
+use u2f::protocol::U2f;
+
 use openssl::bn::BigNum;
 use openssl::bn::BigNumContext;
 use openssl::bn::BigNumRef;
@@ -112,6 +114,10 @@ impl<'a> Constructor<'a> {
             issuer_url,
             algorithm,
         }
+    }
+
+    pub fn build_u2f(&self) -> U2f {
+        U2f::new(self.issuer_url.clone())
     }
 
     pub fn build_rate_limiter(&self) -> RateLimiter {

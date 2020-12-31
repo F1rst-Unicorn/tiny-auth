@@ -1,0 +1,30 @@
+{# tiny-auth: Tiny OIDC Provider
+   Copyright (C) 2019 The tiny-auth developers
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#}
+
+{% extends "base.html.j2" %}
+{% block content %}
+<script type="text/javascript" src="static/js/u2f-api.js"></script>
+<script type="text/javascript" src="static/js/u2f.js"></script>
+<div class="form">
+    <h2>{{ translate(term="Universal 2nd Factor") }}</h2>
+    <input id="register" type="button" class="btn btn-success" value="Register" onClick="register()">
+    <div id="output-container">
+        <div>{{ translate(term="Send the following text to the server admin") }}</div>
+        <pre id="output"></pre>
+    </div>
+</div>
+{% endblock %}

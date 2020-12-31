@@ -21,6 +21,7 @@ pub mod consent;
 pub mod discovery;
 pub mod health;
 pub mod token;
+pub mod u2f;
 pub mod userinfo;
 
 use crate::protocol::oauth2::ProtocolError as OAuthError;
