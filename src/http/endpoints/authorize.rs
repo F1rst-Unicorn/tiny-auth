@@ -191,7 +191,7 @@ pub async fn handle(
     }
 
     let scopes = parse_scope_names(query.scope.as_deref().unwrap());
-    let scopes = BTreeSet::from_iter(scopes.into_iter());
+    let scopes = scopes.into_iter().collect();
 
     if log_enabled!(Debug) {
         let forbidden_scopes = scopes
