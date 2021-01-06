@@ -29,6 +29,10 @@ use serde::Serialize;
 
 use serde_json::Value;
 
+use u2f::register::Registration;
+
+use log::warn;
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct User {
     pub name: String,
@@ -36,10 +40,56 @@ pub struct User {
     pub password: Password,
 
     #[serde(default)]
-    pub allowed_scopes: BTreeMap<String, BTreeSet<String>>,
+    pub u2f: Vec<String>,
+
+    #[serde(default)]
+    #[serde(alias = "client config")]
+    pub client_config: ClientConfigs,
 
     #[serde(flatten)]
     pub attributes: HashMap<String, Value>,
+}
+
+#[derive(Default, Clone, Serialize, Deserialize)]
+pub struct ClientConfigs {
+    #[serde(default)]
+    pub default: ClientConfig,
+
+    #[serde(default)]
+    pub clients: BTreeMap<String, ClientConfig>,
+}
+
+#[derive(Default, Clone, Serialize, Deserialize)]
+pub struct ClientConfig {
+    #[serde(default)]
+    #[serde(alias = "allowed scopes")]
+    pub allowed_scopes: BTreeSet<String>,
+
+    #[serde(default)]
+    pub u2f: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct U2fRegistration {
+    pub key_handle: Vec<u8>,
+
+    pub pub_key: Vec<u8>,
+
+    pub attestation_cert: Option<Vec<u8>>,
+
+    pub device_name: Option<String>,
+}
+
+impl From<U2fRegistration> for u2f::register::Registration {
+    fn from(r: U2fRegistration) -> Self {
+        Self {
+            key_handle: r.key_handle,
+            pub_key: r.pub_key,
+            attestation_cert: r.attestation_cert,
+            device_name: r.device_name,
+        }
+    }
 }
 
 impl User {
@@ -48,10 +98,31 @@ impl User {
     }
 
     pub fn get_allowed_scopes(&self, client_id: &str) -> BTreeSet<String> {
-        self.allowed_scopes
+        self.client_config
+            .clients
             .get(client_id)
             .map(Clone::clone)
-            .unwrap_or_default()
+            .map(|v| v.allowed_scopes)
+            .unwrap_or(self.client_config.default.allowed_scopes.clone())
+    }
+
+    pub fn get_u2f_registrations(&self) -> Vec<Registration> {
+        self.u2f
+            .iter()
+            .map(|v| v.as_str())
+            .map(serde_json::from_str::<U2fRegistration>)
+            .map(|v| {
+                if let Err(e) = &v {
+                    warn!("Invalid u2f registration: {}", e);
+                    v
+                } else {
+                    v
+                }
+            })
+            .filter(Result::is_ok)
+            .map(Result::unwrap)
+            .map(Registration::from)
+            .collect()
     }
 }
 
@@ -63,7 +134,8 @@ impl TryFrom<Client> for User {
             ClientType::Confidential { password, .. } => Ok(Self {
                 name: client.client_id,
                 password,
-                allowed_scopes: BTreeMap::default(),
+                u2f: Vec::default(),
+                client_config: Default::default(),
                 attributes: client.attributes,
             }),
         }

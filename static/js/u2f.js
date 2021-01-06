@@ -25,14 +25,14 @@ async function register() {
     const outputContainer = document.getElementById("output-container");
 
     try {
-        const req = await fetch('u2f/register').then(response => response.json());
+        const req = await fetch('u2f_register').then(response => response.json());
 
         const response = await u2fRegisterAsync(req.appId, req.registerRequests, req.registeredKeys, 30);
 
         if (response) {
-            const registration = await postJSON('u2f/register', response);
+            const registration = await postJSON('u2f_register', response);
 
-            document.getElementById("output").innerHTML = JSON.stringify(registration);
+            document.getElementById("output").innerHTML = JSON.stringify(registration.json());
             outputContainer.style.display = "block";
         }
     }
@@ -47,12 +47,13 @@ async function register() {
 */
 async function authenticate() {
     try {
-        const req =  await fetch('u2f/sign').then(req => req.json());
+        const req =  await fetch('u2f_sign').then(req => req.json());
 
         const response = await u2fSignAsync(req.appId, req.challenge, req.registeredKeys, 30);
 
         if (response) {
-            await postJSON('u2f/sign', response);
+            const result = await postJSON('u2f_sign', response);
+            window.location = result.url;
         }
     }
     catch(e) {
@@ -64,7 +65,7 @@ async function authenticate() {
 async function postJSON(url, data){
     const response = await fetch(url, { method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } });
     if (response.ok) {
-        return response.json();
+        return response;
     }
     throw new Error(response.statusText);
 };

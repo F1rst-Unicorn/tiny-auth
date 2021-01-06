@@ -17,11 +17,14 @@
 
 package de.njsm.tinyauth.test.runtime;
 
+import de.njsm.tinyauth.test.repository.Endpoints;
 import org.junit.jupiter.api.extension.*;
 import org.junit.jupiter.api.extension.support.TypeBasedParameterResolver;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.firefox.FirefoxOptions;
 import org.openqa.selenium.firefox.FirefoxProfile;
+import org.openqa.selenium.virtualauthenticator.Credential;
+import org.openqa.selenium.virtualauthenticator.VirtualAuthenticatorOptions;
 
 import java.io.File;
 
@@ -40,7 +43,24 @@ public class SeleniumLifecycleManager extends TypeBasedParameterResolver<Browser
         options.setHeadless(true);
         options.setProfile(profile);
         driver = new FirefoxDriver(options);
-        browser = new Browser(driver);
+        //VirtualAuthenticator authenticator = driver.addVirtualAuthenticator(buildVirtualAuthenticator());
+        //authenticator.setUserVerified(true);
+        //authenticator.addCredential(buildCredential());
+        browser = new Browser(driver, null);
+    }
+
+    private VirtualAuthenticatorOptions buildVirtualAuthenticator() {
+        return new VirtualAuthenticatorOptions()
+                .setTransport(VirtualAuthenticatorOptions.Transport.USB)
+                .setProtocol(VirtualAuthenticatorOptions.Protocol.U2F)
+                .setHasUserVerification(false)
+                .setHasResidentKey(false)
+                .setIsUserConsenting(true)
+                .setIsUserVerified(true);
+    }
+
+    private Credential buildCredential() {
+        return Credential.createNonResidentCredential(new byte[]{1}, Endpoints.getIssuer(), null, 0);
     }
 
     @Override

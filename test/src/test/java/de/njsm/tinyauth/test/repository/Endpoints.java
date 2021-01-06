@@ -53,6 +53,10 @@ public class Endpoints {
         return getBaseUri() + getUserinfoPath();
     }
 
+    public static String getU2fUrl() {
+        return getBaseUri() + getU2fPath();
+    }
+
     private static String getUserinfoPath() {
         return "userinfo";
     }
@@ -75,5 +79,9 @@ public class Endpoints {
 
     public static String getHealthPath() {
         return "health";
+    }
+
+    private static String getU2fPath() {
+        return "u2f";
     }
 }

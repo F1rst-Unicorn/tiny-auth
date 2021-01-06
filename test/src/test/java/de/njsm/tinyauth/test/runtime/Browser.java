@@ -19,14 +19,12 @@ package de.njsm.tinyauth.test.runtime;
 
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.repository.Endpoints;
-import de.njsm.tinyauth.test.runtime.webpage.AuthenticationPage;
-import de.njsm.tinyauth.test.runtime.webpage.AuthorisationPage;
-import de.njsm.tinyauth.test.runtime.webpage.InvalidRedirectUriPage;
-import de.njsm.tinyauth.test.runtime.webpage.RedirectPage;
+import de.njsm.tinyauth.test.runtime.webpage.*;
 import okhttp3.HttpUrl;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.virtualauthenticator.VirtualAuthenticator;
 
 import java.util.Collections;
 import java.util.Map;
@@ -41,10 +39,13 @@ public class Browser {
 
     private final FirefoxDriver driver;
 
+    private final VirtualAuthenticator authenticator;
+
     private Set<ResponseType> responseType;
 
-    public Browser(FirefoxDriver driver) {
+    public Browser(FirefoxDriver driver, VirtualAuthenticator authenticator) {
         this.driver = driver;
+        this.authenticator = authenticator;
     }
 
     public void setResponseType(Set<ResponseType> responseTypes) {
@@ -72,6 +73,11 @@ public class Browser {
     public void startAuthenticationWithoutInteraction(Client client, String state, Set<String> scopes, String nonce, Map<String, String> additionalParameters) {
         startAuthentication(client, state, scopes, nonce, additionalParameters);
         RedirectPage.assertRedirect(driver);
+    }
+
+    public U2fPage startU2fRegistration() {
+        driver.navigate().to(Endpoints.getU2fUrl());
+        return new U2fPage(driver, authenticator);
     }
 
     private void startAuthentication(Client client, String state, Set<String> scopes, String nonce, Map<String, String> additionalParameters) {

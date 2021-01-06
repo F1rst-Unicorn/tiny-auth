@@ -124,7 +124,8 @@ pub mod tests {
                 "user1" | "user2" | "user3" => Some(User {
                     name: key.to_string(),
                     password: Password::Plain(key.to_string()),
-                    allowed_scopes: Default::default(),
+                    u2f: Vec::default(),
+                    client_config: Default::default(),
                     attributes: HashMap::new(),
                 }),
                 _ => None,

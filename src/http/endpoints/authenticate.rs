@@ -303,7 +303,7 @@ fn build_context(session: &Session) -> Option<Context> {
 
 fn redirect_successfully() -> HttpResponse {
     HttpResponse::SeeOther()
-        .set_header("Location", "consent")
+        .set_header("Location", "authenticate_u2f")
         .finish()
 }
 
@@ -330,7 +330,7 @@ fn render_invalid_login_attempt_error(
         .finish()
 }
 
-fn render_invalid_authentication_request(tera: &Tera) -> HttpResponse {
+pub fn render_invalid_authentication_request(tera: &Tera) -> HttpResponse {
     render_template(
         "invalid_authentication_request.html.j2",
         StatusCode::BAD_REQUEST,

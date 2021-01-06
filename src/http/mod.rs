@@ -173,15 +173,17 @@ pub fn build(config: Config) -> Result<Server, Error> {
                     .route("/health", all().to(endpoints::method_not_allowed))
                     .route("/u2f", get().to(endpoints::u2f::get))
                     .route("/u2f", all().to(endpoints::method_not_allowed))
-                    .route("/u2f/register", get().to(endpoints::u2f::register_request))
+                    .route("/u2f_register", get().to(endpoints::u2f::register_request))
                     .route(
-                        "/u2f/register",
+                        "/u2f_register",
                         post().to(endpoints::u2f::register_response),
                     )
-                    .route("/u2f/register", all().to(endpoints::method_not_allowed))
-                    //                    .route("/u2f/sign", get().to(endpoints::u2f::sign_request))
-                    //                    .route("/u2f/sign", post().to(endpoints::u2f::sign_request))
-                    //                    .route("/u2f/sign", all().to(endpoints::method_not_allowed))
+                    .route("/u2f_register", all().to(endpoints::method_not_allowed))
+                    .route("/u2f_sign", get().to(endpoints::u2f::sign_request))
+                    .route("/u2f_sign", post().to(endpoints::u2f::sign_response))
+                    .route("/u2f_sign", all().to(endpoints::method_not_allowed))
+                    .route("/authenticate_u2f", get().to(endpoints::u2f::get_u2f))
+                    .route("/authenticate_u2f", all().to(endpoints::method_not_allowed))
                     .default_service(all().to(|| HttpResponse::NotFound().body("not found"))),
             )
     })
