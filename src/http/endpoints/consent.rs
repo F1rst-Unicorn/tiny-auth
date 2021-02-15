@@ -225,7 +225,7 @@ async fn process_skipping_csrf(
 
     let requested_scopes = parse_scope_names(&first_request.scope.clone().unwrap_or_default());
     let requested_scopes = BTreeSet::from_iter(requested_scopes);
-    let allowed_scopes = query.scopes.keys().map(Clone::clone).collect();
+    let allowed_scopes: BTreeSet<String> = query.scopes.keys().map(Clone::clone).collect();
     let scopes = allowed_scopes
         .intersection(&requested_scopes)
         .map(Clone::clone)

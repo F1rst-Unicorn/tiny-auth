@@ -94,10 +94,12 @@ pub struct Web {
     pub secret_key: String,
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn default_path() -> Option<String> {
     Some("".to_string())
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn default_session_timeout() -> Option<i64> {
     Some(3600)
 }

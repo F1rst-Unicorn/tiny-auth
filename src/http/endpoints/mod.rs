@@ -267,6 +267,7 @@ pub fn parse_authorization(value: &HeaderValue, auth_type: &str) -> Option<Strin
     Some(value.replacen(&auth_type, "", 1))
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn deserialise_empty_as_none<'de, D: Deserializer<'de>>(
     value: D,
 ) -> Result<Option<String>, D::Error> {

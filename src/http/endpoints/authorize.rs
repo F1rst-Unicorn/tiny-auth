@@ -29,7 +29,6 @@ use crate::store::ClientStore;
 
 use std::collections::BTreeSet;
 use std::convert::TryFrom;
-use std::iter::FromIterator;
 use std::sync::Arc;
 
 use actix_web::http::StatusCode;
@@ -191,7 +190,7 @@ pub async fn handle(
     }
 
     let scopes = parse_scope_names(query.scope.as_deref().unwrap());
-    let scopes = scopes.into_iter().collect();
+    let scopes: BTreeSet<String> = scopes.into_iter().collect();
 
     if log_enabled!(Debug) {
         let forbidden_scopes = scopes
