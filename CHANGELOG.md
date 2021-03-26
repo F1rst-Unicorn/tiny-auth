@@ -7,6 +7,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Maintenance
 
+* Add `cargo audit` to CI to be informed about security vulnerabilities
+
 * Fix linter issues
 
 ## [0.8.2]

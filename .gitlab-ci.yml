@@ -72,6 +72,21 @@ format:
       - target
       - .cargo
 
+audit:
+  stage: build
+  image: rust:latest
+  script:
+    - apt-get update
+    - apt-get -y --no-install-recommends install libsystemd-dev
+    - cargo install cargo-audit
+    - cargo audit
+  cache:
+    key: ${CI_JOB_NAME}
+    policy: pull
+    paths:
+      - target
+      - .cargo
+
 clippy:
   stage: build
   image: rust:latest
