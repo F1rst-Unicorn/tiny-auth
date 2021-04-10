@@ -15,13 +15,13 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod authenticate;
+//pub mod authenticate;
 pub mod authorize;
-pub mod consent;
+//pub mod consent;
 pub mod discovery;
 pub mod health;
-pub mod token;
-pub mod userinfo;
+//pub mod token;
+//pub mod userinfo;
 
 use crate::protocol::oauth2::ProtocolError as OAuthError;
 use crate::protocol::oidc::Prompt;
@@ -31,15 +31,13 @@ use crate::util::render_tera_error;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::convert::Infallible;
 use std::convert::TryFrom;
+use std::io::Cursor;
+use std::ops::Deref;
+use std::str::FromStr;
 
-use actix_web::dev::HttpResponseBuilder;
-use actix_web::http::HeaderValue;
-use actix_web::http::StatusCode;
-use actix_web::HttpResponse;
-
-use actix_session::Session;
-
+use rocket::response::Redirect;
 use url::Url;
 
 use tera::Context;
@@ -47,6 +45,14 @@ use tera::Tera;
 
 use log::debug;
 use log::error;
+
+use rocket::form::FromFormField;
+use rocket::http::ContentType;
+use rocket::http::Header;
+use rocket::http::Status;
+use rocket::response::content::Html;
+use rocket::response::ResponseBuilder;
+use rocket::Response;
 
 use serde::de::Deserialize as _;
 use serde::de::Visitor;
@@ -63,26 +69,7 @@ const CLIENT_ID_CONTEXT: &str = "client";
 const USER_NAME_CONTEXT: &str = "user";
 const SCOPES_CONTEXT: &str = "scopes";
 const LOGIN_HINT_CONTEXT: &str = "login_hint";
-
-fn parse_first_request(session: &Session) -> Option<authorize::Request> {
-    let first_request = match session.get::<String>(authorize::SESSION_KEY) {
-        Err(_) | Ok(None) => {
-            debug!("unsolicited consent request, lacks authorization session key");
-            return None;
-        }
-        Ok(Some(req)) => req,
-    };
-
-    let first_request = match serde_urlencoded::from_str::<authorize::Request>(&first_request) {
-        Err(e) => {
-            error!("Failed to deserialize initial request. {}", e);
-            return None;
-        }
-        Ok(req) => req,
-    };
-
-    Some(first_request)
-}
+const COOKIE_NAME: &str = "session";
 
 fn parse_prompt(prompt: &Option<String>) -> BTreeSet<Prompt> {
     match prompt {
@@ -109,11 +96,11 @@ struct ErrorResponse {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     error_uri: Option<String>,
-}
 
-pub fn method_not_allowed() -> HttpResponse {
-    HttpResponse::MethodNotAllowed().body("method not allowed")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    state: Option<String>,
 }
+/*
 
 /// When which HTTP code: https://tools.ietf.org/html/rfc6749#section-5.2
 fn render_json_error(error: ProtocolError, description: &str) -> HttpResponse {
@@ -128,71 +115,73 @@ fn render_json_error(error: ProtocolError, description: &str) -> HttpResponse {
         error_uri: None,
     })
 }
-
-fn render_redirect_error(
+ */
+fn render_redirect_error<'r>(
     redirect_uri: &str,
     error: ProtocolError,
     description: &str,
     state: &Option<String>,
     encode_to_fragment: bool,
-) -> HttpResponse {
-    render_redirect_error_with_base(
-        HttpResponse::Found(),
-        redirect_uri,
-        error,
-        description,
-        state,
-        encode_to_fragment,
+) -> Redirect {
+    Redirect::found(
+        render_error_url(redirect_uri, error, description, state, encode_to_fragment).to_string(),
     )
 }
 
-fn render_redirect_error_with_base(
-    mut base_response: HttpResponseBuilder,
+fn render_error_url(
     redirect_uri: &str,
     error: ProtocolError,
     description: &str,
     state: &Option<String>,
     encode_to_fragment: bool,
-) -> HttpResponse {
+) -> Url {
     let mut url = Url::parse(redirect_uri).expect("should have been validated upon registration");
 
-    let mut response_parameters = BTreeMap::new();
-    response_parameters.insert("error", format!("{}", error));
-    response_parameters.insert("error_description", description.to_string());
-    state
-        .clone()
-        .map(|v| response_parameters.insert("state", v));
+    let error = ErrorResponse {
+        error,
+        error_description: Some(description.to_string()),
+        error_uri: None,
+        state: state.clone(),
+    };
 
+    let serialised_error = serde_urlencoded::to_string(error).expect("failed to serialize");
     if encode_to_fragment {
-        let fragment =
-            serde_urlencoded::to_string(response_parameters).expect("failed to serialize");
-        url.set_fragment(Some(&fragment));
+        url.set_fragment(Some(&serialised_error));
     } else {
-        url.query_pairs_mut().extend_pairs(response_parameters);
+        url.set_query(Some(&serialised_error))
     }
 
-    base_response.header("Location", url.as_str()).finish()
+    url
 }
 
-fn server_error(tera: &Tera) -> HttpResponse {
-    render_template("500.html.j2", StatusCode::INTERNAL_SERVER_ERROR, tera)
+fn render_redirect_error_with_base<'r>(
+    mut base_response: ResponseBuilder<'r>,
+    redirect_uri: &str,
+    error: ProtocolError,
+    description: &str,
+    state: &Option<String>,
+    encode_to_fragment: bool,
+) -> Response<'r> {
+    let url = render_error_url(redirect_uri, error, description, state, encode_to_fragment);
+    base_response
+        .header(Header::new("Location", url.to_string()))
+        .finalize()
 }
 
-fn render_template(name: &str, code: StatusCode, tera: &Tera) -> HttpResponse {
-    render_template_with_context(name, code, tera, &Context::new())
+type Website = (Status, Html<String>);
+
+fn server_error(tera: &Tera) -> Html<String> {
+    render_template("500.html.j2", tera)
 }
 
-fn render_template_with_context(
-    name: &str,
-    code: StatusCode,
-    tera: &Tera,
-    context: &Context,
-) -> HttpResponse {
+fn render_template(name: &str, tera: &Tera) -> Html<String> {
+    render_template_with_context(name, tera, &Context::new())
+}
+
+fn render_template_with_context(name: &str, tera: &Tera, context: &Context) -> Html<String> {
     let body = tera.render(name, context);
     match body {
-        Ok(body) => HttpResponse::build(code)
-            .set_header("Content-Type", "text/html")
-            .body(body),
+        Ok(body) => Html(body),
         Err(e) => {
             log::warn!("{}", render_tera_error(&e));
             server_error(tera)
@@ -200,6 +189,7 @@ fn render_template_with_context(
     }
 }
 
+/*
 fn generate_csrf_token() -> String {
     generate_random_string(32)
 }
@@ -266,6 +256,60 @@ pub fn parse_authorization(value: &HeaderValue, auth_type: &str) -> Option<Strin
     }
     Some(value.replacen(&auth_type, "", 1))
 }
+ */
+#[derive(Default, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct NonEmptyString(
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    Option<String>,
+);
+
+impl From<Option<String>> for NonEmptyString {
+    fn from(s: Option<String>) -> Self {
+        Self(s)
+    }
+}
+
+impl From<String> for NonEmptyString {
+    fn from(s: String) -> Self {
+        Self(Some(s))
+    }
+}
+
+impl From<&str> for NonEmptyString {
+    fn from(s: &str) -> Self {
+        Self(Some(s.to_string()))
+    }
+}
+
+impl FromStr for NonEmptyString {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(s.into())
+    }
+}
+
+impl<'v> FromFormField<'v> for NonEmptyString {
+    fn from_value(field: rocket::form::ValueField<'v>) -> rocket::form::Result<'v, Self> {
+        Ok(match field.value {
+            "" => Self(None),
+            v => Self(Some(v.to_string())),
+        })
+    }
+
+    fn default() -> Option<Self> {
+        Some(Self(None))
+    }
+}
+
+impl Deref for NonEmptyString {
+    type Target = Option<String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[allow(clippy::unnecessary_wraps)]
 fn deserialise_empty_as_none<'de, D: Deserializer<'de>>(
@@ -331,12 +375,6 @@ mod tests {
 
     use super::*;
 
-    use actix_web::test;
-    use actix_web::web::BytesMut;
-    use actix_web::HttpResponse;
-
-    use actix_session::UserSession;
-
     use futures::stream::StreamExt;
 
     use serde::de::DeserializeOwned;
@@ -378,6 +416,7 @@ mod tests {
         let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
         assert_eq!(Some("value".to_string()), result.value);
     }
+    /*
 
     #[test]
     pub fn verify_wrong_csrf_verification() {
@@ -410,5 +449,5 @@ mod tests {
             bytes.extend_from_slice(&item.unwrap());
         }
         serde_json::from_slice::<T>(&bytes).expect("Failed to deserialize response")
-    }
+    } */
 }

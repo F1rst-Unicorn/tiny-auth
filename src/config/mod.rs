@@ -71,13 +71,13 @@ impl Default for RateLimit {
 
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Web {
-    pub bind: String,
+    pub bind: IpHost,
 
     #[serde(alias = "public host")]
     pub public_host: Host,
 
-    #[serde(default = "default_path")]
-    pub path: Option<String>,
+    #[serde(default)]
+    pub path: String,
 
     pub tls: Option<Tls>,
 
@@ -88,27 +88,44 @@ pub struct Web {
 
     #[serde(default = "default_session_timeout")]
     #[serde(alias = "session timeout")]
-    pub session_timeout: Option<i64>,
+    pub session_timeout: i64,
 
     #[serde(alias = "secret key")]
     pub secret_key: String,
 }
 
 #[allow(clippy::unnecessary_wraps)]
-fn default_path() -> Option<String> {
-    Some("".to_string())
+fn default_session_timeout() -> i64 {
+    3600
 }
 
-#[allow(clippy::unnecessary_wraps)]
-fn default_session_timeout() -> Option<i64> {
-    Some(3600)
+#[derive(Default, Clone, Debug, Deserialize)]
+pub struct IpHost {
+    pub address: String,
+
+    #[serde(default = "default_port")]
+    pub port: u16,
+}
+
+fn default_port() -> u16 {
+    80
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Host {
     pub domain: String,
 
-    pub port: Option<String>,
+    pub port: Option<u16>,
+}
+
+impl ToString for Host {
+    fn to_string(&self) -> String {
+        if let Some(port) = self.port {
+            self.domain.clone() + ":" + &port.to_string()
+        } else {
+            self.domain.clone()
+        }
+    }
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]

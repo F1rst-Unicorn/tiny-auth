@@ -16,12 +16,10 @@
  */
 extern crate vergen;
 
-use vergen::generate_cargo_keys;
-use vergen::ConstantsFlags;
+use vergen::vergen;
+use vergen::Config;
+use vergen::Error;
 
-fn main() {
-    let mut flags = ConstantsFlags::all();
-    flags.toggle(ConstantsFlags::REBUILD_ON_HEAD_CHANGE);
-
-    generate_cargo_keys(flags).expect("vergen could not generate flags");
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    vergen(Config::default()).map_err(Error::into)
 }

@@ -31,7 +31,12 @@ use crate::store::memory::*;
 use crate::store::*;
 use crate::util::read_file;
 
+use cookie::Cookie;
 use std::sync::Arc;
+use time::Duration as TimeDuration;
+
+use cookie::CookieBuilder;
+use cookie::SameSite;
 
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
@@ -129,6 +134,16 @@ impl<'a> Constructor<'a> {
         ))
     }
 
+    pub fn get_cookie_builder(&self) -> CookieFactory {
+        CookieFactory::new(
+            "session",
+            &self.config.web.public_host.to_string(),
+            &self.config.web.path,
+            self.config.web.tls.is_some(),
+            self.config.web.session_timeout,
+        )
+    }
+
     pub fn get_user_store(&self) -> Option<Arc<dyn UserStore>> {
         self.user_store.clone()
     }
@@ -176,8 +191,7 @@ impl<'a> Constructor<'a> {
     }
 
     fn build_template_engine(config: &'a Config) -> Result<Tera, Error> {
-        load_template_engine(&config.web.static_files, config.web.path.as_ref().unwrap())
-            .map_err(Into::into)
+        load_template_engine(&config.web.static_files, &config.web.path).map_err(Into::into)
     }
 
     pub fn get_public_key(&self) -> String {
@@ -190,18 +204,12 @@ impl<'a> Constructor<'a> {
             token_issuer += "s";
         }
         token_issuer += "://";
-        token_issuer += &config.web.public_host.domain;
-        if let Some(port) = &config.web.public_host.port {
-            token_issuer += ":";
-            token_issuer += port;
-        }
-        if let Some(path) = &config.web.path {
-            if !path.is_empty() {
-                if !path.starts_with('/') {
-                    token_issuer += "/";
-                }
-                token_issuer += path;
+        token_issuer += &config.web.public_host.to_string();
+        if !config.web.path.is_empty() {
+            if !config.web.path.starts_with('/') {
+                token_issuer += "/";
             }
+            token_issuer += &config.web.path;
         }
 
         while token_issuer.ends_with('/') {
@@ -308,6 +316,48 @@ impl<'a> Constructor<'a> {
     }
 }
 
+#[derive(Clone)]
+pub struct CookieFactory {
+    name: String,
+
+    public_host: String,
+
+    path: String,
+
+    secure: bool,
+
+    max_age: TimeDuration,
+}
+
+impl CookieFactory {
+    pub fn new(
+        name: &str,
+        public_host: &str,
+        path: &str,
+        secure: bool,
+        max_age_seconds: i64,
+    ) -> Self {
+        Self {
+            name: name.to_string(),
+            public_host: public_host.to_string(),
+            path: path.to_string(),
+            secure,
+            max_age: TimeDuration::seconds(max_age_seconds),
+        }
+    }
+
+    pub fn build(&self) -> Cookie<'static> {
+        CookieBuilder::new(self.name.to_string(), "".to_string())
+            .domain(self.public_host.clone())
+            .path(self.path.clone())
+            .secure(self.secure)
+            .http_only(true)
+            .same_site(SameSite::Lax)
+            .max_age(self.max_age)
+            .finish()
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
@@ -325,7 +375,7 @@ pub mod tests {
 
     use std::sync::Arc;
 
-    use actix_web::web::Data;
+    use chrono::Duration;
 
     use jsonwebtoken::Algorithm;
     use jsonwebtoken::DecodingKey;
@@ -333,16 +383,18 @@ pub mod tests {
 
     use tera::Tera;
 
-    pub fn build_test_token_creator() -> Data<TokenCreator> {
-        Data::new(TokenCreator::new(
+    pub const SESSION_COOKIE_NAME: &str = "session";
+
+    pub fn build_test_token_creator() -> TokenCreator {
+        TokenCreator::new(
             build_test_encoding_key(),
             build_test_issuer_config(),
             build_test_jwk(),
-        ))
+        )
     }
 
-    pub fn build_test_issuer_config_for_web() -> Data<IssuerConfiguration> {
-        Data::new(build_test_issuer_config())
+    pub fn build_test_issuer_config_for_web() -> IssuerConfiguration {
+        build_test_issuer_config()
     }
 
     pub fn build_test_issuer_config() -> IssuerConfiguration {
@@ -364,51 +416,52 @@ pub mod tests {
         EncodingKey::from_secret("secret".as_bytes())
     }
 
-    pub fn build_test_tera() -> Data<Tera> {
-        Data::new(
-            load_template_engine(&(env!("CARGO_MANIFEST_DIR").to_string() + "/static/"), "")
-                .unwrap(),
-        )
+    pub fn build_test_tera() -> Tera {
+        load_template_engine(&(env!("CARGO_MANIFEST_DIR").to_string() + "/static/"), "").unwrap()
     }
 
-    pub fn build_test_client_store() -> Data<Arc<dyn ClientStore>> {
-        Data::new(crate::store::tests::build_test_client_store())
+    pub fn build_test_cookie_builder() -> CookieFactory {
+        CookieFactory::new(SESSION_COOKIE_NAME, "localhost", "", false, 60)
     }
 
-    pub fn build_test_user_store() -> Data<Arc<dyn UserStore>> {
-        Data::new(crate::store::tests::build_test_user_store())
+    pub fn build_test_client_store() -> Arc<dyn ClientStore> {
+        crate::store::tests::build_test_client_store()
     }
 
-    pub fn build_test_scope_store() -> Data<Arc<dyn ScopeStore>> {
-        Data::new(crate::store::tests::build_test_scope_store())
+    pub fn build_test_user_store() -> Arc<dyn UserStore> {
+        crate::store::tests::build_test_user_store()
     }
 
-    pub fn build_test_auth_code_store() -> Data<Arc<dyn AuthorizationCodeStore>> {
-        Data::new(crate::store::tests::build_test_auth_code_store())
+    pub fn build_test_scope_store() -> Arc<dyn ScopeStore> {
+        crate::store::tests::build_test_scope_store()
+    }
+
+    pub fn build_test_auth_code_store() -> Arc<dyn AuthorizationCodeStore> {
+        crate::store::tests::build_test_auth_code_store()
     }
 
     pub fn build_test_rate_limiter() -> RateLimiter {
         RateLimiter::new(3, Duration::minutes(5))
     }
 
-    pub fn build_test_authenticator() -> Data<Authenticator> {
-        Data::new(Authenticator::new(
+    pub fn build_test_authenticator() -> Authenticator {
+        Authenticator::new(
             crate::store::tests::build_test_user_store(),
             build_test_rate_limiter(),
             "pepper",
-        ))
+        )
     }
 
     pub fn build_test_decoding_key() -> DecodingKey<'static> {
         DecodingKey::from_secret("secret".as_bytes()).into_static()
     }
 
-    pub fn build_test_token_validator() -> Data<TokenValidator> {
-        Data::new(TokenValidator::new(
+    pub fn build_test_token_validator() -> TokenValidator {
+        TokenValidator::new(
             build_test_decoding_key(),
             build_test_algorithm(),
             build_test_token_issuer(),
-        ))
+        )
     }
 
     pub fn build_test_jwk() -> Jwk {

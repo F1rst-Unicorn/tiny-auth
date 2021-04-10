@@ -23,102 +23,64 @@ use crate::terminate::terminator;
 
 use openssl::error::ErrorStack;
 
-use std::convert::From;
-use std::fmt::Display;
-
 use log::error;
 
+use rocket::Rocket;
 use tokio::sync::oneshot;
 
-#[derive(Debug)]
+use thiserror::Error;
+use tokio::task::JoinHandle;
+
+#[derive(Debug, Error)]
 pub enum Error {
+    #[error("Error. See above")]
     LoggedBeforeError,
 
-    StdIoError(std::io::Error),
-    JwtError(jsonwebtoken::errors::Error),
-    TeraError(tera::Error),
-    OpensslError(ErrorStack),
-}
+    #[error("'web.secret key' needs at least 32 random characters")]
+    SecretTooShort,
 
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::LoggedBeforeError => write!(f, "Error: See above"),
-            Self::StdIoError(e) => write!(f, "IO error: {}", e),
-            Self::JwtError(e) => write!(f, "JWT error: {}", e),
-            Self::TeraError(e) => write!(f, "Template error: {}", e),
-            Self::OpensslError(e) => write!(f, "Crypto error: {}", e),
-        }
-    }
-}
+    #[error("IO error: {0}")]
+    StdIoError(#[from] std::io::Error),
 
-impl From<std::io::Error> for Error {
-    fn from(error: std::io::Error) -> Self {
-        Self::StdIoError(error)
-    }
-}
+    #[error("JWT error: {0}")]
+    JwtError(#[from] jsonwebtoken::errors::Error),
 
-impl From<ErrorStack> for Error {
-    fn from(error: ErrorStack) -> Self {
-        Self::OpensslError(error)
-    }
-}
+    #[error("Template error: {0}")]
+    TeraError(#[from] tera::Error),
 
-impl From<jsonwebtoken::errors::Error> for Error {
-    fn from(error: jsonwebtoken::errors::Error) -> Self {
-        Self::JwtError(error)
-    }
-}
+    #[error("Crypto error: {0}")]
+    OpensslError(#[from] ErrorStack),
 
-impl From<tera::Error> for Error {
-    fn from(error: tera::Error) -> Self {
-        Self::TeraError(error)
-    }
+    #[error("'web.bind.address' is no valid IP address")]
+    IpAddrParseError(#[from] std::net::AddrParseError),
+
+    #[error("Interrupted")]
+    JoinError(#[from] tokio::task::JoinError),
+
+    #[error("HTTP failed to start")]
+    RocketError(#[from] rocket::error::Error),
 }
 
 pub fn run(config: Config) -> Result<(), Error> {
-    let mut tok_runtime = tokio::runtime::Builder::new()
-        .threaded_scheduler()
-        .core_threads(4)
+    let tokio_runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(config.web.workers.unwrap_or(4))
         .enable_all()
         .thread_name(env!("CARGO_PKG_NAME"))
         .build()?;
 
-    let (pass_server, receive_server) = oneshot::channel();
-
-    tok_runtime.spawn(async move {
-        let server = match receive_server.await {
-            Err(e) => {
-                error!("failed to receive server: {}", e);
-                return;
-            }
-            Ok(server) => server,
-        };
+    let rocket: JoinHandle<Result<Rocket, Error>> = tokio_runtime.spawn(async move {
+        let (rocket, shutdown) = http::build(config)?;
 
         tokio::spawn(notify_about_start());
         tokio::spawn(watchdog());
-        tokio::spawn(terminator(server));
+        tokio::spawn(terminator(shutdown));
+
+        Ok(rocket)
     });
 
-    let tasks = tokio::task::LocalSet::new();
-    let system_fut = actix_rt::System::run_in_tokio(env!("CARGO_PKG_NAME"), &tasks);
+    let rocket = tokio_runtime.block_on(rocket)??;
 
-    tasks.block_on(&mut tok_runtime, async move {
-        tokio::task::spawn_local(system_fut);
-        let srv = match http::build(config) {
-            Err(e) => {
-                error!("Startup failed: {}", e);
-                return;
-            }
-            Ok(srv) => srv,
-        };
-        if pass_server.send(srv.clone()).is_err() {
-            error!("Failed to create server");
-            return;
-        }
-        if let Err(e) = srv.await {
-            error!("HTTP server failed: {}", e);
-        }
-    });
+    tokio_runtime.block_on(rocket.launch())?;
+
     Ok(())
 }

@@ -15,17 +15,18 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use actix_web::HttpResponse;
-
 use serde::Serialize;
 
+use rocket::get;
+
+use rocket_contrib::json::Json;
+
 #[derive(Serialize)]
-struct Health {
+pub struct Health {
     ok: bool,
 }
 
-pub async fn get() -> HttpResponse {
-    let health = Health { ok: true };
-
-    HttpResponse::Ok().json(health)
+#[get("/")]
+pub async fn get() -> Json<Health> {
+    Json(Health { ok: true })
 }

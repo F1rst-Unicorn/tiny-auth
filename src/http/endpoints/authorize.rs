@@ -18,8 +18,12 @@
 use super::deserialise_empty_as_none;
 use super::parse_prompt;
 use super::parse_scope_names;
+use super::render_error_url;
 use super::render_template;
-use crate::http::endpoints::server_error;
+use super::NonEmptyString;
+use super::Website;
+use super::COOKIE_NAME;
+use crate::http::state::CookieFactory;
 use crate::protocol::oauth2;
 use crate::protocol::oidc::OidcResponseType;
 use crate::protocol::oidc::Prompt;
@@ -31,100 +35,148 @@ use std::collections::BTreeSet;
 use std::convert::TryFrom;
 use std::sync::Arc;
 
-use actix_web::http::StatusCode;
-use actix_web::web;
-use actix_web::HttpResponse;
-
-use actix_session::Session;
-
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
 use tera::Tera;
 
 use log::debug;
-use log::error;
 use log::info;
 use log::log_enabled;
+use log::warn;
 use log::Level::Debug;
 
-pub const SESSION_KEY: &str = "a";
+use rocket::form::Form;
+use rocket::form::FromForm;
+use rocket::get;
+use rocket::http::CookieJar;
+use rocket::http::Status;
+use rocket::post;
+use rocket::request::FromRequest;
+use rocket::request::Outcome;
+use rocket::response::Redirect;
+use rocket::State;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Default)]
-pub struct Request {
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub scope: Option<String>,
+use async_trait::async_trait;
 
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub response_type: Option<String>,
+#[derive(Debug, PartialEq, Eq, Clone, Default, Serialize, Deserialize)]
+pub struct SessionRequest {
+    #[serde(rename = "a")]
+    pub scope: NonEmptyString,
 
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub client_id: Option<String>,
+    #[serde(rename = "b")]
+    pub response_type: NonEmptyString,
 
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub redirect_uri: Option<String>,
+    #[serde(rename = "c")]
+    pub client_id: String,
 
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub state: Option<String>,
+    #[serde(rename = "d")]
+    pub redirect_uri: String,
 
     #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub response_mode: Option<String>,
+    #[serde(rename = "e")]
+    pub state: NonEmptyString,
 
     #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub nonce: Option<String>,
+    #[serde(rename = "f")]
+    pub response_mode: NonEmptyString,
 
     #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub display: Option<String>,
+    #[serde(rename = "g")]
+    pub nonce: NonEmptyString,
 
     #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub prompt: Option<String>,
+    #[serde(rename = "h")]
+    pub display: NonEmptyString,
 
     #[serde(default)]
+    #[serde(rename = "i")]
+    pub prompt: NonEmptyString,
+
+    #[serde(default)]
+    #[serde(rename = "j")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_age: Option<i64>,
 
     #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub ui_locales: Option<String>,
+    #[serde(rename = "k")]
+    pub ui_locales: NonEmptyString,
 
     #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub id_token_hint: Option<String>,
+    #[serde(rename = "l")]
+    pub id_token_hint: NonEmptyString,
 
     #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub login_hint: Option<String>,
+    #[serde(rename = "m")]
+    pub login_hint: NonEmptyString,
 
     #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub acr_values: Option<String>,
+    #[serde(rename = "n")]
+    pub acr_values: NonEmptyString,
+}
+
+impl From<Request> for SessionRequest {
+    fn from(r: Request) -> Self {
+        Self {
+            scope: r.scope,
+            response_type: r.response_type,
+            client_id: r.client_id,
+            redirect_uri: r.redirect_uri,
+            state: r.state,
+            response_mode: r.response_mode,
+            nonce: r.nonce,
+            display: r.display,
+            prompt: r.prompt,
+            max_age: r.max_age,
+            ui_locales: r.ui_locales,
+            id_token_hint: r.id_token_hint,
+            login_hint: r.login_hint,
+            acr_values: r.acr_values,
+        }
+    }
+}
+
+#[derive(FromForm, Debug, PartialEq, Eq, Clone, Default, Serialize)]
+pub struct Request {
+    pub scope: NonEmptyString,
+
+    pub response_type: NonEmptyString,
+
+    pub client_id: String,
+
+    pub redirect_uri: String,
+
+    pub state: NonEmptyString,
+
+    pub response_mode: NonEmptyString,
+
+    pub nonce: NonEmptyString,
+
+    pub display: NonEmptyString,
+
+    pub prompt: NonEmptyString,
+
+    pub max_age: Option<i64>,
+
+    pub ui_locales: NonEmptyString,
+
+    pub id_token_hint: NonEmptyString,
+
+    pub login_hint: NonEmptyString,
+
+    pub acr_values: NonEmptyString,
 }
 
 impl Request {
+    pub fn empty() -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
+
     pub fn get_response_types(&self) -> Vec<ResponseType> {
         self.response_type
+            .0
             .as_deref()
             .map(parse_response_type)
             .flatten()
@@ -138,55 +190,148 @@ impl Request {
     }
 }
 
-pub async fn handle(
-    mut query: web::Query<Request>,
-    tera: web::Data<Tera>,
-    client_store: web::Data<Arc<dyn ClientStore>>,
-    session: Session,
-) -> HttpResponse {
-    let redirect_uri = match query.redirect_uri.as_ref() {
-        None => {
-            debug!("missing redirect_uri");
-            return render_invalid_redirect_uri_error(&tera);
-        }
-        Some(uri) => uri.clone(),
-    };
+pub struct Session<'r> {
+    cookie_jar: &'r CookieJar<'r>,
 
-    let client_id = match query.client_id.as_ref() {
-        None => {
-            debug!("missing client_id");
-            return render_invalid_client_id_error(&tera);
-        }
-        Some(client_id) => client_id,
-    };
+    cookie_builder: CookieFactory,
+}
 
-    let client = match client_store.get(client_id) {
+#[derive(Serialize, Deserialize, Default, Debug, PartialEq, Eq)]
+struct SessionContent {
+    #[serde(flatten)]
+    first_request: SessionRequest,
+
+    #[serde(default)]
+    #[serde(rename = "o")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    username: Option<String>,
+
+    #[serde(default)]
+    #[serde(rename = "p")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    auth_time: Option<u64>,
+
+    #[serde(default)]
+    #[serde(rename = "q")]
+    error_code: u64,
+
+    #[serde(default)]
+    #[serde(rename = "r")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tries_left: Option<u64>,
+}
+
+impl From<Request> for SessionContent {
+    fn from(request: Request) -> Self {
+        Self {
+            first_request: request.into(),
+            ..Self::default()
+        }
+    }
+}
+
+impl<'r> Session<'r> {
+    fn set_initial_request(&'r self, request: Request) {
+        let mut cookie = match self.cookie_jar.get_private(COOKIE_NAME) {
+            Some(v) => v,
+            None => self.cookie_builder.build(),
+        };
+
+        let content = SessionContent::from(request);
+
+        let serialised_content = match serde_urlencoded::to_string(&content) {
+            Err(e) => {
+                warn!("Failed to set initial request to cookie: {}", e);
+                return;
+            }
+            Ok(v) => v,
+        };
+
+        cookie.set_value(serialised_content);
+        self.cookie_jar.add_private(cookie);
+    }
+}
+
+#[async_trait]
+impl<'r> FromRequest<'r> for Session<'r> {
+    type Error = ();
+
+    async fn from_request(request: &'r rocket::Request<'_>) -> Outcome<Self, Self::Error> {
+        let cookie_builder = match request.guard::<State<'_, CookieFactory>>().await {
+            Outcome::Success(v) => v,
+            Outcome::Forward(v) => return Outcome::Forward(v),
+            Outcome::Failure((status, _)) => return Outcome::Failure((status, ())),
+        };
+
+        FromRequest::from_request(request)
+            .await
+            .map(|cookie_jar| Self {
+                cookie_jar,
+                cookie_builder: cookie_builder.inner().clone(),
+            })
+            .map_failure(|(s, _)| (s, ()))
+    }
+}
+
+#[get("/?<query..>")]
+pub fn get(
+    query: Request,
+    tera: State<'_, Tera>,
+    client_store: State<'_, Arc<dyn ClientStore>>,
+    session: Session<'_>,
+) -> Result<Redirect, Website> {
+    handle(query, tera.inner(), client_store.inner().clone(), session)
+}
+
+#[post("/", data = "<query>")]
+pub fn post(
+    query: Form<Request>,
+    tera: State<'_, Tera>,
+    client_store: State<'_, Arc<dyn ClientStore>>,
+    session: Session<'_>,
+) -> Result<Redirect, Website> {
+    handle(
+        query.into_inner(),
+        tera.inner(),
+        client_store.inner().clone(),
+        session,
+    )
+}
+
+pub fn handle(
+    mut query: Request,
+    tera: &Tera,
+    client_store: Arc<dyn ClientStore>,
+    session: Session<'_>,
+) -> Result<Redirect, Website> {
+    let client = match client_store.get(&query.client_id) {
         None => {
-            info!("client '{}' not found", client_id);
-            return render_invalid_client_id_error(&tera);
+            info!("client '{}' not found", query.client_id);
+            return Err(render_invalid_client_id_error(&tera));
         }
         Some(client) => client,
     };
 
-    if !client.is_redirect_uri_valid(&redirect_uri) {
+    if !client.is_redirect_uri_valid(&query.redirect_uri) {
         info!(
             "invalid redirect_uri '{}' for client '{}'",
-            redirect_uri, client_id
+            query.redirect_uri, query.client_id
         );
-        return render_invalid_redirect_uri_error(&tera);
+        return Err(render_invalid_redirect_uri_error(&tera));
     }
 
     let client_state = query.state.clone();
 
     if query.scope.is_none() {
         debug!("Missing scope");
-        return return_error(
-            &redirect_uri,
+        return Ok(return_error(
+            &query.redirect_uri,
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Missing required parameter scope",
             &client_state,
             query.encode_redirect_to_fragment(),
-        );
+        ));
     }
 
     let scopes = parse_scope_names(query.scope.as_deref().unwrap());
@@ -212,7 +357,7 @@ pub async fn handle(
         .collect::<Vec<String>>()
         .join(" ");
 
-    query.scope.replace(scopes);
+    query.scope.0.replace(scopes);
 
     let prompts = parse_prompt(&query.prompt);
     if (prompts.contains(&Prompt::Login)
@@ -221,25 +366,25 @@ pub async fn handle(
         && prompts.contains(&Prompt::None)
     {
         debug!("Contradicting prompt requirements");
-        return return_error(
-            &redirect_uri,
+        return Ok(return_error(
+            &query.redirect_uri,
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "contradicting prompt requirements",
             &client_state,
             query.encode_redirect_to_fragment(),
-        );
+        ));
     }
 
     let response_type = match query.response_type.as_deref().map(parse_response_type) {
         None | Some(None) => {
             debug!("Missing or invalid response_type");
-            return return_error(
-                &redirect_uri,
+            return Ok(return_error(
+                &query.redirect_uri,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
                 "Invalid required parameter response_type",
                 &client_state,
                 false,
-            );
+            ));
         }
         Some(Some(response_type)) => response_type,
     };
@@ -249,23 +394,18 @@ pub async fn handle(
         && query.nonce.is_none()
     {
         debug!("Missing required parameter nonce for implicit flow");
-        return return_error(
-            &redirect_uri,
+        return Ok(return_error(
+            &query.redirect_uri,
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
             "Invalid required parameter nonce",
             &client_state,
             query.encode_redirect_to_fragment(),
-        );
+        ));
     }
 
-    if let Err(e) = session.set(SESSION_KEY, serde_urlencoded::to_string(query.0).unwrap()) {
-        error!("Failed to serialise session: {}", e);
-        return server_error(&tera);
-    }
+    session.set_initial_request(query);
 
-    HttpResponse::SeeOther()
-        .set_header("Location", "authenticate")
-        .finish()
+    Ok(Redirect::to("authenticate"))
 }
 
 pub fn parse_response_type(input: &str) -> Option<Vec<ResponseType>> {
@@ -284,15 +424,17 @@ pub fn parse_response_type(input: &str) -> Option<Vec<ResponseType>> {
     Some(result)
 }
 
-fn render_invalid_client_id_error(tera: &Tera) -> HttpResponse {
-    render_template("invalid_client_id.html.j2", StatusCode::BAD_REQUEST, tera)
+fn render_invalid_client_id_error(tera: &Tera) -> Website {
+    (
+        Status::BadRequest,
+        render_template("invalid_client_id.html.j2", tera),
+    )
 }
 
-fn render_invalid_redirect_uri_error(tera: &Tera) -> HttpResponse {
-    render_template(
-        "invalid_redirect_uri.html.j2",
-        StatusCode::BAD_REQUEST,
-        tera,
+fn render_invalid_redirect_uri_error(tera: &Tera) -> Website {
+    (
+        Status::BadRequest,
+        render_template("invalid_redirect_uri.html.j2", tera),
     )
 }
 
@@ -302,31 +444,17 @@ pub fn return_error(
     description: &str,
     state: &Option<String>,
     encode_to_fragment: bool,
-) -> HttpResponse {
-    super::render_redirect_error_with_base(
-        HttpResponse::TemporaryRedirect(),
-        redirect_uri,
-        error,
-        description,
-        state,
-        encode_to_fragment,
+) -> Redirect {
+    Redirect::temporary(
+        render_error_url(redirect_uri, error, description, state, encode_to_fragment).to_string(),
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use actix_session::UserSession;
-    use actix_web::http;
-    use actix_web::test;
-    use actix_web::web::Query;
-
-    use url::Url;
-
-    use crate::http::endpoints::parse_first_request;
     use crate::http::state::tests::build_test_client_store;
-    use crate::http::state::tests::build_test_tera;
+    use crate::http::tests::build_client;
     use crate::protocol::oauth2::ResponseType::Code;
     use crate::protocol::oauth2::ResponseType::Token;
     use crate::protocol::oidc::OidcResponseType::IdToken;
@@ -335,337 +463,269 @@ mod tests {
     use crate::store::tests::CONFIDENTIAL_CLIENT;
     use crate::store::tests::UNKNOWN_CLIENT_ID;
 
-    #[actix_rt::test]
-    async fn missing_client_id_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let query = Query(Request {
-            scope: None,
-            response_type: None,
-            client_id: None,
-            redirect_uri: None,
-            state: None,
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
-        });
+    use url::Url;
 
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
+    use rocket::http::ContentType;
+    use rocket::http::Cookie;
+    use rocket::http::Status;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
-    }
+    const TEST_STATE: &str = "somestate";
 
-    #[actix_rt::test]
-    async fn missing_redirect_uri_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let query = Query(Request {
-            scope: None,
-            response_type: None,
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
-            redirect_uri: None,
-            state: None,
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
-        });
-
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
-
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
-    }
-
-    #[actix_rt::test]
-    async fn unknown_client_id_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let query = Query(Request {
-            scope: None,
-            response_type: None,
-            client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
-            redirect_uri: None,
-            state: None,
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
-        });
-
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
-
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
-    }
-
-    #[actix_rt::test]
-    async fn unregistered_redirect_uri_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let query = Query(Request {
-            scope: None,
-            response_type: None,
-            client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
-            redirect_uri: Some("invalid".to_string()),
-            state: None,
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
-        });
-
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
-
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
-    }
-
-    #[actix_rt::test]
-    async fn missing_scope_is_redirected() {
-        let req = test::TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let client_store = build_test_client_store();
-        let redirect_uri =
-            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
-        let client_state = "somestate".to_string();
-        let query = Query(Request {
-            scope: None,
-            response_type: Some("code".to_string()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
-            redirect_uri: Some(redirect_uri.to_string()),
-            state: Some(client_state.clone()),
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
-        });
-
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
-
-        assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
-
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        let url = Url::parse(url).unwrap();
-        let expected_url = Url::parse(&redirect_uri).unwrap();
-
-        assert_eq!(expected_url.scheme(), url.scheme());
-        assert_eq!(expected_url.domain(), url.domain());
-        assert_eq!(expected_url.port(), url.port());
-        assert_eq!(expected_url.path(), url.path());
-        let expected_error = format!(
-            "{}",
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
-        );
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param == ("state".to_string(), client_state.to_string())));
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param == ("error".to_string(), expected_error.to_string())));
-    }
-
-    #[actix_rt::test]
-    async fn contradicting_prompts_are_rejected() {
-        let req = test::TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let client_store = build_test_client_store();
-        let redirect_uri =
-            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
-        let client_state = "somestate".to_string();
-        let query = Query(Request {
-            scope: Some("email".to_string()),
-            response_type: Some("code".to_string()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
-            redirect_uri: Some(redirect_uri.to_string()),
-            state: Some(client_state.clone()),
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: Some("none login".to_string()),
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
-        });
-
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
-
-        assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
-
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        let url = Url::parse(url).unwrap();
-        let expected_url = Url::parse(&redirect_uri).unwrap();
-
-        assert_eq!(expected_url.scheme(), url.scheme());
-        assert_eq!(expected_url.domain(), url.domain());
-        assert_eq!(expected_url.port(), url.port());
-        assert_eq!(expected_url.path(), url.path());
-        let expected_error = format!(
-            "{}",
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
-        );
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param == ("state".to_string(), client_state.to_string())));
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param == ("error".to_string(), expected_error.to_string())));
-    }
-
-    #[actix_rt::test]
-    async fn missing_response_type_is_redirected() {
-        let req = test::TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let client_store = build_test_client_store();
-        let redirect_uri =
-            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
-        let client_state = "somestate".to_string();
-        let query = Query(Request {
-            scope: Some("email".to_string()),
-            response_type: None,
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
-            redirect_uri: Some(redirect_uri.to_string()),
-            state: Some(client_state.clone()),
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
-        });
-
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
-
-        assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
-
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        let url = Url::parse(url).unwrap();
-        let expected_url = Url::parse(&redirect_uri).unwrap();
-
-        assert_eq!(expected_url.scheme(), url.scheme());
-        assert_eq!(expected_url.domain(), url.domain());
-        assert_eq!(expected_url.port(), url.port());
-        assert_eq!(expected_url.path(), url.path());
-        let expected_error = format!(
-            "{}",
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
-        );
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param == ("state".to_string(), client_state.to_string())));
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param == ("error".to_string(), expected_error.to_string())));
-    }
-
-    #[actix_rt::test]
-    async fn disallowed_scope_is_dropped() {
-        let req = test::TestRequest::post().to_http_request();
-        let client_store = build_test_client_store();
-        let session = req.get_session();
-        let redirect_uri =
-            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
-        let client_state = "somestate".to_string();
-        let request = Request {
-            scope: Some("email profile".to_string()),
-            response_type: Some("code".to_string()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
-            redirect_uri: Some(redirect_uri.to_string()),
-            state: Some(client_state.clone()),
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
+    #[test]
+    fn unknown_client_id_is_rejected() {
+        let client = build_client();
+        let query = Request {
+            client_id: UNKNOWN_CLIENT_ID.to_string(),
+            ..build_successful_request()
         };
-        let query = Query(request.clone());
 
-        let resp = handle(query, build_test_tera(), client_store, session).await;
+        let response = client
+            .post("/authorize")
+            .header(ContentType::Form)
+            .body(serde_urlencoded::to_string(query).unwrap())
+            .dispatch();
 
-        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+        assert_eq!(response.status(), Status::BadRequest);
+    }
 
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+    #[test]
+    fn unregistered_redirect_uri_is_rejected() {
+        let client = build_client();
+        let query = Request {
+            client_id: CONFIDENTIAL_CLIENT.to_string(),
+            redirect_uri: "invalid".to_string(),
+            ..build_successful_request()
+        };
+
+        let response = client
+            .post("/authorize")
+            .header(ContentType::Form)
+            .body(serde_urlencoded::to_string(query).unwrap())
+            .dispatch();
+
+        assert_eq!(response.status(), Status::BadRequest);
+    }
+
+    #[test]
+    fn missing_scope_is_redirected() {
+        let client = build_client();
+        let client_store = build_test_client_store();
+        let expected_url = client_store
+            .get(CONFIDENTIAL_CLIENT)
+            .map(|v| v.redirect_uris[0].to_string())
+            .as_deref()
+            .map(Url::parse)
+            .map(Result::ok)
+            .flatten()
+            .unwrap();
+
+        let query = Request {
+            scope: Default::default(),
+            ..build_successful_request()
+        };
+
+        let response = client
+            .post("/authorize")
+            .header(ContentType::Form)
+            .body(serde_urlencoded::to_string(&query).unwrap())
+            .dispatch();
+
+        assert_eq!(response.status(), Status::TemporaryRedirect);
+
+        let url = response
+            .headers()
+            .get_one("Location")
+            .map(Url::parse)
+            .map(Result::ok)
+            .flatten()
+            .unwrap();
+
+        assert_eq!(expected_url.scheme(), url.scheme());
+        assert_eq!(expected_url.domain(), url.domain());
+        assert_eq!(expected_url.port(), url.port());
+        assert_eq!(expected_url.path(), url.path());
+        let expected_error = format!(
+            "{}",
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
+        );
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("state".to_string(), TEST_STATE.into())));
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("error".into(), expected_error.clone())));
+    }
+
+    #[test]
+    fn contradicting_prompts_are_rejected() {
+        let client = build_client();
+        let client_store = build_test_client_store();
+        let expected_url = client_store
+            .get(CONFIDENTIAL_CLIENT)
+            .map(|v| v.redirect_uris[0].to_string())
+            .as_deref()
+            .map(Url::parse)
+            .map(Result::ok)
+            .flatten()
+            .unwrap();
+
+        let query = Request {
+            prompt: "none login".into(),
+            ..build_successful_request()
+        };
+
+        let response = client
+            .post("/authorize")
+            .header(ContentType::Form)
+            .body(serde_urlencoded::to_string(&query).unwrap())
+            .dispatch();
+
+        assert_eq!(response.status(), Status::TemporaryRedirect);
+
+        let url = response
+            .headers()
+            .get_one("Location")
+            .map(Url::parse)
+            .map(Result::ok)
+            .flatten()
+            .unwrap();
+
+        assert_eq!(expected_url.scheme(), url.scheme());
+        assert_eq!(expected_url.domain(), url.domain());
+        assert_eq!(expected_url.port(), url.port());
+        assert_eq!(expected_url.path(), url.path());
+        let expected_error = format!(
+            "{}",
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
+        );
+        dbg!(&url);
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("state".to_string(), TEST_STATE.into())));
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("error".into(), expected_error.clone())));
+    }
+    #[test]
+    fn missing_response_type_is_redirected() {
+        let client = build_client();
+        let client_store = build_test_client_store();
+        let expected_url = client_store
+            .get(CONFIDENTIAL_CLIENT)
+            .map(|v| v.redirect_uris[0].to_string())
+            .as_deref()
+            .map(Url::parse)
+            .map(Result::ok)
+            .flatten()
+            .unwrap();
+
+        let query = Request {
+            response_type: None.into(),
+            ..build_successful_request()
+        };
+
+        let response = client
+            .post("/authorize")
+            .header(ContentType::Form)
+            .body(serde_urlencoded::to_string(&query).unwrap())
+            .dispatch();
+
+        assert_eq!(response.status(), Status::TemporaryRedirect);
+
+        let url = response
+            .headers()
+            .get_one("Location")
+            .map(Url::parse)
+            .map(Result::ok)
+            .flatten()
+            .unwrap();
+
+        assert_eq!(expected_url.scheme(), url.scheme());
+        assert_eq!(expected_url.domain(), url.domain());
+        assert_eq!(expected_url.port(), url.port());
+        assert_eq!(expected_url.path(), url.path());
+        let expected_error = format!(
+            "{}",
+            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
+        );
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("state".to_string(), TEST_STATE.into())));
+        assert!(url
+            .query_pairs()
+            .into_owned()
+            .any(|param| param == ("error".into(), expected_error.clone())));
+    }
+
+    #[test]
+    fn successful_authorization_is_redirected() {
+        let client = build_client();
+        let query = Request {
+            ..build_successful_request()
+        };
+
+        let response = client
+            .post("/authorize")
+            .header(ContentType::Form)
+            .body(serde_urlencoded::to_string(&query).unwrap())
+            .dispatch();
+
+        assert_eq!(response.status(), Status::SeeOther);
+
+        let url = response.headers().get_one("Location").unwrap();
         assert_eq!("authenticate", url);
 
-        let session = req.get_session();
-        let first_request = parse_first_request(&session).unwrap();
-        assert_eq!(Some("email".to_string()), first_request.scope);
+        let session_request: SessionContent = response
+            .cookies()
+            .get_private(crate::http::state::tests::SESSION_COOKIE_NAME)
+            .as_ref()
+            .map(Cookie::value)
+            .map(serde_urlencoded::from_str)
+            .map(Result::ok)
+            .flatten()
+            .unwrap();
+
+        assert_eq!(SessionContent::from(query), session_request);
     }
 
-    #[actix_rt::test]
-    async fn successful_authorization_is_redirected() {
-        let req = test::TestRequest::post().to_http_request();
-        let client_store = build_test_client_store();
-        let session = req.get_session();
-        let redirect_uri =
-            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
-        let client_state = "somestate".to_string();
-        let request = Request {
-            scope: Some("email".to_string()),
-            response_type: Some("code".to_string()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
-            redirect_uri: Some(redirect_uri.to_string()),
-            state: Some(client_state.clone()),
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
+    #[test]
+    fn disallowed_scope_is_dropped() {
+        let client = build_client();
+        let query = Request {
+            scope: "email profile".into(),
+            ..build_successful_request()
         };
-        let query = Query(request.clone());
 
-        let resp = handle(query, build_test_tera(), client_store, session).await;
+        let response = client
+            .post("/authorize")
+            .header(ContentType::Form)
+            .body(serde_urlencoded::to_string(&query).unwrap())
+            .dispatch();
 
-        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+        assert_eq!(response.status(), Status::SeeOther);
 
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let url = response.headers().get_one("Location").unwrap();
         assert_eq!("authenticate", url);
 
-        let session = req.get_session();
-        let first_request = parse_first_request(&session).unwrap();
-        assert_eq!(request, first_request);
+        let session_request: SessionContent = response
+            .cookies()
+            .get_private(crate::http::endpoints::COOKIE_NAME)
+            .as_ref()
+            .map(Cookie::value)
+            .map(serde_urlencoded::from_str)
+            .map(Result::ok)
+            .flatten()
+            .unwrap();
+
+        assert_eq!(
+            "email",
+            session_request.first_request.scope.as_deref().unwrap()
+        )
     }
 
     #[test]
@@ -694,5 +754,19 @@ mod tests {
     #[test]
     pub fn errors_are_reported() {
         assert_eq!(None, parse_response_type("code id_token invalid"));
+    }
+
+    fn build_successful_request() -> Request {
+        let client_store = build_test_client_store();
+        let redirect_uri =
+            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        Request {
+            scope: "email".into(),
+            response_type: "code".into(),
+            client_id: CONFIDENTIAL_CLIENT.into(),
+            redirect_uri: redirect_uri.into(),
+            state: TEST_STATE.into(),
+            ..Request::empty()
+        }
     }
 }

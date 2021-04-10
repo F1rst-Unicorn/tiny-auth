@@ -21,13 +21,14 @@ use crate::store::ScopeStore;
 
 use std::sync::Arc;
 
-use actix_web::web::Data;
-use actix_web::HttpResponse;
-
 use serde_derive::Serialize;
 
+use rocket::get;
+use rocket::State;
+use rocket_contrib::json::Json;
+
 #[derive(Serialize, Default)]
-struct Response {
+pub struct Response {
     #[serde(skip_serializing_if = "String::is_empty")]
     issuer: String,
 
@@ -130,10 +131,11 @@ struct Response {
     op_tos_uri: String,
 }
 
+#[get("/")]
 pub async fn get(
-    config: Data<IssuerConfiguration>,
-    scopes: Data<Arc<dyn ScopeStore>>,
-) -> HttpResponse {
+    config: State<'_, IssuerConfiguration>,
+    scopes: State<'_, Arc<dyn ScopeStore>>,
+) -> Json<Response> {
     let response = Response {
         issuer: config.issuer_url.clone(),
         authorization_endpoint: config.issuer_url.clone() + "/authorize",
@@ -200,13 +202,10 @@ pub async fn get(
         ..Default::default()
     };
 
-    HttpResponse::Ok()
-        .content_type("application/json")
-        .json(response)
+    Json(response)
 }
 
-pub async fn jwks(jwks: Data<Jwks>) -> HttpResponse {
-    HttpResponse::Ok()
-        .content_type("application/json")
-        .json(jwks.get_ref())
+#[get("/")]
+pub async fn jwks(jwks: State<'_, Jwks>) -> Json<&Jwks> {
+    Json(jwks.inner())
 }

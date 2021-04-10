@@ -20,41 +20,17 @@ pub mod state;
 mod tera;
 
 use crate::config::Config;
-use crate::config::Tls;
-use crate::config::TlsVersion;
 use crate::runtime::Error;
+use endpoints::*;
 
-use std::fs::File;
-use std::io::BufReader;
+use rocket::config::TlsConfig;
+use rocket::routes;
+use rocket::Rocket;
+use rocket::Shutdown;
 
-use actix_web::cookie::SameSite;
-use actix_web::dev::Server;
-use actix_web::middleware::DefaultHeaders;
-use actix_web::web;
-use actix_web::web::get;
-use actix_web::web::post;
-use actix_web::web::route as all;
-use actix_web::App;
-use actix_web::HttpResponse;
-use actix_web::HttpServer;
+use rocket_contrib::serve::StaticFiles;
 
-use actix_session::CookieSession;
-
-use rustls::internal::pemfile::certs;
-use rustls::internal::pemfile::pkcs8_private_keys;
-use rustls::AllowAnyAuthenticatedClient;
-use rustls::NoClientAuth;
-use rustls::RootCertStore;
-use rustls::ServerConfig;
-
-use log::error;
-use log::warn;
-
-pub fn build(config: Config) -> Result<Server, Error> {
-    let bind = config.web.bind.clone();
-    let workers = config.web.workers;
-    let tls = config.web.tls.clone();
-
+pub fn build(config: Config) -> Result<(Rocket, Shutdown), Error> {
     let constructor = state::Constructor::new(&config)?;
 
     let tera = constructor
@@ -80,58 +56,119 @@ pub fn build(config: Config) -> Result<Server, Error> {
         .ok_or(Error::LoggedBeforeError)?;
     let issuer_config = constructor.get_issuer_config();
     let jwks = constructor.build_jwks()?;
+    let cookie_builder = constructor.get_cookie_builder();
 
     std::mem::drop(constructor);
 
+    if config.web.secret_key.len() < 32 {
+        return Err(Error::SecretTooShort);
+    }
+
+    let mut rocket_config = rocket::Config::release_default();
+    rocket_config.ctrlc = false;
+    rocket_config.keep_alive = 60;
+    rocket_config.address = config.web.bind.address.parse()?;
+    rocket_config.port = config.web.bind.port;
+    rocket_config.workers = config.web.workers.unwrap_or(rocket_config.workers);
+    rocket_config.secret_key =
+        rocket::config::SecretKey::derive_from(config.web.secret_key.as_bytes());
+    rocket_config.log_level = rocket::config::LogLevel::Debug;
+
+    if let Some(config) = config.web.tls {
+        let tls_config = TlsConfig::from_paths(config.certificate, config.key);
+        rocket_config.tls = Some(tls_config);
+    }
+
+    let base_path = config.web.path;
+
+    let rocket = rocket::custom(rocket_config)
+        .manage(tera)
+        .manage(authenticator)
+        .manage(client_store)
+        .manage(scope_store)
+        .manage(user_store)
+        .manage(auth_code_store)
+        .manage(token_creator)
+        .manage(token_validator)
+        .manage(issuer_config)
+        .manage(jwks)
+        .manage(cookie_builder);
+
+    let rocket = mount_paths(rocket, &base_path, &config.web.static_files);
+
+    let shutdown = rocket.shutdown();
+
+    Ok((rocket, shutdown))
+}
+
+fn mount_paths(rocket: Rocket, base_path: &str, static_base: &str) -> Rocket {
+    rocket
+        .mount(
+            base_path.to_string() + "/static/css",
+            StaticFiles::from(static_base.to_string() + "/css"),
+        )
+        .mount(
+            base_path.to_string() + "/static/img",
+            StaticFiles::from(static_base.to_string() + "/img"),
+        )
+        .mount(
+            base_path.to_string() + "/.well-known/openid-configuration",
+            routes![discovery::get],
+        )
+        .mount(base_path.to_string() + "/jwks", routes![discovery::jwks])
+        .mount(
+            base_path.to_string() + "/authorize",
+            routes![authorize::get, authorize::post],
+        )
+        .mount(base_path.to_string() + "/health", routes![health::get])
+}
+
+#[cfg(test)]
+pub mod tests {
+
+    use crate::http::state::tests::*;
+
+    use rocket::local::blocking::Client;
+    use rocket::Rocket;
+
+    pub fn build_client() -> Client {
+        Client::tracked(build_rocket()).expect("Failed to build client")
+    }
+
+    pub fn build_rocket() -> Rocket {
+        super::mount_paths(build_rocket_state(), "", "static")
+    }
+
+    fn build_rocket_state() -> Rocket {
+        let mut rocket_config = rocket::Config::debug_default();
+        rocket_config.log_level = rocket::config::LogLevel::Debug;
+        rocket_config.secret_key = rocket::config::SecretKey::from(
+            "oYlv4KTjQGqxwVaBgTMj3andosEfZJfZOtp2TPEKIJMIiHGb7FYnY1jLde5HeyjO0hw8ua47SWtT1Q9UCAgcc"
+                .as_bytes(),
+        );
+        rocket::custom(rocket_config)
+            .manage(build_test_tera())
+            .manage(build_test_authenticator())
+            .manage(build_test_client_store())
+            .manage(build_test_scope_store())
+            .manage(build_test_user_store())
+            .manage(build_test_auth_code_store())
+            .manage(build_test_token_creator())
+            .manage(build_test_token_validator())
+            .manage(build_test_issuer_config())
+            .manage(build_test_cookie_builder())
+    }
+}
+
+/*
+fn parked(config: Config) -> _ {
+
     let server = HttpServer::new(move || {
-        let token_certificate = token_certificate.clone();
         App::new()
-            .app_data(web::Data::new(tera.clone()))
-            .app_data(web::Data::new(authenticator.clone()))
-            .app_data(web::Data::new(client_store.clone()))
-            .app_data(web::Data::new(scope_store.clone()))
-            .app_data(web::Data::new(user_store.clone()))
-            .app_data(web::Data::new(auth_code_store.clone()))
-            .app_data(web::Data::new(token_creator.clone()))
-            .app_data(web::Data::new(token_validator.clone()))
-            .app_data(web::Data::new(issuer_config.clone()))
-            .app_data(web::Data::new(jwks.clone()))
-            .wrap(
-                CookieSession::private(config.web.secret_key.as_bytes())
-                    // ^- encryption is only needed to avoid encoding problems
-                    .domain(&config.web.public_host.domain)
-                    .name("session")
-                    .path(config.web.path.as_ref().expect("no default given"))
-                    .secure(config.web.tls.is_some())
-                    .http_only(true)
-                    .same_site(SameSite::Lax)
-                    .max_age(config.web.session_timeout.expect("no default given")),
-            )
             .wrap(DefaultHeaders::new().header("Cache-Control", "no-store"))
             .wrap(DefaultHeaders::new().header("Pragma", "no-cache"))
-            .service(actix_files::Files::new(
-                &(config.web.path.clone().unwrap() + "/static/css"),
-                &(config.web.static_files.clone() + "/css"),
-            ))
-            .service(actix_files::Files::new(
-                &(config.web.path.clone().unwrap() + "/static/img"),
-                &(config.web.static_files.clone() + "/img"),
-            ))
             .service(
-                web::scope(&config.web.path.as_ref().unwrap())
-                    .route(
-                        "/.well-known/openid-configuration",
-                        get().to(endpoints::discovery::get),
-                    )
-                    .route(
-                        "/.well-known/openid-configuration",
-                        all().to(endpoints::method_not_allowed),
-                    )
-                    .route("/jwks", get().to(endpoints::discovery::jwks))
-                    .route("/jwks", all().to(endpoints::method_not_allowed))
-                    .route("/authorize", get().to(endpoints::authorize::handle))
-                    .route("/authorize", post().to(endpoints::authorize::handle))
-                    .route("/authorize", all().to(endpoints::method_not_allowed))
+                web::scope(&rocket_config.web.path.as_ref().unwrap())
                     .route("/token", post().to(endpoints::token::post))
                     .route("/token", all().to(endpoints::method_not_allowed))
                     .route("/userinfo", get().to(endpoints::userinfo::get))
@@ -163,91 +200,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
                         get().to(move || HttpResponse::Ok().body(token_certificate.clone())),
                     )
                     .route("/cert", all().to(endpoints::method_not_allowed))
-                    .route("/health", get().to(endpoints::health::get))
-                    .route("/health", all().to(endpoints::method_not_allowed))
-                    .default_service(all().to(|| HttpResponse::NotFound().body("not found"))),
             )
-    })
-    .disable_signals()
-    .keep_alive(60)
-    .shutdown_timeout(30);
-
-    let server = if let Some(tls) = tls {
-        let tls_config = configure_tls(&tls);
-        if let Err(e) = tls_config {
-            return Err(e);
-        }
-        server.bind_rustls(&bind, tls_config.unwrap())
-    } else {
-        server.bind(&bind)
-    };
-
-    if let Err(e) = server {
-        warn!("Failed to create server: {}", e);
-        return Err(e.into());
-    }
-    let mut server = server.unwrap();
-
-    if let Some(workers) = workers {
-        server = server.workers(workers);
-    }
-
-    let srv = server.run();
-    Ok(srv)
+    });
 }
-
-fn configure_tls(config: &Tls) -> Result<ServerConfig, Error> {
-    let mut result = if let Some(client_ca) = &config.client_ca {
-        let mut ca_store = RootCertStore::empty();
-        if ca_store
-            .add_pem_file(&mut BufReader::new(File::open(&client_ca)?))
-            .is_err()
-        {
-            error!("could not load tls client ca");
-            return Err(Error::LoggedBeforeError);
-        }
-        ServerConfig::new(AllowAnyAuthenticatedClient::new(ca_store))
-    } else {
-        ServerConfig::new(NoClientAuth::new())
-    };
-
-    let certs = match certs(&mut BufReader::new(File::open(&config.certificate)?)) {
-        Err(_) => {
-            error!("could not read tls certificate file");
-            return Err(Error::LoggedBeforeError);
-        }
-        Ok(certs) => certs,
-    };
-
-    let key = match pkcs8_private_keys(&mut BufReader::new(File::open(&config.key)?)) {
-        Err(_) => {
-            error!("could not read tls key file");
-            return Err(Error::LoggedBeforeError);
-        }
-        Ok(keys) => match keys.len() {
-            0 => {
-                error!("No tls key found");
-                return Err(Error::LoggedBeforeError);
-            }
-            1 => keys[0].clone(),
-            _ => {
-                error!("Put only one tls key into the tls key file");
-                return Err(Error::LoggedBeforeError);
-            }
-        },
-    };
-
-    if let Err(e) = result.set_single_cert(certs, key) {
-        error!("tls key is invalid: {}", e);
-        return Err(Error::LoggedBeforeError);
-    }
-
-    result.versions = config
-        .versions
-        .clone()
-        .into_iter()
-        .map(TlsVersion::into)
-        .collect();
-
-    Ok(result)
-}
+*/

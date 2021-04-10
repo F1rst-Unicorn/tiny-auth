@@ -29,9 +29,11 @@ rate limit:
   period in seconds: 30
 
 web:
-  bind: localhost:34344
+  bind:
+    address: ::1
+    port: 34344
   public host:
-    domain: localhost
+    domain: ::1
     port: 34344
   static files: static
   session timeout: 60000

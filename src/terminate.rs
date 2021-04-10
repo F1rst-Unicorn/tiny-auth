@@ -17,17 +17,16 @@
 
 use crate::systemd::notify_about_termination;
 
-use actix_web::dev::Server;
-
 use tokio::io::Error;
 use tokio::signal::unix::signal;
 use tokio::signal::unix::SignalKind;
 
+use rocket::Shutdown;
+
 use log::debug;
 use log::info;
 
-#[allow(clippy::cognitive_complexity)] // not really complex to read
-pub async fn terminator(server: Server) -> Result<(), Error> {
+pub async fn terminator(shutdown_handle: Shutdown) -> Result<(), Error> {
     let mut sigint = signal(SignalKind::interrupt())?;
     let mut sigterm = signal(SignalKind::terminate())?;
     let mut sigquit = signal(SignalKind::quit())?;
@@ -40,36 +39,7 @@ pub async fn terminator(server: Server) -> Result<(), Error> {
     }
 
     info!("Exitting");
+    shutdown_handle.shutdown();
     tokio::spawn(notify_about_termination());
-    tokio::select! {
-        _ = server.stop(true) => {
-            debug!("HTTP server stopped");
-            return Ok(())
-        }
-        _ = sigint.recv() => {}
-        _ = sigterm.recv() => {}
-        _ = sigquit.recv() => {}
-    };
-
-    info!("Calm down, exitting immediately...");
-    while tokio::select! {
-        _ = server.stop(false) => {
-            debug!("HTTP server stopped");
-            false
-        }
-        _ = sigint.recv() => {
-            info!("Still waiting for shutdown...");
-            true
-        }
-        _ = sigterm.recv() => {
-            info!("Still waiting for shutdown...");
-            true
-        }
-        _ = sigquit.recv() => {
-            info!("Still waiting for shutdown...");
-            true
-        }
-    } {}
-
     Ok(())
 }

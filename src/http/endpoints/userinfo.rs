@@ -29,6 +29,9 @@ use actix_web::HttpResponse;
 
 use serde_derive::Deserialize;
 
+use rocket::get;
+use rocket::post;
+
 #[derive(Deserialize)]
 pub struct Request {
     #[serde(default)]
@@ -36,6 +39,7 @@ pub struct Request {
     access_token: Option<String>,
 }
 
+#[get("/")]
 pub async fn get(headers: HttpRequest, validator: Data<TokenValidator>) -> HttpResponse {
     post(Form(Request { access_token: None }), headers, validator).await
 }
