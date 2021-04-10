@@ -260,7 +260,7 @@ impl<'r> FromRequest<'r> for Session<'r> {
     async fn from_request(request: &'r rocket::Request<'_>) -> Outcome<Self, Self::Error> {
         let cookie_builder = match request.guard::<State<'_, CookieFactory>>().await {
             Outcome::Success(v) => v,
-            Outcome::Forward(v) => return Outcome::Forward(v),
+            Outcome::Forward(_) => return Outcome::Forward(()),
             Outcome::Failure((status, _)) => return Outcome::Failure((status, ())),
         };
 

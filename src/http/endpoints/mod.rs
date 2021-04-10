@@ -116,7 +116,7 @@ fn render_json_error(error: ProtocolError, description: &str) -> HttpResponse {
     })
 }
  */
-fn render_redirect_error<'r>(
+fn render_redirect_error(
     redirect_uri: &str,
     error: ProtocolError,
     description: &str,
