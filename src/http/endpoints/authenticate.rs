@@ -261,7 +261,7 @@ fn render_redirect_error(
 ) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
-            return render_invalid_authentication_request(&tera);
+            return render_invalid_authentication_request(tera);
         }
         Some(req) => req,
     };

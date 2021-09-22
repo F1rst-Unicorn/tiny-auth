@@ -50,8 +50,7 @@ pub trait ScopeStore: Send + Sync {
                 }
                 s => s,
             })
-            .filter(Option::is_some)
-            .map(Option::unwrap)
+            .flatten()
             .collect()
     }
 

@@ -136,7 +136,7 @@ impl<'a> Constructor<'a> {
     fn build_user_store(config: &'a Config) -> Option<Arc<dyn UserStore>> {
         match &config.store {
             None => None,
-            Some(Store::Config { base }) => Some(Arc::new(FileUserStore::new(&base)?)),
+            Some(Store::Config { base }) => Some(Arc::new(FileUserStore::new(base)?)),
         }
     }
 
@@ -147,7 +147,7 @@ impl<'a> Constructor<'a> {
     fn build_client_store(config: &'a Config) -> Option<Arc<dyn ClientStore>> {
         match &config.store {
             None => None,
-            Some(Store::Config { base }) => Some(Arc::new(FileClientStore::new(&base)?)),
+            Some(Store::Config { base }) => Some(Arc::new(FileClientStore::new(base)?)),
         }
     }
 
@@ -158,7 +158,7 @@ impl<'a> Constructor<'a> {
     fn build_scope_store(config: &'a Config) -> Option<Arc<dyn ScopeStore>> {
         match &config.store {
             None => None,
-            Some(Store::Config { base }) => Some(Arc::new(FileScopeStore::new(&base)?)),
+            Some(Store::Config { base }) => Some(Arc::new(FileScopeStore::new(base)?)),
         }
     }
 

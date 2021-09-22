@@ -118,7 +118,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
                 &(config.web.static_files.clone() + "/img"),
             ))
             .service(
-                web::scope(&config.web.path.as_ref().unwrap())
+                web::scope(config.web.path.as_ref().unwrap())
                     .route(
                         "/.well-known/openid-configuration",
                         get().to(endpoints::discovery::get),

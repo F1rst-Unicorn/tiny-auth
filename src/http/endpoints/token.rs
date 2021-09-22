@@ -174,7 +174,7 @@ pub async fn post(
             match grant_with_refresh_token(
                 headers,
                 request,
-                client_store,
+                client_store.get_ref().clone(),
                 authenticator,
                 token_validator,
                 scope_store,
@@ -192,7 +192,7 @@ pub async fn post(
                     grant_with_authorization_code(
                         headers,
                         request,
-                        client_store,
+                        client_store.get_ref().clone(),
                         user_store,
                         auth_code_store,
                         authenticator,
@@ -204,7 +204,7 @@ pub async fn post(
                 GrantType::ClientCredentials => grant_with_client_credentials(
                     headers,
                     request,
-                    client_store,
+                    client_store.get_ref().clone(),
                     authenticator,
                     scope_store,
                     issuer_configuration,
@@ -214,7 +214,7 @@ pub async fn post(
                 GrantType::Password => grant_with_password(
                     headers,
                     request,
-                    client_store,
+                    client_store.get_ref().clone(),
                     authenticator,
                     scope_store,
                     issuer_configuration,
@@ -299,7 +299,7 @@ pub async fn post(
 async fn grant_with_authorization_code(
     headers: HttpRequest,
     request: web::Form<Request>,
-    client_store: web::Data<Arc<dyn ClientStore>>,
+    client_store: Arc<dyn ClientStore>,
     user_store: web::Data<Arc<dyn UserStore>>,
     auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
     authenticator: web::Data<Authenticator>,
@@ -323,7 +323,7 @@ async fn grant_with_authorization_code(
     let client = match authenticate_client(
         headers,
         &request,
-        (*client_store).clone(),
+        client_store.clone(),
         authenticator,
         issuer_configuration,
     ) {
@@ -337,7 +337,7 @@ async fn grant_with_authorization_code(
                 }
                 Some(client_id) => client_id,
             };
-            let client = match client_store.get(&client_id) {
+            let client = match client_store.get(client_id) {
                 None => {
                     debug!("client '{}' not found", client_id);
                     return Err(render_json_error(
@@ -362,7 +362,7 @@ async fn grant_with_authorization_code(
 
     let code = request.code.as_ref().unwrap();
     let record = match auth_code_store
-        .validate(&client.client_id, &code, Local::now())
+        .validate(&client.client_id, code, Local::now())
         .await
     {
         None => {
@@ -419,7 +419,7 @@ async fn grant_with_authorization_code(
 async fn grant_with_client_credentials(
     headers: HttpRequest,
     request: web::Form<Request>,
-    client_store: web::Data<Arc<dyn ClientStore>>,
+    client_store: Arc<dyn ClientStore>,
     authenticator: web::Data<Authenticator>,
     scope_store: web::Data<Arc<dyn ScopeStore>>,
     issuer_configuration: web::Data<IssuerConfiguration>,
@@ -427,7 +427,7 @@ async fn grant_with_client_credentials(
     let client = authenticate_client(
         headers,
         &request,
-        (*client_store).clone(),
+        client_store,
         authenticator,
         issuer_configuration,
     )?;
@@ -454,7 +454,7 @@ async fn grant_with_client_credentials(
 async fn grant_with_password(
     headers: HttpRequest,
     request: web::Form<Request>,
-    client_store: web::Data<Arc<dyn ClientStore>>,
+    client_store: Arc<dyn ClientStore>,
     authenticator: web::Data<Authenticator>,
     scope_store: web::Data<Arc<dyn ScopeStore>>,
     issuer_configuration: web::Data<IssuerConfiguration>,
@@ -482,12 +482,12 @@ async fn grant_with_password(
     let client = authenticate_client(
         headers,
         &request,
-        (*client_store).clone(),
+        client_store,
         authenticator.clone(),
         issuer_configuration,
     )?;
 
-    let user = match authenticator.authenticate_user(&username, &password).await {
+    let user = match authenticator.authenticate_user(username, password).await {
         Err(e) => {
             return Err(render_json_error(
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
@@ -515,7 +515,7 @@ async fn grant_with_password(
 async fn grant_with_refresh_token(
     headers: HttpRequest,
     request: web::Form<Request>,
-    client_store: web::Data<Arc<dyn ClientStore>>,
+    client_store: Arc<dyn ClientStore>,
     authenticator: web::Data<Authenticator>,
     validator: web::Data<TokenValidator>,
     scope_store: web::Data<Arc<dyn ScopeStore>>,
@@ -531,7 +531,7 @@ async fn grant_with_refresh_token(
         Some(token) => token,
     };
 
-    let refresh_token = match validator.validate::<RefreshToken>(&raw_token) {
+    let refresh_token = match validator.validate::<RefreshToken>(raw_token) {
         None => {
             return Err(render_json_error(
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
@@ -544,7 +544,7 @@ async fn grant_with_refresh_token(
     let client = authenticate_client(
         headers,
         &request,
-        (*client_store).clone(),
+        client_store,
         authenticator,
         issuer_configuration,
     )?;
@@ -581,7 +581,7 @@ async fn grant_with_refresh_token(
 fn authenticate_client(
     headers: HttpRequest,
     request: &web::Form<Request>,
-    client_store: Arc<Arc<dyn ClientStore>>,
+    client_store: Arc<dyn ClientStore>,
     authenticator: web::Data<Authenticator>,
     issuer_configuration: web::Data<IssuerConfiguration>,
 ) -> Result<Client, HttpResponse> {
@@ -645,7 +645,7 @@ fn authenticate_client(
 
 fn authenticate_client_via_jwt(
     request: &web::Form<Request>,
-    client_store: Arc<Arc<dyn ClientStore>>,
+    client_store: Arc<dyn ClientStore>,
     issuer_configuration: web::Data<IssuerConfiguration>,
 ) -> Result<Client, HttpResponse> {
     let assertion_type = request.client_assertion_type.clone().unwrap();

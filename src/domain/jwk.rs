@@ -82,8 +82,8 @@ impl Jwk {
     }
 }
 
-#[serde(untagged)]
 #[derive(Serialize, Clone)]
+#[serde(untagged)]
 enum Key {
     Rsa { n: String, e: String },
     Ecdsa { crv: String, x: String, y: String },
