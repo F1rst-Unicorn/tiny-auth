@@ -107,7 +107,7 @@ pub async fn get(
     let prompt = parse_prompt(&first_request.prompt);
 
     let allowed_scopes = user.get_allowed_scopes(&first_request.client_id.clone().unwrap());
-    let scopes = parse_scope_names(first_request.scope.as_ref().unwrap());
+    let scopes = parse_scope_names(first_request.scope.as_ref().unwrap_or(&"".to_string()));
     let scopes = BTreeSet::from_iter(scopes);
     if scopes.is_subset(&allowed_scopes) {
         if prompt.contains(&oidc::Prompt::Consent) {

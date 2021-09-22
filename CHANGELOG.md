@@ -5,6 +5,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+* Fix panic when authorising a request with unknown scope
+  ([#72](https://gitlab.com/veenj/tiny-auth/issues/72))
+
 ### Maintenance
 
 * Add `cargo audit` to CI to be informed about security vulnerabilities
