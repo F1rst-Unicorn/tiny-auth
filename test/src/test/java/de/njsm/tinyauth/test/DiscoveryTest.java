@@ -49,7 +49,7 @@ public class DiscoveryTest implements TinyAuthTest {
                 .body("id_token_signing_alg_values_supported", containsInAnyOrder("HS256", "HS384", "HS512", "ES256", "ES384", "RS256", "RS384", "RS512", "PS256", "PS384", "PS512"))
                 .body("token_endpoint_auth_methods_supported", containsInAnyOrder("client_secret_basic", "client_secret_post", "client_secret_jwt", "private_key_jwt"))
                 .body("claims_supported", containsInAnyOrder("iss", "sub", "aud", "exp", "iat", "auth_time", "nonce", "acr", "amr", "azp"))
-                .body("service_documentation", equalTo("https://gitlab.com/veenj/tiny-auth/-/blob/master/doc/README.md"))
+                .body("service_documentation", equalTo("https://j.njsm.de/git/veenj/tiny-auth/src/branch/master/README.md"))
                 .body("claims_locales_supported", containsInAnyOrder("en"))
                 .body("ui_locales_supported", containsInAnyOrder("en"))
                 .body("claims_parameter_supported", equalTo(false))

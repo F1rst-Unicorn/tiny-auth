@@ -3,7 +3,7 @@ name = "tiny-auth"
 version = "0.8.2"
 authors = ["Jan Veen <jan.veen@posteo.de>"]
 description = "Tiny OIDC Provider"
-homepage = "https://gitlab.com/veenj/tiny-auth/-/blob/master/doc/README.md"
+homepage = "https://j.njsm.de/git/veenj/tiny-auth/src/branch/master/README.md"
 
 license = "GPL-3.0-or-later"
 build = "build.rs"

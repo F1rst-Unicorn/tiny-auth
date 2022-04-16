@@ -266,7 +266,7 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-basic-certification-test-plan.oidcc-id-token-hint")
     @Tag("oidcc-implicit-certification-test-plan.oidcc-id-token-hint")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-id-token-hint")
-    @Disabled("https://gitlab.com/veenj/tiny-auth/-/issues/53")
+    @Disabled("https://j.njsm.de/git/veenj/tiny-auth/issues/53")
     default void authenticateWithIdTokenHint() {
         fail("This test calls the authorization endpoint test twice. " +
                 "The second time it will include prompt=none with the " +
@@ -282,7 +282,7 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-basic-certification-test-plan.oidcc-ui-locales")
     @Tag("oidcc-implicit-certification-test-plan.oidcc-ui-locales")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-ui-locales")
-    @Disabled("https://gitlab.com/veenj/tiny-auth/-/issues/22")
+    @Disabled("https://j.njsm.de/git/veenj/tiny-auth/issues/22")
     default void authenticateWithUiLocale() {
         fail("This test includes the ui_locales parameter in the request to " +
                 "the authorization endpoint, with the value set to that " +
