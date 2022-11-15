@@ -173,11 +173,8 @@ pub fn build(config: Config) -> Result<Server, Error> {
     .shutdown_timeout(30);
 
     let server = if let Some(tls) = tls {
-        let tls_config = configure_tls(&tls);
-        if let Err(e) = tls_config {
-            return Err(e);
-        }
-        server.bind_rustls(&bind, tls_config.unwrap())
+        let tls_config = configure_tls(&tls)?;
+        server.bind_rustls(&bind, tls_config)
     } else {
         server.bind(&bind)
     };
@@ -200,7 +197,7 @@ fn configure_tls(config: &Tls) -> Result<ServerConfig, Error> {
     let mut result = if let Some(client_ca) = &config.client_ca {
         let mut ca_store = RootCertStore::empty();
         if ca_store
-            .add_pem_file(&mut BufReader::new(File::open(&client_ca)?))
+            .add_pem_file(&mut BufReader::new(File::open(client_ca)?))
             .is_err()
         {
             error!("could not load tls client ca");

@@ -62,6 +62,7 @@ fn translator(args: &HashMap<String, Value>) -> Result<Value> {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn make_static_mapper(
     http_path: String,
 ) -> Box<dyn Fn(&HashMap<String, Value>) -> Result<Value> + Sync + Send> {

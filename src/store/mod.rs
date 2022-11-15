@@ -43,14 +43,13 @@ pub trait ScopeStore: Send + Sync {
 
     fn get_all(&self, keys: &[String]) -> Vec<Scope> {
         keys.iter()
-            .map(|v| match self.get(v) {
+            .filter_map(|v| match self.get(v) {
                 None => {
                     info!("requested unknown scope {}, ignoring", v);
                     None
                 }
                 s => s,
             })
-            .flatten()
             .collect()
     }
 

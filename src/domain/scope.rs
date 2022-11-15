@@ -166,12 +166,12 @@ impl Mapping {
                 }
             }
             Type::UserAttribute(selector) => {
-                let value = serde_json::to_value(&user).map_err(Error::from)?;
+                let value = serde_json::to_value(user).map_err(Error::from)?;
                 let value_to_copy = copy_values(value, selector.clone(), &mut Vec::new())?;
                 insert_value(self.structure.clone(), value_to_copy)
             }
             Type::ClientAttribute(selector) => {
-                let value = serde_json::to_value(&client).map_err(Error::from)?;
+                let value = serde_json::to_value(client).map_err(Error::from)?;
                 let value_to_copy = copy_values(value, selector.clone(), &mut Vec::new())?;
                 insert_value(self.structure.clone(), value_to_copy)
             }

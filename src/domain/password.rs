@@ -111,7 +111,7 @@ fn generate_salt(username: &str) -> Vec<u8> {
     const RANDOM_SALT_LENGTH: usize = 32;
     let random_salt: [u8; RANDOM_SALT_LENGTH] = random();
     let mut result = Vec::with_capacity(RANDOM_SALT_LENGTH + username.len());
-    result.extend(&random_salt);
+    result.extend(random_salt);
     result.extend(username.as_bytes());
     result
 }

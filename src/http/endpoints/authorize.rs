@@ -126,8 +126,7 @@ impl Request {
     pub fn get_response_types(&self) -> Vec<ResponseType> {
         self.response_type
             .as_deref()
-            .map(parse_response_type)
-            .flatten()
+            .and_then(parse_response_type)
             .unwrap()
     }
 

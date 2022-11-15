@@ -77,8 +77,7 @@ fn compute_watchdog_interval() -> u64 {
         .ok()
         .as_deref()
         .map(u64::from_str)
-        .map(Result::ok)
-        .flatten()
+        .and_then(Result::ok)
         .unwrap_or(default);
     microseconds * 4 / 5
 }
