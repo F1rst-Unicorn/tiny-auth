@@ -111,11 +111,11 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .wrap(DefaultHeaders::new().header("Pragma", "no-cache"))
             .service(actix_files::Files::new(
                 &(config.web.path.clone().unwrap() + "/static/css"),
-                &(config.web.static_files.clone() + "/css"),
+                config.web.static_files.clone() + "/css",
             ))
             .service(actix_files::Files::new(
                 &(config.web.path.clone().unwrap() + "/static/img"),
-                &(config.web.static_files.clone() + "/img"),
+                config.web.static_files.clone() + "/img",
             ))
             .service(
                 web::scope(config.web.path.as_ref().unwrap())
