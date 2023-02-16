@@ -153,6 +153,7 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-prompt-login")
     default void authenticateTwiceWithForcedLogin(Browser browser) throws Exception {
         OidcToken tokenFromFirstLogin = authenticate(browser);
+        Thread.sleep(2000);
         OidcToken tokenFromSecondLogin = authenticateWithAdditionalParameters(browser, Map.of("prompt", "login"));
 
         long firstAuthTime = tokenFromFirstLogin.getClaims().getLongClaim(AUTH_TIME);
