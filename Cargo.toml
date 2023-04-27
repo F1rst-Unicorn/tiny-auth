@@ -78,4 +78,4 @@ default-features = false
 features = ["yaml_format", "file", "pattern_encoder", "json_encoder", "console_appender"]
 
 [build-dependencies]
-vergen = "3"
+vergen = { version = "8", features = ["build", "git", "git2"] }

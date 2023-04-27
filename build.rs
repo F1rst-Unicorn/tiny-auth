@@ -1,5 +1,5 @@
-/*  tiny-auth: Tiny OIDC Provider
- *  Copyright (C) 2019 The tiny-auth developers
+/*  cinit: process initialisation program for containers
+ *  Copyright (C) 2019 The cinit developers
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -16,12 +16,10 @@
  */
 extern crate vergen;
 
-use vergen::generate_cargo_keys;
-use vergen::ConstantsFlags;
+use std::error::Error;
+use vergen::EmitBuilder;
 
-fn main() {
-    let mut flags = ConstantsFlags::all();
-    flags.toggle(ConstantsFlags::REBUILD_ON_HEAD_CHANGE);
-
-    generate_cargo_keys(flags).expect("vergen could not generate flags");
+fn main() -> Result<(), Box<dyn Error>> {
+    EmitBuilder::builder().all_git().all_build().emit()?;
+    Ok(())
 }
