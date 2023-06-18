@@ -31,6 +31,8 @@ use crate::store::memory::*;
 use crate::store::*;
 use crate::util::read_file;
 
+use tiny_auth_business::cors::CorsListerImpl;
+
 use std::sync::Arc;
 
 use jsonwebtoken::Algorithm;
@@ -50,6 +52,7 @@ use openssl::rsa::Rsa;
 use log::error;
 
 use tera::Tera;
+use tiny_auth_business::cors::CorsLister;
 
 pub struct Constructor<'a> {
     config: &'a Config,
@@ -303,6 +306,10 @@ impl<'a> Constructor<'a> {
         Ok(Jwks::with_keys(vec![self.jwk.clone()]))
     }
 
+    pub fn build_cors_lister(&self) -> Result<Arc<dyn CorsLister>, Error> {
+        Ok(Arc::new(CorsListerImpl::new(self.config.web.cors.clone())))
+    }
+
     fn encode_bignum(num: &BigNumRef) -> String {
         base64::encode_config(num.to_vec(), base64::URL_SAFE_NO_PAD)
     }
@@ -366,8 +373,11 @@ pub mod tests {
 
     pub fn build_test_tera() -> Data<Tera> {
         Data::new(
-            load_template_engine(&(env!("CARGO_MANIFEST_DIR").to_string() + "/static/"), "")
-                .unwrap(),
+            load_template_engine(
+                &(env!("CARGO_MANIFEST_DIR").to_string() + "/../../static/"),
+                "",
+            )
+            .unwrap(),
         )
     }
 

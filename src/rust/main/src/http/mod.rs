@@ -23,17 +23,21 @@ use crate::config::Config;
 use crate::config::Tls;
 use crate::config::TlsVersion;
 use crate::runtime::Error;
+use tiny_auth_web::cors::cors_options_preflight;
 
 use std::fs::File;
 use std::io::BufReader;
 
 use actix_web::cookie::SameSite;
 use actix_web::dev::Server;
+use actix_web::http::Method;
 use actix_web::middleware::DefaultHeaders;
-use actix_web::web;
 use actix_web::web::get;
+use actix_web::web::method;
 use actix_web::web::post;
 use actix_web::web::route as all;
+use actix_web::web::scope;
+use actix_web::web::Data;
 use actix_web::App;
 use actix_web::HttpResponse;
 use actix_web::HttpServer;
@@ -80,22 +84,24 @@ pub fn build(config: Config) -> Result<Server, Error> {
         .ok_or(Error::LoggedBeforeError)?;
     let issuer_config = constructor.get_issuer_config();
     let jwks = constructor.build_jwks()?;
+    let cors_lister = constructor.build_cors_lister()?;
 
     std::mem::drop(constructor);
 
     let server = HttpServer::new(move || {
         let token_certificate = token_certificate.clone();
         App::new()
-            .app_data(web::Data::new(tera.clone()))
-            .app_data(web::Data::new(authenticator.clone()))
-            .app_data(web::Data::new(client_store.clone()))
-            .app_data(web::Data::new(scope_store.clone()))
-            .app_data(web::Data::new(user_store.clone()))
-            .app_data(web::Data::new(auth_code_store.clone()))
-            .app_data(web::Data::new(token_creator.clone()))
-            .app_data(web::Data::new(token_validator.clone()))
-            .app_data(web::Data::new(issuer_config.clone()))
-            .app_data(web::Data::new(jwks.clone()))
+            .app_data(Data::new(tera.clone()))
+            .app_data(Data::new(authenticator.clone()))
+            .app_data(Data::new(client_store.clone()))
+            .app_data(Data::new(scope_store.clone()))
+            .app_data(Data::new(user_store.clone()))
+            .app_data(Data::new(auth_code_store.clone()))
+            .app_data(Data::new(token_creator.clone()))
+            .app_data(Data::new(token_validator.clone()))
+            .app_data(Data::new(issuer_config.clone()))
+            .app_data(Data::new(jwks.clone()))
+            .app_data(Data::new(cors_lister.clone()))
             .wrap(
                 CookieSession::private(config.web.secret_key.as_bytes())
                     // ^- encryption is only needed to avoid encoding problems
@@ -118,24 +124,34 @@ pub fn build(config: Config) -> Result<Server, Error> {
                 config.web.static_files.clone() + "/img",
             ))
             .service(
-                web::scope(config.web.path.as_ref().unwrap())
+                scope(config.web.path.as_ref().unwrap())
                     .route(
                         "/.well-known/openid-configuration",
                         get().to(endpoints::discovery::get),
                     )
                     .route(
                         "/.well-known/openid-configuration",
+                        method(Method::OPTIONS).to(cors_options_preflight),
+                    )
+                    .route(
+                        "/.well-known/openid-configuration",
                         all().to(endpoints::method_not_allowed),
                     )
                     .route("/jwks", get().to(endpoints::discovery::jwks))
+                    .route("/jwks", method(Method::OPTIONS).to(cors_options_preflight))
                     .route("/jwks", all().to(endpoints::method_not_allowed))
                     .route("/authorize", get().to(endpoints::authorize::handle))
                     .route("/authorize", post().to(endpoints::authorize::handle))
                     .route("/authorize", all().to(endpoints::method_not_allowed))
                     .route("/token", post().to(endpoints::token::post))
+                    .route("/token", method(Method::OPTIONS).to(cors_options_preflight))
                     .route("/token", all().to(endpoints::method_not_allowed))
                     .route("/userinfo", get().to(endpoints::userinfo::get))
                     .route("/userinfo", post().to(endpoints::userinfo::post))
+                    .route(
+                        "/userinfo",
+                        method(Method::OPTIONS).to(cors_options_preflight),
+                    )
                     .route("/userinfo", all().to(endpoints::method_not_allowed))
                     .route("/authenticate", get().to(endpoints::authenticate::get))
                     .route("/authenticate", post().to(endpoints::authenticate::post))
@@ -162,8 +178,13 @@ pub fn build(config: Config) -> Result<Server, Error> {
                         "/cert",
                         get().to(move || HttpResponse::Ok().body(token_certificate.clone())),
                     )
+                    .route("/cert", method(Method::OPTIONS).to(cors_options_preflight))
                     .route("/cert", all().to(endpoints::method_not_allowed))
                     .route("/health", get().to(endpoints::health::get))
+                    .route(
+                        "/health",
+                        method(Method::OPTIONS).to(cors_options_preflight),
+                    )
                     .route("/health", all().to(endpoints::method_not_allowed))
                     .default_service(all().to(|| HttpResponse::NotFound().body("not found"))),
             )

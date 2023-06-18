@@ -43,6 +43,12 @@ The domain under which clients and users can reach tiny-auth. Used for URLs.
 Optional. The path under which tiny-auth is hosted. If it is deployed on a
 subpath below a domain, set the subpath here.
 
+#### `cors`
+
+A list of strings representing approved domains for [Cross Origin Resource
+Sharing](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS). Supported
+methods are `GET`, `POST`, and `OPTIONS` and responses are cacheable for 1 day.
+
 #### `static files`
 
 Directory storing the HTML et al. files. This directory is usually determined

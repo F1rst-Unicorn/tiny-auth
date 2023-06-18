@@ -15,6 +15,15 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use tiny_auth_business::cors::CorsLister;
+use tiny_auth_web::cors::render_invalid_request;
+use tiny_auth_web::cors::CorsCheckResult;
+use tiny_auth_web::cors::CorsChecker;
+
+use std::sync::Arc;
+
+use actix_web::web::Data;
+use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 
 use serde::Serialize;
@@ -24,8 +33,14 @@ struct Health {
     ok: bool,
 }
 
-pub async fn get() -> HttpResponse {
+pub async fn get(request: HttpRequest, cors_lister: Data<Arc<dyn CorsLister>>) -> HttpResponse {
     let health = Health { ok: true };
 
-    HttpResponse::Ok().json(health)
+    match CorsChecker::new(cors_lister.get_ref().clone()).check(&request) {
+        CorsCheckResult::IllegalOrigin => render_invalid_request(),
+        approved @ (CorsCheckResult::ApprovedOrigin(_) | CorsCheckResult::NoOrigin) => approved
+            .add_headers_to(&mut HttpResponse::Ok())
+            .content_type("application/json")
+            .json(health),
+    }
 }

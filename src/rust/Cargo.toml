@@ -1,32 +1,21 @@
-[package]
-name = "tiny-auth"
+[workspace]
+members = ["main", "business", "web"]
+
+[workspace.package]
 version = "0.8.2"
 authors = ["Jan Veen <jan.veen@posteo.de>"]
 description = "Tiny OIDC Provider"
 homepage = "https://j.njsm.de/git/veenj/tiny-auth/src/branch/master/README.md"
 
 license = "GPL-3.0-or-later"
-build = "build.rs"
-edition = "2018"
+edition = "2021"
 
 [profile.release]
 lto = true
 opt-level = "s"
 codegen-units = 1
 
-[[bin]]
-name = "tiny-auth"
-path = "src/bin/tiny-auth.rs"
-
-[[bin]]
-name = "tiny-auth-password-encoder"
-path = "src/bin/password-encoder.rs"
-
-[[bin]]
-name = "tiny-auth-scope-debugger"
-path = "src/bin/scope-debugger.rs"
-
-[dependencies]
+[workspace.dependencies]
 clap = "2.33.3"
 log = "0.4.11"
 serde_derive = "1.0.115"
@@ -48,34 +37,35 @@ rand = "0.7.3"
 async-trait = "0.1.40"
 rustls = "0.16.0"
 
-[dependencies.openssl]
+[workspace.dependencies.openssl]
 version = "0.10"
 features = ["v110"]
 
-[dependencies.ring]
+[workspace.dependencies.ring]
 version = "0.16.15"
 features = ["alloc", "std"]
 
-[dependencies.tokio]
+[workspace.dependencies.tokio]
 version = "0.2"
 features = ["full"]
 
-[dependencies.actix-web]
+[workspace.dependencies.actix-web]
 version = "2.0"
 features = ["rustls"]
 
-[dependencies.uuid]
+[workspace.dependencies.uuid]
 version = "0.8.1"
 features = ["v4", "serde"]
 
-[dependencies.serde]
+[workspace.dependencies.serde]
 version = "1.0.115"
 features = ["derive"]
 
-[dependencies.log4rs]
+[workspace.dependencies.log4rs]
 version = "0.13.0"
 default-features = false
 features = ["yaml_format", "file", "pattern_encoder", "json_encoder", "console_appender"]
 
-[build-dependencies]
-vergen = { version = "8", features = ["build", "git", "git2"] }
+[workspace.dependencies.vergen]
+version = "8"
+features = ["build", "git", "git2"]

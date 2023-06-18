@@ -33,7 +33,9 @@ web:
   public host:
     domain: localhost
     port: 34344
-  static files: static
+  static files: src/static
+  cors:
+    - http://correct.example
   session timeout: 60000
   secret key: 6nwYoK0L9J5ADFQE74CkkuLmTGMSd1skxHso9XwZNbsCbVmLIVH6L2aBIi2veuia3aQ3fnBzfwwlIuzCmWTEjAcc
   tls:

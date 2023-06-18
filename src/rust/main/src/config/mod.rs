@@ -79,6 +79,9 @@ pub struct Web {
     #[serde(default = "default_path")]
     pub path: Option<String>,
 
+    #[serde(default)]
+    pub cors: Vec<String>,
+
     pub tls: Option<Tls>,
 
     pub workers: Option<usize>,

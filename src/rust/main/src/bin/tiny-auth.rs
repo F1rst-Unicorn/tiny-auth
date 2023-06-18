@@ -15,10 +15,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use tiny_auth::cli_parser;
-use tiny_auth::config::parser::parse_config;
-use tiny_auth::logging;
-use tiny_auth::runtime;
+use tiny_auth_main::cli_parser;
+use tiny_auth_main::config::parser::parse_config;
+use tiny_auth_main::logging;
+use tiny_auth_main::runtime;
 
 use log::error;
 use log::info;

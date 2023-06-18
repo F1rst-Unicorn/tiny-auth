@@ -1,0 +1,56 @@
+[package]
+name = "tiny_auth_main"
+authors.workspace = true
+description.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+version.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "tiny-auth"
+path = "src/bin/tiny-auth.rs"
+
+[[bin]]
+name = "tiny-auth-password-encoder"
+path = "src/bin/password-encoder.rs"
+
+[[bin]]
+name = "tiny-auth-scope-debugger"
+path = "src/bin/scope-debugger.rs"
+
+[dependencies]
+tiny_auth_business = { path = "../business" }
+tiny_auth_web = { path = "../web" }
+
+clap.workspace = true
+log.workspace = true
+serde_derive.workspace = true
+serde_yaml.workspace = true
+serde_json.workspace = true
+serde_urlencoded.workspace = true
+chrono.workspace = true
+regex.workspace = true
+actix-rt.workspace = true
+actix-session.workspace = true
+actix-files.workspace = true
+url.workspace = true
+futures.workspace = true
+tera.workspace = true
+base64.workspace = true
+systemd.workspace = true
+jsonwebtoken.workspace = true
+rand.workspace = true
+async-trait.workspace = true
+rustls.workspace = true
+openssl.workspace = true
+ring.workspace = true
+tokio.workspace = true
+actix-web.workspace = true
+uuid.workspace = true
+serde.workspace = true
+log4rs.workspace = true
+
+[build-dependencies]
+vergen = { workspace = true }

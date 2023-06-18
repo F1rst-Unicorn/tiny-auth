@@ -2495,7 +2495,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "tiny-auth"
+name = "tiny_auth_business"
+version = "0.8.2"
+
+[[package]]
+name = "tiny_auth_main"
 version = "0.8.2"
 dependencies = [
  "actix-files",
@@ -2522,10 +2526,21 @@ dependencies = [
  "serde_yaml",
  "systemd",
  "tera",
+ "tiny_auth_business",
+ "tiny_auth_web",
  "tokio",
  "url",
  "uuid",
  "vergen",
+]
+
+[[package]]
+name = "tiny_auth_web"
+version = "0.8.2"
+dependencies = [
+ "actix-web",
+ "log",
+ "tiny_auth_business",
 ]
 
 [[package]]

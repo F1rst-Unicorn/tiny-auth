@@ -15,9 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use tiny_auth::config::parser::parse_config;
-use tiny_auth::domain::Token;
-use tiny_auth::http::state;
+use tiny_auth_main::config::parser::parse_config;
+use tiny_auth_main::domain::Password;
 
 use log4rs::config::Appender;
 use log4rs::config::Config;
@@ -28,17 +27,13 @@ use log::debug;
 use log::error;
 use log::LevelFilter;
 
-use chrono::Duration;
-use chrono::Local;
-
 use clap::App;
 use clap::Arg;
 
 pub const FLAG_VERBOSE: &str = "verbose";
+pub const FLAG_USERNAME: &str = "username";
+pub const FLAG_PASSWORD: &str = "password";
 pub const FLAG_CONFIG: &str = "config";
-pub const FLAG_USER: &str = "user";
-pub const FLAG_CLIENT: &str = "client";
-pub const FLAG_SCOPE: &str = "scope";
 
 fn main() {
     let args = parse_arguments();
@@ -48,88 +43,30 @@ fn main() {
 
     let config_path = args
         .value_of(FLAG_CONFIG)
-        .unwrap_or(tiny_auth::cli_parser::FLAG_CONFIG_DEFAULT);
+        .unwrap_or(tiny_auth_main::cli_parser::FLAG_CONFIG_DEFAULT);
     debug!("Config is at {}", config_path);
 
     debug!("Parsing config");
     let config = parse_config(config_path);
 
-    let di = match state::Constructor::new(&config) {
-        Err(e) => {
-            error!("Failed to read config: {}", e);
-            return;
-        }
-        Ok(v) => v,
-    };
-
-    let store = match di.get_user_store() {
-        None => {
-            error!("Failed to read users");
-            return;
-        }
-        Some(v) => v,
-    };
-
-    let user = match store.get(args.value_of(FLAG_USER).unwrap()) {
-        None => {
-            error!("user not found");
-            return;
-        }
-        Some(v) => v,
-    };
-
-    let store = match di.get_client_store() {
-        None => {
-            error!("Failed to read clients");
-            return;
-        }
-        Some(v) => v,
-    };
-
-    let client = match store.get(args.value_of(FLAG_CLIENT).unwrap()) {
-        None => {
-            error!("client not found");
-            return;
-        }
-        Some(v) => v,
-    };
-
-    let store = match di.get_scope_store() {
-        None => {
-            error!("Failed to read scopes");
-            return;
-        }
-        Some(v) => v,
-    };
-
-    let scope = match store.get(args.value_of(FLAG_SCOPE).unwrap()) {
-        None => {
-            error!("scope not found");
-            return;
-        }
-        Some(v) => v,
-    };
-
-    let mut token = Token::build(
-        &user,
-        &client,
-        &[scope],
-        Local::now(),
-        Duration::minutes(1),
-        0,
+    let password = Password::new(
+        args.value_of(FLAG_USERNAME).unwrap(),
+        args.value_of(FLAG_PASSWORD).unwrap(),
+        &config.crypto.pepper,
     );
 
-    let issuer = di.get_issuer_config();
-    token.set_issuer(&issuer.issuer_url);
-
-    match serde_json::to_string_pretty(&token) {
-        Err(_) => error!("Failed to serialize data"),
-        Ok(v) => println!("{}", v),
-    };
+    match serde_yaml::to_string(&password) {
+        Err(e) => {
+            error!("Could not dump password: {}", e);
+        }
+        Ok(password) => {
+            println!("{}", password);
+        }
+    }
 }
 
 pub fn parse_arguments<'a>() -> clap::ArgMatches<'a> {
-    let app = App::new("Scope debugger for tiny-auth")
+    let app = App::new("Password encoder for tiny-auth")
         .version(concat!(
             env!("CARGO_PKG_VERSION"),
             " ",
@@ -137,7 +74,7 @@ pub fn parse_arguments<'a>() -> clap::ArgMatches<'a> {
             " ",
             env!("VERGEN_BUILD_TIMESTAMP"),
         ))
-        .about("Compute what claims are added to a token")
+        .about("Encrypt passwords for users and clients of tiny-auth")
         .arg(
             Arg::with_name(FLAG_VERBOSE)
                 .short("v")
@@ -147,36 +84,28 @@ pub fn parse_arguments<'a>() -> clap::ArgMatches<'a> {
                 .takes_value(false),
         )
         .arg(
-            Arg::with_name(FLAG_USER)
+            Arg::with_name(FLAG_USERNAME)
                 .short("u")
-                .long(FLAG_USER)
-                .help("Name of the user")
+                .long(FLAG_USERNAME)
+                .help("Name of the user or client")
                 .value_name("STRING")
                 .required(true),
         )
         .arg(
-            Arg::with_name(FLAG_CLIENT)
-                .short("c")
-                .long(FLAG_CLIENT)
-                .help("Name of the client")
-                .value_name("STRING")
-                .required(true),
-        )
-        .arg(
-            Arg::with_name(FLAG_SCOPE)
-                .short("s")
-                .long(FLAG_SCOPE)
-                .help("Name of the scope")
+            Arg::with_name(FLAG_PASSWORD)
+                .short("p")
+                .long(FLAG_PASSWORD)
+                .help("Password to encrypt")
                 .value_name("STRING")
                 .required(true),
         )
         .arg(
             Arg::with_name(FLAG_CONFIG)
-                .short("C")
+                .short("c")
                 .long(FLAG_CONFIG)
                 .help("The config file to run with")
                 .value_name("STRING")
-                .default_value(tiny_auth::cli_parser::FLAG_CONFIG_DEFAULT),
+                .default_value("/etc/tiny-auth/config.yml"),
         );
     app.get_matches()
 }

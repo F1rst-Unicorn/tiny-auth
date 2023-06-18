@@ -19,9 +19,15 @@ use crate::domain::IssuerConfiguration;
 use crate::domain::Jwks;
 use crate::store::ScopeStore;
 
+use tiny_auth_business::cors::CorsLister;
+use tiny_auth_web::cors::render_invalid_request;
+use tiny_auth_web::cors::CorsCheckResult;
+use tiny_auth_web::cors::CorsChecker;
+
 use std::sync::Arc;
 
 use actix_web::web::Data;
+use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 
 use serde_derive::Serialize;
@@ -131,6 +137,8 @@ struct Response {
 }
 
 pub async fn get(
+    request: HttpRequest,
+    cors_lister: Data<Arc<dyn CorsLister>>,
     config: Data<IssuerConfiguration>,
     scopes: Data<Arc<dyn ScopeStore>>,
 ) -> HttpResponse {
@@ -200,9 +208,13 @@ pub async fn get(
         ..Default::default()
     };
 
-    HttpResponse::Ok()
-        .content_type("application/json")
-        .json(response)
+    match CorsChecker::new(cors_lister.get_ref().clone()).check(&request) {
+        CorsCheckResult::IllegalOrigin => render_invalid_request(),
+        approved @ (CorsCheckResult::ApprovedOrigin(_) | CorsCheckResult::NoOrigin) => approved
+            .add_headers_to(&mut HttpResponse::Ok())
+            .content_type("application/json")
+            .json(response),
+    }
 }
 
 pub async fn jwks(jwks: Data<Jwks>) -> HttpResponse {
