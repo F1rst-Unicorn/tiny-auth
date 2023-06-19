@@ -15,10 +15,16 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::sync::Arc;
+
 use super::deserialise_empty_as_none;
 use super::parse_bearer_authorization;
 use crate::business::token::TokenValidator;
 use crate::domain::Token;
+use tiny_auth_business::cors::CorsLister;
+use tiny_auth_web::cors::render_invalid_request;
+use tiny_auth_web::cors::CorsCheckResult;
+use tiny_auth_web::cors::CorsChecker;
 
 use log::debug;
 
@@ -36,31 +42,56 @@ pub struct Request {
     access_token: Option<String>,
 }
 
-pub async fn get(headers: HttpRequest, validator: Data<TokenValidator>) -> HttpResponse {
-    post(Form(Request { access_token: None }), headers, validator).await
+pub async fn get(
+    headers: HttpRequest,
+    validator: Data<TokenValidator>,
+    cors_lister: Data<Arc<dyn CorsLister>>,
+) -> HttpResponse {
+    post(
+        Form(Request { access_token: None }),
+        headers,
+        validator,
+        cors_lister,
+    )
+    .await
 }
 
 pub async fn post(
     query: Form<Request>,
-    headers: HttpRequest,
+    request: HttpRequest,
     validator: Data<TokenValidator>,
+    cors_lister: Data<Arc<dyn CorsLister>>,
+) -> HttpResponse {
+    match CorsChecker::new(cors_lister.get_ref().clone()).check(&request) {
+        CorsCheckResult::IllegalOrigin => render_invalid_request(),
+        approved @ (CorsCheckResult::ApprovedOrigin(_) | CorsCheckResult::NoOrigin) => {
+            return_token(query, validator, &request, approved).await
+        }
+    }
+}
+
+async fn return_token<'a>(
+    query: Form<Request>,
+    validator: Data<TokenValidator>,
+    request: &HttpRequest,
+    cors_check_result: CorsCheckResult<'a>,
 ) -> HttpResponse {
     let token = if let Some(token) = &query.access_token {
         token.to_string()
     } else {
-        match headers.headers().get("Authorization") {
+        match request.headers().get("Authorization") {
             Some(header) => match parse_bearer_authorization(header) {
                 Some(token) => token,
                 None => {
                     debug!("Invalid authorization header");
-                    return HttpResponse::Unauthorized()
-                .header("www-authenticate", "error=\"invalid_request\", error_description=\"Invalid authorization header\"")
-                .finish();
+                    return cors_check_result.with_headers(HttpResponse::Unauthorized())
+                        .header("www-authenticate", "error=\"invalid_request\", error_description=\"Invalid authorization header\"")
+                        .finish();
                 }
             },
             None => {
                 debug!("Missing authorization header");
-                return HttpResponse::BadRequest()
+                return cors_check_result.with_headers(HttpResponse::BadRequest())
                 .header(
                     "www-authenticate",
                     "error=\"invalid_request\", error_description=\"Missing authorization header\"",
@@ -73,7 +104,8 @@ pub async fn post(
     let token = match validator.validate::<Token>(&token) {
         None => {
             debug!("Invalid token");
-            return HttpResponse::Unauthorized()
+            return cors_check_result
+                .with_headers(HttpResponse::Unauthorized())
                 .header(
                     "www-authenticate",
                     "error=\"invalid_token\", error_description=\"Invalid token\"",
@@ -83,7 +115,9 @@ pub async fn post(
         Some(token) => token,
     };
 
-    HttpResponse::Ok().json(token)
+    cors_check_result
+        .with_headers(HttpResponse::Ok())
+        .json(token)
 }
 
 #[cfg(test)]
@@ -99,6 +133,7 @@ mod tests {
     use crate::http::state::tests::build_test_user_store;
     use crate::store::tests::PUBLIC_CLIENT;
     use crate::store::tests::USER;
+    use tiny_auth_business::cors::test_fixtures::build_test_cors_lister;
 
     use chrono::Duration;
     use chrono::Local;
@@ -111,8 +146,9 @@ mod tests {
         let validator = build_test_token_validator();
         let request = test::TestRequest::post().to_http_request();
         let query = Form(Request { access_token: None });
+        let cors_lister = build_test_cors_lister();
 
-        let resp = post(query, request, validator).await;
+        let resp = post(query, request, validator, Data::new(cors_lister)).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -124,8 +160,9 @@ mod tests {
             .header("authorization", "invalid")
             .to_http_request();
         let query = Form(Request { access_token: None });
+        let cors_lister = build_test_cors_lister();
 
-        let resp = post(query, request, validator).await;
+        let resp = post(query, request, validator, Data::new(cors_lister)).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
     }
@@ -154,8 +191,9 @@ mod tests {
             )
             .to_http_request();
         let query = Form(Request { access_token: None });
+        let cors_lister = build_test_cors_lister();
 
-        let resp = post(query, request, validator).await;
+        let resp = post(query, request, validator, Data::new(cors_lister)).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
     }
@@ -183,8 +221,9 @@ mod tests {
             )
             .to_http_request();
         let query = Form(Request { access_token: None });
+        let cors_lister = build_test_cors_lister();
 
-        let resp = post(query, request, validator).await;
+        let resp = post(query, request, validator, Data::new(cors_lister)).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Token>(resp).await;

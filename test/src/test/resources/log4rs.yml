@@ -31,7 +31,11 @@ root:
     - stdout
 
 loggers:
-  tiny_auth:
+  tiny_auth_main:
     level: trace
-  tiny_auth::config::parser:
+  tiny_auth_main::config::parser:
     level: info
+  tiny_auth_web:
+    level: trace
+  tiny_auth_business:
+    level: trace

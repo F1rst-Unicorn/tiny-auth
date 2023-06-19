@@ -101,4 +101,19 @@ impl<'a> CorsCheckResult<'a> {
             response
         }
     }
+
+    pub fn with_headers(&'a self, mut response: HttpResponseBuilder) -> HttpResponseBuilder {
+        self.add_headers_to(&mut response);
+        response
+    }
+}
+
+pub mod test_fixtures {
+    use super::*;
+    use actix_web::web::Data;
+    use tiny_auth_business::cors::test_fixtures::build_test_cors_lister as business;
+
+    pub fn build_test_cors_lister() -> Data<Arc<dyn CorsLister>> {
+        Data::new(business())
+    }
 }

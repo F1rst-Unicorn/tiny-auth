@@ -17,6 +17,7 @@
 
 pub mod authenticate;
 pub mod authorize;
+pub mod cert;
 pub mod consent;
 pub mod discovery;
 pub mod health;

@@ -18,6 +18,8 @@
 pub mod file;
 pub mod memory;
 
+use std::sync::Arc;
+
 use crate::domain::Client;
 use crate::domain::Scope;
 use crate::domain::User;
@@ -29,6 +31,13 @@ use log::info;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Local;
+
+pub struct Store {
+    pub user_store: Arc<dyn UserStore>,
+    pub client_store: Arc<dyn ClientStore>,
+    pub scope_store: Arc<dyn ScopeStore>,
+    pub auth_code_store: Arc<dyn AuthorizationCodeStore>,
+}
 
 pub trait UserStore: Send + Sync {
     fn get(&self, key: &str) -> Option<User>;

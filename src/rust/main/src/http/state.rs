@@ -51,6 +51,7 @@ use openssl::rsa::Rsa;
 
 use log::error;
 
+use crate::http::TokenCertificate;
 use tera::Tera;
 use tiny_auth_business::cors::CorsLister;
 
@@ -183,8 +184,8 @@ impl<'a> Constructor<'a> {
             .map_err(Into::into)
     }
 
-    pub fn get_public_key(&self) -> String {
-        self.public_key.clone()
+    pub fn get_public_key(&self) -> TokenCertificate {
+        TokenCertificate(self.public_key.clone())
     }
 
     fn build_issuer_url(config: &'a Config) -> String {

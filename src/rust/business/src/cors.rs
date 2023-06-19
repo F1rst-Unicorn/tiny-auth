@@ -34,3 +34,22 @@ impl CorsLister for CorsListerImpl {
         self.approved_domains.iter().any(|v| v == domain)
     }
 }
+
+pub mod test_fixtures {
+    use super::*;
+    use std::sync::Arc;
+
+    struct TestCorsLister {}
+
+    const VALID_CORS_DOMAIN: &str = "http://valid.example";
+
+    impl CorsLister for TestCorsLister {
+        fn is_cors_allowed(&self, domain: &str) -> bool {
+            domain == VALID_CORS_DOMAIN
+        }
+    }
+
+    pub fn build_test_cors_lister() -> Arc<dyn CorsLister> {
+        Arc::new(TestCorsLister {})
+    }
+}

@@ -27,6 +27,7 @@ use tiny_auth_web::cors::cors_options_preflight;
 
 use std::fs::File;
 use std::io::BufReader;
+use std::sync::Arc;
 
 use actix_web::cookie::SameSite;
 use actix_web::dev::Server;
@@ -51,8 +52,12 @@ use rustls::NoClientAuth;
 use rustls::RootCertStore;
 use rustls::ServerConfig;
 
+use crate::store::Store;
 use log::error;
 use log::warn;
+
+#[derive(Clone)]
+pub struct TokenCertificate(String);
 
 pub fn build(config: Config) -> Result<Server, Error> {
     let bind = config.web.bind.clone();
@@ -85,6 +90,12 @@ pub fn build(config: Config) -> Result<Server, Error> {
     let issuer_config = constructor.get_issuer_config();
     let jwks = constructor.build_jwks()?;
     let cors_lister = constructor.build_cors_lister()?;
+    let unified_store = Arc::new(Store {
+        user_store: user_store.clone(),
+        client_store: client_store.clone(),
+        scope_store: scope_store.clone(),
+        auth_code_store: auth_code_store.clone(),
+    });
 
     std::mem::drop(constructor);
 
@@ -102,6 +113,8 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .app_data(Data::new(issuer_config.clone()))
             .app_data(Data::new(jwks.clone()))
             .app_data(Data::new(cors_lister.clone()))
+            .app_data(Data::new(token_certificate))
+            .app_data(Data::new(unified_store.clone()))
             .wrap(
                 CookieSession::private(config.web.secret_key.as_bytes())
                     // ^- encryption is only needed to avoid encoding problems
@@ -174,10 +187,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
                     .route("/consent", all().to(endpoints::method_not_allowed))
                     .route("/consent/cancel", get().to(endpoints::consent::cancel))
                     .route("/consent/cancel", all().to(endpoints::method_not_allowed))
-                    .route(
-                        "/cert",
-                        get().to(move || HttpResponse::Ok().body(token_certificate.clone())),
-                    )
+                    .route("/cert", get().to(endpoints::cert::get))
                     .route("/cert", method(Method::OPTIONS).to(cors_options_preflight))
                     .route("/cert", all().to(endpoints::method_not_allowed))
                     .route("/health", get().to(endpoints::health::get))

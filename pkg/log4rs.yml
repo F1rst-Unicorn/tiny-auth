@@ -34,5 +34,9 @@ root:
     - stdout
 
 loggers:
-  tiny_auth:
+  tiny_auth_main:
+    level: info
+  tiny_auth_web:
+    level: info
+  tiny_auth_business:
     level: info

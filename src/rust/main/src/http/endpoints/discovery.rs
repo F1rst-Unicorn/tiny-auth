@@ -211,14 +211,22 @@ pub async fn get(
     match CorsChecker::new(cors_lister.get_ref().clone()).check(&request) {
         CorsCheckResult::IllegalOrigin => render_invalid_request(),
         approved @ (CorsCheckResult::ApprovedOrigin(_) | CorsCheckResult::NoOrigin) => approved
-            .add_headers_to(&mut HttpResponse::Ok())
+            .with_headers(HttpResponse::Ok())
             .content_type("application/json")
             .json(response),
     }
 }
 
-pub async fn jwks(jwks: Data<Jwks>) -> HttpResponse {
-    HttpResponse::Ok()
-        .content_type("application/json")
-        .json(jwks.get_ref())
+pub async fn jwks(
+    jwks: Data<Jwks>,
+    cors_lister: Data<Arc<dyn CorsLister>>,
+    request: HttpRequest,
+) -> HttpResponse {
+    match CorsChecker::new(cors_lister.get_ref().clone()).check(&request) {
+        CorsCheckResult::IllegalOrigin => render_invalid_request(),
+        approved @ (CorsCheckResult::ApprovedOrigin(_) | CorsCheckResult::NoOrigin) => approved
+            .with_headers(HttpResponse::Ok())
+            .content_type("application/json")
+            .json(jwks.get_ref()),
+    }
 }
