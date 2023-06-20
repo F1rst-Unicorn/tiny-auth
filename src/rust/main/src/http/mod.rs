@@ -24,6 +24,7 @@ use crate::config::Tls;
 use crate::config::TlsVersion;
 use crate::runtime::Error;
 use tiny_auth_web::cors::cors_options_preflight;
+use tiny_auth_web::cors::CorsChecker;
 
 use std::fs::File;
 use std::io::BufReader;
@@ -90,12 +91,15 @@ pub fn build(config: Config) -> Result<Server, Error> {
     let issuer_config = constructor.get_issuer_config();
     let jwks = constructor.build_jwks()?;
     let cors_lister = constructor.build_cors_lister()?;
+    let cors_checker = Arc::new(CorsChecker::new(cors_lister.clone()));
     let unified_store = Arc::new(Store {
         user_store: user_store.clone(),
         client_store: client_store.clone(),
         scope_store: scope_store.clone(),
         auth_code_store: auth_code_store.clone(),
     });
+    let user_info_handler =
+        endpoints::userinfo::Handler::new(Arc::new(token_validator.clone()), cors_checker);
 
     std::mem::drop(constructor);
 
@@ -115,6 +119,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .app_data(Data::new(cors_lister.clone()))
             .app_data(Data::new(token_certificate))
             .app_data(Data::new(unified_store.clone()))
+            .app_data(Data::new(user_info_handler.clone()))
             .wrap(
                 CookieSession::private(config.web.secret_key.as_bytes())
                     // ^- encryption is only needed to avoid encoding problems

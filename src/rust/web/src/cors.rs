@@ -41,9 +41,9 @@ pub async fn cors_options_preflight(
             render_invalid_request()
         }
         CorsCheckResult::IllegalOrigin => render_invalid_request(),
-        approved @ CorsCheckResult::ApprovedOrigin(_) => approved
-            .add_headers_to(&mut HttpResponse::NoContent())
-            .finish(),
+        approved @ CorsCheckResult::ApprovedOrigin(_) => {
+            approved.with_headers(HttpResponse::NoContent()).finish()
+        }
     }
 }
 
@@ -51,6 +51,7 @@ pub fn render_invalid_request() -> HttpResponse {
     HttpResponse::BadRequest().finish()
 }
 
+#[derive(Clone)]
 pub struct CorsChecker {
     lister: Arc<dyn CorsLister>,
 }
@@ -87,7 +88,7 @@ pub enum CorsCheckResult<'a> {
 }
 
 impl<'a> CorsCheckResult<'a> {
-    pub fn add_headers_to<'b>(
+    fn add_headers_to<'b>(
         &'a self,
         response: &'b mut HttpResponseBuilder,
     ) -> &'b mut HttpResponseBuilder {

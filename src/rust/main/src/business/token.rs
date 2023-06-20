@@ -91,7 +91,6 @@ impl TokenValidator {
             .map(|v| v.claims)
             .map_err(|e| {
                 debug!("Token validation failed: {}", e);
-                println!("Token validation failed: {}", e);
                 e
             })
             .ok()
