@@ -52,6 +52,7 @@ use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
+use tiny_auth_web::cors::{CorsCheckResult, CorsChecker};
 
 const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -150,9 +151,11 @@ pub async fn post(
     request: Form<Request>,
     handler: web::Data<Handler>,
 ) -> HttpResponse {
+    let cors_check_result = handler.check_cors(&headers);
     let grant_type = match &request.grant_type {
         None => {
             return render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
                 "Missing parameter grant_type",
             );
@@ -165,73 +168,92 @@ pub async fn post(
         .await
         .map_err(|e| match e {
             Error::MissingRefreshToken => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
                 "Missing refresh token",
             ),
             Error::InvalidRefreshToken => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
                 "Invalid refresh token",
             ),
             Error::MissingRedirectUri => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
                 "Missing parameter redirect_uri",
             ),
             Error::MissingAuthorizationCode => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
                 "Missing parameter code",
             ),
-            Error::InvalidAuthenticationToken(protocol_error) => {
-                render_json_error(ProtocolError::OAuth2(protocol_error), "token is invalid")
-            }
+            Error::InvalidAuthenticationToken(protocol_error) => render_json_error(
+                cors_check_result,
+                ProtocolError::OAuth2(protocol_error),
+                "token is invalid",
+            ),
             Error::InvalidAuthenticationTokenType => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
                 "client_assertion_type is invalid",
             ),
             Error::InvalidAuthorizationHeader => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
                 "Invalid authorization header",
             ),
             Error::MissingAuthorizationHeader => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
                 "Missing authorization header",
             ),
             Error::WrongClientIdOrPassword => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
                 "client id or password wrong",
             ),
             Error::MissingClientId => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
                 "Missing parameter client_id",
             ),
             Error::ConfidentialClientMustAutenticate => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
                 "Confidential client has to authenticate",
             ),
             Error::InvalidAuthorizationCode => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
                 "Invalid code",
             ),
             Error::MissingUsername => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
                 "Missing username",
             ),
             Error::MissingPassword => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
                 "Missing password",
             ),
             Error::WrongUsernameOrPassword(message) => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
                 &message,
             ),
             Error::TokenEncodingFailed => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::ServerError),
                 "token encoding failed",
             ),
             Error::RefreshTokenEncodingFailed => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::ServerError),
                 "refresh token encoding failed",
             ),
             Error::UnsupportedGrantType => render_json_error(
+                cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::UnsupportedGrantType),
                 "invalid grant_type",
             ),
@@ -240,20 +262,22 @@ pub async fn post(
         Ok(v) => v,
     };
 
-    HttpResponse::Ok().json(Response {
-        access_token: token.clone(),
-        token_type: "bearer".to_string(),
-        expires_in: Some(60),
-        refresh_token,
-        scope: Some(
-            scopes
-                .into_iter()
-                .map(|v| v.name)
-                .collect::<Vec<String>>()
-                .join(" "),
-        ),
-        id_token: Some(token),
-    })
+    cors_check_result
+        .with_headers(HttpResponse::Ok())
+        .json(Response {
+            access_token: token.clone(),
+            token_type: "bearer".to_string(),
+            expires_in: Some(60),
+            refresh_token,
+            scope: Some(
+                scopes
+                    .into_iter()
+                    .map(|v| v.name)
+                    .collect::<Vec<String>>()
+                    .join(" "),
+            ),
+            id_token: Some(token),
+        })
 }
 
 #[derive(Clone)]
@@ -266,6 +290,7 @@ pub struct Handler {
     token_validator: TokenValidator,
     scope_store: Arc<dyn ScopeStore>,
     issuer_configuration: IssuerConfiguration,
+    cors_checker: Arc<CorsChecker>,
 }
 
 impl Handler {
@@ -279,6 +304,7 @@ impl Handler {
         token_validator: TokenValidator,
         scope_store: Arc<dyn ScopeStore>,
         issuer_configuration: IssuerConfiguration,
+        cors_checker: Arc<CorsChecker>,
     ) -> Self {
         Self {
             client_store,
@@ -289,7 +315,12 @@ impl Handler {
             token_validator,
             scope_store,
             issuer_configuration,
+            cors_checker,
         }
+    }
+
+    fn check_cors<'a>(&self, request: &'a HttpRequest) -> CorsCheckResult<'a> {
+        self.cors_checker.check(request)
     }
 
     async fn grant_tokens(
@@ -685,15 +716,6 @@ enum Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use actix_web::http;
-    use actix_web::test::TestRequest;
-    use actix_web::web::{Data, Form};
-
-    use test_log::test;
-
-    use chrono::offset::Local;
-
     use crate::http::endpoints::tests::read_response;
     use crate::http::endpoints::ErrorResponse;
     use crate::http::state::tests::build_test_auth_code_store;
@@ -711,6 +733,12 @@ mod tests {
     use crate::store::tests::PUBLIC_CLIENT;
     use crate::store::tests::UNKNOWN_CLIENT_ID;
     use crate::store::tests::USER;
+    use actix_web::http;
+    use actix_web::test::TestRequest;
+    use actix_web::web::{Data, Form};
+    use chrono::offset::Local;
+    use test_log::test;
+    use tiny_auth_business::cors::test_fixtures::build_test_cors_lister;
 
     #[test(actix_rt::test)]
     async fn missing_grant_type_is_rejected() {
@@ -1709,7 +1737,7 @@ mod tests {
     fn build_test_handler_with_store(
         auth_code_store: Data<Arc<dyn AuthorizationCodeStore>>,
     ) -> Data<Handler> {
-        web::Data::new(Handler {
+        Data::new(Handler {
             client_store: build_test_client_store().get_ref().clone(),
             user_store: build_test_user_store().get_ref().clone(),
             auth_code_store: auth_code_store.get_ref().clone(),
@@ -1718,6 +1746,7 @@ mod tests {
             token_validator: build_test_token_validator().get_ref().clone(),
             scope_store: build_test_scope_store().get_ref().clone(),
             issuer_configuration: build_test_issuer_config().get_ref().clone(),
+            cors_checker: Arc::new(CorsChecker::new(build_test_cors_lister())),
         })
     }
 }

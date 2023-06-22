@@ -81,6 +81,7 @@ impl CorsChecker {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum CorsCheckResult<'a> {
     NoOrigin,
     IllegalOrigin,

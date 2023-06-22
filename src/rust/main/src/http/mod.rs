@@ -23,13 +23,8 @@ use crate::config::Config;
 use crate::config::Tls;
 use crate::config::TlsVersion;
 use crate::runtime::Error;
-use tiny_auth_web::cors::cors_options_preflight;
-use tiny_auth_web::cors::CorsChecker;
-
-use std::fs::File;
-use std::io::BufReader;
-use std::sync::Arc;
-
+use crate::store::Store;
+use actix_session::CookieSession;
 use actix_web::cookie::SameSite;
 use actix_web::dev::Server;
 use actix_web::http::Method;
@@ -43,19 +38,19 @@ use actix_web::web::Data;
 use actix_web::App;
 use actix_web::HttpResponse;
 use actix_web::HttpServer;
-
-use actix_session::CookieSession;
-
+use log::error;
+use log::warn;
 use rustls::internal::pemfile::certs;
 use rustls::internal::pemfile::pkcs8_private_keys;
 use rustls::AllowAnyAuthenticatedClient;
 use rustls::NoClientAuth;
 use rustls::RootCertStore;
 use rustls::ServerConfig;
-
-use crate::store::Store;
-use log::error;
-use log::warn;
+use std::fs::File;
+use std::io::BufReader;
+use std::sync::Arc;
+use tiny_auth_web::cors::cors_options_preflight;
+use tiny_auth_web::cors::CorsChecker;
 
 #[derive(Clone)]
 pub struct TokenCertificate(String);
@@ -99,7 +94,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
         auth_code_store: auth_code_store.clone(),
     });
     let user_info_handler =
-        endpoints::userinfo::Handler::new(Arc::new(token_validator.clone()), cors_checker);
+        endpoints::userinfo::Handler::new(Arc::new(token_validator.clone()), cors_checker.clone());
     let token_handler = endpoints::token::Handler::new(
         client_store.clone(),
         user_store.clone(),
@@ -109,6 +104,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
         token_validator.clone(),
         scope_store.clone(),
         issuer_config.clone(),
+        cors_checker,
     );
 
     std::mem::drop(constructor);

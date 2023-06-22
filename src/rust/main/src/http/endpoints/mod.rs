@@ -54,6 +54,7 @@ use serde::de::Visitor;
 use serde::Deserializer;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
+use tiny_auth_web::cors::CorsCheckResult;
 
 const CSRF_SESSION_KEY: &str = "c";
 
@@ -117,17 +118,22 @@ pub fn method_not_allowed() -> HttpResponse {
 }
 
 /// When which HTTP code: https://tools.ietf.org/html/rfc6749#section-5.2
-fn render_json_error(error: ProtocolError, description: &str) -> HttpResponse {
-    match error {
-        ProtocolError::OAuth2(OAuthError::InvalidClient) => HttpResponse::Unauthorized(),
-        ProtocolError::OAuth2(OAuthError::UnauthorizedClient) => HttpResponse::Unauthorized(),
-        _ => HttpResponse::BadRequest(),
-    }
-    .json(ErrorResponse {
-        error,
-        error_description: Some(description.to_string()),
-        error_uri: None,
-    })
+fn render_json_error(
+    cors_check_result: CorsCheckResult,
+    error: ProtocolError,
+    description: &str,
+) -> HttpResponse {
+    cors_check_result
+        .with_headers(match error {
+            ProtocolError::OAuth2(OAuthError::InvalidClient) => HttpResponse::Unauthorized(),
+            ProtocolError::OAuth2(OAuthError::UnauthorizedClient) => HttpResponse::Unauthorized(),
+            _ => HttpResponse::BadRequest(),
+        })
+        .json(ErrorResponse {
+            error,
+            error_description: Some(description.to_string()),
+            error_uri: None,
+        })
 }
 
 fn render_redirect_error(
