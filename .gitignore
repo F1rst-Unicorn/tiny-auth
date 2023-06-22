@@ -12,3 +12,5 @@ pkg/Archlinux/*.pkg.tar*
 static/img/favicon.png
 
 *.code-workspace
+
+.envrc

@@ -36,6 +36,8 @@ jsonwebtoken = "7.2.0"
 rand = "0.7.3"
 async-trait = "0.1.40"
 rustls = "0.16.0"
+test-log = "0.2.12"
+env_logger = "*"
 
 [workspace.dependencies.openssl]
 version = "0.10"

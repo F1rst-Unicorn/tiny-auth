@@ -51,6 +51,8 @@ actix-web.workspace = true
 uuid.workspace = true
 serde.workspace = true
 log4rs.workspace = true
+test-log.workspace = true
+env_logger.workspace = true
 
 [build-dependencies]
 vergen = { workspace = true }

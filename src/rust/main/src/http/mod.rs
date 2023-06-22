@@ -100,6 +100,16 @@ pub fn build(config: Config) -> Result<Server, Error> {
     });
     let user_info_handler =
         endpoints::userinfo::Handler::new(Arc::new(token_validator.clone()), cors_checker);
+    let token_handler = endpoints::token::Handler::new(
+        client_store.clone(),
+        user_store.clone(),
+        auth_code_store.clone(),
+        token_creator.clone(),
+        authenticator.clone(),
+        token_validator.clone(),
+        scope_store.clone(),
+        issuer_config.clone(),
+    );
 
     std::mem::drop(constructor);
 
@@ -120,6 +130,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .app_data(Data::new(token_certificate))
             .app_data(Data::new(unified_store.clone()))
             .app_data(Data::new(user_info_handler.clone()))
+            .app_data(Data::new(token_handler.clone()))
             .wrap(
                 CookieSession::private(config.web.secret_key.as_bytes())
                     // ^- encryption is only needed to avoid encoding problems

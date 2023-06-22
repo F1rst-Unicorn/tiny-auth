@@ -166,7 +166,7 @@ mod tests {
         let request = test::TestRequest::post().to_http_request();
         let query = Form(Request { access_token: None });
 
-        let resp = post(query, request, Data::new(build_test_handler())).await;
+        let resp = post(query, request, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -178,7 +178,7 @@ mod tests {
             .to_http_request();
         let query = Form(Request { access_token: None });
 
-        let resp = post(query, request, Data::new(build_test_handler())).await;
+        let resp = post(query, request, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
     }
@@ -207,7 +207,7 @@ mod tests {
             .to_http_request();
         let query = Form(Request { access_token: None });
 
-        let resp = post(query, request, Data::new(build_test_handler())).await;
+        let resp = post(query, request, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
     }
@@ -235,17 +235,17 @@ mod tests {
             .to_http_request();
         let query = Form(Request { access_token: None });
 
-        let resp = post(query, request, Data::new(build_test_handler())).await;
+        let resp = post(query, request, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Token>(resp).await;
         assert_eq!(token, response);
     }
 
-    fn build_test_handler() -> Handler {
-        Handler {
+    fn build_test_handler() -> Data<Handler> {
+        Data::new(Handler {
             validator: build_test_token_validator().into_inner(),
             cors_checker: Arc::new(CorsChecker::new(build_test_cors_lister())),
-        }
+        })
     }
 }

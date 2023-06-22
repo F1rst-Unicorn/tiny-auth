@@ -18,6 +18,7 @@
 use super::deserialise_empty_as_none;
 use super::parse_basic_authorization;
 use super::parse_scope_names;
+use crate::business::authenticator::Error::WrongCredentials;
 use crate::business::token::TokenCreator;
 use crate::business::token::TokenValidator;
 use crate::business::Authenticator;
@@ -37,24 +38,20 @@ use crate::store::ClientStore;
 use crate::store::ScopeStore;
 use crate::store::UserStore;
 use crate::store::AUTH_CODE_LIFE_TIME;
-
+use actix_web::web;
+use actix_web::web::Form;
+use actix_web::HttpRequest;
+use actix_web::HttpResponse;
+use chrono::offset::Local;
+use chrono::Duration;
+use log::debug;
+use log::warn;
+use serde_derive::Deserialize;
+use serde_derive::Serialize;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
-
-use actix_web::web;
-use actix_web::HttpRequest;
-use actix_web::HttpResponse;
-
-use serde_derive::Deserialize;
-use serde_derive::Serialize;
-
-use chrono::offset::Local;
-use chrono::Duration;
-
-use log::debug;
-use log::warn;
 
 const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -106,21 +103,26 @@ pub struct Request {
 #[derive(Deserialize)]
 struct ClientAssertion {
     #[serde(rename = "iss")]
+    #[allow(dead_code)]
     pub issuer: String,
 
     #[serde(rename = "sub")]
     pub subject: String,
 
     #[serde(rename = "aud")]
+    #[allow(dead_code)]
     pub audience: String,
 
     #[serde(rename = "jti")]
+    #[allow(dead_code)]
     pub id: String,
 
     #[serde(rename = "exp")]
+    #[allow(dead_code)]
     pub expiration_time: i64,
 
     #[serde(rename = "iat")]
+    #[allow(dead_code)]
     pub issuance_time: i64,
 }
 
@@ -143,18 +145,10 @@ pub struct Response {
     id_token: Option<String>,
 }
 
-#[allow(clippy::too_many_arguments)]
 pub async fn post(
     headers: HttpRequest,
-    request: web::Form<Request>,
-    client_store: web::Data<Arc<dyn ClientStore>>,
-    user_store: web::Data<Arc<dyn UserStore>>,
-    auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
-    token_creator: web::Data<TokenCreator>,
-    authenticator: web::Data<Authenticator>,
-    token_validator: web::Data<TokenValidator>,
-    scope_store: web::Data<Arc<dyn ScopeStore>>,
-    issuer_configuration: web::Data<IssuerConfiguration>,
+    request: Form<Request>,
+    handler: web::Data<Handler>,
 ) -> HttpResponse {
     let grant_type = match &request.grant_type {
         None => {
@@ -163,124 +157,91 @@ pub async fn post(
                 "Missing parameter grant_type",
             );
         }
-        Some(grant_type) => grant_type,
+        Some(grant_type) => grant_type.to_owned(),
     };
 
-    let generate_refresh_token;
-
-    let (token, scopes) = match grant_type {
-        GrantType::RefreshToken => {
-            generate_refresh_token = true;
-            match grant_with_refresh_token(
-                headers,
-                request,
-                client_store.get_ref().clone(),
-                authenticator,
-                token_validator,
-                scope_store,
-                issuer_configuration,
-            )
-            .await
-            {
-                Err(e) => return e,
-                Ok(t) => t,
+    let (token, refresh_token, scopes) = match handler
+        .grant_tokens(&headers, request, grant_type)
+        .await
+        .map_err(|e| match e {
+            Error::MissingRefreshToken => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "Missing refresh token",
+            ),
+            Error::InvalidRefreshToken => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
+                "Invalid refresh token",
+            ),
+            Error::MissingRedirectUri => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "Missing parameter redirect_uri",
+            ),
+            Error::MissingAuthorizationCode => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "Missing parameter code",
+            ),
+            Error::InvalidAuthenticationToken(protocol_error) => {
+                render_json_error(ProtocolError::OAuth2(protocol_error), "token is invalid")
             }
-        }
-        _ => {
-            let result = match grant_type {
-                GrantType::AuthorizationCode => {
-                    grant_with_authorization_code(
-                        headers,
-                        request,
-                        client_store.get_ref().clone(),
-                        user_store,
-                        auth_code_store,
-                        authenticator,
-                        scope_store,
-                        issuer_configuration,
-                    )
-                    .await
-                }
-                GrantType::ClientCredentials => grant_with_client_credentials(
-                    headers,
-                    request,
-                    client_store.get_ref().clone(),
-                    authenticator,
-                    scope_store,
-                    issuer_configuration,
-                )
-                .await
-                .map(|(a, b, c, d)| (a, b, c, d, None)),
-                GrantType::Password => grant_with_password(
-                    headers,
-                    request,
-                    client_store.get_ref().clone(),
-                    authenticator,
-                    scope_store,
-                    issuer_configuration,
-                )
-                .await
-                .map(|(a, b, c, d)| (a, b, c, d, None)),
-                _ => {
-                    return render_json_error(
-                        ProtocolError::OAuth2(oauth2::ProtocolError::UnsupportedGrantType),
-                        "invalid grant_type",
-                    );
-                }
-            };
-
-            let (user, client, scopes, auth_time, nonce) = match result {
-                Err(r) => return r,
-                Ok(x) => x,
-            };
-
-            generate_refresh_token = matches!(client.client_type, ClientType::Confidential { .. });
-
-            let mut token = Token::build(
-                &user,
-                &client,
-                &scopes,
-                Local::now(),
-                Duration::minutes(1),
-                auth_time,
-            );
-            token.set_nonce(nonce);
-
-            (token, scopes)
-        }
-    };
-
-    let encoded_token = match token_creator.create(token.clone()) {
-        Err(e) => {
-            debug!("failed to encode token: {}", e);
-            return render_json_error(
+            Error::InvalidAuthenticationTokenType => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "client_assertion_type is invalid",
+            ),
+            Error::InvalidAuthorizationHeader => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
+                "Invalid authorization header",
+            ),
+            Error::MissingAuthorizationHeader => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
+                "Missing authorization header",
+            ),
+            Error::WrongClientIdOrPassword => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
+                "client id or password wrong",
+            ),
+            Error::MissingClientId => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
+                "Missing parameter client_id",
+            ),
+            Error::ConfidentialClientMustAutenticate => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
+                "Confidential client has to authenticate",
+            ),
+            Error::InvalidAuthorizationCode => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
+                "Invalid code",
+            ),
+            Error::MissingUsername => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "Missing username",
+            ),
+            Error::MissingPassword => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "Missing password",
+            ),
+            Error::WrongUsernameOrPassword(message) => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
+                &message,
+            ),
+            Error::TokenEncodingFailed => render_json_error(
                 ProtocolError::OAuth2(oauth2::ProtocolError::ServerError),
                 "token encoding failed",
-            );
-        }
-        Ok(token) => token,
-    };
-    let refresh_token = if generate_refresh_token {
-        match token_creator.create_refresh_token(RefreshToken::from(
-            token,
-            Duration::minutes(1),
-            &scopes,
-        )) {
-            Err(e) => {
-                debug!("failed to encode refresh token: {}", e);
-                return render_json_error(
-                    ProtocolError::OAuth2(oauth2::ProtocolError::ServerError),
-                    "refresh token encoding failed",
-                );
-            }
-            token => token.ok(),
-        }
-    } else {
-        None
+            ),
+            Error::RefreshTokenEncodingFailed => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::ServerError),
+                "refresh token encoding failed",
+            ),
+            Error::UnsupportedGrantType => render_json_error(
+                ProtocolError::OAuth2(oauth2::ProtocolError::UnsupportedGrantType),
+                "invalid grant_type",
+            ),
+        }) {
+        Err(e) => return e,
+        Ok(v) => v,
     };
 
     HttpResponse::Ok().json(Response {
-        access_token: encoded_token.clone(),
+        access_token: token.clone(),
         token_type: "bearer".to_string(),
         expires_in: Some(60),
         refresh_token,
@@ -291,426 +252,434 @@ pub async fn post(
                 .collect::<Vec<String>>()
                 .join(" "),
         ),
-        id_token: Some(encoded_token),
+        id_token: Some(token),
     })
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn grant_with_authorization_code(
-    headers: HttpRequest,
-    request: web::Form<Request>,
+#[derive(Clone)]
+pub struct Handler {
     client_store: Arc<dyn ClientStore>,
-    user_store: web::Data<Arc<dyn UserStore>>,
-    auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
-    authenticator: web::Data<Authenticator>,
-    scope_store: web::Data<Arc<dyn ScopeStore>>,
-    issuer_configuration: web::Data<IssuerConfiguration>,
-) -> Result<(User, Client, Vec<Scope>, i64, Option<String>), HttpResponse> {
-    if request.redirect_uri.is_none() {
-        return Err(render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-            "Missing parameter redirect_uri",
-        ));
-    }
-
-    if request.code.is_none() {
-        return Err(render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-            "Missing parameter code",
-        ));
-    }
-
-    let client = match authenticate_client(
-        headers,
-        &request,
-        client_store.clone(),
-        authenticator,
-        issuer_configuration,
-    ) {
-        Err(_) => {
-            let client_id = match &request.client_id {
-                None => {
-                    return Err(render_json_error(
-                        ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
-                        "Missing parameter client_id",
-                    ))
-                }
-                Some(client_id) => client_id,
-            };
-            let client = match client_store.get(client_id) {
-                None => {
-                    debug!("client '{}' not found", client_id);
-                    return Err(render_json_error(
-                        ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
-                        "client id or password wrong",
-                    ));
-                }
-                Some(client) => client,
-            };
-
-            if let ClientType::Confidential { .. } = client.client_type {
-                return Err(render_json_error(
-                    ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
-                    "Confidential client has to authenticate",
-                ));
-            }
-
-            client
-        }
-        Ok(client) => client,
-    };
-
-    let code = request.code.as_ref().unwrap();
-    let record = match auth_code_store
-        .validate(&client.client_id, code, Local::now())
-        .await
-    {
-        None => {
-            debug!(
-                "No authorization code found for client '{}' with code '{}'",
-                &client.client_id, code
-            );
-            return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
-                "Invalid code",
-            ));
-        }
-        Some(record) => record,
-    };
-
-    if &record.redirect_uri != request.redirect_uri.as_ref().unwrap() {
-        debug!("redirect_uri is wrong");
-        return Err(render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
-            "Invalid code",
-        ));
-    }
-
-    if record.stored_duration > Duration::minutes(AUTH_CODE_LIFE_TIME) {
-        debug!("code has expired");
-        return Err(render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
-            "Invalid code",
-        ));
-    }
-
-    let user = match user_store.get(&record.username) {
-        None => {
-            debug!("user {} not found", record.username);
-            return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
-                "User not found",
-            ));
-        }
-        Some(user) => user,
-    };
-
-    let scopes = scope_store.get_all(&parse_scope_names(&record.scopes));
-
-    Ok((
-        user,
-        client,
-        scopes,
-        record.auth_time.timestamp(),
-        record.nonce,
-    ))
+    user_store: Arc<dyn UserStore>,
+    auth_code_store: Arc<dyn AuthorizationCodeStore>,
+    token_creator: TokenCreator,
+    authenticator: Authenticator,
+    token_validator: TokenValidator,
+    scope_store: Arc<dyn ScopeStore>,
+    issuer_configuration: IssuerConfiguration,
 }
 
-async fn grant_with_client_credentials(
-    headers: HttpRequest,
-    request: web::Form<Request>,
-    client_store: Arc<dyn ClientStore>,
-    authenticator: web::Data<Authenticator>,
-    scope_store: web::Data<Arc<dyn ScopeStore>>,
-    issuer_configuration: web::Data<IssuerConfiguration>,
-) -> Result<(User, Client, Vec<Scope>, i64), HttpResponse> {
-    let client = authenticate_client(
-        headers,
-        &request,
-        client_store,
-        authenticator,
-        issuer_configuration,
-    )?;
-    let allowed_scopes = BTreeSet::from_iter(client.allowed_scopes.clone());
-    let requested_scopes = match &request.scope {
-        None => Default::default(),
-        Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
-    };
-
-    let scopes = allowed_scopes
-        .intersection(&requested_scopes)
-        .map(|v| scope_store.get(v))
-        .map(Option::unwrap)
-        .collect();
-
-    Ok((
-        client.clone().try_into().unwrap(),
-        client,
-        scopes,
-        Local::now().timestamp(),
-    ))
-}
-
-async fn grant_with_password(
-    headers: HttpRequest,
-    request: web::Form<Request>,
-    client_store: Arc<dyn ClientStore>,
-    authenticator: web::Data<Authenticator>,
-    scope_store: web::Data<Arc<dyn ScopeStore>>,
-    issuer_configuration: web::Data<IssuerConfiguration>,
-) -> Result<(User, Client, Vec<Scope>, i64), HttpResponse> {
-    let username = match &request.username {
-        None => {
-            return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-                "Missing username",
-            ))
+impl Handler {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        client_store: Arc<dyn ClientStore>,
+        user_store: Arc<dyn UserStore>,
+        auth_code_store: Arc<dyn AuthorizationCodeStore>,
+        token_creator: TokenCreator,
+        authenticator: Authenticator,
+        token_validator: TokenValidator,
+        scope_store: Arc<dyn ScopeStore>,
+        issuer_configuration: IssuerConfiguration,
+    ) -> Self {
+        Self {
+            client_store,
+            user_store,
+            auth_code_store,
+            token_creator,
+            authenticator,
+            token_validator,
+            scope_store,
+            issuer_configuration,
         }
-        Some(username) => username,
-    };
-
-    let password = match &request.password {
-        None => {
-            return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-                "Missing password",
-            ))
-        }
-        Some(password) => password,
-    };
-
-    let client = authenticate_client(
-        headers,
-        &request,
-        client_store,
-        authenticator.clone(),
-        issuer_configuration,
-    )?;
-
-    let user = match authenticator.authenticate_user(username, password).await {
-        Err(e) => {
-            return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
-                &format!("{}", e),
-            ));
-        }
-        Ok(user) => user,
-    };
-
-    let allowed_scopes = BTreeSet::from_iter(client.allowed_scopes.clone());
-    let requested_scopes = match &request.scope {
-        None => Default::default(),
-        Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
-    };
-
-    let scopes = allowed_scopes
-        .intersection(&requested_scopes)
-        .map(|v| scope_store.get(v))
-        .map(Option::unwrap)
-        .collect();
-
-    Ok((user, client, scopes, Local::now().timestamp()))
-}
-
-async fn grant_with_refresh_token(
-    headers: HttpRequest,
-    request: web::Form<Request>,
-    client_store: Arc<dyn ClientStore>,
-    authenticator: web::Data<Authenticator>,
-    validator: web::Data<TokenValidator>,
-    scope_store: web::Data<Arc<dyn ScopeStore>>,
-    issuer_configuration: web::Data<IssuerConfiguration>,
-) -> Result<(Token, Vec<Scope>), HttpResponse> {
-    let raw_token = match &request.refresh_token {
-        None => {
-            return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-                "Missing refresh token",
-            ));
-        }
-        Some(token) => token,
-    };
-
-    let refresh_token = match validator.validate::<RefreshToken>(raw_token) {
-        None => {
-            return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
-                "Invalid refresh token",
-            ));
-        }
-        Some(token) => token,
-    };
-
-    let client = authenticate_client(
-        headers,
-        &request,
-        client_store,
-        authenticator,
-        issuer_configuration,
-    )?;
-
-    if client.client_id != refresh_token.access_token.authorized_party {
-        warn!(
-            "client '{}' tried to use refresh_token issued to client '{}'",
-            client.client_id, refresh_token.access_token.authorized_party
-        );
-        return Err(render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidGrant),
-            "Invalid refresh token",
-        ));
     }
 
-    let mut token = refresh_token.access_token;
-    token.renew(Local::now(), Duration::minutes(1));
+    async fn grant_tokens(
+        &self,
+        headers: &HttpRequest,
+        request: Form<Request>,
+        grant_type: GrantType,
+    ) -> Result<(String, Option<String>, Vec<Scope>), Error> {
+        let (token, scopes, generate_refresh_token) =
+            self.grant_token(headers, request, grant_type).await?;
 
-    let granted_scopes = BTreeSet::from_iter(refresh_token.scopes);
-    let requested_scopes = match &request.scope {
-        None => granted_scopes.clone(),
-        Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
-    };
-
-    let x = granted_scopes
-        .intersection(&requested_scopes)
-        .map(|v| scope_store.get(v))
-        .map(Option::unwrap)
-        .collect();
-
-    Ok((token, x))
-}
-
-fn authenticate_client(
-    headers: HttpRequest,
-    request: &web::Form<Request>,
-    client_store: Arc<dyn ClientStore>,
-    authenticator: web::Data<Authenticator>,
-    issuer_configuration: web::Data<IssuerConfiguration>,
-) -> Result<Client, HttpResponse> {
-    if request.client_assertion.is_some() && request.client_assertion_type.is_some() {
-        return authenticate_client_via_jwt(request, client_store.clone(), issuer_configuration);
-    }
-
-    let (client_name, password) = match headers.headers().get("Authorization") {
-        Some(value) => match parse_basic_authorization(value) {
-            Some(x) => x,
-            None => {
-                return Err(render_json_error(
-                    ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
-                    "Invalid authorization header",
-                ));
-            }
-        },
-        None => {
-            if let (Some(client_id), Some(client_secret)) =
-                (request.client_id.clone(), request.client_secret.clone())
-            {
-                (client_id, client_secret)
-            } else {
-                return Err(render_json_error(
-                    ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
-                    "Missing authorization header",
-                ));
-            }
-        }
-    };
-
-    let client = match client_store.get(&client_name) {
-        None => {
-            debug!("Client '{}' not found", client_name);
-            return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
-                "client id or password wrong",
-            ));
-        }
-        Some(c) => c,
-    };
-
-    if let ClientType::Public = client.client_type {
-        debug!("tried to authenticate public client");
-        return Err(render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
-            "Invalid authorization header",
-        ));
-    }
-
-    if !authenticator.authenticate_client(&client, &password) {
-        debug!("password for client '{}' was wrong", client_name);
-        Err(render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
-            "client id or password wrong",
-        ))
-    } else {
-        Ok(client)
-    }
-}
-
-fn authenticate_client_via_jwt(
-    request: &web::Form<Request>,
-    client_store: Arc<dyn ClientStore>,
-    issuer_configuration: web::Data<IssuerConfiguration>,
-) -> Result<Client, HttpResponse> {
-    let assertion_type = request.client_assertion_type.clone().unwrap();
-    if assertion_type != CLIENT_ASSERTION_TYPE {
-        return Err(render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-            "client_assertion_type is invalid",
-        ));
-    }
-
-    let assertion = request.client_assertion.clone().unwrap();
-
-    let unsafe_assertion =
-        match jsonwebtoken::dangerous_insecure_decode::<ClientAssertion>(&assertion) {
+        let encoded_token = match self.token_creator.create(token.clone()) {
             Err(e) => {
-                debug!("failed to decode authentication token unsafely: {}", e);
-                return Err(render_json_error(
-                    ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-                    "token is invalid",
-                ));
+                debug!("failed to encode token: {}", e);
+                return Err(Error::TokenEncodingFailed);
             }
             Ok(token) => token,
         };
+        let refresh_token = if generate_refresh_token {
+            match self.token_creator.create_refresh_token(RefreshToken::from(
+                token,
+                Duration::minutes(1),
+                &scopes,
+            )) {
+                Err(e) => {
+                    debug!("failed to encode refresh token: {}", e);
+                    return Err(Error::RefreshTokenEncodingFailed);
+                }
+                token => token.ok(),
+            }
+        } else {
+            None
+        };
 
-    let client = match client_store.get(&unsafe_assertion.claims.subject) {
-        None => {
-            debug!("Client '{}' not found", unsafe_assertion.claims.subject);
-            return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
-                "token is invalid",
-            ));
+        Ok((encoded_token, refresh_token, scopes))
+    }
+
+    async fn grant_token(
+        &self,
+        headers: &HttpRequest,
+        request: Form<Request>,
+        grant_type: GrantType,
+    ) -> Result<(Token, Vec<Scope>, bool), Error> {
+        match grant_type {
+            GrantType::RefreshToken => self.grant_with_refresh_token(headers, request).await,
+            _ => {
+                let (user, client, scopes, auth_time, nonce) = match grant_type {
+                    GrantType::AuthorizationCode => {
+                        self.grant_with_authorization_code(headers, request).await?
+                    }
+                    GrantType::ClientCredentials => self
+                        .grant_with_client_credentials(headers, request)
+                        .await
+                        .map(|(a, b, c, d)| (a, b, c, d, None))?,
+                    GrantType::Password => self
+                        .grant_with_password(headers, request)
+                        .await
+                        .map(|(a, b, c, d)| (a, b, c, d, None))?,
+                    _ => {
+                        return Err(Error::UnsupportedGrantType);
+                    }
+                };
+
+                let generate_refresh_token =
+                    matches!(client.client_type, ClientType::Confidential { .. });
+
+                let mut token = Token::build(
+                    &user,
+                    &client,
+                    &scopes,
+                    Local::now(),
+                    Duration::minutes(1),
+                    auth_time,
+                );
+                token.set_nonce(nonce);
+
+                Ok((token, scopes, generate_refresh_token))
+            }
         }
-        Some(v) => v,
-    };
+    }
 
-    let key = match client.get_decoding_key(unsafe_assertion.header.alg) {
-        None => {
-            return Err(render_json_error(
-                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidClient),
-                "token is invalid",
-            ));
+    async fn grant_with_authorization_code(
+        &self,
+        headers: &HttpRequest,
+        request: Form<Request>,
+    ) -> Result<(User, Client, Vec<Scope>, i64, Option<String>), Error> {
+        let redirect_uri_from_request = request
+            .redirect_uri
+            .as_ref()
+            .ok_or(Error::MissingRedirectUri)?;
+        let code = request
+            .code
+            .as_ref()
+            .ok_or(Error::MissingAuthorizationCode)?;
+        let client = match self.authenticate_client(headers, &request) {
+            Err(_) => {
+                let client_id = &request.client_id.as_ref().ok_or(Error::MissingClientId)?;
+                let client = self.client_store.get(client_id).ok_or_else(|| {
+                    debug!("client '{}' not found", client_id);
+                    Error::WrongClientIdOrPassword
+                })?;
+
+                if let ClientType::Confidential { .. } = client.client_type {
+                    return Err(Error::ConfidentialClientMustAutenticate);
+                }
+
+                client
+            }
+            Ok(client) => client,
+        };
+
+        let record = self
+            .auth_code_store
+            .validate(&client.client_id, code, Local::now())
+            .await
+            .ok_or_else(|| {
+                debug!(
+                    "No authorization code found for client '{}' with code '{}'",
+                    &client.client_id, code
+                );
+                Error::InvalidAuthorizationCode
+            })?;
+
+        if &record.redirect_uri != redirect_uri_from_request {
+            debug!("redirect_uri is wrong");
+            return Err(Error::InvalidAuthorizationCode);
         }
-        Some(v) => v,
-    };
 
-    let mut validation = jsonwebtoken::Validation {
-        leeway: 5,
-        validate_exp: true,
-        validate_nbf: false,
-        iss: Some(unsafe_assertion.claims.subject),
-        algorithms: vec![unsafe_assertion.header.alg],
-        ..Default::default()
-    };
+        if record.stored_duration > Duration::minutes(AUTH_CODE_LIFE_TIME) {
+            debug!("code has expired");
+            return Err(Error::InvalidAuthorizationCode);
+        }
 
-    validation.set_audience(&[issuer_configuration.token()]);
+        let user = self.user_store.get(&record.username).ok_or_else(|| {
+            debug!("user {} not found", record.username);
+            Error::WrongUsernameOrPassword(format!("{}", WrongCredentials))
+        })?;
 
-    if let Err(e) = jsonwebtoken::decode::<ClientAssertion>(&assertion, &key, &validation) {
-        debug!("failed to decode authentication token: {}", e);
-        return Err(render_json_error(
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-            "token is invalid",
-        ));
-    };
+        let scopes = self.scope_store.get_all(&parse_scope_names(&record.scopes));
 
-    Ok(client)
+        Ok((
+            user,
+            client,
+            scopes,
+            record.auth_time.timestamp(),
+            record.nonce,
+        ))
+    }
+
+    async fn grant_with_client_credentials(
+        &self,
+        headers: &HttpRequest,
+        request: Form<Request>,
+    ) -> Result<(User, Client, Vec<Scope>, i64), Error> {
+        let client = self.authenticate_client(headers, &request)?;
+        let allowed_scopes = BTreeSet::from_iter(client.allowed_scopes.clone());
+        let requested_scopes = match &request.scope {
+            None => Default::default(),
+            Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
+        };
+
+        let scopes = allowed_scopes
+            .intersection(&requested_scopes)
+            .map(|v| self.scope_store.get(v))
+            .map(Option::unwrap)
+            .collect();
+
+        Ok((
+            client.clone().try_into().unwrap(),
+            client,
+            scopes,
+            Local::now().timestamp(),
+        ))
+    }
+
+    async fn grant_with_password(
+        &self,
+        headers: &HttpRequest,
+        request: Form<Request>,
+    ) -> Result<(User, Client, Vec<Scope>, i64), Error> {
+        let username = &request.username.as_ref().ok_or(Error::MissingUsername)?;
+        let password = &request.password.as_ref().ok_or(Error::MissingPassword)?;
+        let client = self.authenticate_client(headers, &request)?;
+        let user = self
+            .authenticator
+            .authenticate_user(username, password)
+            .await
+            .map_err(|e| Error::WrongUsernameOrPassword(format!("{}", e)))?;
+
+        let allowed_scopes = BTreeSet::from_iter(client.allowed_scopes.clone());
+        let requested_scopes = match &request.scope {
+            None => Default::default(),
+            Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
+        };
+
+        let scopes = allowed_scopes
+            .intersection(&requested_scopes)
+            .map(|v| self.scope_store.get(v))
+            .map(Option::unwrap)
+            .collect();
+
+        Ok((user, client, scopes, Local::now().timestamp()))
+    }
+
+    async fn grant_with_refresh_token(
+        &self,
+        headers: &HttpRequest,
+        request: Form<Request>,
+    ) -> Result<(Token, Vec<Scope>, bool), Error> {
+        let raw_token = &request
+            .refresh_token
+            .as_ref()
+            .ok_or(Error::MissingRefreshToken)?;
+
+        let refresh_token = self
+            .token_validator
+            .validate::<RefreshToken>(raw_token)
+            .ok_or(Error::InvalidRefreshToken)?;
+
+        let client = self.authenticate_client(headers, &request)?;
+
+        if client.client_id != refresh_token.access_token.authorized_party {
+            warn!(
+                "client '{}' tried to use refresh_token issued to client '{}'",
+                client.client_id, refresh_token.access_token.authorized_party
+            );
+            return Err(Error::InvalidRefreshToken);
+        }
+
+        let mut token = refresh_token.access_token;
+        token.renew(Local::now(), Duration::minutes(1));
+
+        let granted_scopes = BTreeSet::from_iter(refresh_token.scopes);
+        let requested_scopes = match &request.scope {
+            None => granted_scopes.clone(),
+            Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
+        };
+
+        let actual_scopes = granted_scopes
+            .intersection(&requested_scopes)
+            .map(|v| self.scope_store.get(v))
+            .map(Option::unwrap)
+            .collect();
+
+        Ok((token, actual_scopes, true))
+    }
+
+    fn authenticate_client(
+        &self,
+        headers: &HttpRequest,
+        request: &Form<Request>,
+    ) -> Result<Client, Error> {
+        if let (Some(assertion), Some(assertion_type)) =
+            (&request.client_assertion, &request.client_assertion_type)
+        {
+            self.authenticate_client_by_jwt(assertion_type.clone(), assertion.clone())
+        } else {
+            self.authenticate_client_by_password(headers, request)
+        }
+    }
+
+    fn authenticate_client_by_password(
+        &self,
+        headers: &HttpRequest,
+        request: &Form<Request>,
+    ) -> Result<Client, Error> {
+        let (client_id, password) = Self::look_for_client_password(headers, request)?;
+
+        let client = match self.client_store.get(&client_id) {
+            None => {
+                debug!("client '{}' not found", client_id);
+                return Err(Error::WrongClientIdOrPassword);
+            }
+            Some(c) => c,
+        };
+
+        if let ClientType::Public = client.client_type {
+            debug!("tried to authenticate public client");
+            return Err(Error::InvalidAuthorizationHeader);
+        }
+
+        if !self.authenticator.authenticate_client(&client, &password) {
+            debug!("password for client '{}' was wrong", client_id);
+            Err(Error::WrongClientIdOrPassword)
+        } else {
+            Ok(client)
+        }
+    }
+
+    fn look_for_client_password(
+        headers: &HttpRequest,
+        request: &Form<Request>,
+    ) -> Result<(String, String), Error> {
+        match headers.headers().get("Authorization") {
+            Some(value) => match parse_basic_authorization(value) {
+                Some(x) => Ok(x),
+                None => Err(Error::InvalidAuthorizationHeader),
+            },
+            None => {
+                if let (Some(client_id), Some(client_secret)) =
+                    (request.client_id.clone(), request.client_secret.clone())
+                {
+                    Ok((client_id, client_secret))
+                } else {
+                    Err(Error::MissingAuthorizationHeader)
+                }
+            }
+        }
+    }
+
+    fn authenticate_client_by_jwt(
+        &self,
+        assertion_type: String,
+        assertion: String,
+    ) -> Result<Client, Error> {
+        if assertion_type != CLIENT_ASSERTION_TYPE {
+            return Err(Error::InvalidAuthenticationTokenType);
+        }
+
+        let unsafe_assertion =
+            match jsonwebtoken::dangerous_insecure_decode::<ClientAssertion>(&assertion) {
+                Err(e) => {
+                    debug!("failed to decode authentication token unsafely: {}", e);
+                    return Err(Error::InvalidAuthenticationToken(
+                        oauth2::ProtocolError::InvalidRequest,
+                    ));
+                }
+                Ok(token) => token,
+            };
+
+        let client = match self.client_store.get(&unsafe_assertion.claims.subject) {
+            None => {
+                debug!("client '{}' not found", unsafe_assertion.claims.subject);
+                return Err(Error::InvalidAuthenticationToken(
+                    oauth2::ProtocolError::InvalidClient,
+                ));
+            }
+            Some(v) => v,
+        };
+
+        let key = match client.get_decoding_key(unsafe_assertion.header.alg) {
+            None => {
+                return Err(Error::InvalidAuthenticationToken(
+                    oauth2::ProtocolError::InvalidClient,
+                ));
+            }
+            Some(v) => v,
+        };
+
+        let mut validation = jsonwebtoken::Validation {
+            leeway: 5,
+            validate_exp: true,
+            validate_nbf: false,
+            iss: Some(unsafe_assertion.claims.subject),
+            algorithms: vec![unsafe_assertion.header.alg],
+            ..Default::default()
+        };
+
+        validation.set_audience(&[self.issuer_configuration.token()]);
+        match jsonwebtoken::decode::<ClientAssertion>(&assertion, &key, &validation) {
+            Err(e) => {
+                debug!("failed to decode authentication token: {}", e);
+                Err(Error::InvalidAuthenticationToken(
+                    oauth2::ProtocolError::InvalidRequest,
+                ))
+            }
+            Ok(_) => Ok(client),
+        }
+    }
+}
+
+enum Error {
+    InvalidAuthenticationToken(oauth2::ProtocolError),
+    InvalidAuthenticationTokenType,
+    InvalidAuthorizationHeader,
+    MissingAuthorizationHeader,
+    WrongClientIdOrPassword,
+    MissingRefreshToken,
+    InvalidRefreshToken,
+    MissingUsername,
+    MissingPassword,
+    WrongUsernameOrPassword(String),
+    MissingRedirectUri,
+    MissingAuthorizationCode,
+    MissingClientId,
+    ConfidentialClientMustAutenticate,
+    InvalidAuthorizationCode,
+    UnsupportedGrantType,
+    TokenEncodingFailed,
+    RefreshTokenEncodingFailed,
 }
 
 #[cfg(test)]
@@ -718,8 +687,10 @@ mod tests {
     use super::*;
 
     use actix_web::http;
-    use actix_web::test;
-    use actix_web::web::Form;
+    use actix_web::test::TestRequest;
+    use actix_web::web::{Data, Form};
+
+    use test_log::test;
 
     use chrono::offset::Local;
 
@@ -741,9 +712,9 @@ mod tests {
     use crate::store::tests::UNKNOWN_CLIENT_ID;
     use crate::store::tests::USER;
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn missing_grant_type_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let form = Form(Request {
             grant_type: None,
             code: Some("fdsa".to_string()),
@@ -758,19 +729,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -780,9 +739,9 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn missing_code_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: None,
@@ -797,19 +756,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -819,9 +766,9 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn missing_client_id_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some("fdsa".to_string()),
@@ -836,19 +783,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -858,9 +793,9 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn missing_redirect_uri_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some("fdsa".to_string()),
@@ -875,19 +810,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -897,9 +820,9 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn unknown_client_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some("fdsa".to_string()),
@@ -914,21 +837,9 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
-        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
+        assert_eq!(http::StatusCode::UNAUTHORIZED, resp.status());
         let response = read_response::<ErrorResponse>(resp).await;
         assert_eq!(
             OidcError::from(oauth2::ProtocolError::UnauthorizedClient),
@@ -936,10 +847,10 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn unknown_auth_code_is_rejected() {
         // Don't register any auth_code
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let form = Form(Request {
             grant_type: Some(GrantType::AuthorizationCode),
             code: Some("fdsa".to_string()),
@@ -954,19 +865,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -976,9 +875,9 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn wrong_redirect_uri_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
@@ -1006,28 +905,16 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
         assert_eq!(OidcError::from(ProtocolError::InvalidGrant), response.error);
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn expired_code_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let creation_time = Local::now() - Duration::minutes(2 * AUTH_CODE_LIFE_TIME);
@@ -1056,28 +943,16 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
         assert_eq!(OidcError::from(ProtocolError::InvalidGrant), response.error);
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn valid_token_is_issued() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
@@ -1105,19 +980,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler_with_store(auth_code_store)).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Response>(resp).await;
@@ -1129,9 +992,9 @@ mod tests {
         assert!(!response.id_token.unwrap().is_empty());
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn confidential_client_without_basic_auth_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
@@ -1159,19 +1022,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -1181,9 +1032,9 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn unknown_authorization_is_rejected() {
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Invalid")
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
@@ -1213,19 +1064,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -1235,9 +1074,9 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn invalid_base64_password_is_rejected() {
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Basic invalid")
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
@@ -1267,19 +1106,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -1289,9 +1116,9 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn invalid_utf8_password_is_rejected() {
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Basic changeme")
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
@@ -1321,19 +1148,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -1343,9 +1158,9 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn missing_password_is_rejected() {
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header(
                 "Authorization",
                 "Basic ".to_string() + &base64::encode("username".as_bytes()),
@@ -1378,19 +1193,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -1400,11 +1203,11 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn issue_valid_token_for_correct_password() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Basic ".to_string() + &encoded_auth)
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
@@ -1434,21 +1237,9 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler_with_store(auth_code_store)).await;
 
-        assert_eq!(resp.status(), http::StatusCode::OK);
+        assert_eq!(http::StatusCode::OK, resp.status());
         let response = read_response::<Response>(resp).await;
         assert!(!response.access_token.is_empty());
         assert_eq!("bearer".to_string(), response.token_type);
@@ -1458,11 +1249,11 @@ mod tests {
         assert!(!response.id_token.unwrap().is_empty());
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn issue_valid_token_with_id_token_for_correct_password() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Basic ".to_string() + &encoded_auth)
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
@@ -1492,21 +1283,9 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler_with_store(auth_code_store)).await;
 
-        assert_eq!(resp.status(), http::StatusCode::OK);
+        assert_eq!(http::StatusCode::OK, resp.status());
         let response = read_response::<Response>(resp).await;
         assert!(!response.access_token.is_empty());
         assert_eq!("bearer".to_string(), response.token_type);
@@ -1520,12 +1299,11 @@ mod tests {
         assert_eq!("nonce".to_string(), token.nonce);
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn public_client_cannot_get_access_token() {
         let auth = PUBLIC_CLIENT.to_string() + ":" + PUBLIC_CLIENT;
         let encoded_auth = base64::encode(auth);
-        let auth_code_store = build_test_auth_code_store();
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Basic ".to_string() + &encoded_auth)
             .to_http_request();
         let form = Form(Request {
@@ -1542,19 +1320,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -1564,12 +1330,11 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn confidential_client_gets_access_token() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
-        let auth_code_store = build_test_auth_code_store();
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Basic ".to_string() + &encoded_auth)
             .to_http_request();
         let form = Form(Request {
@@ -1586,19 +1351,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Response>(resp).await;
@@ -1610,12 +1363,11 @@ mod tests {
         assert!(!response.id_token.unwrap().is_empty());
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn missing_username_is_rejected() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
-        let auth_code_store = build_test_auth_code_store();
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Basic ".to_string() + &encoded_auth)
             .to_http_request();
         let form = Form(Request {
@@ -1632,19 +1384,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -1654,12 +1394,11 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn missing_password_is_rejected_with_password_grant() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
-        let auth_code_store = build_test_auth_code_store();
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Basic ".to_string() + &encoded_auth)
             .to_http_request();
         let form = Form(Request {
@@ -1676,19 +1415,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -1698,12 +1425,11 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn public_client_cannot_use_password_grant() {
         let auth = PUBLIC_CLIENT.to_string() + ":" + PUBLIC_CLIENT;
         let encoded_auth = base64::encode(auth);
-        let auth_code_store = build_test_auth_code_store();
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Basic ".to_string() + &encoded_auth)
             .to_http_request();
         let form = Form(Request {
@@ -1720,19 +1446,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
         let response = read_response::<ErrorResponse>(resp).await;
@@ -1742,12 +1456,11 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn confidential_client_can_use_password_grant() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
-        let auth_code_store = build_test_auth_code_store();
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Basic ".to_string() + &encoded_auth)
             .to_http_request();
         let form = Form(Request {
@@ -1764,19 +1477,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Response>(resp).await;
@@ -1788,9 +1489,9 @@ mod tests {
         assert!(!response.id_token.unwrap().is_empty());
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn missing_refresh_token_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let form = Form(Request {
             grant_type: Some(GrantType::RefreshToken),
             code: None,
@@ -1805,26 +1506,14 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn invalid_refresh_token_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let form = Form(Request {
             grant_type: Some(GrantType::RefreshToken),
             code: None,
@@ -1839,29 +1528,16 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(http::StatusCode::BAD_REQUEST, resp.status());
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn invalid_client_credentials_with_refresh_token_are_rejected() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":wrong";
         let encoded_auth = base64::encode(auth);
-        let auth_code_store = build_test_auth_code_store();
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Basic ".to_string() + &encoded_auth)
             .to_http_request();
 
@@ -1891,29 +1567,16 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn refresh_token_from_different_client_is_rejected() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
-        let auth_code_store = build_test_auth_code_store();
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Basic ".to_string() + &encoded_auth)
             .to_http_request();
 
@@ -1944,29 +1607,16 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(http::StatusCode::BAD_REQUEST, resp.status());
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn successful_refresh_token_authentication() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
-        let auth_code_store = build_test_auth_code_store();
-        let req = test::TestRequest::post()
+        let req = TestRequest::post()
             .header("Authorization", "Basic ".to_string() + &encoded_auth)
             .to_http_request();
 
@@ -1997,19 +1647,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Response>(resp).await;
@@ -2021,10 +1659,9 @@ mod tests {
         assert!(!response.id_token.unwrap().is_empty());
     }
 
-    #[actix_rt::test]
+    #[test(actix_rt::test)]
     async fn successful_authentication_with_secret_as_post_parameter() {
-        let auth_code_store = build_test_auth_code_store();
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
 
         let token_creator = build_test_token_creator();
         let mut token = Token::build(
@@ -2053,19 +1690,7 @@ mod tests {
             client_assertion_type: None,
         });
 
-        let resp = post(
-            req,
-            form,
-            build_test_client_store(),
-            build_test_user_store(),
-            auth_code_store,
-            build_test_token_creator(),
-            build_test_authenticator(),
-            build_test_token_validator(),
-            build_test_scope_store(),
-            build_test_issuer_config(),
-        )
-        .await;
+        let resp = post(req, form, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
         let response = read_response::<Response>(resp).await;
@@ -2075,5 +1700,24 @@ mod tests {
         assert!(response.refresh_token.iter().any(|v| !v.is_empty()));
         assert_eq!(Some("".to_string()), response.scope);
         assert!(!response.id_token.unwrap().is_empty());
+    }
+
+    fn build_test_handler() -> Data<Handler> {
+        build_test_handler_with_store(build_test_auth_code_store())
+    }
+
+    fn build_test_handler_with_store(
+        auth_code_store: Data<Arc<dyn AuthorizationCodeStore>>,
+    ) -> Data<Handler> {
+        web::Data::new(Handler {
+            client_store: build_test_client_store().get_ref().clone(),
+            user_store: build_test_user_store().get_ref().clone(),
+            auth_code_store: auth_code_store.get_ref().clone(),
+            token_creator: build_test_token_creator().get_ref().clone(),
+            authenticator: build_test_authenticator().get_ref().clone(),
+            token_validator: build_test_token_validator().get_ref().clone(),
+            scope_store: build_test_scope_store().get_ref().clone(),
+            issuer_configuration: build_test_issuer_config().get_ref().clone(),
+        })
     }
 }

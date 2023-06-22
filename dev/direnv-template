@@ -1,0 +1,1 @@
+export RUST_LOG=tiny_auth_main=trace,tiny_auth_web=trace,tiny_auth_business=trace
