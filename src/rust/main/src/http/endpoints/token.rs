@@ -555,6 +555,8 @@ impl Handler {
 
         let granted_scopes = BTreeSet::from_iter(refresh_token.scopes);
         let requested_scopes = match &request.scope {
+            #[allow(clippy::redundant_clone)]
+            // false positive https://github.com/rust-lang/rust-clippy/issues/10940
             None => granted_scopes.clone(),
             Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
         };

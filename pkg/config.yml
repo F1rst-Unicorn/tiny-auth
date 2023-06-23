@@ -35,4 +35,5 @@ web:
     port: 8088
   static files: /usr/share/tiny-auth/static
   session timeout: 300
+  session same site policy: lax
   secret key: set-a-random-string-of-at-least-32-characters-here

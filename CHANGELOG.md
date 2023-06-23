@@ -5,14 +5,17 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+
+* Allow configuration of the cookie's `SameSite` attribute via configuration
+  option `web.session same site policy`.
+
 ### Fixed
 
 * Fix panic when authorising a request with unknown scope
   ([#72](https://j.njsm.de/git/veenj/tiny-auth/issues/72))
 
 ### Maintenance
-
-* Add `cargo audit` to CI to be informed about security vulnerabilities
 
 * Fix linter issues
 

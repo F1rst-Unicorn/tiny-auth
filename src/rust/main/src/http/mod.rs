@@ -25,7 +25,6 @@ use crate::config::TlsVersion;
 use crate::runtime::Error;
 use crate::store::Store;
 use actix_session::CookieSession;
-use actix_web::cookie::SameSite;
 use actix_web::dev::Server;
 use actix_web::http::Method;
 use actix_web::middleware::DefaultHeaders;
@@ -135,7 +134,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
                     .path(config.web.path.as_ref().expect("no default given"))
                     .secure(config.web.tls.is_some())
                     .http_only(true)
-                    .same_site(SameSite::Lax)
+                    .same_site(config.web.session_same_site_policy.into())
                     .max_age(config.web.session_timeout.expect("no default given")),
             )
             .wrap(DefaultHeaders::new().header("Cache-Control", "no-store"))

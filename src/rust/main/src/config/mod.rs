@@ -17,11 +17,10 @@
 
 pub mod parser;
 
-use std::convert::From;
-
+use actix_web::cookie::SameSite;
 use chrono::Duration;
-
 use serde_derive::Deserialize;
+use std::convert::From;
 
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Config {
@@ -93,6 +92,10 @@ pub struct Web {
     #[serde(alias = "session timeout")]
     pub session_timeout: Option<i64>,
 
+    #[serde(default = "default_session_same_site_policy")]
+    #[serde(alias = "session same site policy")]
+    pub session_same_site_policy: SameSitePolicy,
+
     #[serde(alias = "secret key")]
     pub secret_key: String,
 }
@@ -105,6 +108,37 @@ fn default_path() -> Option<String> {
 #[allow(clippy::unnecessary_wraps)]
 fn default_session_timeout() -> Option<i64> {
     Some(3600)
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn default_session_same_site_policy() -> SameSitePolicy {
+    SameSitePolicy::Lax
+}
+
+#[derive(Deserialize, Clone, Copy, Debug)]
+pub enum SameSitePolicy {
+    #[serde(rename = "strict")]
+    Strict,
+    #[serde(rename = "lax")]
+    Lax,
+    #[serde(rename = "none")]
+    None,
+}
+
+impl Default for SameSitePolicy {
+    fn default() -> Self {
+        Self::Lax
+    }
+}
+
+impl From<SameSitePolicy> for SameSite {
+    fn from(value: SameSitePolicy) -> Self {
+        match value {
+            SameSitePolicy::Strict => Self::Strict,
+            SameSitePolicy::Lax => Self::Lax,
+            SameSitePolicy::None => Self::None,
+        }
+    }
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]
