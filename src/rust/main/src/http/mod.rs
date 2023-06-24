@@ -23,28 +23,34 @@ use crate::config::Config;
 use crate::config::Tls;
 use crate::config::TlsVersion;
 use crate::runtime::Error;
+use crate::runtime::Error::LoggedBeforeError;
 use crate::store::Store;
-use actix_session::CookieSession;
+use actix_session::config::CookieContentSecurity;
+use actix_session::config::PersistentSession;
+use actix_session::storage::CookieSessionStore;
+use actix_session::SessionMiddleware;
+use actix_web::cookie::time::Duration;
+use actix_web::cookie::Key;
 use actix_web::dev::Server;
-use actix_web::http::Method;
+use actix_web::http::{KeepAlive, Method};
 use actix_web::middleware::DefaultHeaders;
 use actix_web::web::get;
 use actix_web::web::method;
 use actix_web::web::post;
 use actix_web::web::route as all;
 use actix_web::web::scope;
+use actix_web::web::to;
 use actix_web::web::Data;
 use actix_web::App;
-use actix_web::HttpResponse;
 use actix_web::HttpServer;
 use log::error;
 use log::warn;
-use rustls::internal::pemfile::certs;
-use rustls::internal::pemfile::pkcs8_private_keys;
-use rustls::AllowAnyAuthenticatedClient;
-use rustls::NoClientAuth;
-use rustls::RootCertStore;
-use rustls::ServerConfig;
+use rustls::server::AllowAnyAuthenticatedClient;
+use rustls::server::ClientCertVerifier;
+use rustls::server::NoClientAuth;
+use rustls::{Certificate, RootCertStore, SupportedProtocolVersion};
+use rustls::{PrivateKey, ServerConfig};
+use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
@@ -106,7 +112,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
         cors_checker,
     );
 
-    std::mem::drop(constructor);
+    drop(constructor);
 
     let server = HttpServer::new(move || {
         let token_certificate = token_certificate.clone();
@@ -127,18 +133,32 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .app_data(Data::new(user_info_handler.clone()))
             .app_data(Data::new(token_handler.clone()))
             .wrap(
-                CookieSession::private(config.web.secret_key.as_bytes())
-                    // ^- encryption is only needed to avoid encoding problems
-                    .domain(&config.web.public_host.domain)
-                    .name("session")
-                    .path(config.web.path.as_ref().expect("no default given"))
-                    .secure(config.web.tls.is_some())
-                    .http_only(true)
-                    .same_site(config.web.session_same_site_policy.into())
-                    .max_age(config.web.session_timeout.expect("no default given")),
+                SessionMiddleware::builder(
+                    CookieSessionStore::default(),
+                    Key::from(config.web.secret_key.as_bytes()),
+                )
+                .cookie_domain(Some(config.web.public_host.domain.clone()))
+                .cookie_name("session".to_string())
+                .cookie_path(
+                    config
+                        .web
+                        .path
+                        .as_ref()
+                        .expect("no default given")
+                        .to_string(),
+                )
+                .cookie_secure(config.web.tls.is_some())
+                .cookie_http_only(true)
+                .cookie_same_site(config.web.session_same_site_policy.into())
+                .session_lifecycle(PersistentSession::default().session_ttl(Duration::seconds(
+                    config.web.session_timeout.expect("no default given"),
+                )))
+                .cookie_content_security(CookieContentSecurity::Private)
+                .build(),
+                // ^- encryption is only needed to avoid encoding problems
             )
-            .wrap(DefaultHeaders::new().header("Cache-Control", "no-store"))
-            .wrap(DefaultHeaders::new().header("Pragma", "no-cache"))
+            .wrap(DefaultHeaders::new().add(("Cache-Control", "no-store")))
+            .wrap(DefaultHeaders::new().add(("Pragma", "no-cache")))
             .service(actix_files::Files::new(
                 &(config.web.path.clone().unwrap() + "/static/css"),
                 config.web.static_files.clone() + "/css",
@@ -159,7 +179,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
                     )
                     .route(
                         "/.well-known/openid-configuration",
-                        all().to(endpoints::method_not_allowed),
+                        to(endpoints::method_not_allowed),
                     )
                     .route("/jwks", get().to(endpoints::discovery::jwks))
                     .route("/jwks", method(Method::OPTIONS).to(cors_options_preflight))
@@ -207,11 +227,11 @@ pub fn build(config: Config) -> Result<Server, Error> {
                         method(Method::OPTIONS).to(cors_options_preflight),
                     )
                     .route("/health", all().to(endpoints::method_not_allowed))
-                    .default_service(all().to(|| HttpResponse::NotFound().body("not found"))),
+                    .default_service(to(endpoints::not_found)),
             )
     })
     .disable_signals()
-    .keep_alive(60)
+    .keep_alive(KeepAlive::Timeout(core::time::Duration::from_secs(60)))
     .shutdown_timeout(30);
 
     let server = if let Some(tls) = tls {
@@ -236,27 +256,11 @@ pub fn build(config: Config) -> Result<Server, Error> {
 }
 
 fn configure_tls(config: &Tls) -> Result<ServerConfig, Error> {
-    let mut result = if let Some(client_ca) = &config.client_ca {
-        let mut ca_store = RootCertStore::empty();
-        if ca_store
-            .add_pem_file(&mut BufReader::new(File::open(client_ca)?))
-            .is_err()
-        {
-            error!("could not load tls client ca");
-            return Err(Error::LoggedBeforeError);
-        }
-        ServerConfig::new(AllowAnyAuthenticatedClient::new(ca_store))
-    } else {
-        ServerConfig::new(NoClientAuth::new())
-    };
-
-    let certs = match certs(&mut BufReader::new(File::open(&config.certificate)?)) {
-        Err(_) => {
-            error!("could not read tls certificate file");
-            return Err(Error::LoggedBeforeError);
-        }
-        Ok(certs) => certs,
-    };
+    let client_cert_verifier = build_client_verifier(&config)?;
+    let server_certificate_chain = certs(&mut BufReader::new(File::open(&config.certificate)?))?
+        .into_iter()
+        .map(Certificate)
+        .collect();
 
     let key = match pkcs8_private_keys(&mut BufReader::new(File::open(&config.key)?)) {
         Err(_) => {
@@ -268,7 +272,7 @@ fn configure_tls(config: &Tls) -> Result<ServerConfig, Error> {
                 error!("No tls key found");
                 return Err(Error::LoggedBeforeError);
             }
-            1 => keys[0].clone(),
+            1 => PrivateKey(keys[0].clone()),
             _ => {
                 error!("Put only one tls key into the tls key file");
                 return Err(Error::LoggedBeforeError);
@@ -276,17 +280,50 @@ fn configure_tls(config: &Tls) -> Result<ServerConfig, Error> {
         },
     };
 
-    if let Err(e) = result.set_single_cert(certs, key) {
-        error!("tls key is invalid: {}", e);
-        return Err(Error::LoggedBeforeError);
-    }
+    ServerConfig::builder()
+        .with_safe_default_cipher_suites()
+        .with_safe_default_kx_groups()
+        .with_protocol_versions(
+            config
+                .versions
+                .clone()
+                .into_iter()
+                .map(TlsVersion::into)
+                .collect::<Vec<&SupportedProtocolVersion>>()
+                .as_slice(),
+        )
+        .unwrap()
+        .with_client_cert_verifier(client_cert_verifier)
+        .with_single_cert(server_certificate_chain, key)
+        .map_err(|e| {
+            error!("tls key is invalid: {}", e);
+            Error::LoggedBeforeError
+        })
+}
 
-    result.versions = config
-        .versions
-        .clone()
-        .into_iter()
-        .map(TlsVersion::into)
-        .collect();
-
-    Ok(result)
+fn build_client_verifier(config: &&Tls) -> Result<Arc<dyn ClientCertVerifier>, Error> {
+    let client_cert_verifier = if let Some(client_ca) = &config.client_ca {
+        let mut ca_store = RootCertStore::empty();
+        certs(&mut BufReader::new(File::open(client_ca)?))?
+            .into_iter()
+            .map(Certificate)
+            .map(|cert| ca_store.add(&cert))
+            .enumerate()
+            .filter(|(_, result)| result.is_err())
+            .for_each(|(index, error)| {
+                error!(
+                    "ignoring client ca certificate at index {}: {}",
+                    index,
+                    error.unwrap_err()
+                )
+            });
+        if ca_store.is_empty() {
+            error!("No usable client ca certificates were found");
+            return Err(LoggedBeforeError);
+        }
+        AllowAnyAuthenticatedClient::new(ca_store)
+    } else {
+        NoClientAuth::new()
+    };
+    Ok(client_cert_verifier)
 }

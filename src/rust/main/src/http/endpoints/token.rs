@@ -1065,7 +1065,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn unknown_authorization_is_rejected() {
         let req = TestRequest::post()
-            .header("Authorization", "Invalid")
+            .insert_header(("Authorization", "Invalid"))
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
@@ -1107,7 +1107,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn invalid_base64_password_is_rejected() {
         let req = TestRequest::post()
-            .header("Authorization", "Basic invalid")
+            .insert_header(("Authorization", "Basic invalid"))
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
@@ -1149,7 +1149,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn invalid_utf8_password_is_rejected() {
         let req = TestRequest::post()
-            .header("Authorization", "Basic changeme")
+            .insert_header(("Authorization", "Basic changeme"))
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
@@ -1191,10 +1191,10 @@ mod tests {
     #[test(actix_rt::test)]
     async fn missing_password_is_rejected() {
         let req = TestRequest::post()
-            .header(
+            .insert_header((
                 "Authorization",
                 "Basic ".to_string() + &base64::encode("username".as_bytes()),
-            )
+            ))
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
@@ -1238,7 +1238,7 @@ mod tests {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
         let req = TestRequest::post()
-            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
@@ -1284,7 +1284,7 @@ mod tests {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
         let req = TestRequest::post()
-            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
@@ -1334,7 +1334,7 @@ mod tests {
         let auth = PUBLIC_CLIENT.to_string() + ":" + PUBLIC_CLIENT;
         let encoded_auth = base64::encode(auth);
         let req = TestRequest::post()
-            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
         let form = Form(Request {
             grant_type: Some(GrantType::ClientCredentials),
@@ -1365,7 +1365,7 @@ mod tests {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
         let req = TestRequest::post()
-            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
         let form = Form(Request {
             grant_type: Some(GrantType::ClientCredentials),
@@ -1398,7 +1398,7 @@ mod tests {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
         let req = TestRequest::post()
-            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
         let form = Form(Request {
             grant_type: Some(GrantType::Password),
@@ -1429,7 +1429,7 @@ mod tests {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
         let req = TestRequest::post()
-            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
         let form = Form(Request {
             grant_type: Some(GrantType::Password),
@@ -1460,7 +1460,7 @@ mod tests {
         let auth = PUBLIC_CLIENT.to_string() + ":" + PUBLIC_CLIENT;
         let encoded_auth = base64::encode(auth);
         let req = TestRequest::post()
-            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
         let form = Form(Request {
             grant_type: Some(GrantType::Password),
@@ -1491,7 +1491,7 @@ mod tests {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
         let req = TestRequest::post()
-            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
         let form = Form(Request {
             grant_type: Some(GrantType::Password),
@@ -1568,7 +1568,7 @@ mod tests {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":wrong";
         let encoded_auth = base64::encode(auth);
         let req = TestRequest::post()
-            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
 
         let token_creator = build_test_token_creator();
@@ -1607,7 +1607,7 @@ mod tests {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
         let req = TestRequest::post()
-            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
 
         let token_creator = build_test_token_creator();
@@ -1647,7 +1647,7 @@ mod tests {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
         let encoded_auth = base64::encode(auth);
         let req = TestRequest::post()
-            .header("Authorization", "Basic ".to_string() + &encoded_auth)
+            .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
 
         let token_creator = build_test_token_creator();

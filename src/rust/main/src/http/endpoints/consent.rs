@@ -325,7 +325,7 @@ async fn process_skipping_csrf(
     session.remove(authorize::SESSION_KEY);
 
     HttpResponse::Found()
-        .set_header("Location", url.as_str())
+        .insert_header(("Location", url.as_str()))
         .finish()
 }
 
@@ -379,7 +379,7 @@ fn build_context(
     let csrftoken = super::generate_csrf_token();
     context.insert(super::CSRF_CONTEXT, &csrftoken);
 
-    if let Err(e) = session.set(super::CSRF_SESSION_KEY, csrftoken) {
+    if let Err(e) = session.insert(super::CSRF_SESSION_KEY, csrftoken) {
         warn!("Failed to construct context: {}", e);
         return None;
     }
@@ -388,15 +388,9 @@ fn build_context(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    use actix_session::UserSession;
-    use actix_web::http;
-    use actix_web::test;
-    use actix_web::web::Form;
-
     use super::super::generate_csrf_token;
     use super::super::CSRF_SESSION_KEY;
+    use super::*;
     use crate::http::state::tests::build_test_auth_code_store;
     use crate::http::state::tests::build_test_client_store;
     use crate::http::state::tests::build_test_scope_store;
@@ -405,6 +399,11 @@ mod tests {
     use crate::http::state::tests::build_test_user_store;
     use crate::store::tests::PUBLIC_CLIENT;
     use crate::store::tests::USER;
+
+    use actix_session::SessionExt;
+    use actix_web::http;
+    use actix_web::test;
+    use actix_web::web::Form;
 
     #[actix_rt::test]
     async fn empty_session_gives_error() {
@@ -429,7 +428,7 @@ mod tests {
     async fn missing_authentication_gives_error() {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
-        session.set(authorize::SESSION_KEY, "dummy").unwrap();
+        session.insert(authorize::SESSION_KEY, "dummy").unwrap();
 
         let resp = get(
             build_test_tera(),
@@ -466,13 +465,13 @@ mod tests {
             ui_locales: None,
         };
         session
-            .set(
+            .insert(
                 authorize::SESSION_KEY,
                 &serde_urlencoded::to_string(first_request).unwrap(),
             )
             .unwrap();
 
-        session.set(authenticate::SESSION_KEY, USER).unwrap();
+        session.insert(authenticate::SESSION_KEY, USER).unwrap();
 
         let resp = get(
             build_test_tera(),
@@ -493,7 +492,7 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let csrftoken = generate_csrf_token();
-        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+        session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
             csrftoken: Some(csrftoken + "wrong"),
             scopes: Default::default(),
@@ -519,7 +518,7 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let csrftoken = generate_csrf_token();
-        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+        session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
             csrftoken: Some(csrftoken),
             scopes: Default::default(),
@@ -544,10 +543,12 @@ mod tests {
     async fn posting_missing_authentication_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        session.set(authorize::SESSION_KEY, "dummy").unwrap();
-        session.set(authenticate::AUTH_TIME_SESSION_KEY, 0).unwrap();
+        session.insert(authorize::SESSION_KEY, "dummy").unwrap();
+        session
+            .insert(authenticate::AUTH_TIME_SESSION_KEY, 0)
+            .unwrap();
         let csrftoken = generate_csrf_token();
-        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+        session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
             csrftoken: Some(csrftoken),
             scopes: Default::default(),
@@ -589,15 +590,17 @@ mod tests {
             ui_locales: None,
         };
         session
-            .set(
+            .insert(
                 authorize::SESSION_KEY,
                 &serde_urlencoded::to_string(first_request.clone()).unwrap(),
             )
             .unwrap();
-        session.set(authenticate::AUTH_TIME_SESSION_KEY, 0).unwrap();
-        session.set(authenticate::SESSION_KEY, USER).unwrap();
+        session
+            .insert(authenticate::AUTH_TIME_SESSION_KEY, 0)
+            .unwrap();
+        session.insert(authenticate::SESSION_KEY, USER).unwrap();
         let csrftoken = generate_csrf_token();
-        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+        session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
             csrftoken: Some(csrftoken),
             scopes: Default::default(),
@@ -657,15 +660,17 @@ mod tests {
             ui_locales: None,
         };
         session
-            .set(
+            .insert(
                 authorize::SESSION_KEY,
                 &serde_urlencoded::to_string(first_request.clone()).unwrap(),
             )
             .unwrap();
-        session.set(authenticate::AUTH_TIME_SESSION_KEY, 0).unwrap();
-        session.set(authenticate::SESSION_KEY, USER).unwrap();
+        session
+            .insert(authenticate::AUTH_TIME_SESSION_KEY, 0)
+            .unwrap();
+        session.insert(authenticate::SESSION_KEY, USER).unwrap();
         let csrftoken = generate_csrf_token();
-        session.set(CSRF_SESSION_KEY, &csrftoken).unwrap();
+        session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
             csrftoken: Some(csrftoken),
             scopes: Default::default(),

@@ -16,18 +16,15 @@
  */
 
 use crate::systemd::notify_about_termination;
-
-use actix_web::dev::Server;
-
+use actix_web::dev::ServerHandle;
+use log::debug;
+use log::info;
 use tokio::io::Error;
 use tokio::signal::unix::signal;
 use tokio::signal::unix::SignalKind;
 
-use log::debug;
-use log::info;
-
 #[allow(clippy::cognitive_complexity)] // not really complex to read
-pub async fn terminator(server: Server) -> Result<(), Error> {
+pub async fn terminator(server: ServerHandle) -> Result<(), Error> {
     let mut sigint = signal(SignalKind::interrupt())?;
     let mut sigterm = signal(SignalKind::terminate())?;
     let mut sigquit = signal(SignalKind::quit())?;
@@ -39,7 +36,7 @@ pub async fn terminator(server: Server) -> Result<(), Error> {
         _ = sigquit.recv() => {}
     }
 
-    info!("Exitting");
+    info!("Exitting, waiting 30s for connections to terminate");
     tokio::spawn(notify_about_termination());
     tokio::select! {
         _ = server.stop(true) => {
@@ -51,7 +48,7 @@ pub async fn terminator(server: Server) -> Result<(), Error> {
         _ = sigquit.recv() => {}
     };
 
-    info!("Calm down, exitting immediately...");
+    info!("Calm down...");
     while tokio::select! {
         _ = server.stop(false) => {
             debug!("HTTP server stopped");

@@ -61,24 +61,24 @@ pub async fn post(
             .json(token),
         Err(Error::InvalidAuthorizationHeader) => cors_check_result
             .with_headers(HttpResponse::Unauthorized())
-            .header(
+            .append_header((
                 "www-authenticate",
                 "error=\"invalid_request\", error_description=\"Invalid authorization header\"",
-            )
+            ))
             .finish(),
         Err(Error::MissingAuthorizationHeader) => cors_check_result
             .with_headers(HttpResponse::BadRequest())
-            .header(
+            .append_header((
                 "www-authenticate",
                 "error=\"invalid_request\", error_description=\"Missing authorization header\"",
-            )
+            ))
             .finish(),
         Err(Error::InvalidToken) => cors_check_result
             .with_headers(HttpResponse::Unauthorized())
-            .header(
+            .append_header((
                 "www-authenticate",
                 "error=\"invalid_token\", error_description=\"Invalid token\"",
-            )
+            ))
             .finish(),
     }
 }
@@ -174,7 +174,7 @@ mod tests {
     #[tokio::test]
     pub async fn invalid_header_is_rejected() {
         let request = test::TestRequest::post()
-            .header("authorization", "invalid")
+            .insert_header(("authorization", "invalid"))
             .to_http_request();
         let query = Form(Request { access_token: None });
 
@@ -190,7 +190,7 @@ mod tests {
         let client = build_test_client_store().get(PUBLIC_CLIENT).unwrap();
         let expiration = Duration::minutes(3);
         let request = test::TestRequest::post()
-            .header(
+            .insert_header((
                 "authorization",
                 "Bearer ".to_string()
                     + &creator
@@ -203,7 +203,7 @@ mod tests {
                             0,
                         ))
                         .unwrap(),
-            )
+            ))
             .to_http_request();
         let query = Form(Request { access_token: None });
 
@@ -228,10 +228,10 @@ mod tests {
         );
         token.set_issuer(&build_test_token_issuer());
         let request = test::TestRequest::post()
-            .header(
+            .insert_header((
                 "authorization",
                 "Bearer ".to_string() + &creator.create(token.clone()).unwrap(),
-            )
+            ))
             .to_http_request();
         let query = Form(Request { access_token: None });
 

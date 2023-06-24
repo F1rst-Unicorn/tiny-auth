@@ -23,12 +23,14 @@ use crate::terminate::terminator;
 
 use openssl::error::ErrorStack;
 
+use actix_web::dev::ServerHandle;
 use std::convert::From;
 use std::fmt::Display;
 
 use log::error;
 
 use tokio::sync::oneshot;
+use tokio::sync::oneshot::Receiver;
 
 #[derive(Debug)]
 pub enum Error {
@@ -77,34 +79,22 @@ impl From<tera::Error> for Error {
 }
 
 pub fn run(config: Config) -> Result<(), Error> {
-    let mut tok_runtime = tokio::runtime::Builder::new()
-        .threaded_scheduler()
-        .core_threads(4)
-        .enable_all()
-        .thread_name(env!("CARGO_PKG_NAME"))
-        .build()?;
-
-    let (pass_server, receive_server) = oneshot::channel();
-
-    tok_runtime.spawn(async move {
-        let server = match receive_server.await {
-            Err(e) => {
-                error!("failed to receive server: {}", e);
-                return;
-            }
-            Ok(server) => server,
-        };
-
-        tokio::spawn(notify_about_start());
-        tokio::spawn(watchdog());
-        tokio::spawn(terminator(server));
+    let actor_system = actix_rt::System::with_tokio_rt(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(4)
+            .enable_all()
+            .thread_name(env!("CARGO_PKG_NAME"))
+            .build()
+            .map_err(|e| {
+                error!("failed to start tokio runtime: {}", e);
+                e
+            })
+            .unwrap()
     });
+    actor_system.block_on(async move {
+        let (pass_server, receive_server) = oneshot::channel();
+        tokio::spawn(runtime_primitives(receive_server));
 
-    let tasks = tokio::task::LocalSet::new();
-    let system_fut = actix_rt::System::run_in_tokio(env!("CARGO_PKG_NAME"), &tasks);
-
-    tasks.block_on(&mut tok_runtime, async move {
-        tokio::task::spawn_local(system_fut);
         let srv = match http::build(config) {
             Err(e) => {
                 error!("Startup failed: {}", e);
@@ -112,7 +102,7 @@ pub fn run(config: Config) -> Result<(), Error> {
             }
             Ok(srv) => srv,
         };
-        if pass_server.send(srv.clone()).is_err() {
+        if pass_server.send(srv.handle()).is_err() {
             error!("Failed to create server");
             return;
         }
@@ -121,4 +111,18 @@ pub fn run(config: Config) -> Result<(), Error> {
         }
     });
     Ok(())
+}
+
+async fn runtime_primitives(receive_server: Receiver<ServerHandle>) {
+    let server = match receive_server.await {
+        Err(e) => {
+            error!("failed to receive server: {}", e);
+            return;
+        }
+        Ok(server) => server,
+    };
+
+    tokio::spawn(notify_about_start());
+    tokio::spawn(watchdog());
+    tokio::spawn(terminator(server));
 }

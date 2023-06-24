@@ -29,32 +29,25 @@ use crate::protocol::oidc::Prompt;
 use crate::protocol::oidc::ProtocolError;
 use crate::util::generate_random_string;
 use crate::util::render_tera_error;
-
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::convert::TryFrom;
-
-use actix_web::dev::HttpResponseBuilder;
-use actix_web::http::HeaderValue;
+use actix_session::Session;
+use actix_web::http::header::HeaderValue;
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
-
-use actix_session::Session;
-
-use url::Url;
-
-use tera::Context;
-use tera::Tera;
-
+use actix_web::HttpResponseBuilder;
 use log::debug;
 use log::error;
-
 use serde::de::Deserialize as _;
 use serde::de::Visitor;
 use serde::Deserializer;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::convert::TryFrom;
+use tera::Context;
+use tera::Tera;
 use tiny_auth_web::cors::CorsCheckResult;
+use url::Url;
 
 const CSRF_SESSION_KEY: &str = "c";
 
@@ -113,8 +106,12 @@ struct ErrorResponse {
     error_uri: Option<String>,
 }
 
-pub fn method_not_allowed() -> HttpResponse {
+pub async fn method_not_allowed() -> HttpResponse {
     HttpResponse::MethodNotAllowed().body("method not allowed")
+}
+
+pub async fn not_found() -> HttpResponse {
+    HttpResponse::MethodNotAllowed().body("not found")
 }
 
 /// When which HTTP code: https://tools.ietf.org/html/rfc6749#section-5.2
@@ -178,7 +175,9 @@ fn render_redirect_error_with_base(
         url.query_pairs_mut().extend_pairs(response_parameters);
     }
 
-    base_response.header("Location", url.as_str()).finish()
+    base_response
+        .append_header(("Location", url.as_str()))
+        .finish()
 }
 
 fn server_error(tera: &Tera) -> HttpResponse {
@@ -198,7 +197,7 @@ fn render_template_with_context(
     let body = tera.render(name, context);
     match body {
         Ok(body) => HttpResponse::build(code)
-            .set_header("Content-Type", "text/html")
+            .insert_header(("Content-Type", "text/html"))
             .body(body),
         Err(e) => {
             log::warn!("{}", render_tera_error(&e));
@@ -338,14 +337,12 @@ mod tests {
 
     use super::*;
 
+    use actix_session::SessionExt;
+    use actix_web::body::to_bytes;
+
     use actix_web::test;
     use actix_web::web::BytesMut;
     use actix_web::HttpResponse;
-
-    use actix_session::UserSession;
-
-    use futures::stream::StreamExt;
-
     use serde::de::DeserializeOwned;
     use serde_derive::Deserialize;
 
@@ -357,7 +354,7 @@ mod tests {
     }
 
     #[test]
-    pub fn plus_is_encoded() {
+    async fn plus_is_encoded() {
         let input = Test {
             value: Some("AI4qNF5I6XA+HH8b0KFobQ".to_string()),
         };
@@ -366,55 +363,55 @@ mod tests {
     }
 
     #[test]
-    pub fn empty_string_is_mapped_to_none() {
+    async fn empty_string_is_mapped_to_none() {
         let input = r#"value="#;
         let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
         assert_eq!(None, result.value);
     }
 
     #[test]
-    pub fn missing_value_is_none() {
+    async fn missing_value_is_none() {
         let input = r#""#;
         let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
         assert_eq!(None, result.value);
     }
 
     #[test]
-    pub fn value_is_some() {
+    async fn value_is_some() {
         let input = r#"value=value"#;
         let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
         assert_eq!(Some("value".to_string()), result.value);
     }
 
     #[test]
-    pub fn verify_wrong_csrf_verification() {
+    async fn verify_wrong_csrf_verification() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let token = "token".to_string();
         assert!(!is_csrf_valid(&None, &session));
         assert!(!is_csrf_valid(&Some(token.clone()), &session));
 
-        session.set(CSRF_SESSION_KEY, &token).unwrap();
+        session.insert(CSRF_SESSION_KEY, &token).unwrap();
         assert!(!is_csrf_valid(&Some(token.clone() + "wrong"), &session));
     }
 
     #[test]
-    pub fn verify_csrf_verification() {
+    async fn verify_csrf_verification() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let token = "token".to_string();
         assert!(!is_csrf_valid(&None, &session));
         assert!(!is_csrf_valid(&Some(token.clone()), &session));
 
-        session.set(CSRF_SESSION_KEY, &token).unwrap();
+        session.insert(CSRF_SESSION_KEY, &token).unwrap();
         assert!(is_csrf_valid(&Some(token), &session));
     }
 
-    pub async fn read_response<T: DeserializeOwned>(mut resp: HttpResponse) -> T {
-        let mut body = resp.take_body();
+    pub async fn read_response<T: DeserializeOwned>(resp: HttpResponse) -> T {
+        let x = to_bytes(resp.into_body()).await;
         let mut bytes = BytesMut::new();
-        while let Some(item) = body.next().await {
-            bytes.extend_from_slice(&item.unwrap());
+        if let Ok(item) = x {
+            bytes.extend_from_slice(&item);
         }
         serde_json::from_slice::<T>(&bytes).expect("Failed to deserialize response")
     }

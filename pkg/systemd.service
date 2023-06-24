@@ -9,8 +9,12 @@ User=tiny-auth
 Group=tiny-auth
 WorkingDirectory=/var/lib/tiny-auth
 Restart=on-failure
+RestartSec=5
 WatchdogSec=5
 WatchdogSignal=SIGTERM
+
+# tiny-auth waits 30s for existing connections to terminate
+TimeoutStopSec=30s
 
 NoNewPrivileges=true
 ProtectSystem=full

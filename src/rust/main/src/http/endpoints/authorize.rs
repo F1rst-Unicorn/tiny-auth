@@ -257,13 +257,13 @@ pub async fn handle(
         );
     }
 
-    if let Err(e) = session.set(SESSION_KEY, serde_urlencoded::to_string(query.0).unwrap()) {
+    if let Err(e) = session.insert(SESSION_KEY, serde_urlencoded::to_string(query.0).unwrap()) {
         error!("Failed to serialise session: {}", e);
         return server_error(&tera);
     }
 
     HttpResponse::SeeOther()
-        .set_header("Location", "authenticate")
+        .insert_header(("Location", "authenticate"))
         .finish()
 }
 
@@ -315,14 +315,6 @@ pub fn return_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use actix_session::UserSession;
-    use actix_web::http;
-    use actix_web::test;
-    use actix_web::web::Query;
-
-    use url::Url;
-
     use crate::http::endpoints::parse_first_request;
     use crate::http::state::tests::build_test_client_store;
     use crate::http::state::tests::build_test_tera;
@@ -334,7 +326,13 @@ mod tests {
     use crate::store::tests::CONFIDENTIAL_CLIENT;
     use crate::store::tests::UNKNOWN_CLIENT_ID;
 
-    #[actix_rt::test]
+    use actix_session::SessionExt;
+    use actix_web::http;
+    use actix_web::test;
+    use actix_web::web::Query;
+    use url::Url;
+
+    #[test]
     async fn missing_client_id_is_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -360,7 +358,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[actix_rt::test]
+    #[test]
     async fn missing_redirect_uri_is_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -386,7 +384,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[actix_rt::test]
+    #[test]
     async fn unknown_client_id_is_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -412,7 +410,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[actix_rt::test]
+    #[test]
     async fn unregistered_redirect_uri_is_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -438,7 +436,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[actix_rt::test]
+    #[test]
     async fn missing_scope_is_redirected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -489,7 +487,7 @@ mod tests {
             .any(|param| param == ("error".to_string(), expected_error.to_string())));
     }
 
-    #[actix_rt::test]
+    #[test]
     async fn contradicting_prompts_are_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -540,7 +538,7 @@ mod tests {
             .any(|param| param == ("error".to_string(), expected_error.to_string())));
     }
 
-    #[actix_rt::test]
+    #[test]
     async fn missing_response_type_is_redirected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -591,7 +589,7 @@ mod tests {
             .any(|param| param == ("error".to_string(), expected_error.to_string())));
     }
 
-    #[actix_rt::test]
+    #[test]
     async fn disallowed_scope_is_dropped() {
         let req = test::TestRequest::post().to_http_request();
         let client_store = build_test_client_store();
@@ -629,7 +627,7 @@ mod tests {
         assert_eq!(Some("email".to_string()), first_request.scope);
     }
 
-    #[actix_rt::test]
+    #[test]
     async fn successful_authorization_is_redirected() {
         let req = test::TestRequest::post().to_http_request();
         let client_store = build_test_client_store();
@@ -668,14 +666,14 @@ mod tests {
     }
 
     #[test]
-    pub fn single_response_types_are_parsed() {
+    async fn single_response_types_are_parsed() {
         assert_eq!(Some(vec![OAuth2(Code)]), parse_response_type("code"));
         assert_eq!(Some(vec![OAuth2(Token)]), parse_response_type("token"));
         assert_eq!(Some(vec![Oidc(IdToken)]), parse_response_type("id_token"));
     }
 
     #[test]
-    pub fn composite_response_types_are_parsed() {
+    async fn composite_response_types_are_parsed() {
         assert_eq!(
             Some(vec![OAuth2(Code), Oidc(IdToken)]),
             parse_response_type("code id_token")
@@ -691,7 +689,7 @@ mod tests {
     }
 
     #[test]
-    pub fn errors_are_reported() {
+    async fn errors_are_reported() {
         assert_eq!(None, parse_response_type("code id_token invalid"));
     }
 }

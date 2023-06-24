@@ -15,19 +15,17 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
-
-use tiny_auth_business::cors::CorsLister;
-
-use actix_web::dev::HttpResponseBuilder;
+use actix_web::http::header::HeaderValue;
 use actix_web::http::header::ACCESS_CONTROL_ALLOW_METHODS;
 use actix_web::http::header::ACCESS_CONTROL_ALLOW_ORIGIN;
 use actix_web::http::header::ACCESS_CONTROL_MAX_AGE;
 use actix_web::http::header::ORIGIN;
-use actix_web::http::HeaderValue;
 use actix_web::web;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
+use actix_web::HttpResponseBuilder;
+use std::sync::Arc;
+use tiny_auth_business::cors::CorsLister;
 
 use log::debug;
 
@@ -95,10 +93,10 @@ impl<'a> CorsCheckResult<'a> {
     ) -> &'b mut HttpResponseBuilder {
         if let CorsCheckResult::ApprovedOrigin(origin) = self {
             response
-                .header(ACCESS_CONTROL_ALLOW_ORIGIN, *origin)
-                .header(ACCESS_CONTROL_MAX_AGE, "86400")
-                .header(ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS")
-                .header("Vary", ORIGIN.as_str())
+                .append_header((ACCESS_CONTROL_ALLOW_ORIGIN, *origin))
+                .append_header((ACCESS_CONTROL_MAX_AGE, "86400"))
+                .append_header((ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS"))
+                .append_header(("Vary", ORIGIN.as_str()))
         } else {
             response
         }

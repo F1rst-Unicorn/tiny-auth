@@ -174,11 +174,11 @@ pub enum TlsVersion {
     Tls1_2,
 }
 
-impl From<TlsVersion> for rustls::ProtocolVersion {
+impl From<TlsVersion> for &'static rustls::SupportedProtocolVersion {
     fn from(tls_version: TlsVersion) -> Self {
         match tls_version {
-            TlsVersion::Tls1_3 => rustls::ProtocolVersion::TLSv1_3,
-            TlsVersion::Tls1_2 => rustls::ProtocolVersion::TLSv1_2,
+            TlsVersion::Tls1_3 => &rustls::version::TLS13,
+            TlsVersion::Tls1_2 => &rustls::version::TLS12,
         }
     }
 }
