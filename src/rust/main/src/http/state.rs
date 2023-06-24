@@ -25,22 +25,19 @@ use crate::config::Store;
 use crate::domain::IssuerConfiguration;
 use crate::domain::Jwk;
 use crate::domain::Jwks;
+use crate::http::TokenCertificate;
 use crate::runtime::Error;
 use crate::store::file::*;
 use crate::store::memory::*;
 use crate::store::*;
 use crate::util::read_file;
-
-use tiny_auth_business::cors::CorsListerImpl;
-
-use std::sync::Arc;
-
+use base64::engine::general_purpose;
+use base64::engine::Engine;
+use chrono::Duration;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::EncodingKey;
-
-use chrono::Duration;
-
+use log::error;
 use openssl::bn::BigNum;
 use openssl::bn::BigNumContext;
 use openssl::bn::BigNumRef;
@@ -48,12 +45,10 @@ use openssl::ec::EcKey;
 use openssl::hash::Hasher;
 use openssl::hash::MessageDigest;
 use openssl::rsa::Rsa;
-
-use log::error;
-
-use crate::http::TokenCertificate;
+use std::sync::Arc;
 use tera::Tera;
 use tiny_auth_business::cors::CorsLister;
+use tiny_auth_business::cors::CorsListerImpl;
 
 pub struct Constructor<'a> {
     config: &'a Config,
@@ -244,7 +239,7 @@ impl<'a> Constructor<'a> {
         };
 
         Ok(TokenValidator::new(
-            key.into_static(),
+            key,
             self.algorithm,
             self.issuer_url.clone(),
         ))
@@ -312,7 +307,7 @@ impl<'a> Constructor<'a> {
     }
 
     fn encode_bignum(num: &BigNumRef) -> String {
-        base64::encode_config(num.to_vec(), base64::URL_SAFE_NO_PAD)
+        general_purpose::URL_SAFE_NO_PAD.encode(num.to_vec())
     }
 }
 
@@ -410,8 +405,8 @@ pub mod tests {
         ))
     }
 
-    pub fn build_test_decoding_key() -> DecodingKey<'static> {
-        DecodingKey::from_secret("secret".as_bytes()).into_static()
+    pub fn build_test_decoding_key() -> DecodingKey {
+        DecodingKey::from_secret("secret".as_bytes())
     }
 
     pub fn build_test_token_validator() -> Data<TokenValidator> {

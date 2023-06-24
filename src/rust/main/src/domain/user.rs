@@ -33,6 +33,7 @@ use serde_json::Value;
 pub struct User {
     pub name: String,
 
+    #[serde(with = "serde_yaml::with::singleton_map")]
     pub password: Password,
 
     #[serde(default)]

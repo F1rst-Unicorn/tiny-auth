@@ -24,6 +24,7 @@ use std::convert::From;
 
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Config {
+    #[serde(with = "serde_yaml::with::singleton_map")]
     pub store: Option<Store>,
 
     #[serde(default)]

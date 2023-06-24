@@ -135,6 +135,7 @@ struct Mapping {
     structure: Value,
 
     #[serde(rename = "type")]
+    #[serde(with = "serde_yaml::with::singleton_map")]
     mapping_type: Type,
 
     #[serde(default)]

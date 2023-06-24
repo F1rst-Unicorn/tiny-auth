@@ -19,6 +19,7 @@ use crate::domain::IssuerConfiguration;
 use crate::domain::Jwk;
 use crate::domain::RefreshToken;
 use crate::domain::Token;
+use std::collections::HashSet;
 
 use jsonwebtoken::decode;
 use jsonwebtoken::encode;
@@ -66,24 +67,19 @@ impl TokenCreator {
 
 #[derive(Clone)]
 pub struct TokenValidator {
-    key: DecodingKey<'static>,
+    key: DecodingKey,
 
     validation: Validation,
 }
 
 impl TokenValidator {
-    pub fn new(key: DecodingKey<'static>, algorithm: Algorithm, issuer: String) -> Self {
-        Self {
-            key,
-            validation: Validation {
-                leeway: 5,
-                validate_exp: true,
-                validate_nbf: false,
-                iss: Some(issuer),
-                algorithms: vec![algorithm],
-                ..Default::default()
-            },
-        }
+    pub fn new(key: DecodingKey, algorithm: Algorithm, issuer: String) -> Self {
+        let mut validation = jsonwebtoken::Validation::new(algorithm);
+        validation.leeway = 5;
+        validation.validate_exp = true;
+        validation.validate_nbf = false;
+        validation.set_issuer(&[issuer]);
+        Self { key, validation }
     }
 
     pub fn validate<T: DeserializeOwned>(&self, token: &str) -> Option<T> {

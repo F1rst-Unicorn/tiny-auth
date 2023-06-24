@@ -40,6 +40,7 @@ pub enum ClientType {
 
     #[serde(rename = "confidential")]
     Confidential {
+        #[serde(with = "serde_yaml::with::singleton_map")]
         password: Password,
 
         #[serde(alias = "public key")]

@@ -38,6 +38,7 @@ use log::warn;
 pub struct Client {
     pub client_id: String,
 
+    #[serde(with = "serde_yaml::with::singleton_map")]
     pub client_type: ClientType,
 
     pub redirect_uris: Vec<String>,
@@ -81,7 +82,7 @@ impl Client {
         }
     }
 
-    pub fn get_decoding_key(&self, algorithm: Algorithm) -> Option<DecodingKey<'static>> {
+    pub fn get_decoding_key(&self, algorithm: Algorithm) -> Option<DecodingKey> {
         match (algorithm, &self.client_type) {
             (
                 Algorithm::HS256,
@@ -117,8 +118,7 @@ impl Client {
                     public_key: Some(key),
                     ..
                 },
-            ) => DecodingKey::from_ec_pem(key.as_bytes())
-                .ok(),
+            ) => DecodingKey::from_ec_pem(key.as_bytes()).ok(),
             (
                 Algorithm::RS256,
                 ClientType::Confidential {
@@ -160,13 +160,12 @@ impl Client {
                     public_key: Some(key),
                     ..
                 },
-            ) => DecodingKey::from_rsa_pem(key.as_bytes())
-                .ok(),
+            ) => DecodingKey::from_rsa_pem(key.as_bytes()).ok(),
             _ => {
                 warn!("client '{}' tried to authenticate with algorithm '{:?}' for which it is not configured", self.client_id, algorithm);
                 None
             }
-        }.map(|k| k.into_static())
+        }
     }
 }
 

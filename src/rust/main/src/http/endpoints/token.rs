@@ -44,15 +44,21 @@ use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use chrono::offset::Local;
 use chrono::Duration;
+use jsonwebtoken::Algorithm;
+use jsonwebtoken::DecodingKey;
+use jsonwebtoken::TokenData;
 use log::debug;
 use log::warn;
+use log4rs::config::Deserialize;
+use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
-use tiny_auth_web::cors::{CorsCheckResult, CorsChecker};
+use tiny_auth_web::cors::CorsCheckResult;
+use tiny_auth_web::cors::CorsChecker;
 
 const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -642,16 +648,14 @@ impl Handler {
             return Err(Error::InvalidAuthenticationTokenType);
         }
 
-        let unsafe_assertion =
-            match jsonwebtoken::dangerous_insecure_decode::<ClientAssertion>(&assertion) {
-                Err(e) => {
-                    debug!("failed to decode authentication token unsafely: {}", e);
-                    return Err(Error::InvalidAuthenticationToken(
-                        oauth2::ProtocolError::InvalidRequest,
-                    ));
-                }
-                Ok(token) => token,
-            };
+        let unsafe_assertion = match self.decode_token_insecurely::<ClientAssertion>(&assertion) {
+            Err(_) => {
+                return Err(Error::InvalidAuthenticationToken(
+                    oauth2::ProtocolError::InvalidRequest,
+                ));
+            }
+            Ok(token) => token,
+        };
 
         let client = match self.client_store.get(&unsafe_assertion.claims.subject) {
             None => {
@@ -672,14 +676,11 @@ impl Handler {
             Some(v) => v,
         };
 
-        let mut validation = jsonwebtoken::Validation {
-            leeway: 5,
-            validate_exp: true,
-            validate_nbf: false,
-            iss: Some(unsafe_assertion.claims.subject),
-            algorithms: vec![unsafe_assertion.header.alg],
-            ..Default::default()
-        };
+        let mut validation = jsonwebtoken::Validation::new(unsafe_assertion.header.alg);
+        validation.leeway = 5;
+        validation.validate_exp = true;
+        validation.validate_nbf = false;
+        validation.set_issuer(&[unsafe_assertion.claims.subject]);
 
         validation.set_audience(&[self.issuer_configuration.token()]);
         match jsonwebtoken::decode::<ClientAssertion>(&assertion, &key, &validation) {
@@ -691,6 +692,46 @@ impl Handler {
             }
             Ok(_) => Ok(client),
         }
+    }
+
+    fn decode_token_insecurely<T: DeserializeOwned>(
+        &self,
+        token: &str,
+    ) -> Result<TokenData<T>, ()> {
+        let mut error = None;
+        for algorithm in &[
+            Algorithm::HS256,
+            Algorithm::HS384,
+            Algorithm::HS512,
+            Algorithm::ES256,
+            Algorithm::ES384,
+            Algorithm::RS256,
+            Algorithm::RS384,
+            Algorithm::RS512,
+            Algorithm::PS256,
+            Algorithm::PS384,
+            Algorithm::PS512,
+            Algorithm::EdDSA,
+        ] {
+            let mut validation = jsonwebtoken::Validation::new(*algorithm);
+            validation.leeway = 5;
+            validation.validate_exp = true;
+            validation.validate_nbf = false;
+            validation.insecure_disable_signature_validation();
+
+            match jsonwebtoken::decode::<T>(token, &DecodingKey::from_secret(&[]), &validation) {
+                Err(e) => {
+                    error = Some(e);
+                }
+                Ok(v) => {
+                    return Ok(v);
+                }
+            }
+        }
+        if let Some(e) = error {
+            debug!("token invalid: {}", e);
+        }
+        Err(())
     }
 }
 
