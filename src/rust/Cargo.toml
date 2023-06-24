@@ -16,7 +16,7 @@ opt-level = "s"
 codegen-units = 1
 
 [workspace.dependencies]
-clap = "2.33.3"
+clap = "4.3.8"
 log = "0.4.11"
 serde_derive = "1.0.115"
 serde_yaml = "0.8.7"

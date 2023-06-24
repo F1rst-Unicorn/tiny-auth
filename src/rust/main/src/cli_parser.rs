@@ -15,8 +15,9 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use clap::App;
 use clap::Arg;
+use clap::ArgMatches;
+use clap::Command;
 
 pub const FLAG_CONFIG: &str = "config";
 pub const FLAG_CONFIG_DEFAULT: &str = "/etc/tiny-auth/config.yml";
@@ -24,8 +25,8 @@ pub const FLAG_CONFIG_DEFAULT: &str = "/etc/tiny-auth/config.yml";
 pub const FLAG_LOG_CONFIG: &str = "log";
 pub const FLAG_LOG_DEFAULT: &str = "/etc/tiny-auth/log4rs.yml";
 
-pub fn parse_arguments<'a>() -> clap::ArgMatches<'a> {
-    let app = App::new(env!("CARGO_PKG_NAME"))
+pub fn parse_arguments() -> ArgMatches {
+    let app = Command::new(env!("CARGO_PKG_NAME"))
         .version(concat!(
             env!("CARGO_PKG_VERSION"),
             " ",
@@ -35,21 +36,21 @@ pub fn parse_arguments<'a>() -> clap::ArgMatches<'a> {
         ))
         .about(env!("CARGO_PKG_DESCRIPTION"))
         .arg(
-            Arg::with_name("config")
-                .short("c")
+            Arg::new("config")
+                .short('c')
                 .long(FLAG_CONFIG)
                 .value_name("PATH")
                 .help("The config file to run with")
-                .takes_value(true)
+                .num_args(1)
                 .default_value(FLAG_CONFIG_DEFAULT),
         )
         .arg(
-            Arg::with_name("log")
-                .short("l")
+            Arg::new("log")
+                .short('l')
                 .long(FLAG_LOG_CONFIG)
                 .value_name("PATH")
                 .help("The log4rs logging configuration")
-                .takes_value(true)
+                .num_args(1)
                 .default_value(FLAG_LOG_DEFAULT),
         );
     app.get_matches()

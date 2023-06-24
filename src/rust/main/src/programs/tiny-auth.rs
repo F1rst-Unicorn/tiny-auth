@@ -27,14 +27,16 @@ fn main() {
     let arguments = cli_parser::parse_arguments();
     logging::initialise(
         arguments
-            .value_of(cli_parser::FLAG_LOG_CONFIG)
+            .get_one::<String>(cli_parser::FLAG_LOG_CONFIG)
+            .map(String::as_str)
             .unwrap_or(cli_parser::FLAG_LOG_DEFAULT),
     );
 
     info!("Starting up");
 
     let config_path = arguments
-        .value_of(cli_parser::FLAG_CONFIG)
+        .get_one(cli_parser::FLAG_CONFIG)
+        .map(String::as_str)
         .unwrap_or(cli_parser::FLAG_CONFIG_DEFAULT);
     info!("Config is at {}", config_path);
 

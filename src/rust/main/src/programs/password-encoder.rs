@@ -15,20 +15,19 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use tiny_auth_main::config::parser::parse_config;
-use tiny_auth_main::domain::Password;
-
+use clap::Arg;
+use clap::ArgAction::Count;
+use clap::ArgMatches;
+use clap::Command;
+use log::debug;
+use log::error;
+use log::LevelFilter;
 use log4rs::config::Appender;
 use log4rs::config::Config;
 use log4rs::config::Root;
 use log4rs::encode::pattern::PatternEncoder;
-
-use log::debug;
-use log::error;
-use log::LevelFilter;
-
-use clap::App;
-use clap::Arg;
+use tiny_auth_main::config::parser::parse_config;
+use tiny_auth_main::domain::Password;
 
 pub const FLAG_VERBOSE: &str = "verbose";
 pub const FLAG_USERNAME: &str = "username";
@@ -37,12 +36,13 @@ pub const FLAG_CONFIG: &str = "config";
 
 fn main() {
     let args = parse_arguments();
-    initialise_logging(args.occurrences_of(FLAG_VERBOSE));
+    initialise_logging(args.get_count(FLAG_VERBOSE));
 
     debug!("Starting up");
 
     let config_path = args
-        .value_of(FLAG_CONFIG)
+        .get_one::<String>(FLAG_CONFIG)
+        .map(String::as_str)
         .unwrap_or(tiny_auth_main::cli_parser::FLAG_CONFIG_DEFAULT);
     debug!("Config is at {}", config_path);
 
@@ -50,8 +50,12 @@ fn main() {
     let config = parse_config(config_path);
 
     let password = Password::new(
-        args.value_of(FLAG_USERNAME).unwrap(),
-        args.value_of(FLAG_PASSWORD).unwrap(),
+        args.get_one::<String>(FLAG_USERNAME)
+            .map(String::as_str)
+            .unwrap(),
+        args.get_one::<String>(FLAG_PASSWORD)
+            .map(String::as_str)
+            .unwrap(),
         &config.crypto.pepper,
     );
 
@@ -65,8 +69,8 @@ fn main() {
     }
 }
 
-pub fn parse_arguments<'a>() -> clap::ArgMatches<'a> {
-    let app = App::new("Password encoder for tiny-auth")
+pub fn parse_arguments() -> ArgMatches {
+    let app = Command::new("Password encoder for tiny-auth")
         .version(concat!(
             env!("CARGO_PKG_VERSION"),
             " ",
@@ -76,32 +80,31 @@ pub fn parse_arguments<'a>() -> clap::ArgMatches<'a> {
         ))
         .about("Encrypt passwords for users and clients of tiny-auth")
         .arg(
-            Arg::with_name(FLAG_VERBOSE)
-                .short("v")
+            Arg::new(FLAG_VERBOSE)
+                .short('v')
                 .long(FLAG_VERBOSE)
                 .help("Output information while running")
-                .multiple(true)
-                .takes_value(false),
+                .action(Count),
         )
         .arg(
-            Arg::with_name(FLAG_USERNAME)
-                .short("u")
+            Arg::new(FLAG_USERNAME)
+                .short('u')
                 .long(FLAG_USERNAME)
                 .help("Name of the user or client")
                 .value_name("STRING")
                 .required(true),
         )
         .arg(
-            Arg::with_name(FLAG_PASSWORD)
-                .short("p")
+            Arg::new(FLAG_PASSWORD)
+                .short('p')
                 .long(FLAG_PASSWORD)
                 .help("Password to encrypt")
                 .value_name("STRING")
                 .required(true),
         )
         .arg(
-            Arg::with_name(FLAG_CONFIG)
-                .short("c")
+            Arg::new(FLAG_CONFIG)
+                .short('c')
                 .long(FLAG_CONFIG)
                 .help("The config file to run with")
                 .value_name("STRING")
@@ -110,7 +113,7 @@ pub fn parse_arguments<'a>() -> clap::ArgMatches<'a> {
     app.get_matches()
 }
 
-pub fn initialise_logging(verbosity_level: u64) {
+pub fn initialise_logging(verbosity_level: u8) {
     let stdout = log4rs::append::console::ConsoleAppender::builder()
         .encoder(Box::new(PatternEncoder::new("{level} {m}{n}")))
         .build();

@@ -10,15 +10,15 @@ build = "build.rs"
 
 [[bin]]
 name = "tiny-auth"
-path = "src/bin/tiny-auth.rs"
+path = "src/programs/tiny-auth.rs"
 
 [[bin]]
 name = "tiny-auth-password-encoder"
-path = "src/bin/password-encoder.rs"
+path = "src/programs/password-encoder.rs"
 
 [[bin]]
 name = "tiny-auth-scope-debugger"
-path = "src/bin/scope-debugger.rs"
+path = "src/programs/scope-debugger.rs"
 
 [dependencies]
 tiny_auth_business = { path = "../business" }
