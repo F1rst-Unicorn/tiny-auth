@@ -19,7 +19,6 @@ use crate::domain::IssuerConfiguration;
 use crate::domain::Jwk;
 use crate::domain::RefreshToken;
 use crate::domain::Token;
-use std::collections::HashSet;
 
 use jsonwebtoken::decode;
 use jsonwebtoken::encode;

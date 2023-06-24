@@ -34,6 +34,8 @@ use actix_web::http::header::HeaderValue;
 use actix_web::http::StatusCode;
 use actix_web::HttpResponse;
 use actix_web::HttpResponseBuilder;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use log::debug;
 use log::error;
 use serde::de::Deserialize as _;
@@ -228,7 +230,7 @@ fn is_csrf_valid(input_token: &Option<String>, session: &Session) -> bool {
 
 pub fn parse_basic_authorization(value: &HeaderValue) -> Option<(String, String)> {
     let credentials = parse_authorization(value, "Basic")?;
-    let credentials = match base64::decode(credentials) {
+    let credentials = match STANDARD.decode(credentials) {
         Err(e) => {
             debug!("base64 decoding of authorization header failed. {}", e);
             return None;

@@ -214,7 +214,10 @@ async fn process_skipping_csrf(
         }
         Ok(Some(username)) => username,
     };
-    let auth_time = Local.timestamp(auth_time, 0);
+    let auth_time = Local
+        .timestamp_opt(auth_time, 0)
+        .single()
+        .unwrap_or(Local::now());
 
     let encode_to_fragment = first_request.encode_redirect_to_fragment();
     let client_name = first_request.client_id.as_ref().unwrap();

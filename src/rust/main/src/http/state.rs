@@ -32,6 +32,7 @@ use crate::store::memory::*;
 use crate::store::*;
 use crate::util::read_file;
 use base64::engine::general_purpose;
+use base64::engine::general_purpose::STANDARD;
 use base64::engine::Engine;
 use chrono::Duration;
 use jsonwebtoken::Algorithm;
@@ -256,7 +257,7 @@ impl<'a> Constructor<'a> {
             let mut hasher = Hasher::new(MessageDigest::sha1())?;
             hasher.update(&key.n().to_vec())?;
             hasher.update(&key.e().to_vec())?;
-            let id = base64::encode(hasher.finish()?);
+            let id = STANDARD.encode(hasher.finish()?);
             Jwk::new_rsa(id, url, n, e)
         } else if let Ok(key) = Rsa::public_key_from_pem(key) {
             let n = Self::encode_bignum(key.n());
@@ -264,7 +265,7 @@ impl<'a> Constructor<'a> {
             let mut hasher = Hasher::new(MessageDigest::sha1())?;
             hasher.update(&key.n().to_vec())?;
             hasher.update(&key.e().to_vec())?;
-            let id = base64::encode(hasher.finish()?);
+            let id = STANDARD.encode(hasher.finish()?);
             Jwk::new_rsa(id, url, n, e)
         } else if let Ok(key) = EcKey::public_key_from_pem(key) {
             let crv = match key.group().curve_name() {
@@ -288,7 +289,7 @@ impl<'a> Constructor<'a> {
 
             let x = Self::encode_bignum(&x);
             let y = Self::encode_bignum(&y);
-            let id = base64::encode(hasher.finish()?);
+            let id = STANDARD.encode(hasher.finish()?);
             Jwk::new_ecdsa(id, url, crv, x, y)
         } else {
             error!("Token key has unknown type, tried RSA and ECDSA");

@@ -15,20 +15,15 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::num::NonZeroU32;
-
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
+use log::error;
+use rand::random;
 use ring::digest;
 use ring::pbkdf2;
-
-use base64::decode;
-use base64::encode;
-
-use rand::random;
-
 use serde::Deserialize;
 use serde::Serialize;
-
-use log::error;
+use std::num::NonZeroU32;
 
 const HASH_ITERATIONS: u32 = 100_000;
 
@@ -61,9 +56,9 @@ impl Password {
             &mut credentials,
         );
         Self::Pbkdf2HmacSha256 {
-            credential: encode(credentials),
+            credential: STANDARD.encode(credentials),
             iterations,
-            salt: encode(salt),
+            salt: STANDARD.encode(salt),
         }
     }
 
@@ -75,7 +70,7 @@ impl Password {
                 iterations,
                 salt,
             } => {
-                let credential = match decode(credential) {
+                let credential = match STANDARD.decode(credential) {
                     Err(e) => {
                         error!("Failed to decode credential of user '{}': {}", username, e);
                         return false;
@@ -83,7 +78,7 @@ impl Password {
                     Ok(v) => v,
                 };
 
-                let salt = match decode(salt) {
+                let salt = match STANDARD.decode(salt) {
                     Err(e) => {
                         error!("Failed to decode salt of user '{}': {}", username, e);
                         return false;

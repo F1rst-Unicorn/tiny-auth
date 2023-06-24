@@ -49,11 +49,11 @@ use jsonwebtoken::DecodingKey;
 use jsonwebtoken::TokenData;
 use log::debug;
 use log::warn;
-use log4rs::config::Deserialize;
+
 use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
@@ -778,7 +778,10 @@ mod tests {
     use crate::store::tests::USER;
     use actix_web::http;
     use actix_web::test::TestRequest;
-    use actix_web::web::{Data, Form};
+    use actix_web::web::Data;
+    use actix_web::web::Form;
+    use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
     use chrono::offset::Local;
     use test_log::test;
     use tiny_auth_business::cors::test_fixtures::build_test_cors_lister;
@@ -1234,7 +1237,7 @@ mod tests {
         let req = TestRequest::post()
             .insert_header((
                 "Authorization",
-                "Basic ".to_string() + &base64::encode("username".as_bytes()),
+                "Basic ".to_string() + &STANDARD.encode("username".as_bytes()),
             ))
             .to_http_request();
         let redirect_uri = "fdsa".to_string();
@@ -1277,7 +1280,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn issue_valid_token_for_correct_password() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
-        let encoded_auth = base64::encode(auth);
+        let encoded_auth = STANDARD.encode(auth);
         let req = TestRequest::post()
             .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
@@ -1323,7 +1326,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn issue_valid_token_with_id_token_for_correct_password() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
-        let encoded_auth = base64::encode(auth);
+        let encoded_auth = STANDARD.encode(auth);
         let req = TestRequest::post()
             .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
@@ -1373,7 +1376,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn public_client_cannot_get_access_token() {
         let auth = PUBLIC_CLIENT.to_string() + ":" + PUBLIC_CLIENT;
-        let encoded_auth = base64::encode(auth);
+        let encoded_auth = STANDARD.encode(auth);
         let req = TestRequest::post()
             .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
@@ -1404,7 +1407,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn confidential_client_gets_access_token() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
-        let encoded_auth = base64::encode(auth);
+        let encoded_auth = STANDARD.encode(auth);
         let req = TestRequest::post()
             .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
@@ -1437,7 +1440,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn missing_username_is_rejected() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
-        let encoded_auth = base64::encode(auth);
+        let encoded_auth = STANDARD.encode(auth);
         let req = TestRequest::post()
             .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
@@ -1468,7 +1471,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn missing_password_is_rejected_with_password_grant() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
-        let encoded_auth = base64::encode(auth);
+        let encoded_auth = STANDARD.encode(auth);
         let req = TestRequest::post()
             .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
@@ -1499,7 +1502,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn public_client_cannot_use_password_grant() {
         let auth = PUBLIC_CLIENT.to_string() + ":" + PUBLIC_CLIENT;
-        let encoded_auth = base64::encode(auth);
+        let encoded_auth = STANDARD.encode(auth);
         let req = TestRequest::post()
             .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
@@ -1530,7 +1533,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn confidential_client_can_use_password_grant() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
-        let encoded_auth = base64::encode(auth);
+        let encoded_auth = STANDARD.encode(auth);
         let req = TestRequest::post()
             .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
@@ -1607,7 +1610,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn invalid_client_credentials_with_refresh_token_are_rejected() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":wrong";
-        let encoded_auth = base64::encode(auth);
+        let encoded_auth = STANDARD.encode(auth);
         let req = TestRequest::post()
             .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
@@ -1646,7 +1649,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn refresh_token_from_different_client_is_rejected() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
-        let encoded_auth = base64::encode(auth);
+        let encoded_auth = STANDARD.encode(auth);
         let req = TestRequest::post()
             .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
@@ -1686,7 +1689,7 @@ mod tests {
     #[test(actix_rt::test)]
     async fn successful_refresh_token_authentication() {
         let auth = CONFIDENTIAL_CLIENT.to_string() + ":" + CONFIDENTIAL_CLIENT;
-        let encoded_auth = base64::encode(auth);
+        let encoded_auth = STANDARD.encode(auth);
         let req = TestRequest::post()
             .insert_header(("Authorization", "Basic ".to_string() + &encoded_auth))
             .to_http_request();
