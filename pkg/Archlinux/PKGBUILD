@@ -7,7 +7,7 @@ arch=('x86_64')
 url="https://j.njsm.de/git/veenj/${pkgname}"
 license=('GPL3')
 depends=('gcc-libs' 'systemd' 'openssl')
-makedepends=('rust' 'gcc' 'pkgconf')
+makedepends=('rust' 'gcc' 'pkgconf' 'npm')
 backup=("etc/${pkgname}/config.yml"
         "etc/${pkgname}/log4rs.yml"
         "etc/${pkgname}/store/scopes/address.yml"
@@ -21,6 +21,9 @@ build() {
     chmod u+rw . -R
     cd src/rust
     cargo build --release
+    cd ../..
+    cd src/typescript
+    npm run build
 }
 
 check() {
@@ -46,12 +49,21 @@ package() {
     install -D -m 644 pkg/systemd.sysusers $pkgdir/usr/lib/sysusers.d/${pkgname}.conf
     install -D -m 644 pkg/systemd.tmpfiles $pkgdir/usr/lib/tmpfiles.d/${pkgname}.conf
 
-    mkdir -p $pkgdir/usr/share/${pkgname}/static
-    cp -r src/static $pkgdir/usr/share/${pkgname}
+    mkdir -p $pkgdir/usr/share/${pkgname}/static/css
+    cp -r src/static/css $pkgdir/usr/share/${pkgname}/static
+    mkdir -p $pkgdir/usr/share/${pkgname}/static/templates
+    cp -r src/static/templates $pkgdir/usr/share/${pkgname}/static
+    rm $pkgdir/usr/share/${pkgname}/static/templates/index.html.j2
     mkdir -p $pkgdir/usr/share/${pkgname}/static/img
+    cp -r src/static/img $pkgdir/usr/share/${pkgname}/static
+    mkdir -p $pkgdir/usr/share/${pkgname}/static/js
+    cp -r src/typescript/dist/* $pkgdir/usr/share/${pkgname}/static/js
+    cp -r src/typescript/dist/index.html $pkgdir/usr/share/${pkgname}/static/templates/index.html.j2
+    rm $pkgdir/usr/share/${pkgname}/static/js/index.html
 
     mkdir -p $pkgdir/etc/${pkgname}/store/{users,clients,scopes}
     cp -r pkg/scopes/* $pkgdir/etc/${pkgname}/store/scopes
+    cp -r pkg/clients/* $pkgdir/etc/${pkgname}/store/clients
 
     mkdir -p $pkgdir/usr/share/doc/${pkgname}
     cp -r doc/* $pkgdir/usr/share/doc/${pkgname}
