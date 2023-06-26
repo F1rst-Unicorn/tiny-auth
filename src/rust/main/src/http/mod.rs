@@ -31,8 +31,12 @@ use actix_session::storage::CookieSessionStore;
 use actix_session::SessionMiddleware;
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::Key;
+use actix_web::dev::fn_service;
 use actix_web::dev::Server;
-use actix_web::http::{KeepAlive, Method};
+use actix_web::dev::ServiceRequest;
+use actix_web::dev::ServiceResponse;
+use actix_web::http::KeepAlive;
+use actix_web::http::Method;
 use actix_web::middleware::DefaultHeaders;
 use actix_web::web::get;
 use actix_web::web::method;
@@ -42,15 +46,20 @@ use actix_web::web::scope;
 use actix_web::web::to;
 use actix_web::web::Data;
 use actix_web::App;
+use actix_web::HttpResponse;
 use actix_web::HttpServer;
 use log::error;
 use log::warn;
 use rustls::server::AllowAnyAuthenticatedClient;
 use rustls::server::ClientCertVerifier;
 use rustls::server::NoClientAuth;
-use rustls::{Certificate, RootCertStore, SupportedProtocolVersion};
-use rustls::{PrivateKey, ServerConfig};
-use rustls_pemfile::{certs, pkcs8_private_keys};
+use rustls::Certificate;
+use rustls::PrivateKey;
+use rustls::RootCertStore;
+use rustls::ServerConfig;
+use rustls::SupportedProtocolVersion;
+use rustls_pemfile::certs;
+use rustls_pemfile::pkcs8_private_keys;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
@@ -227,8 +236,25 @@ pub fn build(config: Config) -> Result<Server, Error> {
                         method(Method::OPTIONS).to(cors_options_preflight),
                     )
                     .route("/health", all().to(endpoints::method_not_allowed))
-                    .default_service(to(endpoints::not_found)),
+                    .route(
+                        "/oidc-login-redirect-silent",
+                        get().to(|| async { HttpResponse::NoContent().finish() }),
+                    )
+                    .route(
+                        "/oidc-login-redirect-silent",
+                        all().to(endpoints::method_not_allowed),
+                    )
+                    .route("/", get().to(endpoints::webapp_root::get))
+                    .route("/", all().to(endpoints::method_not_allowed))
+                    .route("/index.html", get().to(endpoints::webapp_root::get))
+                    .route("/index.html", all().to(endpoints::method_not_allowed))
+                    .service(actix_files::Files::new(
+                        &(config.web.path.clone().unwrap()),
+                        config.web.static_files.clone() + "/js",
+                    ))
+                    .default_service(to(endpoints::webapp_root::get)),
             )
+            .default_service(to(endpoints::webapp_root::get))
     })
     .disable_signals()
     .keep_alive(KeepAlive::Timeout(core::time::Duration::from_secs(60)))

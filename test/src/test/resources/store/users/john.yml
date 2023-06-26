@@ -29,6 +29,8 @@ password:
 allowed_scopes:
   client-for-no-prompt-test:
     - openid
+  tiny-auth-frontend:
+    - openid
 
 email: john@test.example
 email_verified: true

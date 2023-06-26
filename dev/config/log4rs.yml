@@ -23,7 +23,7 @@ appenders:
 
     encoder:
       kind: pattern
-      pattern: "{level:>5} {file}:{line} {message}{n}"
+      pattern: "{date(%H:%M:%S)} {level:>5} {file}:{line} {message}{n}"
 
 root:
   level: warn
@@ -35,6 +35,8 @@ loggers:
     level: trace
   tiny_auth_main::config::parser:
     level: info
+  tiny_auth_main::store::memory:
+    level: debug
   tiny_auth_main::systemd:
     level: debug
   tiny_auth_web:

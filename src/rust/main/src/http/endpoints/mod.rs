@@ -23,6 +23,7 @@ pub mod discovery;
 pub mod health;
 pub mod token;
 pub mod userinfo;
+pub mod webapp_root;
 
 use crate::protocol::oauth2::ProtocolError as OAuthError;
 use crate::protocol::oidc::Prompt;
@@ -113,7 +114,7 @@ pub async fn method_not_allowed() -> HttpResponse {
 }
 
 pub async fn not_found() -> HttpResponse {
-    HttpResponse::MethodNotAllowed().body("not found")
+    HttpResponse::NotFound().body("not found")
 }
 
 /// When which HTTP code: https://tools.ietf.org/html/rfc6749#section-5.2
