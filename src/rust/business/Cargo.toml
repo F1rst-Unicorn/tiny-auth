@@ -10,3 +10,5 @@ version.workspace = true
 [lib]
 
 [dependencies]
+chrono.workspace = true
+tokio.workspace = true

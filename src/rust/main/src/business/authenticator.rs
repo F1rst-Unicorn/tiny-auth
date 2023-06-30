@@ -15,18 +15,15 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::business::RateLimiter;
 use crate::domain::Client;
 use crate::domain::User;
 use crate::store::UserStore;
-
-use std::fmt::Display;
-use std::sync::Arc;
-
+use chrono::Local;
 use log::debug;
 use log::warn;
-
-use chrono::Local;
+use std::fmt::Display;
+use std::sync::Arc;
+use tiny_auth_business::rate_limiter::RateLimiter;
 
 #[derive(Clone)]
 pub struct Authenticator {

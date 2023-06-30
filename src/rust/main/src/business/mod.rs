@@ -16,10 +16,8 @@
  */
 
 pub mod authenticator;
-pub mod rate_limiter;
 pub mod token;
 
 pub use authenticator::Authenticator;
-pub use rate_limiter::RateLimiter;
 pub use token::TokenCreator;
 pub use token::TokenValidator;

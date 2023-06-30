@@ -15,15 +15,13 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::sync::Arc;
-
-use tokio::sync::RwLock;
-
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Local;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Clone)]
 pub struct RateLimiter {
@@ -76,7 +74,7 @@ impl RateLimiter {
                 *events = events.split_off(&(now - self.duration));
             }
         }
-        std::mem::drop(rates);
+        drop(rates);
 
         let rates = self.rates.read().await;
         match rates.get(rate_name) {
@@ -89,7 +87,6 @@ impl RateLimiter {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use std::convert::TryInto;
 
     #[tokio::test]

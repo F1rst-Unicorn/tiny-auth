@@ -2252,6 +2252,10 @@ dependencies = [
 [[package]]
 name = "tiny_auth_business"
 version = "0.8.2"
+dependencies = [
+ "chrono",
+ "tokio",
+]
 
 [[package]]
 name = "tiny_auth_main"

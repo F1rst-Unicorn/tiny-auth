@@ -19,7 +19,6 @@ use super::tera::load_template_engine;
 use crate::business::authenticator::Authenticator;
 use crate::business::token::TokenCreator;
 use crate::business::token::TokenValidator;
-use crate::business::RateLimiter;
 use crate::config::Config;
 use crate::config::Store;
 use crate::domain::IssuerConfiguration;
@@ -50,6 +49,7 @@ use std::sync::Arc;
 use tera::Tera;
 use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::cors::CorsListerImpl;
+use tiny_auth_business::rate_limiter::RateLimiter;
 
 pub struct Constructor<'a> {
     config: &'a Config,
