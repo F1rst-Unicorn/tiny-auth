@@ -30,7 +30,8 @@ use std::fmt::Display;
 use log::error;
 
 use tokio::sync::oneshot;
-use tokio::sync::oneshot::Receiver;
+use tokio::sync::oneshot::{Receiver, Sender};
+use tokio::task::JoinHandle;
 
 #[derive(Debug)]
 pub enum Error {
@@ -93,7 +94,14 @@ pub fn run(config: Config) -> Result<(), Error> {
     });
     actor_system.block_on(async move {
         let (pass_server, receive_server) = oneshot::channel();
-        tokio::spawn(runtime_primitives(receive_server));
+        let api_join_handle = match tiny_auth_api::start(&config.api.endpoint).await {
+            Err(e) => {
+                error!("GRPC API startup failed: {}", e);
+                return;
+            }
+            Ok(v) => v,
+        };
+        tokio::spawn(runtime_primitives(receive_server, api_join_handle));
 
         let srv = match http::build(config) {
             Err(e) => {
@@ -113,7 +121,10 @@ pub fn run(config: Config) -> Result<(), Error> {
     Ok(())
 }
 
-async fn runtime_primitives(receive_server: Receiver<ServerHandle>) {
+async fn runtime_primitives(
+    receive_server: Receiver<ServerHandle>,
+    api_join_handle: (Sender<()>, JoinHandle<()>),
+) {
     let server = match receive_server.await {
         Err(e) => {
             error!("failed to receive server: {}", e);
@@ -124,5 +135,5 @@ async fn runtime_primitives(receive_server: Receiver<ServerHandle>) {
 
     tokio::spawn(notify_about_start());
     tokio::spawn(watchdog());
-    tokio::spawn(terminator(server));
+    tokio::spawn(terminator(server, api_join_handle));
 }

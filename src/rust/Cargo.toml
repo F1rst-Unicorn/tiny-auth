@@ -1,5 +1,6 @@
 [workspace]
-members = ["main", "business", "web"]
+members = ["main", "business", "web", "api"]
+resolver = "2"
 
 [workspace.package]
 version = "0.8.2"
@@ -39,6 +40,10 @@ rustls = { version = "0.20.8", features = ["dangerous_configuration"]}
 rustls-pemfile = "1.0.2"
 test-log = "0.2.12"
 env_logger = "*"
+tonic = { version = "0.9.2", features = ["transport", "tls"] }
+prost = "0.11.9"
+tonic-build = "0.9.2"
+thiserror = "1.0.40"
 
 [workspace.dependencies.openssl]
 version = "0.10"
@@ -51,6 +56,10 @@ features = ["alloc", "std"]
 [workspace.dependencies.tokio]
 version = "1.28.2"
 features = ["full"]
+
+[workspace.dependencies.tokio-stream]
+version = "0.1.14"
+features = ["net"]
 
 [workspace.dependencies.actix-web]
 version = "4.3.1"

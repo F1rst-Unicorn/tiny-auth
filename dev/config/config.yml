@@ -40,3 +40,6 @@ web:
     - http://localhost:34344
   session timeout: 60000
   secret key: 6nwYoK0L9J5ADFQE74CkkuLmTGMSd1skxHso9XwZNbsCbVmLIVH6L2aBIi2veuia3aQ3fnBzfwwlIuzCmWTEjAcc
+api:
+  endpoint: localhost:8089
+  web endpoint: localhost:8090

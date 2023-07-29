@@ -23,6 +23,7 @@ build() {
     cargo build --release
     cd ../..
     cd src/typescript
+    npm install
     npm run build
 }
 

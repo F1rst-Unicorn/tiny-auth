@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package api;
+
+message PasswordChangeRequest {
+  string new_password = 1;
+}
+
+message HashedPasswordPbkdf2HmacSha256 {
+  string credential = 1;
+  uint32 iterations = 2;
+  string salt = 3;
+}
+
+message PasswordChangeResponse {
+  oneof hashed_password {
+    HashedPasswordPbkdf2HmacSha256 pbkdf2_hmac_sha256 = 1;
+  }
+}
+
+service TinyAuthApi {
+  rpc ChangePassword(PasswordChangeRequest) returns (PasswordChangeResponse);
+}

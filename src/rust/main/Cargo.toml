@@ -23,6 +23,7 @@ path = "src/programs/scope-debugger.rs"
 [dependencies]
 tiny_auth_business = { path = "../business" }
 tiny_auth_web = { path = "../web" }
+tiny_auth_api = { path = "../api" }
 
 clap.workspace = true
 log.workspace = true
@@ -56,4 +57,4 @@ test-log.workspace = true
 env_logger.workspace = true
 
 [build-dependencies]
-vergen = { workspace = true }
+vergen.workspace = true

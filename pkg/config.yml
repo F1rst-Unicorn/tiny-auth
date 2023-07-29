@@ -37,3 +37,7 @@ web:
   session timeout: 300
   session same site policy: lax
   secret key: set-a-random-string-of-at-least-32-characters-here
+
+api:
+  endpoint: localhost:8089
+  web endpoint: localhost:8090

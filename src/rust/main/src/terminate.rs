@@ -18,13 +18,19 @@
 use crate::systemd::notify_about_termination;
 use actix_web::dev::ServerHandle;
 use log::debug;
+use log::error;
 use log::info;
 use tokio::io::Error;
 use tokio::signal::unix::signal;
 use tokio::signal::unix::SignalKind;
+use tokio::sync::oneshot::Sender;
+use tokio::task::JoinHandle;
 
 #[allow(clippy::cognitive_complexity)] // not really complex to read
-pub async fn terminator(server: ServerHandle) -> Result<(), Error> {
+pub async fn terminator(
+    server: ServerHandle,
+    api_join_handle: (Sender<()>, JoinHandle<()>),
+) -> Result<(), Error> {
     let mut sigint = signal(SignalKind::interrupt())?;
     let mut sigterm = signal(SignalKind::terminate())?;
     let mut sigquit = signal(SignalKind::quit())?;
@@ -38,17 +44,33 @@ pub async fn terminator(server: ServerHandle) -> Result<(), Error> {
 
     info!("Exitting, waiting 30s for connections to terminate");
     tokio::spawn(notify_about_termination());
+    match api_join_handle.0.send(()) {
+        Err(_) => {
+            error!("Error terminating GRPC API");
+        }
+        Ok(v) => v,
+    }
+    let http_join_handle = tokio::spawn(server.stop(true));
+
     tokio::select! {
-        _ = server.stop(true) => {
+        _ = api_join_handle.1 => {
+            debug!("GRPC server stopped");
+        }
+        _ = sigint.recv() => {}
+        _ = sigterm.recv() => {}
+        _ = sigquit.recv() => {}
+    }
+
+    tokio::select! {
+        _ = http_join_handle => {
             debug!("HTTP server stopped");
             return Ok(())
         }
         _ = sigint.recv() => {}
         _ = sigterm.recv() => {}
         _ = sigquit.recv() => {}
-    };
+    }
 
-    info!("Calm down...");
     while tokio::select! {
         _ = server.stop(false) => {
             debug!("HTTP server stopped");
