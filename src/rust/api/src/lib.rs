@@ -15,13 +15,11 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::tiny_auth_proto::password_change_response::HashedPassword;
-use crate::tiny_auth_proto::tiny_auth_api_server::TinyAuthApi;
+mod api;
+mod auth;
+
+use crate::api::TinyAuthApiImpl;
 use crate::tiny_auth_proto::tiny_auth_api_server::TinyAuthApiServer;
-use crate::tiny_auth_proto::HashedPasswordPbkdf2HmacSha256;
-use crate::tiny_auth_proto::PasswordChangeRequest;
-use crate::tiny_auth_proto::PasswordChangeResponse;
-use async_trait::async_trait;
 use log::info;
 use log::warn;
 use tokio::net::TcpListener;
@@ -30,8 +28,6 @@ use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
-use tonic::Request;
-use tonic::Response;
 
 pub(crate) mod tiny_auth_proto {
     // https://github.com/hyperium/tonic/issues/1056
@@ -39,33 +35,7 @@ pub(crate) mod tiny_auth_proto {
     tonic::include_proto!("api");
 
     pub(crate) const FILE_DESCRIPTOR_SET: &[u8] =
-            tonic::include_file_descriptor_set!("tiny_auth_descriptor");
-}
-
-#[derive(Default)]
-struct TinyAuthApiImpl {}
-
-#[async_trait]
-impl TinyAuthApi for TinyAuthApiImpl {
-    async fn change_password(
-        &self,
-        request: Request<PasswordChangeRequest>,
-    ) -> Result<Response<PasswordChangeResponse>, tonic::Status> {
-        info!(
-            "User wants to change password to {}",
-            request.into_inner().new_password
-        );
-        let response = PasswordChangeResponse {
-            hashed_password: Some(HashedPassword::Pbkdf2HmacSha256(
-                HashedPasswordPbkdf2HmacSha256 {
-                    credential: "credential".to_string(),
-                    iterations: 1409,
-                    salt: "salt".to_string(),
-                },
-            )),
-        };
-        Ok(Response::new(response))
-    }
+        tonic::include_file_descriptor_set!("tiny_auth_descriptor");
 }
 
 #[derive(thiserror::Error, Debug)]
