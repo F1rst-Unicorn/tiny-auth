@@ -12,6 +12,7 @@ build = "build.rs"
 
 [dependencies]
 tonic.workspace = true
+tonic-reflection.workspace = true
 prost.workspace = true
 log.workspace = true
 async-trait.workspace = true

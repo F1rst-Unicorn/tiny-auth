@@ -37,6 +37,9 @@ pub(crate) mod tiny_auth_proto {
     // https://github.com/hyperium/tonic/issues/1056
     #![allow(clippy::derive_partial_eq_without_eq)]
     tonic::include_proto!("api");
+
+    pub(crate) const FILE_DESCRIPTOR_SET: &[u8] =
+            tonic::include_file_descriptor_set!("tiny_auth_descriptor");
 }
 
 #[derive(Default)]
@@ -57,7 +60,7 @@ impl TinyAuthApi for TinyAuthApiImpl {
                 HashedPasswordPbkdf2HmacSha256 {
                     credential: "credential".to_string(),
                     iterations: 1409,
-                    salt: "credential".to_string(),
+                    salt: "salt".to_string(),
                 },
             )),
         };
@@ -77,7 +80,12 @@ pub async fn start(endpoint: &str) -> Result<(Sender<()>, JoinHandle<()>), Error
     let (tx, rx) = channel::<()>();
 
     let join_handle = tokio::spawn(async move {
+        let reflection_service = tonic_reflection::server::Builder::configure()
+            .register_encoded_file_descriptor_set(tiny_auth_proto::FILE_DESCRIPTOR_SET)
+            .build()
+            .unwrap();
         let server = Server::builder()
+            .add_service(reflection_service)
             .add_service(TinyAuthApiServer::new(api))
             .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async move {
                 match rx.await {

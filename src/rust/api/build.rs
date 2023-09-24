@@ -15,8 +15,12 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{env, path::PathBuf};
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     tonic_build::configure()
+        .file_descriptor_set_path(out_dir.join("tiny_auth_descriptor.bin"))
         .build_server(true)
         .build_client(false)
         .build_transport(true)
