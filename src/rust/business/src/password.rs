@@ -25,39 +25,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::num::NonZeroU32;
 
-pub struct PasswordVerifier {
-    pepper: String,
-}
-
-impl PasswordVerifier {
-    pub fn new(pepper: String) -> Self {
-        Self { pepper }
-    }
-
-    pub fn is_valid(
-        &self,
-        stored_password: &Password,
-        username: &str,
-        given_password: &str,
-    ) -> bool {
-        stored_password.verify(username, given_password, &self.pepper)
-    }
-}
-
-pub struct PasswordConstructor {
-    pepper: String,
-}
-
-impl PasswordConstructor {
-    pub fn new(pepper: String) -> Self {
-        Self { pepper }
-    }
-
-    pub fn construct(&self, username: &str, password: &str) -> Password {
-        Password::new(username, password, &self.pepper)
-    }
-}
-
 const HASH_ITERATIONS: u32 = 100_000;
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]

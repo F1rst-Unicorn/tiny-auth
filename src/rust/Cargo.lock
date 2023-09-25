@@ -2588,6 +2588,7 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.9.22",
  "tera",
+ "thiserror",
  "tokio",
  "url",
 ]

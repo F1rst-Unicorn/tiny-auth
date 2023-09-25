@@ -17,14 +17,18 @@
 
 use crate::auth;
 use crate::tiny_auth_proto::tiny_auth_api_server::TinyAuthApi;
-use crate::tiny_auth_proto::PasswordChangeRequest;
+use crate::tiny_auth_proto::{HashedPasswordPbkdf2HmacSha256, PasswordChangeRequest};
 use crate::tiny_auth_proto::PasswordChangeResponse;
 use async_trait::async_trait;
 use tonic::Request;
 use tonic::Response;
+use tiny_auth_business::password::Password;
+use log::debug;
+use log::error;
+use crate::tiny_auth_proto::password_change_response::HashedPassword;
 
 pub(crate) struct TinyAuthApiImpl {
-    pub(crate) change_password: crate::change_password::Handler,
+    pub(crate) change_password: tiny_auth_business::change_password::Handler,
 }
 
 #[async_trait]
@@ -33,10 +37,38 @@ impl TinyAuthApi for TinyAuthApiImpl {
         &self,
         request: Request<PasswordChangeRequest>,
     ) -> Result<Response<PasswordChangeResponse>, tonic::Status> {
-        if !auth::authenticate_token(request.metadata()).await {
-            return Err(tonic::Status::unauthenticated("unauthenticated"));
-        }
+        let token = match auth::extract_token(request.metadata()).await {
+            None => {
+                return Err(tonic::Status::unauthenticated("unauthenticated"));
+            }
+            Some(v) => v,
+        };
 
-        self.change_password.handle(request).await
+        match self.change_password.handle(&request.into_inner().current_password, &request.into_inner().new_password, token).await {
+            Err(e) => {
+                debug!("changing password failed: {}", e);
+                Err(tonic::Status::permission_denied("permission denied"))
+            }
+            Ok(Password::Pbkdf2HmacSha256 {
+                credential,
+                iterations,
+                salt,
+               }) => {
+                let response = PasswordChangeResponse {
+                    hashed_password: Some(HashedPassword::Pbkdf2HmacSha256(
+                        HashedPasswordPbkdf2HmacSha256 {
+                            credential,
+                            iterations: iterations.get(),
+                            salt
+                        }
+                    ))
+                };
+                Ok(Response::new(response))
+            }
+            Ok(Password::Plain(_)) => {
+                error!("Changing password to plain is prohibited.");
+                Err(tonic::Status::internal("internal error"))
+            }
+        }
     }
 }

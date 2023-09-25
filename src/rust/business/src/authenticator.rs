@@ -24,6 +24,7 @@ use log::debug;
 use log::warn;
 use std::fmt::Display;
 use std::sync::Arc;
+use crate::password::Password;
 
 #[derive(Clone)]
 pub struct Authenticator {
@@ -34,18 +35,12 @@ pub struct Authenticator {
     pepper: String,
 }
 
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("rate limited")]
     RateLimited,
+    #[error("username or password wrong")]
     WrongCredentials,
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::RateLimited => write!(f, "rate limited"),
-            Error::WrongCredentials => write!(f, "username or password wrong"),
-        }
-    }
 }
 
 impl Authenticator {
@@ -94,5 +89,9 @@ impl Authenticator {
 
     pub fn authenticate_client(&self, client: &Client, password: &str) -> bool {
         client.is_password_correct(password, &self.pepper)
+    }
+
+    pub fn construct_password(&self, username: &str, password: &str) -> Password {
+        Password::new(username, password, &self.pepper)
     }
 }

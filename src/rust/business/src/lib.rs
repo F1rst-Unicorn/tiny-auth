@@ -28,3 +28,4 @@ pub mod scope;
 pub mod store;
 pub mod token;
 pub mod user;
+pub mod change_password;

@@ -21,11 +21,11 @@ use tonic::metadata::MetadataMap;
 const AUTHORIZATION_HEADER_KEY: &str = "x-authorization";
 const AUTHORIZATION_HEADER_BEARER_VALUE: &str = "Bearer ";
 
-pub(crate) async fn authenticate_token(metadata: &MetadataMap) -> bool {
+pub(crate) async fn extract_token(metadata: &MetadataMap) -> Option<&str> {
     let value = match metadata.get(AUTHORIZATION_HEADER_KEY) {
         None => {
             debug!("request has no {} header", AUTHORIZATION_HEADER_KEY);
-            return false;
+            return None;
         }
         Some(v) => v,
     };
@@ -33,20 +33,18 @@ pub(crate) async fn authenticate_token(metadata: &MetadataMap) -> bool {
     let value = match value.to_str() {
         Err(e) => {
             debug!("value contains unprintable characters: {}", e);
-            return false;
+            return None;
         }
         Ok(v) => v,
     };
 
     if !value.starts_with(AUTHORIZATION_HEADER_BEARER_VALUE) {
         debug!("value is not a bearer token");
-        return false;
+        return None;
     }
 
-    let token = value
+    Some(value
         .split_once(' ')
         .expect("existence of space was validated before")
-        .1;
-
-    true
+        .1)
 }

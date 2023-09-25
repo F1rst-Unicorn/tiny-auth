@@ -46,7 +46,7 @@ pub struct Token {
     issuer: String,
 
     #[serde(rename = "sub")]
-    subject: String,
+    pub subject: String,
 
     #[serde(rename = "aud")]
     audience: Audience,
