@@ -16,8 +16,8 @@
  */
 
 use crate::domain::Client;
-use crate::domain::Password;
 use crate::protocol::oauth2::ClientType;
+use tiny_auth_business::password::Password;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;

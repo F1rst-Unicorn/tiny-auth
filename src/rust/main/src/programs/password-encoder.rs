@@ -26,8 +26,8 @@ use log4rs::config::Appender;
 use log4rs::config::Config;
 use log4rs::config::Root;
 use log4rs::encode::pattern::PatternEncoder;
+use tiny_auth_business::password::Password;
 use tiny_auth_main::config::parser::parse_config;
-use tiny_auth_main::domain::Password;
 
 pub const FLAG_VERBOSE: &str = "verbose";
 pub const FLAG_USERNAME: &str = "username";

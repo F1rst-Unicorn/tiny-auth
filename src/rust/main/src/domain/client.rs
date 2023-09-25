@@ -15,8 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::domain::Password;
 use crate::protocol::oauth2::ClientType;
+use tiny_auth_business::password::Password;
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;

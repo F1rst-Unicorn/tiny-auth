@@ -2575,7 +2575,13 @@ dependencies = [
 name = "tiny_auth_business"
 version = "0.8.2"
 dependencies = [
+ "base64 0.21.2",
  "chrono",
+ "log",
+ "rand",
+ "ring",
+ "serde",
+ "serde_derive",
  "tokio",
 ]
 
