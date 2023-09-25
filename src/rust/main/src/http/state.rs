@@ -16,19 +16,11 @@
  */
 
 use super::tera::load_template_engine;
-use crate::business::authenticator::Authenticator;
-use crate::business::token::TokenCreator;
-use crate::business::token::TokenValidator;
 use crate::config::Config;
 use crate::config::Store;
-use crate::domain::IssuerConfiguration;
-use crate::domain::Jwk;
-use crate::domain::Jwks;
 use crate::http::TokenCertificate;
 use crate::runtime::Error;
 use crate::store::file::*;
-use crate::store::memory::*;
-use crate::store::*;
 use crate::util::read_file;
 use base64::engine::general_purpose;
 use base64::engine::general_purpose::STANDARD;
@@ -47,9 +39,17 @@ use openssl::hash::MessageDigest;
 use openssl::rsa::Rsa;
 use std::sync::Arc;
 use tera::Tera;
+use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::cors::CorsListerImpl;
+use tiny_auth_business::issuer_configuration::IssuerConfiguration;
+use tiny_auth_business::jwk::Jwk;
+use tiny_auth_business::jwk::Jwks;
 use tiny_auth_business::rate_limiter::RateLimiter;
+use tiny_auth_business::store::memory::*;
+use tiny_auth_business::store::*;
+use tiny_auth_business::token::TokenCreator;
+use tiny_auth_business::token::TokenValidator;
 
 pub struct Constructor<'a> {
     config: &'a Config,
@@ -317,15 +317,15 @@ pub mod tests {
     use super::*;
 
     use super::super::tera::load_template_engine;
-    use crate::business::authenticator::Authenticator;
-    use crate::business::token::TokenCreator;
-    use crate::business::token::TokenValidator;
-    use crate::domain::IssuerConfiguration;
-    use crate::domain::Jwk;
-    use crate::store::AuthorizationCodeStore;
-    use crate::store::ClientStore;
-    use crate::store::ScopeStore;
-    use crate::store::UserStore;
+    use tiny_auth_business::authenticator::Authenticator;
+    use tiny_auth_business::issuer_configuration::IssuerConfiguration;
+    use tiny_auth_business::jwk::Jwk;
+    use tiny_auth_business::store::AuthorizationCodeStore;
+    use tiny_auth_business::store::ClientStore;
+    use tiny_auth_business::store::ScopeStore;
+    use tiny_auth_business::store::UserStore;
+    use tiny_auth_business::token::TokenCreator;
+    use tiny_auth_business::token::TokenValidator;
 
     use std::sync::Arc;
 
@@ -379,19 +379,19 @@ pub mod tests {
     }
 
     pub fn build_test_client_store() -> Data<Arc<dyn ClientStore>> {
-        Data::new(crate::store::tests::build_test_client_store())
+        Data::new(test_fixtures::build_test_client_store())
     }
 
     pub fn build_test_user_store() -> Data<Arc<dyn UserStore>> {
-        Data::new(crate::store::tests::build_test_user_store())
+        Data::new(test_fixtures::build_test_user_store())
     }
 
     pub fn build_test_scope_store() -> Data<Arc<dyn ScopeStore>> {
-        Data::new(crate::store::tests::build_test_scope_store())
+        Data::new(test_fixtures::build_test_scope_store())
     }
 
     pub fn build_test_auth_code_store() -> Data<Arc<dyn AuthorizationCodeStore>> {
-        Data::new(crate::store::tests::build_test_auth_code_store())
+        Data::new(test_fixtures::build_test_auth_code_store())
     }
 
     pub fn build_test_rate_limiter() -> RateLimiter {
@@ -400,7 +400,7 @@ pub mod tests {
 
     pub fn build_test_authenticator() -> Data<Authenticator> {
         Data::new(Authenticator::new(
-            crate::store::tests::build_test_user_store(),
+            test_fixtures::build_test_user_store(),
             build_test_rate_limiter(),
             "pepper",
         ))

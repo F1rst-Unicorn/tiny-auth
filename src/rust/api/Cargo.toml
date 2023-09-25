@@ -11,6 +11,8 @@ build = "build.rs"
 [lib]
 
 [dependencies]
+tiny_auth_business = { path = "../business" }
+
 tonic.workspace = true
 tonic-reflection.workspace = true
 prost.workspace = true

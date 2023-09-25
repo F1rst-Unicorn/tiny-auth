@@ -94,13 +94,14 @@ pub fn run(config: Config) -> Result<(), Error> {
     });
     actor_system.block_on(async move {
         let (pass_server, receive_server) = oneshot::channel();
-        let api_join_handle = match tiny_auth_api::start(&config.api.endpoint).await {
-            Err(e) => {
-                error!("GRPC API startup failed: {}", e);
-                return;
-            }
-            Ok(v) => v,
-        };
+        let api_join_handle =
+            match tiny_auth_api::start(&config.api.endpoint, &config.crypto.pepper).await {
+                Err(e) => {
+                    error!("GRPC API startup failed: {}", e);
+                    return;
+                }
+                Ok(v) => v,
+            };
         tokio::spawn(runtime_primitives(receive_server, api_join_handle));
 
         let srv = match http::build(config) {

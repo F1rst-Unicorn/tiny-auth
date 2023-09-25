@@ -15,9 +15,9 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::domain::IssuerConfiguration;
-use crate::domain::Jwks;
-use crate::store::ScopeStore;
+use tiny_auth_business::issuer_configuration::IssuerConfiguration;
+use tiny_auth_business::jwk::Jwks;
+use tiny_auth_business::store::ScopeStore;
 
 use tiny_auth_business::cors::CorsLister;
 use tiny_auth_web::cors::render_invalid_request;

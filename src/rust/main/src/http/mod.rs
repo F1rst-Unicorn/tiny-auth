@@ -24,7 +24,6 @@ use crate::config::Tls;
 use crate::config::TlsVersion;
 use crate::runtime::Error;
 use crate::runtime::Error::LoggedBeforeError;
-use crate::store::Store;
 use actix_session::config::CookieContentSecurity;
 use actix_session::config::PersistentSession;
 use actix_session::storage::CookieSessionStore;
@@ -60,6 +59,7 @@ use rustls_pemfile::pkcs8_private_keys;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
+use tiny_auth_business::store::Store;
 use tiny_auth_web::cors::cors_options_preflight;
 use tiny_auth_web::cors::CorsChecker;
 

@@ -15,6 +15,16 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+pub mod authenticator;
+pub mod client;
 pub mod cors;
-pub mod rate_limiter;
+pub mod issuer_configuration;
+pub mod jwk;
+pub mod oauth2;
+pub mod oidc;
 pub mod password;
+pub mod rate_limiter;
+pub mod scope;
+pub mod store;
+pub mod token;
+pub mod user;

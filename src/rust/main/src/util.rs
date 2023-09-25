@@ -15,7 +15,6 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::error::Error as _;
 use std::fmt::Debug;
 use std::fs;
 use std::fs::File;
@@ -52,27 +51,4 @@ pub fn iterate_directory<T: AsRef<Path> + Debug>(path: T) -> Option<fs::ReadDir>
         }
         Ok(files) => Some(files),
     }
-}
-
-pub fn generate_random_string(length: u32) -> String {
-    let mut result = String::new();
-    for _ in 0..length {
-        let mut char = 'ö';
-        while !char.is_ascii_alphanumeric() {
-            char = rand::random::<u8>().into();
-        }
-        result.push(char);
-    }
-    result
-}
-
-pub fn render_tera_error(error: &tera::Error) -> String {
-    let mut result = String::new();
-    result += &format!("{}\n", error);
-    let mut source = error.source();
-    while let Some(error) = source {
-        result += &format!("{}\n", error);
-        source = error.source();
-    }
-    result
 }

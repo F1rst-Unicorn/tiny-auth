@@ -15,28 +15,37 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::auth;
-use crate::tiny_auth_proto::tiny_auth_api_server::TinyAuthApi;
+use crate::tiny_auth_proto::password_change_response::HashedPassword;
+use crate::tiny_auth_proto::HashedPasswordPbkdf2HmacSha256;
 use crate::tiny_auth_proto::PasswordChangeRequest;
 use crate::tiny_auth_proto::PasswordChangeResponse;
-use async_trait::async_trait;
+use std::sync::Arc;
+use tiny_auth_business::password::PasswordVerifier;
 use tonic::Request;
 use tonic::Response;
 
-pub(crate) struct TinyAuthApiImpl {
-    pub(crate) change_password: crate::change_password::Handler,
+pub(crate) struct Handler {
+    pub(crate) password_verifier: Arc<PasswordVerifier>,
 }
 
-#[async_trait]
-impl TinyAuthApi for TinyAuthApiImpl {
-    async fn change_password(
+impl Handler {
+    pub fn new(password_verifier: Arc<PasswordVerifier>) -> Self {
+        Self { password_verifier }
+    }
+
+    pub async fn handle(
         &self,
         request: Request<PasswordChangeRequest>,
     ) -> Result<Response<PasswordChangeResponse>, tonic::Status> {
-        if !auth::authenticate_token(request.metadata()).await {
-            return Err(tonic::Status::unauthenticated("unauthenticated"));
-        }
-
-        self.change_password.handle(request).await
+        let response = PasswordChangeResponse {
+            hashed_password: Some(HashedPassword::Pbkdf2HmacSha256(
+                HashedPasswordPbkdf2HmacSha256 {
+                    credential: "credential".to_string(),
+                    iterations: 1409,
+                    salt: "salt".to_string(),
+                },
+            )),
+        };
+        Ok(Response::new(response))
     }
 }

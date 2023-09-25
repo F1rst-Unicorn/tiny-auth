@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use tiny_auth_business::password::Password;
+use crate::password::Password;
 
 use std::fmt::Display;
 

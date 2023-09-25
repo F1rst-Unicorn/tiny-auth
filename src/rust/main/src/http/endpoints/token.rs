@@ -18,26 +18,7 @@
 use super::deserialise_empty_as_none;
 use super::parse_basic_authorization;
 use super::parse_scope_names;
-use crate::business::authenticator::Error::WrongCredentials;
-use crate::business::token::TokenCreator;
-use crate::business::token::TokenValidator;
-use crate::business::Authenticator;
-use crate::domain::Client;
-use crate::domain::IssuerConfiguration;
-use crate::domain::RefreshToken;
-use crate::domain::Scope;
-use crate::domain::Token;
-use crate::domain::User;
 use crate::http::endpoints::render_json_error;
-use crate::protocol::oauth2;
-use crate::protocol::oauth2::ClientType;
-use crate::protocol::oauth2::GrantType;
-use crate::protocol::oidc::ProtocolError;
-use crate::store::AuthorizationCodeStore;
-use crate::store::ClientStore;
-use crate::store::ScopeStore;
-use crate::store::UserStore;
-use crate::store::AUTH_CODE_LIFE_TIME;
 use actix_web::web;
 use actix_web::web::Form;
 use actix_web::HttpRequest;
@@ -49,6 +30,25 @@ use jsonwebtoken::DecodingKey;
 use jsonwebtoken::TokenData;
 use log::debug;
 use log::warn;
+use tiny_auth_business::authenticator::Authenticator;
+use tiny_auth_business::authenticator::Error::WrongCredentials;
+use tiny_auth_business::client::Client;
+use tiny_auth_business::issuer_configuration::IssuerConfiguration;
+use tiny_auth_business::oauth2;
+use tiny_auth_business::oauth2::ClientType;
+use tiny_auth_business::oauth2::GrantType;
+use tiny_auth_business::oidc::ProtocolError;
+use tiny_auth_business::scope::Scope;
+use tiny_auth_business::store::AuthorizationCodeStore;
+use tiny_auth_business::store::ClientStore;
+use tiny_auth_business::store::ScopeStore;
+use tiny_auth_business::store::UserStore;
+use tiny_auth_business::store::AUTH_CODE_LIFE_TIME;
+use tiny_auth_business::token::RefreshToken;
+use tiny_auth_business::token::Token;
+use tiny_auth_business::token::TokenCreator;
+use tiny_auth_business::token::TokenValidator;
+use tiny_auth_business::user::User;
 
 use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
@@ -770,12 +770,6 @@ mod tests {
     use crate::http::state::tests::build_test_token_issuer;
     use crate::http::state::tests::build_test_token_validator;
     use crate::http::state::tests::build_test_user_store;
-    use crate::protocol::oauth2::ProtocolError;
-    use crate::protocol::oidc::ProtocolError as OidcError;
-    use crate::store::tests::CONFIDENTIAL_CLIENT;
-    use crate::store::tests::PUBLIC_CLIENT;
-    use crate::store::tests::UNKNOWN_CLIENT_ID;
-    use crate::store::tests::USER;
     use actix_web::http;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
@@ -785,6 +779,12 @@ mod tests {
     use chrono::offset::Local;
     use test_log::test;
     use tiny_auth_business::cors::test_fixtures::build_test_cors_lister;
+    use tiny_auth_business::oauth2::ProtocolError;
+    use tiny_auth_business::oidc::ProtocolError as OidcError;
+    use tiny_auth_business::store::test_fixtures::CONFIDENTIAL_CLIENT;
+    use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
+    use tiny_auth_business::store::test_fixtures::UNKNOWN_CLIENT_ID;
+    use tiny_auth_business::store::test_fixtures::USER;
 
     #[test(actix_rt::test)]
     async fn missing_grant_type_is_rejected() {

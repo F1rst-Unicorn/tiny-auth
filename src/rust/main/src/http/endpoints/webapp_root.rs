@@ -15,13 +15,13 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::domain::IssuerConfiguration;
 use crate::http::endpoints::render_template_with_context;
 use actix_web::http::StatusCode;
 use actix_web::web::Data;
 use actix_web::HttpResponse;
 use tera::Context;
 use tera::Tera;
+use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 
 pub async fn get(tera: Data<Tera>, issuer_config: Data<IssuerConfiguration>) -> HttpResponse {
     let mut context = Context::new();

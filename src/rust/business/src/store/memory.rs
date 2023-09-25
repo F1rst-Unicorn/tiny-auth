@@ -104,7 +104,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
         };
 
         loop {
-            let auth_code = crate::util::generate_random_string(32);
+            let auth_code = generate_random_string(32);
             key.authorization_code = auth_code.clone();
 
             if store.get(&key).is_none() {
@@ -146,6 +146,18 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
             nonce: value.nonce,
         })
     }
+}
+
+pub fn generate_random_string(length: u32) -> String {
+    let mut result = String::new();
+    for _ in 0..length {
+        let mut char = 'ö';
+        while !char.is_ascii_alphanumeric() {
+            char = rand::random::<u8>().into();
+        }
+        result.push(char);
+    }
+    result
 }
 
 #[cfg(test)]

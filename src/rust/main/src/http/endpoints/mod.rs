@@ -25,11 +25,6 @@ pub mod token;
 pub mod userinfo;
 pub mod webapp_root;
 
-use crate::protocol::oauth2::ProtocolError as OAuthError;
-use crate::protocol::oidc::Prompt;
-use crate::protocol::oidc::ProtocolError;
-use crate::util::generate_random_string;
-use crate::util::render_tera_error;
 use actix_session::Session;
 use actix_web::http::header::HeaderValue;
 use actix_web::http::StatusCode;
@@ -49,6 +44,11 @@ use std::collections::BTreeSet;
 use std::convert::TryFrom;
 use tera::Context;
 use tera::Tera;
+use tiny_auth_business::oauth2::ProtocolError as OAuthError;
+use tiny_auth_business::oidc::Prompt;
+use tiny_auth_business::oidc::ProtocolError;
+use tiny_auth_business::scope::render_tera_error;
+use tiny_auth_business::store::memory::generate_random_string;
 use tiny_auth_web::cors::CorsCheckResult;
 use url::Url;
 

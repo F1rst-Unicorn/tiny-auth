@@ -39,3 +39,5 @@ loggers:
     level: trace
   tiny_auth_business:
     level: trace
+  tiny_auth_api:
+    level: trace

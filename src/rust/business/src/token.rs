@@ -15,20 +15,28 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::domain::scope::merge;
-use crate::domain::Client;
-use crate::domain::Scope;
-use crate::domain::User;
-
+use crate::client::Client;
+use crate::issuer_configuration::IssuerConfiguration;
+use crate::jwk::Jwk;
+use crate::scope::merge;
+use crate::scope::Scope;
+use crate::user::User;
 use chrono::offset::Local;
 use chrono::DateTime;
 use chrono::Duration;
-
+use jsonwebtoken::decode;
+use jsonwebtoken::encode;
+use jsonwebtoken::errors::Result;
+use jsonwebtoken::Algorithm;
+use jsonwebtoken::DecodingKey;
+use jsonwebtoken::EncodingKey;
+use jsonwebtoken::Header;
+use jsonwebtoken::Validation;
+use log::debug;
 use log::error;
-
+use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
-
 use serde_json::Value;
 
 /// https://openid.net/specs/openid-connect-core-1_0.html#IDToken
@@ -176,6 +184,65 @@ impl RefreshToken {
     pub fn set_issuer(&mut self, issuer: &str) {
         self.issuer = issuer.to_string();
         self.access_token.set_issuer(issuer);
+    }
+}
+
+#[derive(Clone)]
+pub struct TokenCreator {
+    key: EncodingKey,
+
+    issuer: IssuerConfiguration,
+
+    jwk: Jwk,
+}
+
+impl TokenCreator {
+    pub fn new(key: EncodingKey, issuer: IssuerConfiguration, jwk: Jwk) -> Self {
+        Self { key, issuer, jwk }
+    }
+
+    pub fn create(&self, mut token: Token) -> Result<String> {
+        token.set_issuer(&self.issuer.issuer_url);
+        let mut header = Header::new(self.issuer.algorithm);
+        header.kid = Some(self.jwk.key_id.clone());
+        header.jku = Some(self.issuer.jwks());
+        encode(&header, &token, &self.key)
+    }
+
+    pub fn create_refresh_token(&self, mut token: RefreshToken) -> Result<String> {
+        token.set_issuer(&self.issuer.issuer_url);
+        let mut header = Header::new(self.issuer.algorithm);
+        header.kid = Some(self.jwk.key_id.clone());
+        header.jku = Some(self.issuer.jwks());
+        encode(&header, &token, &self.key)
+    }
+}
+
+#[derive(Clone)]
+pub struct TokenValidator {
+    key: DecodingKey,
+
+    validation: Validation,
+}
+
+impl TokenValidator {
+    pub fn new(key: DecodingKey, algorithm: Algorithm, issuer: String) -> Self {
+        let mut validation = jsonwebtoken::Validation::new(algorithm);
+        validation.leeway = 5;
+        validation.validate_exp = true;
+        validation.validate_nbf = false;
+        validation.set_issuer(&[issuer]);
+        Self { key, validation }
+    }
+
+    pub fn validate<T: DeserializeOwned>(&self, token: &str) -> Option<T> {
+        decode::<T>(token, &self.key, &self.validation)
+            .map(|v| v.claims)
+            .map_err(|e| {
+                debug!("Token validation failed: {}", e);
+                e
+            })
+            .ok()
     }
 }
 

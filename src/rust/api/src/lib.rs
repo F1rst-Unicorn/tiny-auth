@@ -17,11 +17,14 @@
 
 mod api;
 mod auth;
+mod change_password;
 
 use crate::api::TinyAuthApiImpl;
 use crate::tiny_auth_proto::tiny_auth_api_server::TinyAuthApiServer;
 use log::info;
 use log::warn;
+use std::sync::Arc;
+use tiny_auth_business::password::PasswordVerifier;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot::channel;
 use tokio::sync::oneshot::Sender;
@@ -44,8 +47,12 @@ pub enum Error {
     IoError(#[from] std::io::Error),
 }
 
-pub async fn start(endpoint: &str) -> Result<(Sender<()>, JoinHandle<()>), Error> {
-    let api = TinyAuthApiImpl::default();
+pub async fn start(endpoint: &str, pepper: &str) -> Result<(Sender<()>, JoinHandle<()>), Error> {
+    let api = TinyAuthApiImpl {
+        change_password: change_password::Handler::new(Arc::new(PasswordVerifier::new(
+            pepper.to_string(),
+        ))),
+    };
     let listener = TcpListener::bind(endpoint).await?;
     let (tx, rx) = channel::<()>();
 

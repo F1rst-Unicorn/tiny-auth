@@ -15,14 +15,14 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::domain::Client;
-use crate::domain::Scope;
-use crate::domain::User;
-use crate::store::ClientStore;
-use crate::store::ScopeStore;
-use crate::store::UserStore;
 use crate::util::iterate_directory;
 use crate::util::read_file;
+use tiny_auth_business::client::Client;
+use tiny_auth_business::scope::Scope;
+use tiny_auth_business::store::ClientStore;
+use tiny_auth_business::store::ScopeStore;
+use tiny_auth_business::store::UserStore;
+use tiny_auth_business::user::User;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

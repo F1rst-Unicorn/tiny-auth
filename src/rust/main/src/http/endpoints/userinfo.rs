@@ -19,8 +19,8 @@ use std::sync::Arc;
 
 use super::deserialise_empty_as_none;
 use super::parse_bearer_authorization;
-use crate::business::token::TokenValidator;
-use crate::domain::Token;
+use tiny_auth_business::token::Token;
+use tiny_auth_business::token::TokenValidator;
 use tiny_auth_web::cors::render_invalid_request;
 use tiny_auth_web::cors::CorsCheckResult;
 use tiny_auth_web::cors::CorsChecker;
@@ -144,16 +144,16 @@ enum Error {
 mod tests {
     use super::*;
 
-    use crate::domain::token::Token;
     use crate::http::endpoints::tests::read_response;
     use crate::http::state::tests::build_test_client_store;
     use crate::http::state::tests::build_test_token_creator;
     use crate::http::state::tests::build_test_token_issuer;
     use crate::http::state::tests::build_test_token_validator;
     use crate::http::state::tests::build_test_user_store;
-    use crate::store::tests::PUBLIC_CLIENT;
-    use crate::store::tests::USER;
     use tiny_auth_business::cors::test_fixtures::build_test_cors_lister;
+    use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
+    use tiny_auth_business::store::test_fixtures::USER;
+    use tiny_auth_business::token::Token;
 
     use chrono::Duration;
     use chrono::Local;

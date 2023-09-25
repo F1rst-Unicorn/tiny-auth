@@ -40,3 +40,5 @@ loggers:
     level: info
   tiny_auth_business:
     level: info
+  tiny_auth_api:
+    level: info

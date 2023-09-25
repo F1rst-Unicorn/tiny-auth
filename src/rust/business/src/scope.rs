@@ -15,23 +15,18 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::domain::Client;
-use crate::domain::User;
-use crate::util::render_tera_error;
-
-use std::cmp::Ord;
-
-use serde_json::Map;
-use serde_json::Value;
-
+use crate::client::Client;
+use crate::user::User;
 use log::debug;
 use log::error;
-
-use tera::Context;
-use tera::Tera;
-
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
+use serde_json::Map;
+use serde_json::Value;
+use std::cmp::Ord;
+use std::error::Error as ErrorTrait;
+use tera::Context;
+use tera::Tera;
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct Scope {
@@ -345,6 +340,17 @@ pub enum MergeError {
     UnmergableTypes,
 }
 
+pub fn render_tera_error(error: &tera::Error) -> String {
+    let mut result = String::new();
+    result += &format!("{}\n", error);
+    let mut source = error.source();
+    while let Some(error) = source {
+        result += &format!("{}\n", error);
+        source = error.source();
+    }
+    result
+}
+
 pub fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
     match left {
         Value::Array(mut left) => match right {
@@ -379,8 +385,8 @@ pub fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::client::tests::get_test_client;
-    use crate::domain::user::tests::get_test_user;
+    use crate::client::tests::get_test_client;
+    use crate::user::tests::get_test_user;
 
     use serde_json::json;
 

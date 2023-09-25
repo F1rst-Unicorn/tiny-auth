@@ -15,19 +15,16 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::domain::Client;
-use crate::protocol::oauth2::ClientType;
-use tiny_auth_business::password::Password;
-
+use crate::client::Client;
+use crate::oauth2::ClientType;
+use crate::password::Password;
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-
-use serde::Deserialize;
-use serde::Serialize;
-
-use serde_json::Value;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct User {

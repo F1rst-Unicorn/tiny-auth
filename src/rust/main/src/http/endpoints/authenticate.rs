@@ -19,13 +19,13 @@ use super::deserialise_empty_as_none;
 use super::parse_prompt;
 use super::render_template;
 use super::server_error;
-use crate::business::authenticator::Error;
-use crate::business::Authenticator;
 use crate::http::endpoints::authorize;
 use crate::http::endpoints::parse_first_request;
 use crate::http::endpoints::render_template_with_context;
-use crate::protocol::oauth2;
-use crate::protocol::oidc;
+use tiny_auth_business::authenticator::Authenticator;
+use tiny_auth_business::authenticator::Error;
+use tiny_auth_business::oauth2;
+use tiny_auth_business::oidc;
 
 use actix_web::http::StatusCode;
 use actix_web::web;
@@ -345,8 +345,8 @@ mod tests {
     use super::*;
     use crate::http::state::tests::build_test_authenticator;
     use crate::http::state::tests::build_test_tera;
-    use crate::store::tests::UNKNOWN_USER;
-    use crate::store::tests::USER;
+    use tiny_auth_business::store::test_fixtures::UNKNOWN_USER;
+    use tiny_auth_business::store::test_fixtures::USER;
 
     use actix_session::SessionExt;
     use actix_web::http;

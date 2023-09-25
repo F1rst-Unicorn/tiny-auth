@@ -35,7 +35,7 @@ loggers:
     level: trace
   tiny_auth_main::config::parser:
     level: info
-  tiny_auth_main::store::memory:
+  tiny_auth_business::store::memory:
     level: debug
   tiny_auth_main::systemd:
     level: debug

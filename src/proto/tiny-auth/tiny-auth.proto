@@ -3,7 +3,8 @@ syntax = "proto3";
 package api;
 
 message PasswordChangeRequest {
-  string new_password = 1;
+  string current_password = 1;
+  string new_password = 2;
 }
 
 message HashedPasswordPbkdf2HmacSha256 {
