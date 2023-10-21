@@ -43,8 +43,10 @@ pub(crate) async fn extract_token(metadata: &MetadataMap) -> Option<&str> {
         return None;
     }
 
-    Some(value
-        .split_once(' ')
-        .expect("existence of space was validated before")
-        .1)
+    Some(
+        value
+            .split_once(' ')
+            .expect("existence of space was validated before")
+            .1,
+    )
 }

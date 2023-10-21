@@ -24,6 +24,7 @@ use crate::config::Tls;
 use crate::config::TlsVersion;
 use crate::runtime::Error;
 use crate::runtime::Error::LoggedBeforeError;
+use ::tera::Tera;
 use actix_session::config::CookieContentSecurity;
 use actix_session::config::PersistentSession;
 use actix_session::storage::CookieSessionStore;
@@ -59,41 +60,51 @@ use rustls_pemfile::pkcs8_private_keys;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
-use tiny_auth_business::store::Store;
+use tiny_auth_business::authenticator::Authenticator;
+use tiny_auth_business::cors::CorsLister;
+use tiny_auth_business::issuer_configuration::IssuerConfiguration;
+use tiny_auth_business::jwk::Jwks;
+use tiny_auth_business::store::{
+    AuthorizationCodeStore, ClientStore, ScopeStore, Store, UserStore,
+};
+use tiny_auth_business::token::{TokenCreator, TokenValidator};
 use tiny_auth_web::cors::cors_options_preflight;
 use tiny_auth_web::cors::CorsChecker;
 
 #[derive(Clone)]
 pub struct TokenCertificate(String);
 
-pub fn build(config: Config) -> Result<Server, Error> {
+pub trait Constructor<'a> {
+    fn get_template_engine(&self) -> Option<Tera>;
+    fn get_public_key(&self) -> TokenCertificate;
+    fn build_token_creator(&self) -> Result<TokenCreator, Error>;
+    fn token_validator(&self) -> Arc<TokenValidator>;
+    fn user_store(&self) -> Arc<dyn UserStore>;
+    fn get_client_store(&self) -> Option<Arc<dyn ClientStore>>;
+    fn get_scope_store(&self) -> Option<Arc<dyn ScopeStore>>;
+    fn build_auth_code_store(&self) -> Option<Arc<dyn AuthorizationCodeStore>>;
+    fn authenticator(&self) -> Arc<Authenticator>;
+    fn get_issuer_config(&self) -> IssuerConfiguration;
+    fn build_jwks(&self) -> Result<Jwks, Error>;
+    fn build_cors_lister(&self) -> Result<Arc<dyn CorsLister>, Error>;
+}
+
+pub fn build<'a>(config: &Config, constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     let bind = config.web.bind.clone();
     let workers = config.web.workers;
     let tls = config.web.tls.clone();
 
-    let constructor = state::Constructor::new(&config)?;
-
-    let tera = constructor
-        .get_template_engine()
-        .ok_or(Error::LoggedBeforeError)?;
+    let tera = constructor.get_template_engine().ok_or(LoggedBeforeError)?;
     let token_certificate = constructor.get_public_key();
     let token_creator = constructor.build_token_creator()?;
-    let token_validator = constructor.build_token_validator()?;
-    let user_store = constructor
-        .get_user_store()
-        .ok_or(Error::LoggedBeforeError)?;
-    let client_store = constructor
-        .get_client_store()
-        .ok_or(Error::LoggedBeforeError)?;
-    let scope_store = constructor
-        .get_scope_store()
-        .ok_or(Error::LoggedBeforeError)?;
+    let token_validator = constructor.token_validator();
+    let user_store = constructor.user_store();
+    let client_store = constructor.get_client_store().ok_or(LoggedBeforeError)?;
+    let scope_store = constructor.get_scope_store().ok_or(LoggedBeforeError)?;
     let auth_code_store = constructor
         .build_auth_code_store()
-        .ok_or(Error::LoggedBeforeError)?;
-    let authenticator = constructor
-        .build_authenticator()
-        .ok_or(Error::LoggedBeforeError)?;
+        .ok_or(LoggedBeforeError)?;
+    let authenticator = constructor.authenticator();
     let issuer_config = constructor.get_issuer_config();
     let jwks = constructor.build_jwks()?;
     let cors_lister = constructor.build_cors_lister()?;
@@ -105,7 +116,7 @@ pub fn build(config: Config) -> Result<Server, Error> {
         auth_code_store: auth_code_store.clone(),
     });
     let user_info_handler =
-        endpoints::userinfo::Handler::new(Arc::new(token_validator.clone()), cors_checker.clone());
+        endpoints::userinfo::Handler::new(token_validator.clone(), cors_checker.clone());
     let token_handler = endpoints::token::Handler::new(
         client_store.clone(),
         user_store.clone(),
@@ -118,13 +129,19 @@ pub fn build(config: Config) -> Result<Server, Error> {
         cors_checker,
     );
 
-    drop(constructor);
+    let web_path = config.web.path.clone();
+    let static_files = config.web.static_files.clone();
+    let tls_enabled = config.web.tls.is_some();
+    let session_timeout = config.web.session_timeout;
+    let session_same_site_policy = config.web.session_same_site_policy;
+    let public_domain = config.web.public_host.domain.clone();
+    let secret_key = config.web.secret_key.clone();
 
     let server = HttpServer::new(move || {
         let token_certificate = token_certificate.clone();
         App::new()
             .app_data(Data::new(tera.clone()))
-            .app_data(Data::new(authenticator.clone()))
+            .app_data(Data::from(authenticator.clone()))
             .app_data(Data::new(client_store.clone()))
             .app_data(Data::new(scope_store.clone()))
             .app_data(Data::new(user_store.clone()))
@@ -141,23 +158,16 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .wrap(
                 SessionMiddleware::builder(
                     CookieSessionStore::default(),
-                    Key::from(config.web.secret_key.as_bytes()),
+                    Key::from(secret_key.as_bytes()),
                 )
-                .cookie_domain(Some(config.web.public_host.domain.clone()))
+                .cookie_domain(Some(public_domain.clone()))
                 .cookie_name("session".to_string())
-                .cookie_path(
-                    config
-                        .web
-                        .path
-                        .as_ref()
-                        .expect("no default given")
-                        .to_string(),
-                )
-                .cookie_secure(config.web.tls.is_some())
+                .cookie_path(web_path.as_ref().expect("no default given").to_string())
+                .cookie_secure(tls_enabled)
                 .cookie_http_only(true)
-                .cookie_same_site(config.web.session_same_site_policy.into())
+                .cookie_same_site(session_same_site_policy.into())
                 .session_lifecycle(PersistentSession::default().session_ttl(Duration::seconds(
-                    config.web.session_timeout.expect("no default given"),
+                    session_timeout.expect("no default given"),
                 )))
                 .cookie_content_security(CookieContentSecurity::Private)
                 .build(),
@@ -166,15 +176,15 @@ pub fn build(config: Config) -> Result<Server, Error> {
             .wrap(DefaultHeaders::new().add(("Cache-Control", "no-store")))
             .wrap(DefaultHeaders::new().add(("Pragma", "no-cache")))
             .service(actix_files::Files::new(
-                &(config.web.path.clone().unwrap() + "/static/css"),
-                config.web.static_files.clone() + "/css",
+                &(web_path.clone().unwrap() + "/static/css"),
+                static_files.clone() + "/css",
             ))
             .service(actix_files::Files::new(
-                &(config.web.path.clone().unwrap() + "/static/img"),
-                config.web.static_files.clone() + "/img",
+                &(web_path.clone().unwrap() + "/static/img"),
+                static_files.clone() + "/img",
             ))
             .service(
-                scope(config.web.path.as_ref().unwrap())
+                scope(web_path.as_ref().unwrap())
                     .route(
                         "/.well-known/openid-configuration",
                         get().to(endpoints::discovery::get),
@@ -246,8 +256,8 @@ pub fn build(config: Config) -> Result<Server, Error> {
                     .route("/index.html", get().to(endpoints::webapp_root::get))
                     .route("/index.html", all().to(endpoints::method_not_allowed))
                     .service(actix_files::Files::new(
-                        &(config.web.path.clone().unwrap()),
-                        config.web.static_files.clone() + "/js",
+                        &(web_path.clone().unwrap()),
+                        static_files.clone() + "/js",
                     ))
                     .default_service(to(endpoints::webapp_root::get)),
             )
@@ -288,17 +298,17 @@ fn configure_tls(config: &Tls) -> Result<ServerConfig, Error> {
     let key = match pkcs8_private_keys(&mut BufReader::new(File::open(&config.key)?)) {
         Err(_) => {
             error!("could not read tls key file");
-            return Err(Error::LoggedBeforeError);
+            return Err(LoggedBeforeError);
         }
         Ok(keys) => match keys.len() {
             0 => {
                 error!("No tls key found");
-                return Err(Error::LoggedBeforeError);
+                return Err(LoggedBeforeError);
             }
             1 => PrivateKey(keys[0].clone()),
             _ => {
                 error!("Put only one tls key into the tls key file");
-                return Err(Error::LoggedBeforeError);
+                return Err(LoggedBeforeError);
             }
         },
     };
@@ -320,7 +330,7 @@ fn configure_tls(config: &Tls) -> Result<ServerConfig, Error> {
         .with_single_cert(server_certificate_chain, key)
         .map_err(|e| {
             error!("tls key is invalid: {}", e);
-            Error::LoggedBeforeError
+            LoggedBeforeError
         })
 }
 

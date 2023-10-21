@@ -16,21 +16,20 @@
  */
 
 use crate::client::Client;
+use crate::password::Password;
 use crate::rate_limiter::RateLimiter;
 use crate::store::UserStore;
 use crate::user::User;
 use chrono::Local;
 use log::debug;
 use log::warn;
-use std::fmt::Display;
 use std::sync::Arc;
-use crate::password::Password;
 
 #[derive(Clone)]
 pub struct Authenticator {
     user_store: Arc<dyn UserStore>,
 
-    rate_limiter: RateLimiter,
+    rate_limiter: Arc<RateLimiter>,
 
     pepper: String,
 }
@@ -44,7 +43,11 @@ pub enum Error {
 }
 
 impl Authenticator {
-    pub fn new(user_store: Arc<dyn UserStore>, rate_limiter: RateLimiter, pepper: &str) -> Self {
+    pub fn new(
+        user_store: Arc<dyn UserStore>,
+        rate_limiter: Arc<RateLimiter>,
+        pepper: &str,
+    ) -> Self {
         Self {
             user_store,
             rate_limiter,

@@ -18,8 +18,10 @@
 use super::tera::load_template_engine;
 use crate::config::Config;
 use crate::config::Store;
+use crate::http;
 use crate::http::TokenCertificate;
 use crate::runtime::Error;
+use crate::runtime::Error::{ConfigError, LoggedBeforeError};
 use crate::store::file::*;
 use crate::util::read_file;
 use base64::engine::general_purpose;
@@ -40,6 +42,7 @@ use openssl::rsa::Rsa;
 use std::sync::Arc;
 use tera::Tera;
 use tiny_auth_business::authenticator::Authenticator;
+use tiny_auth_business::change_password::Handler;
 use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::cors::CorsListerImpl;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
@@ -54,7 +57,7 @@ use tiny_auth_business::token::TokenValidator;
 pub struct Constructor<'a> {
     config: &'a Config,
 
-    user_store: Option<Arc<dyn UserStore>>,
+    user_store: Arc<dyn UserStore>,
 
     client_store: Option<Arc<dyn ClientStore>>,
 
@@ -62,22 +65,22 @@ pub struct Constructor<'a> {
 
     tera: Option<Tera>,
 
-    issuer_url: String,
-
     public_key: String,
 
     issuer_configuration: IssuerConfiguration,
 
     encoding_key: EncodingKey,
 
-    algorithm: Algorithm,
-
     jwk: Jwk,
+
+    token_validator: Arc<TokenValidator>,
+
+    authenticator: Arc<Authenticator>,
 }
 
 impl<'a> Constructor<'a> {
     pub fn new(config: &'a Config) -> Result<Self, Error> {
-        let user_store = Self::build_user_store(config);
+        let user_store = Self::build_user_store(config)?;
         let client_store = Self::build_client_store(config);
         let scope_store = Self::build_scope_store(config);
         let tera = Some(Self::build_template_engine(config)?);
@@ -87,6 +90,17 @@ impl<'a> Constructor<'a> {
         let (encoding_key, algorithm) = Self::build_encoding_key(&private_key)?;
         let issuer_configuration = Self::build_issuer_config(issuer_url.clone(), algorithm);
         let jwk = Self::build_jwk(&public_key, &issuer_url)?;
+        let token_validator = Arc::new(Self::build_token_validator(
+            &public_key,
+            algorithm,
+            &issuer_url,
+        )?);
+        let rate_limiter = Self::build_rate_limiter(config);
+        let authenticator = Self::build_authenticator(
+            user_store.clone(),
+            rate_limiter.clone(),
+            &config.crypto.pepper,
+        );
 
         Ok(Self {
             config,
@@ -94,12 +108,12 @@ impl<'a> Constructor<'a> {
             client_store,
             scope_store,
             tera,
-            issuer_url,
             public_key,
             issuer_configuration,
             encoding_key,
-            algorithm,
             jwk,
+            token_validator,
+            authenticator,
         })
     }
 
@@ -114,29 +128,27 @@ impl<'a> Constructor<'a> {
         }
     }
 
-    pub fn build_rate_limiter(&self) -> RateLimiter {
-        RateLimiter::new(
-            self.config.rate_limit.events,
-            Duration::seconds(self.config.rate_limit.period_in_seconds),
-        )
-    }
-
-    pub fn build_authenticator(&self) -> Option<Authenticator> {
-        Some(Authenticator::new(
-            self.get_user_store()?,
-            self.build_rate_limiter(),
-            &self.config.crypto.pepper,
+    pub fn build_rate_limiter(config: &Config) -> Arc<RateLimiter> {
+        Arc::new(RateLimiter::new(
+            config.rate_limit.events,
+            Duration::seconds(config.rate_limit.period_in_seconds),
         ))
     }
 
-    pub fn get_user_store(&self) -> Option<Arc<dyn UserStore>> {
-        self.user_store.clone()
+    pub fn build_authenticator(
+        user_store: Arc<dyn UserStore>,
+        rate_limiter: Arc<RateLimiter>,
+        pepper: &str,
+    ) -> Arc<Authenticator> {
+        Arc::new(Authenticator::new(user_store, rate_limiter, pepper))
     }
 
-    fn build_user_store(config: &'a Config) -> Option<Arc<dyn UserStore>> {
+    fn build_user_store(config: &'a Config) -> Result<Arc<dyn UserStore>, Error> {
         match &config.store {
-            None => None,
-            Some(Store::Config { base }) => Some(Arc::new(FileUserStore::new(base)?)),
+            None => Err(ConfigError("no user store configured".to_string())),
+            Some(Store::Config { base }) => {
+                Ok(Arc::new(FileUserStore::new(base).ok_or(LoggedBeforeError)?))
+            }
         }
     }
 
@@ -176,8 +188,10 @@ impl<'a> Constructor<'a> {
     }
 
     fn build_template_engine(config: &'a Config) -> Result<Tera, Error> {
-        load_template_engine(&config.web.static_files, config.web.path.as_ref().unwrap())
-            .map_err(Into::into)
+        Ok(load_template_engine(
+            &config.web.static_files,
+            config.web.path.as_ref().unwrap(),
+        )?)
     }
 
     pub fn get_public_key(&self) -> TokenCertificate {
@@ -233,17 +247,17 @@ impl<'a> Constructor<'a> {
         ))
     }
 
-    pub fn build_token_validator(&self) -> Result<TokenValidator, Error> {
-        let key = match DecodingKey::from_rsa_pem(self.public_key.as_bytes()) {
-            Err(_) => DecodingKey::from_ec_pem(self.public_key.as_bytes())?,
+    pub fn build_token_validator(
+        public_key: &str,
+        algorithm: Algorithm,
+        issuer_url: &str,
+    ) -> Result<TokenValidator, Error> {
+        let key = match DecodingKey::from_rsa_pem(public_key.as_bytes()) {
+            Err(_) => DecodingKey::from_ec_pem(public_key.as_bytes())?,
             Ok(key) => key,
         };
 
-        Ok(TokenValidator::new(
-            key,
-            self.algorithm,
-            self.issuer_url.clone(),
-        ))
+        Ok(TokenValidator::new(key, algorithm, issuer_url.to_string()))
     }
 
     // See https://tools.ietf.org/html/rfc7518#section-6
@@ -309,6 +323,55 @@ impl<'a> Constructor<'a> {
 
     fn encode_bignum(num: &BigNumRef) -> String {
         general_purpose::URL_SAFE_NO_PAD.encode(num.to_vec())
+    }
+}
+
+impl<'a> tiny_auth_api::Constructor<'a> for Constructor<'a> {
+    fn endpoint(&self) -> &'a str {
+        self.config.api.endpoint.as_str()
+    }
+
+    fn change_password_handler(&self) -> Handler {
+        Handler::new(self.authenticator.clone(), self.token_validator.clone())
+    }
+}
+
+impl<'a> http::Constructor<'a> for Constructor<'a> {
+    fn get_template_engine(&self) -> Option<Tera> {
+        self.get_template_engine()
+    }
+    fn get_public_key(&self) -> TokenCertificate {
+        self.get_public_key()
+    }
+    fn build_token_creator(&self) -> Result<TokenCreator, Error> {
+        self.build_token_creator()
+    }
+    fn token_validator(&self) -> Arc<TokenValidator> {
+        self.token_validator.clone()
+    }
+    fn user_store(&self) -> Arc<dyn UserStore> {
+        self.user_store.clone()
+    }
+    fn get_client_store(&self) -> Option<Arc<dyn ClientStore>> {
+        self.get_client_store()
+    }
+    fn get_scope_store(&self) -> Option<Arc<dyn ScopeStore>> {
+        self.get_scope_store()
+    }
+    fn build_auth_code_store(&self) -> Option<Arc<dyn AuthorizationCodeStore>> {
+        self.build_auth_code_store()
+    }
+    fn authenticator(&self) -> Arc<Authenticator> {
+        self.authenticator.clone()
+    }
+    fn get_issuer_config(&self) -> IssuerConfiguration {
+        self.get_issuer_config()
+    }
+    fn build_jwks(&self) -> Result<Jwks, Error> {
+        self.build_jwks()
+    }
+    fn build_cors_lister(&self) -> Result<Arc<dyn CorsLister>, Error> {
+        self.build_cors_lister()
     }
 }
 
@@ -401,7 +464,7 @@ pub mod tests {
     pub fn build_test_authenticator() -> Data<Authenticator> {
         Data::new(Authenticator::new(
             test_fixtures::build_test_user_store(),
-            build_test_rate_limiter(),
+            Arc::new(build_test_rate_limiter()),
             "pepper",
         ))
     }

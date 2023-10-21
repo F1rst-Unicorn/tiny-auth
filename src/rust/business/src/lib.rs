@@ -16,6 +16,7 @@
  */
 
 pub mod authenticator;
+pub mod change_password;
 pub mod client;
 pub mod cors;
 pub mod issuer_configuration;
@@ -28,4 +29,3 @@ pub mod scope;
 pub mod store;
 pub mod token;
 pub mod user;
-pub mod change_password;

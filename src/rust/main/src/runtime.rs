@@ -24,8 +24,6 @@ use crate::terminate::terminator;
 use openssl::error::ErrorStack;
 
 use actix_web::dev::ServerHandle;
-use std::convert::From;
-use std::fmt::Display;
 
 use log::error;
 
@@ -33,50 +31,25 @@ use tokio::sync::oneshot;
 use tokio::sync::oneshot::{Receiver, Sender};
 use tokio::task::JoinHandle;
 
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("Error: See above")]
     LoggedBeforeError,
 
-    StdIoError(std::io::Error),
-    JwtError(jsonwebtoken::errors::Error),
-    TeraError(tera::Error),
-    OpensslError(ErrorStack),
-}
+    #[error("Config error: {0}")]
+    ConfigError(String),
 
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::LoggedBeforeError => write!(f, "Error: See above"),
-            Self::StdIoError(e) => write!(f, "IO error: {}", e),
-            Self::JwtError(e) => write!(f, "JWT error: {}", e),
-            Self::TeraError(e) => write!(f, "Template error: {}", e),
-            Self::OpensslError(e) => write!(f, "Crypto error: {}", e),
-        }
-    }
-}
+    #[error("IO error")]
+    StdIoError(#[from] std::io::Error),
 
-impl From<std::io::Error> for Error {
-    fn from(error: std::io::Error) -> Self {
-        Self::StdIoError(error)
-    }
-}
+    #[error("JWT error")]
+    JwtError(#[from] jsonwebtoken::errors::Error),
 
-impl From<ErrorStack> for Error {
-    fn from(error: ErrorStack) -> Self {
-        Self::OpensslError(error)
-    }
-}
+    #[error("Template error")]
+    TeraError(#[from] tera::Error),
 
-impl From<jsonwebtoken::errors::Error> for Error {
-    fn from(error: jsonwebtoken::errors::Error) -> Self {
-        Self::JwtError(error)
-    }
-}
-
-impl From<tera::Error> for Error {
-    fn from(error: tera::Error) -> Self {
-        Self::TeraError(error)
-    }
+    #[error("Crypto error")]
+    OpensslError(#[from] ErrorStack),
 }
 
 pub fn run(config: Config) -> Result<(), Error> {
@@ -93,32 +66,36 @@ pub fn run(config: Config) -> Result<(), Error> {
             .unwrap()
     });
     actor_system.block_on(async move {
+        let constructor = http::state::Constructor::new(&config)?;
+
         let (pass_server, receive_server) = oneshot::channel();
-        let api_join_handle =
-            match tiny_auth_api::start(&config.api.endpoint, &config.crypto.pepper).await {
-                Err(e) => {
-                    error!("GRPC API startup failed: {}", e);
-                    return;
-                }
-                Ok(v) => v,
-            };
+        let api_join_handle = match tiny_auth_api::start(&constructor).await {
+            Err(e) => {
+                error!("GRPC API startup failed: {}", e);
+                return Ok::<(), Error>(());
+            }
+            Ok(v) => v,
+        };
         tokio::spawn(runtime_primitives(receive_server, api_join_handle));
 
-        let srv = match http::build(config) {
+        let srv = match http::build(&config, &constructor) {
             Err(e) => {
                 error!("Startup failed: {}", e);
-                return;
+                return Ok(());
             }
             Ok(srv) => srv,
         };
+        drop(constructor);
         if pass_server.send(srv.handle()).is_err() {
             error!("Failed to create server");
-            return;
+            return Ok(());
         }
         if let Err(e) = srv.await {
             error!("HTTP server failed: {}", e);
         }
-    });
+
+        Ok(())
+    })?;
     Ok(())
 }
 

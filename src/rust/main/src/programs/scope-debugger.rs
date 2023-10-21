@@ -31,6 +31,7 @@ use log4rs::encode::pattern::PatternEncoder;
 use tiny_auth_business::token::Token;
 use tiny_auth_main::config::parser::parse_config;
 use tiny_auth_main::http::state;
+use tiny_auth_main::http::Constructor;
 pub const FLAG_VERBOSE: &str = "verbose";
 pub const FLAG_CONFIG: &str = "config";
 pub const FLAG_USER: &str = "user";
@@ -60,13 +61,7 @@ fn main() {
         Ok(v) => v,
     };
 
-    let store = match di.get_user_store() {
-        None => {
-            error!("Failed to read users");
-            return;
-        }
-        Some(v) => v,
-    };
+    let store = di.user_store();
 
     let user = match store.get(
         args.get_one::<String>(FLAG_USER)

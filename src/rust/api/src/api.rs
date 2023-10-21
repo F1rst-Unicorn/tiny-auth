@@ -16,16 +16,16 @@
  */
 
 use crate::auth;
+use crate::tiny_auth_proto::password_change_response::HashedPassword;
 use crate::tiny_auth_proto::tiny_auth_api_server::TinyAuthApi;
-use crate::tiny_auth_proto::{HashedPasswordPbkdf2HmacSha256, PasswordChangeRequest};
 use crate::tiny_auth_proto::PasswordChangeResponse;
+use crate::tiny_auth_proto::{HashedPasswordPbkdf2HmacSha256, PasswordChangeRequest};
 use async_trait::async_trait;
-use tonic::Request;
-use tonic::Response;
-use tiny_auth_business::password::Password;
 use log::debug;
 use log::error;
-use crate::tiny_auth_proto::password_change_response::HashedPassword;
+use tiny_auth_business::password::Password;
+use tonic::Request;
+use tonic::Response;
 
 pub(crate) struct TinyAuthApiImpl {
     pub(crate) change_password: tiny_auth_business::change_password::Handler,
@@ -44,7 +44,15 @@ impl TinyAuthApi for TinyAuthApiImpl {
             Some(v) => v,
         };
 
-        match self.change_password.handle(&request.into_inner().current_password, &request.into_inner().new_password, token).await {
+        match self
+            .change_password
+            .handle(
+                &request.get_ref().current_password,
+                &request.get_ref().new_password,
+                token,
+            )
+            .await
+        {
             Err(e) => {
                 debug!("changing password failed: {}", e);
                 Err(tonic::Status::permission_denied("permission denied"))
@@ -53,15 +61,15 @@ impl TinyAuthApi for TinyAuthApiImpl {
                 credential,
                 iterations,
                 salt,
-               }) => {
+            }) => {
                 let response = PasswordChangeResponse {
                     hashed_password: Some(HashedPassword::Pbkdf2HmacSha256(
                         HashedPasswordPbkdf2HmacSha256 {
                             credential,
                             iterations: iterations.get(),
-                            salt
-                        }
-                    ))
+                            salt,
+                        },
+                    )),
                 };
                 Ok(Response::new(response))
             }

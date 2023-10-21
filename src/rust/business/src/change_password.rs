@@ -15,10 +15,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
 use crate::authenticator::Authenticator;
 use crate::password::Password;
 use crate::token::{Token, TokenValidator};
+use std::sync::Arc;
 
 pub struct Handler {
     pub(crate) authenticator: Arc<Authenticator>,
@@ -34,8 +34,11 @@ pub enum Error {
 }
 
 impl Handler {
-    pub(crate) fn new(authenticator: Arc<Authenticator>, token_validator: Arc<TokenValidator>) -> Self {
-        Self { authenticator, token_validator }
+    pub fn new(authenticator: Arc<Authenticator>, token_validator: Arc<TokenValidator>) -> Self {
+        Self {
+            authenticator,
+            token_validator,
+        }
     }
 
     pub async fn handle(
@@ -44,8 +47,15 @@ impl Handler {
         new_password: &str,
         token: &str,
     ) -> Result<Password, Error> {
-        let token = self.token_validator.validate::<Token>(token).ok_or(Error::TokenAuthentication)?;
-        self.authenticator.authenticate_user(&token.subject, current_password).await?;
-        Ok(self.authenticator.construct_password(&token.subject, new_password))
+        let token = self
+            .token_validator
+            .validate::<Token>(token)
+            .ok_or(Error::TokenAuthentication)?;
+        self.authenticator
+            .authenticate_user(&token.subject, current_password)
+            .await?;
+        Ok(self
+            .authenticator
+            .construct_password(&token.subject, new_password))
     }
 }
