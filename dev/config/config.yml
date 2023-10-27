@@ -38,6 +38,9 @@ web:
     - http://correct.example
     - http://localhost:5173
     - http://localhost:34344
+    - https://correct.example
+    - https://localhost:5173
+    - https://localhost:34344
   session timeout: 60000
   secret key: 6nwYoK0L9J5ADFQE74CkkuLmTGMSd1skxHso9XwZNbsCbVmLIVH6L2aBIi2veuia3aQ3fnBzfwwlIuzCmWTEjAcc
   tls:

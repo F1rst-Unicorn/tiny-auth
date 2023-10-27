@@ -30,6 +30,10 @@ redirect_uris:
   - http://localhost:34344/
   - http://localhost:34344/oidc-login-redirect
   - http://localhost:34344/oidc-login-redirect-silent
+  - https://localhost:34344
+  - https://localhost:34344/
+  - https://localhost:34344/oidc-login-redirect
+  - https://localhost:34344/oidc-login-redirect-silent
 
 allowed_scopes:
   - email

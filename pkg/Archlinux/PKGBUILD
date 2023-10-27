@@ -10,6 +10,7 @@ depends=('gcc-libs' 'systemd' 'openssl')
 makedepends=('rust' 'gcc' 'pkgconf' 'npm')
 backup=("etc/${pkgname}/config.yml"
         "etc/${pkgname}/log4rs.yml"
+        "etc/${pkgname}/store/clients/tiny-auth-frontend.yml"
         "etc/${pkgname}/store/scopes/address.yml"
         "etc/${pkgname}/store/scopes/email.yml"
         "etc/${pkgname}/store/scopes/openid.yml"
