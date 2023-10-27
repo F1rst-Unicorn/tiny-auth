@@ -20,6 +20,7 @@ mod auth;
 
 use crate::api::TinyAuthApiImpl;
 use crate::tiny_auth_proto::tiny_auth_api_server::TinyAuthApiServer;
+use log::error;
 use log::info;
 use log::warn;
 use tiny_auth_business::change_password::Handler;
@@ -28,7 +29,10 @@ use tokio::sync::oneshot::channel;
 use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::TcpListenerStream;
+use tonic::transport::Certificate;
+use tonic::transport::Identity;
 use tonic::transport::Server;
+use tonic::transport::ServerTlsConfig;
 
 pub(crate) mod tiny_auth_proto {
     // https://github.com/hyperium/tonic/issues/1056
@@ -43,10 +47,15 @@ pub(crate) mod tiny_auth_proto {
 pub enum Error {
     #[error("io error")]
     IoError(#[from] std::io::Error),
+    #[error("grpc api error")]
+    TonicError(#[from] tonic::transport::Error),
 }
 
 pub trait Constructor<'a> {
     fn endpoint(&self) -> &'a str;
+    fn tls_key(&self) -> Option<String>;
+    fn tls_cert(&self) -> Option<String>;
+    fn tls_client_ca(&self) -> Option<String>;
     fn change_password_handler(&self) -> Handler;
 }
 
@@ -59,12 +68,25 @@ pub async fn start(
     let listener = TcpListener::bind(constructor.endpoint()).await?;
     let (tx, rx) = channel::<()>();
 
+    let identity = constructor
+        .tls_cert()
+        .zip(constructor.tls_key())
+        .map(|(cert, key)| Identity::from_pem(cert, key));
+
+    let client_ca = constructor.tls_client_ca().map(Certificate::from_pem);
+
+    let mut server = Server::builder();
+    if let Some(tls_config) = get_server_tls_config(identity, client_ca) {
+        server = server.tls_config(tls_config)?;
+    }
+
     let join_handle = tokio::spawn(async move {
         let reflection_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(tiny_auth_proto::FILE_DESCRIPTOR_SET)
             .build()
             .unwrap();
-        let server = Server::builder()
+
+        let server = server
             .accept_http1(true)
             .add_service(tonic_web::enable(reflection_service))
             .add_service(tonic_web::enable(TinyAuthApiServer::new(api)))
@@ -84,4 +106,21 @@ pub async fn start(
     });
 
     Ok((tx, join_handle))
+}
+
+fn get_server_tls_config(
+    identity: Option<Identity>,
+    client_ca: Option<Certificate>,
+) -> Option<ServerTlsConfig> {
+    match identity {
+        None => None,
+        Some(identity) => {
+            let mut result = ServerTlsConfig::new();
+            result = result.identity(identity);
+            if let Some(client_ca) = client_ca {
+                result = result.client_ca_root(client_ca);
+            }
+            Some(result)
+        }
+    }
 }

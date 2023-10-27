@@ -50,4 +50,3 @@ web:
 
 api:
   endpoint: localhost:8089
-  web endpoint: localhost:8090

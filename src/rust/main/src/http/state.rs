@@ -76,6 +76,12 @@ pub struct Constructor<'a> {
     token_validator: Arc<TokenValidator>,
 
     authenticator: Arc<Authenticator>,
+
+    tls_cert: Option<String>,
+
+    tls_key: Option<String>,
+
+    client_ca: Option<String>,
 }
 
 impl<'a> Constructor<'a> {
@@ -101,6 +107,17 @@ impl<'a> Constructor<'a> {
             rate_limiter.clone(),
             &config.crypto.pepper,
         );
+        let (tls_cert, tls_key, client_ca) = match &config.web.tls {
+            None => (None, None, None),
+            Some(tls) => (
+                Some(read_file(&tls.certificate)?),
+                Some(read_file(&tls.key)?),
+                match tls.client_ca.as_ref().map(read_file) {
+                    None => None,
+                    Some(v) => Some(v?),
+                },
+            ),
+        };
 
         Ok(Self {
             config,
@@ -114,6 +131,9 @@ impl<'a> Constructor<'a> {
             jwk,
             token_validator,
             authenticator,
+            tls_cert,
+            tls_key,
+            client_ca,
         })
     }
 
@@ -331,6 +351,18 @@ impl<'a> tiny_auth_api::Constructor<'a> for Constructor<'a> {
         self.config.api.endpoint.as_str()
     }
 
+    fn tls_key(&self) -> Option<String> {
+        self.tls_key.clone()
+    }
+
+    fn tls_cert(&self) -> Option<String> {
+        self.tls_cert.clone()
+    }
+
+    fn tls_client_ca(&self) -> Option<String> {
+        self.client_ca.clone()
+    }
+
     fn change_password_handler(&self) -> Handler {
         Handler::new(self.authenticator.clone(), self.token_validator.clone())
     }
@@ -372,6 +404,18 @@ impl<'a> http::Constructor<'a> for Constructor<'a> {
     }
     fn build_cors_lister(&self) -> Result<Arc<dyn CorsLister>, Error> {
         self.build_cors_lister()
+    }
+
+    fn tls_key(&self) -> Option<String> {
+        self.tls_key.clone()
+    }
+
+    fn tls_cert(&self) -> Option<String> {
+        self.tls_cert.clone()
+    }
+
+    fn tls_client_ca(&self) -> Option<String> {
+        self.client_ca.clone()
     }
 }
 

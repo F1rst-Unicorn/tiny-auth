@@ -57,7 +57,6 @@ use rustls::ServerConfig;
 use rustls::SupportedProtocolVersion;
 use rustls_pemfile::certs;
 use rustls_pemfile::pkcs8_private_keys;
-use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
 use tiny_auth_business::authenticator::Authenticator;
@@ -87,6 +86,9 @@ pub trait Constructor<'a> {
     fn get_issuer_config(&self) -> IssuerConfiguration;
     fn build_jwks(&self) -> Result<Jwks, Error>;
     fn build_cors_lister(&self) -> Result<Arc<dyn CorsLister>, Error>;
+    fn tls_key(&self) -> Option<String>;
+    fn tls_cert(&self) -> Option<String>;
+    fn tls_client_ca(&self) -> Option<String>;
 }
 
 pub fn build<'a>(config: &Config, constructor: &impl Constructor<'a>) -> Result<Server, Error> {
@@ -268,7 +270,7 @@ pub fn build<'a>(config: &Config, constructor: &impl Constructor<'a>) -> Result<
     .shutdown_timeout(30);
 
     let server = if let Some(tls) = tls {
-        let tls_config = configure_tls(&tls)?;
+        let tls_config = configure_tls(&tls, constructor)?;
         server.bind_rustls(&bind, tls_config)
     } else {
         server.bind(&bind)
@@ -288,14 +290,21 @@ pub fn build<'a>(config: &Config, constructor: &impl Constructor<'a>) -> Result<
     Ok(srv)
 }
 
-fn configure_tls(config: &Tls) -> Result<ServerConfig, Error> {
-    let client_cert_verifier = build_client_verifier(&config)?;
-    let server_certificate_chain = certs(&mut BufReader::new(File::open(&config.certificate)?))?
-        .into_iter()
-        .map(Certificate)
-        .collect();
+fn configure_tls<'a>(
+    config: &Tls,
+    constructor: &impl Constructor<'a>,
+) -> Result<ServerConfig, Error> {
+    let client_cert_verifier = build_client_verifier(constructor)?;
+    let server_certificate_chain = certs(&mut BufReader::new(
+        constructor.tls_cert().expect("checked before").as_bytes(),
+    ))?
+    .into_iter()
+    .map(Certificate)
+    .collect();
 
-    let key = match pkcs8_private_keys(&mut BufReader::new(File::open(&config.key)?)) {
+    let key = match pkcs8_private_keys(&mut BufReader::new(
+        constructor.tls_key().expect("checked before").as_bytes(),
+    )) {
         Err(_) => {
             error!("could not read tls key file");
             return Err(LoggedBeforeError);
@@ -334,10 +343,12 @@ fn configure_tls(config: &Tls) -> Result<ServerConfig, Error> {
         })
 }
 
-fn build_client_verifier(config: &&Tls) -> Result<Arc<dyn ClientCertVerifier>, Error> {
-    let client_cert_verifier = if let Some(client_ca) = &config.client_ca {
+fn build_client_verifier<'a>(
+    constructor: &impl Constructor<'a>,
+) -> Result<Arc<dyn ClientCertVerifier>, Error> {
+    let client_cert_verifier = if let Some(client_ca) = &constructor.tls_client_ca() {
         let mut ca_store = RootCertStore::empty();
-        certs(&mut BufReader::new(File::open(client_ca)?))?
+        certs(&mut BufReader::new(client_ca.as_bytes()))?
             .into_iter()
             .map(Certificate)
             .map(|cert| ca_store.add(&cert))

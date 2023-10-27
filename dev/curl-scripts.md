@@ -29,15 +29,26 @@ curl --request POST \
 ## Reflection
 
 ```bash
-grpc_cli ls localhost:8089
-grpc_cli ls localhost:8089 api.TinyAuthApi -l
+grpcurl \
+    -key test/src/test/resources/keys/client-key.pem \
+    -cert test/src/test/resources/keys/client-cert.pem \
+    -cacert test/src/test/resources/keys/ca.pem \
+    localhost:8089 list
+grpcurl \
+    -key test/src/test/resources/keys/client-key.pem \
+    -cert test/src/test/resources/keys/client-cert.pem \
+    -cacert test/src/test/resources/keys/ca.pem \
+    localhost:8089 describe api.TinyAuthApi
 ```
 
 ## Change Password
 
 ```bash
-grpc_cli call localhost:8089 api.TinyAuthApi.ChangePassword \
-        "new_password: 'test', current_password: 'password'" \
-        --proto_path=src/proto/ \
-        --metadata 'x-authorization:Bearer <access token>'
+grpcurl \
+    -key test/src/test/resources/keys/client-key.pem \
+    -cert test/src/test/resources/keys/client-cert.pem \
+    -cacert test/src/test/resources/keys/ca.pem \
+    -d '{"new_password": "test", "current_password": "password"}' \
+    -H 'x-authorization:Bearer <access token>' \
+    localhost:8089 api.TinyAuthApi/ChangePassword
 ```
