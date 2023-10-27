@@ -155,9 +155,6 @@ pub struct Host {
 pub struct Api {
     #[serde(alias = "endpoint")]
     pub endpoint: String,
-
-    #[serde(alias = "web endpoint")]
-    pub web_endpoint: String,
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]

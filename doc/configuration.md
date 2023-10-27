@@ -85,10 +85,6 @@ Options for the gRPC API used by the web frontend.
 
 Host and port of the API.
 
-#### `web endpoint`
-
-Host and port of the API for gRPC Web.
-
 ### `crypto`
 
 Configuration of cryptographic material used for secure operation.
