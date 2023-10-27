@@ -77,6 +77,18 @@ Optional. Number of HTTP workers dispatching incoming requests.
 
 See [`tls.md`](tls.md) for details.
 
+### `api`
+
+Options for the gRPC API used by the web frontend.
+
+#### `endpoint`
+
+Host and port of the API.
+
+#### `web endpoint`
+
+Host and port of the API for gRPC Web.
+
 ### `crypto`
 
 Configuration of cryptographic material used for secure operation.
