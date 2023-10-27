@@ -15,6 +15,7 @@ tiny_auth_business = { path = "../business" }
 
 tonic.workspace = true
 tonic-reflection.workspace = true
+tonic-web.workspace = true
 prost.workspace = true
 log.workspace = true
 async-trait.workspace = true

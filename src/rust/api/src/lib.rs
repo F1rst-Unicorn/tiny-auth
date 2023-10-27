@@ -65,8 +65,9 @@ pub async fn start(
             .build()
             .unwrap();
         let server = Server::builder()
-            .add_service(reflection_service)
-            .add_service(TinyAuthApiServer::new(api))
+            .accept_http1(true)
+            .add_service(tonic_web::enable(reflection_service))
+            .add_service(tonic_web::enable(TinyAuthApiServer::new(api)))
             .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async move {
                 match rx.await {
                     Err(e) => warn!("terminating grpc api due to error: {}", e),

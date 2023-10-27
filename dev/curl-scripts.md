@@ -26,6 +26,13 @@ curl --request POST \
 
 # GRPC
 
+## Reflection
+
+```bash
+grpc_cli ls localhost:8089
+grpc_cli ls localhost:8089 api.TinyAuthApi -l
+```
+
 ## Change Password
 
 ```bash
