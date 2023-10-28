@@ -15,15 +15,15 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::tera::load_template_engine;
 use crate::config::Config;
 use crate::config::Store;
-use crate::http;
-use crate::http::TokenCertificate;
+use crate::config::TlsVersion;
 use crate::runtime::Error;
-use crate::runtime::Error::{ConfigError, LoggedBeforeError};
+use crate::runtime::Error::ConfigError;
+use crate::runtime::Error::LoggedBeforeError;
 use crate::store::file::*;
 use crate::util::read_file;
+use actix_web::cookie::SameSite;
 use base64::engine::general_purpose;
 use base64::engine::general_purpose::STANDARD;
 use base64::engine::Engine;
@@ -39,6 +39,7 @@ use openssl::ec::EcKey;
 use openssl::hash::Hasher;
 use openssl::hash::MessageDigest;
 use openssl::rsa::Rsa;
+use rustls::SupportedProtocolVersion;
 use std::sync::Arc;
 use tera::Tera;
 use tiny_auth_business::authenticator::Authenticator;
@@ -53,6 +54,8 @@ use tiny_auth_business::store::memory::*;
 use tiny_auth_business::store::*;
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
+use tiny_auth_web::endpoints::cert::TokenCertificate;
+use tiny_auth_web::tera::load_template_engine;
 
 pub struct Constructor<'a> {
     config: &'a Config,
@@ -259,12 +262,12 @@ impl<'a> Constructor<'a> {
         }
     }
 
-    pub fn build_token_creator(&self) -> Result<TokenCreator, Error> {
-        Ok(TokenCreator::new(
+    pub fn build_token_creator(&self) -> TokenCreator {
+        TokenCreator::new(
             self.encoding_key.clone(),
             self.issuer_configuration.clone(),
             self.jwk.clone(),
-        ))
+        )
     }
 
     pub fn build_token_validator(
@@ -333,16 +336,20 @@ impl<'a> Constructor<'a> {
         Ok(jwk)
     }
 
-    pub fn build_jwks(&self) -> Result<Jwks, Error> {
-        Ok(Jwks::with_keys(vec![self.jwk.clone()]))
+    pub fn build_jwks(&self) -> Jwks {
+        Jwks::with_keys(vec![self.jwk.clone()])
     }
 
-    pub fn build_cors_lister(&self) -> Result<Arc<dyn CorsLister>, Error> {
-        Ok(Arc::new(CorsListerImpl::new(self.config.web.cors.clone())))
+    pub fn build_cors_lister(&self) -> Arc<dyn CorsLister> {
+        Arc::new(CorsListerImpl::new(self.config.web.cors.clone()))
     }
 
     fn encode_bignum(num: &BigNumRef) -> String {
         general_purpose::URL_SAFE_NO_PAD.encode(num.to_vec())
+    }
+
+    pub fn user_store(&self) -> Arc<dyn UserStore> {
+        self.user_store.clone()
     }
 }
 
@@ -368,14 +375,14 @@ impl<'a> tiny_auth_api::Constructor<'a> for Constructor<'a> {
     }
 }
 
-impl<'a> http::Constructor<'a> for Constructor<'a> {
+impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
     fn get_template_engine(&self) -> Option<Tera> {
         self.get_template_engine()
     }
     fn get_public_key(&self) -> TokenCertificate {
         self.get_public_key()
     }
-    fn build_token_creator(&self) -> Result<TokenCreator, Error> {
+    fn build_token_creator(&self) -> TokenCreator {
         self.build_token_creator()
     }
     fn token_validator(&self) -> Arc<TokenValidator> {
@@ -399,10 +406,10 @@ impl<'a> http::Constructor<'a> for Constructor<'a> {
     fn get_issuer_config(&self) -> IssuerConfiguration {
         self.get_issuer_config()
     }
-    fn build_jwks(&self) -> Result<Jwks, Error> {
+    fn build_jwks(&self) -> Jwks {
         self.build_jwks()
     }
-    fn build_cors_lister(&self) -> Result<Arc<dyn CorsLister>, Error> {
+    fn build_cors_lister(&self) -> Arc<dyn CorsLister> {
         self.build_cors_lister()
     }
 
@@ -417,13 +424,68 @@ impl<'a> http::Constructor<'a> for Constructor<'a> {
     fn tls_client_ca(&self) -> Option<String> {
         self.client_ca.clone()
     }
+
+    fn tls_versions(&self) -> Vec<&'static SupportedProtocolVersion> {
+        self.config
+            .web
+            .tls
+            .as_ref()
+            .map(|v| {
+                v.versions
+                    .clone()
+                    .into_iter()
+                    .map(TlsVersion::into)
+                    .collect::<Vec<&SupportedProtocolVersion>>()
+            })
+            .unwrap_or_default()
+    }
+
+    fn bind(&self) -> String {
+        self.config.web.bind.clone()
+    }
+
+    fn workers(&self) -> Option<usize> {
+        self.config.web.workers
+    }
+
+    fn tls_enabled(&self) -> bool {
+        self.config.web.tls.is_some()
+    }
+
+    fn web_path(&self) -> String {
+        self.config.web.path.clone().expect("no default given")
+    }
+
+    fn static_files(&self) -> String {
+        self.config.web.static_files.clone()
+    }
+
+    fn session_timeout(&self) -> i64 {
+        self.config.web.session_timeout.expect("no default given")
+    }
+
+    fn session_same_site_policy(&self) -> SameSite {
+        self.config.web.session_same_site_policy.into()
+    }
+
+    fn public_domain(&self) -> String {
+        self.config.web.public_host.domain.clone()
+    }
+
+    fn secret_key(&self) -> String {
+        self.config.web.secret_key.clone()
+    }
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
-
-    use super::super::tera::load_template_engine;
+    use actix_web::web::Data;
+    use jsonwebtoken::Algorithm;
+    use jsonwebtoken::DecodingKey;
+    use jsonwebtoken::EncodingKey;
+    use std::sync::Arc;
+    use tera::Tera;
     use tiny_auth_business::authenticator::Authenticator;
     use tiny_auth_business::issuer_configuration::IssuerConfiguration;
     use tiny_auth_business::jwk::Jwk;
@@ -433,16 +495,7 @@ pub mod tests {
     use tiny_auth_business::store::UserStore;
     use tiny_auth_business::token::TokenCreator;
     use tiny_auth_business::token::TokenValidator;
-
-    use std::sync::Arc;
-
-    use actix_web::web::Data;
-
-    use jsonwebtoken::Algorithm;
-    use jsonwebtoken::DecodingKey;
-    use jsonwebtoken::EncodingKey;
-
-    use tera::Tera;
+    use tiny_auth_web::tera::load_template_engine;
 
     pub fn build_test_token_creator() -> Data<TokenCreator> {
         Data::new(TokenCreator::new(

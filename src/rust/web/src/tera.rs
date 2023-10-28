@@ -27,15 +27,7 @@ use log::error;
 
 pub fn load_template_engine(static_files_root: &str, http_path: &str) -> Result<Tera> {
     let template_path = static_files_root.to_string() + "/templates/";
-
-    let mut tera = match Tera::new(&(template_path + "**/*")) {
-        Ok(t) => t,
-        Err(e) => {
-            error!("Parsing error(s): {}", e);
-            return Err(e);
-        }
-    };
-
+    let mut tera = Tera::new(&(template_path + "**/*"))?;
     tera.register_function("url", url_mapper);
     tera.register_function("translate", translator);
     tera.register_function("static", make_static_mapper(http_path.to_string()));

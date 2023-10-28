@@ -15,17 +15,17 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::http::TokenCertificate;
-use tiny_auth_business::cors::CorsLister;
-use tiny_auth_web::cors::render_invalid_request;
-use tiny_auth_web::cors::CorsCheckResult;
-use tiny_auth_web::cors::CorsChecker;
-
-use std::sync::Arc;
-
+use crate::cors::render_invalid_request;
+use crate::cors::CorsCheckResult;
+use crate::cors::CorsChecker;
 use actix_web::web::Data;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
+use std::sync::Arc;
+use tiny_auth_business::cors::CorsLister;
+
+#[derive(Clone)]
+pub struct TokenCertificate(pub String);
 
 pub async fn get(
     request: HttpRequest,

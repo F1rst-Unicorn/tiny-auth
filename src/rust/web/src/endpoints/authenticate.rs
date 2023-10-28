@@ -19,31 +19,25 @@ use super::deserialise_empty_as_none;
 use super::parse_prompt;
 use super::render_template;
 use super::server_error;
-use crate::http::endpoints::authorize;
-use crate::http::endpoints::parse_first_request;
-use crate::http::endpoints::render_template_with_context;
+use crate::endpoints::authorize;
+use crate::endpoints::parse_first_request;
+use crate::endpoints::render_template_with_context;
+use actix_session::Session;
+use actix_web::http::StatusCode;
+use actix_web::web;
+use actix_web::HttpResponse;
+use chrono::Local;
+use log::debug;
+use log::error;
+use log::warn;
+use serde_derive::Deserialize;
+use serde_derive::Serialize;
+use tera::Context;
+use tera::Tera;
 use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::authenticator::Error;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
-
-use actix_web::http::StatusCode;
-use actix_web::web;
-use actix_web::HttpResponse;
-
-use actix_session::Session;
-
-use chrono::Local;
-
-use tera::Context;
-use tera::Tera;
-
-use log::debug;
-use log::error;
-use log::warn;
-
-use serde_derive::Deserialize;
-use serde_derive::Serialize;
 
 pub const SESSION_KEY: &str = "b";
 pub const AUTH_TIME_SESSION_KEY: &str = "t";
@@ -343,15 +337,14 @@ mod tests {
     use super::super::generate_csrf_token;
     use super::super::CSRF_SESSION_KEY;
     use super::*;
-    use crate::http::state::tests::build_test_authenticator;
-    use crate::http::state::tests::build_test_tera;
-    use tiny_auth_business::store::test_fixtures::UNKNOWN_USER;
-    use tiny_auth_business::store::test_fixtures::USER;
-
+    use crate::endpoints::tests::build_test_authenticator;
+    use crate::endpoints::tests::build_test_tera;
     use actix_session::SessionExt;
     use actix_web::http;
     use actix_web::test;
     use actix_web::web::Form;
+    use tiny_auth_business::store::test_fixtures::UNKNOWN_USER;
+    use tiny_auth_business::store::test_fixtures::USER;
     use url::Url;
 
     #[actix_rt::test]

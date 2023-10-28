@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::http::endpoints::render_template_with_context;
+use crate::endpoints::render_template_with_context;
 use actix_web::http::StatusCode;
 use actix_web::web::Data;
 use actix_web::HttpResponse;

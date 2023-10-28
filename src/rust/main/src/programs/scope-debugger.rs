@@ -30,8 +30,8 @@ use log4rs::config::Root;
 use log4rs::encode::pattern::PatternEncoder;
 use tiny_auth_business::token::Token;
 use tiny_auth_main::config::parser::parse_config;
-use tiny_auth_main::http::state;
-use tiny_auth_main::http::Constructor;
+use tiny_auth_main::constructor::Constructor;
+
 pub const FLAG_VERBOSE: &str = "verbose";
 pub const FLAG_CONFIG: &str = "config";
 pub const FLAG_USER: &str = "user";
@@ -53,7 +53,7 @@ fn main() {
     debug!("Parsing config");
     let config = parse_config(config_path);
 
-    let di = match state::Constructor::new(&config) {
+    let di = match Constructor::new(&config) {
         Err(e) => {
             error!("Failed to read config: {}", e);
             return;

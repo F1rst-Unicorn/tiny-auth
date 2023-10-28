@@ -17,7 +17,7 @@
 
 pub mod cli_parser;
 pub mod config;
-pub mod http;
+pub mod constructor;
 pub mod logging;
 pub mod runtime;
 mod store;

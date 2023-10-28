@@ -25,6 +25,7 @@ pub mod token;
 pub mod userinfo;
 pub mod webapp_root;
 
+use crate::cors::CorsCheckResult;
 use actix_session::Session;
 use actix_web::http::header::HeaderValue;
 use actix_web::http::StatusCode;
@@ -49,7 +50,6 @@ use tiny_auth_business::oidc::Prompt;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::scope::render_tera_error;
 use tiny_auth_business::store::memory::generate_random_string;
-use tiny_auth_web::cors::CorsCheckResult;
 use url::Url;
 
 const CSRF_SESSION_KEY: &str = "c";
@@ -339,15 +339,16 @@ fn deserialise_empty_as_none<'de, D: Deserializer<'de>>(
 mod tests {
 
     use super::*;
-
+    use crate::tera::load_template_engine;
     use actix_session::SessionExt;
     use actix_web::body::to_bytes;
-
     use actix_web::test;
     use actix_web::web::BytesMut;
+    use actix_web::web::Data;
     use actix_web::HttpResponse;
     use serde::de::DeserializeOwned;
     use serde_derive::Deserialize;
+    use tiny_auth_business::authenticator::Authenticator;
 
     #[derive(Debug, Deserialize, Serialize)]
     struct Test {
@@ -417,5 +418,19 @@ mod tests {
             bytes.extend_from_slice(&item);
         }
         serde_json::from_slice::<T>(&bytes).expect("Failed to deserialize response")
+    }
+
+    pub fn build_test_tera() -> Data<Tera> {
+        Data::new(
+            load_template_engine(
+                &(env!("CARGO_MANIFEST_DIR").to_string() + "/../../static/"),
+                "",
+            )
+            .unwrap(),
+        )
+    }
+
+    pub fn build_test_authenticator() -> Data<Authenticator> {
+        Data::new(tiny_auth_business::test_fixtures::build_test_authenticator())
     }
 }

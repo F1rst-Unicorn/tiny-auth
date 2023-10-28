@@ -20,11 +20,28 @@ use super::parse_prompt;
 use super::parse_scope_names;
 use super::render_template;
 use super::server_error;
-use crate::http::endpoints::authenticate;
-use crate::http::endpoints::authorize;
-use crate::http::endpoints::parse_first_request;
-use crate::http::endpoints::render_redirect_error;
-use crate::http::endpoints::render_template_with_context;
+use crate::endpoints::authenticate;
+use crate::endpoints::authorize;
+use crate::endpoints::parse_first_request;
+use crate::endpoints::render_redirect_error;
+use crate::endpoints::render_template_with_context;
+use actix_session::Session;
+use actix_web::http::StatusCode;
+use actix_web::web;
+use actix_web::HttpResponse;
+use chrono::offset::Local;
+use chrono::Duration;
+use chrono::TimeZone;
+use log::debug;
+use log::warn;
+use serde_derive::Deserialize;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::iter::FromIterator;
+use std::sync::Arc;
+use tera::Context;
+use tera::Tera;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
 use tiny_auth_business::scope::ScopeDescription;
@@ -35,32 +52,7 @@ use tiny_auth_business::store::UserStore;
 use tiny_auth_business::token::RefreshToken;
 use tiny_auth_business::token::Token;
 use tiny_auth_business::token::TokenCreator;
-
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::iter::FromIterator;
-use std::sync::Arc;
-
-use actix_web::http::StatusCode;
-use actix_web::web;
-use actix_web::HttpResponse;
-
-use actix_session::Session;
-
 use url::Url;
-
-use tera::Context;
-use tera::Tera;
-
-use chrono::offset::Local;
-use chrono::Duration;
-use chrono::TimeZone;
-
-use log::debug;
-use log::warn;
-
-use serde_derive::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Request {
@@ -394,19 +386,19 @@ mod tests {
     use super::super::generate_csrf_token;
     use super::super::CSRF_SESSION_KEY;
     use super::*;
-    use crate::http::state::tests::build_test_auth_code_store;
-    use crate::http::state::tests::build_test_client_store;
-    use crate::http::state::tests::build_test_scope_store;
-    use crate::http::state::tests::build_test_tera;
-    use crate::http::state::tests::build_test_token_creator;
-    use crate::http::state::tests::build_test_user_store;
-    use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
-    use tiny_auth_business::store::test_fixtures::USER;
-
+    use crate::endpoints::tests::build_test_tera;
     use actix_session::SessionExt;
     use actix_web::http;
     use actix_web::test;
+    use actix_web::web::Data;
     use actix_web::web::Form;
+    use tiny_auth_business::store::test_fixtures::build_test_auth_code_store;
+    use tiny_auth_business::store::test_fixtures::build_test_client_store;
+    use tiny_auth_business::store::test_fixtures::build_test_scope_store;
+    use tiny_auth_business::store::test_fixtures::build_test_user_store;
+    use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
+    use tiny_auth_business::store::test_fixtures::USER;
+    use tiny_auth_business::test_fixtures::build_test_token_creator;
 
     #[actix_rt::test]
     async fn empty_session_gives_error() {
@@ -416,11 +408,11 @@ mod tests {
         let resp = get(
             build_test_tera(),
             session,
-            build_test_scope_store(),
-            build_test_user_store(),
-            build_test_client_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
+            Data::new(build_test_scope_store()),
+            Data::new(build_test_user_store()),
+            Data::new(build_test_client_store()),
+            Data::new(build_test_auth_code_store()),
+            Data::new(build_test_token_creator()),
         )
         .await;
 
@@ -436,11 +428,11 @@ mod tests {
         let resp = get(
             build_test_tera(),
             session,
-            build_test_scope_store(),
-            build_test_user_store(),
-            build_test_client_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
+            Data::new(build_test_scope_store()),
+            Data::new(build_test_user_store()),
+            Data::new(build_test_client_store()),
+            Data::new(build_test_auth_code_store()),
+            Data::new(build_test_token_creator()),
         )
         .await;
 
@@ -479,11 +471,11 @@ mod tests {
         let resp = get(
             build_test_tera(),
             session,
-            build_test_scope_store(),
-            build_test_user_store(),
-            build_test_client_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
+            Data::new(build_test_scope_store()),
+            Data::new(build_test_user_store()),
+            Data::new(build_test_client_store()),
+            Data::new(build_test_auth_code_store()),
+            Data::new(build_test_token_creator()),
         )
         .await;
 
@@ -505,11 +497,11 @@ mod tests {
             request,
             session,
             build_test_tera(),
-            build_test_client_store(),
-            build_test_user_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
-            build_test_scope_store(),
+            Data::new(build_test_client_store()),
+            Data::new(build_test_user_store()),
+            Data::new(build_test_auth_code_store()),
+            Data::new(build_test_token_creator()),
+            Data::new(build_test_scope_store()),
         )
         .await;
 
@@ -531,11 +523,11 @@ mod tests {
             request,
             session,
             build_test_tera(),
-            build_test_client_store(),
-            build_test_user_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
-            build_test_scope_store(),
+            Data::new(build_test_client_store()),
+            Data::new(build_test_user_store()),
+            Data::new(build_test_auth_code_store()),
+            Data::new(build_test_token_creator()),
+            Data::new(build_test_scope_store()),
         )
         .await;
 
@@ -561,11 +553,11 @@ mod tests {
             request,
             session,
             build_test_tera(),
-            build_test_client_store(),
-            build_test_user_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
-            build_test_scope_store(),
+            Data::new(build_test_client_store()),
+            Data::new(build_test_user_store()),
+            Data::new(build_test_auth_code_store()),
+            Data::new(build_test_token_creator()),
+            Data::new(build_test_scope_store()),
         )
         .await;
 
@@ -613,11 +605,11 @@ mod tests {
             request,
             session,
             build_test_tera(),
-            build_test_client_store(),
-            build_test_user_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
-            build_test_scope_store(),
+            Data::new(build_test_client_store()),
+            Data::new(build_test_user_store()),
+            Data::new(build_test_auth_code_store()),
+            Data::new(build_test_token_creator()),
+            Data::new(build_test_scope_store()),
         )
         .await;
 
@@ -683,11 +675,11 @@ mod tests {
             request,
             session,
             build_test_tera(),
-            build_test_client_store(),
-            build_test_user_store(),
-            build_test_auth_code_store(),
-            build_test_token_creator(),
-            build_test_scope_store(),
+            Data::new(build_test_client_store()),
+            Data::new(build_test_user_store()),
+            Data::new(build_test_auth_code_store()),
+            Data::new(build_test_token_creator()),
+            Data::new(build_test_scope_store()),
         )
         .await;
 

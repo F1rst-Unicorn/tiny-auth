@@ -15,24 +15,20 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
-
 use super::deserialise_empty_as_none;
 use super::parse_bearer_authorization;
-use tiny_auth_business::token::Token;
-use tiny_auth_business::token::TokenValidator;
-use tiny_auth_web::cors::render_invalid_request;
-use tiny_auth_web::cors::CorsCheckResult;
-use tiny_auth_web::cors::CorsChecker;
-
-use log::debug;
-
+use crate::cors::render_invalid_request;
+use crate::cors::CorsCheckResult;
+use crate::cors::CorsChecker;
 use actix_web::web::Data;
 use actix_web::web::Form;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
-
+use log::debug;
 use serde_derive::Deserialize;
+use std::sync::Arc;
+use tiny_auth_business::token::Token;
+use tiny_auth_business::token::TokenValidator;
 
 #[derive(Deserialize)]
 pub struct Request {
@@ -143,23 +139,22 @@ enum Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use crate::http::endpoints::tests::read_response;
-    use crate::http::state::tests::build_test_client_store;
-    use crate::http::state::tests::build_test_token_creator;
-    use crate::http::state::tests::build_test_token_issuer;
-    use crate::http::state::tests::build_test_token_validator;
-    use crate::http::state::tests::build_test_user_store;
-    use tiny_auth_business::cors::test_fixtures::build_test_cors_lister;
-    use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
-    use tiny_auth_business::store::test_fixtures::USER;
-    use tiny_auth_business::token::Token;
-
-    use chrono::Duration;
-    use chrono::Local;
-
+    use crate::endpoints::tests::read_response;
     use actix_web::http;
     use actix_web::test;
+    use chrono::Duration;
+    use chrono::Local;
+    use tiny_auth_business::cors::test_fixtures::build_test_cors_lister;
+    use tiny_auth_business::store::test_fixtures::build_test_client_store;
+    use tiny_auth_business::store::test_fixtures::build_test_user_store;
+    use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
+    use tiny_auth_business::store::test_fixtures::USER;
+    use tiny_auth_business::store::ClientStore;
+    use tiny_auth_business::store::UserStore;
+    use tiny_auth_business::test_fixtures::build_test_token_creator;
+    use tiny_auth_business::test_fixtures::build_test_token_issuer;
+    use tiny_auth_business::test_fixtures::build_test_token_validator;
+    use tiny_auth_business::token::Token;
 
     #[tokio::test]
     pub async fn missing_header_is_rejected() {
@@ -244,7 +239,7 @@ mod tests {
 
     fn build_test_handler() -> Data<Handler> {
         Data::new(Handler {
-            validator: build_test_token_validator().into_inner(),
+            validator: Arc::new(build_test_token_validator()),
             cors_checker: Arc::new(CorsChecker::new(build_test_cors_lister())),
         })
     }

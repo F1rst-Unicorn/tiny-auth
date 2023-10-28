@@ -16,19 +16,15 @@
  */
 
 use crate::config::Config;
-use crate::http;
 use crate::systemd::notify_about_start;
 use crate::systemd::watchdog;
 use crate::terminate::terminator;
-
-use openssl::error::ErrorStack;
-
 use actix_web::dev::ServerHandle;
-
 use log::error;
-
+use openssl::error::ErrorStack;
 use tokio::sync::oneshot;
-use tokio::sync::oneshot::{Receiver, Sender};
+use tokio::sync::oneshot::Receiver;
+use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
 
 #[derive(thiserror::Error, Debug)]
@@ -50,6 +46,9 @@ pub enum Error {
 
     #[error("Crypto error")]
     OpensslError(#[from] ErrorStack),
+
+    #[error("Web error")]
+    WebError(#[from] tiny_auth_web::Error),
 }
 
 pub fn run(config: Config) -> Result<(), Error> {
@@ -66,7 +65,7 @@ pub fn run(config: Config) -> Result<(), Error> {
             .unwrap()
     });
     actor_system.block_on(async move {
-        let constructor = http::state::Constructor::new(&config)?;
+        let constructor = crate::constructor::Constructor::new(&config)?;
 
         let (pass_server, receive_server) = oneshot::channel();
         let api_join_handle = match tiny_auth_api::start(&constructor).await {
@@ -78,7 +77,7 @@ pub fn run(config: Config) -> Result<(), Error> {
         };
         tokio::spawn(runtime_primitives(receive_server, api_join_handle));
 
-        let srv = match http::build(&config, &constructor) {
+        let srv = match tiny_auth_web::build(&constructor) {
             Err(e) => {
                 error!("Startup failed: {}", e);
                 return Ok(());

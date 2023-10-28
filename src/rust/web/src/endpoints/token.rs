@@ -18,7 +18,9 @@
 use super::deserialise_empty_as_none;
 use super::parse_basic_authorization;
 use super::parse_scope_names;
-use crate::http::endpoints::render_json_error;
+use crate::cors::CorsCheckResult;
+use crate::cors::CorsChecker;
+use crate::endpoints::render_json_error;
 use actix_web::web;
 use actix_web::web::Form;
 use actix_web::HttpRequest;
@@ -30,6 +32,13 @@ use jsonwebtoken::DecodingKey;
 use jsonwebtoken::TokenData;
 use log::debug;
 use log::warn;
+use serde::de::DeserializeOwned;
+use serde_derive::Deserialize;
+use serde_derive::Serialize;
+use std::collections::BTreeSet;
+use std::convert::TryInto;
+use std::iter::FromIterator;
+use std::sync::Arc;
 use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::authenticator::Error::WrongCredentials;
 use tiny_auth_business::client::Client;
@@ -49,16 +58,6 @@ use tiny_auth_business::token::Token;
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
 use tiny_auth_business::user::User;
-
-use serde::de::DeserializeOwned;
-use serde_derive::Deserialize;
-use serde_derive::Serialize;
-use std::collections::BTreeSet;
-use std::convert::TryInto;
-use std::iter::FromIterator;
-use std::sync::Arc;
-use tiny_auth_web::cors::CorsCheckResult;
-use tiny_auth_web::cors::CorsChecker;
 
 const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -759,17 +758,8 @@ enum Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::endpoints::tests::read_response;
-    use crate::http::endpoints::ErrorResponse;
-    use crate::http::state::tests::build_test_auth_code_store;
-    use crate::http::state::tests::build_test_authenticator;
-    use crate::http::state::tests::build_test_client_store;
-    use crate::http::state::tests::build_test_issuer_config_for_web as build_test_issuer_config;
-    use crate::http::state::tests::build_test_scope_store;
-    use crate::http::state::tests::build_test_token_creator;
-    use crate::http::state::tests::build_test_token_issuer;
-    use crate::http::state::tests::build_test_token_validator;
-    use crate::http::state::tests::build_test_user_store;
+    use crate::endpoints::tests::read_response;
+    use crate::endpoints::ErrorResponse;
     use actix_web::http;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
@@ -781,10 +771,17 @@ mod tests {
     use tiny_auth_business::cors::test_fixtures::build_test_cors_lister;
     use tiny_auth_business::oauth2::ProtocolError;
     use tiny_auth_business::oidc::ProtocolError as OidcError;
-    use tiny_auth_business::store::test_fixtures::CONFIDENTIAL_CLIENT;
     use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
     use tiny_auth_business::store::test_fixtures::UNKNOWN_CLIENT_ID;
     use tiny_auth_business::store::test_fixtures::USER;
+    use tiny_auth_business::store::test_fixtures::{
+        build_test_auth_code_store, build_test_client_store, build_test_scope_store,
+        build_test_user_store, CONFIDENTIAL_CLIENT,
+    };
+    use tiny_auth_business::test_fixtures::{
+        build_test_authenticator, build_test_issuer_config, build_test_token_creator,
+        build_test_token_issuer, build_test_token_validator,
+    };
 
     #[test(actix_rt::test)]
     async fn missing_grant_type_is_rejected() {
@@ -1781,17 +1778,17 @@ mod tests {
     }
 
     fn build_test_handler_with_store(
-        auth_code_store: Data<Arc<dyn AuthorizationCodeStore>>,
+        auth_code_store: Arc<dyn AuthorizationCodeStore>,
     ) -> Data<Handler> {
         Data::new(Handler {
-            client_store: build_test_client_store().get_ref().clone(),
-            user_store: build_test_user_store().get_ref().clone(),
-            auth_code_store: auth_code_store.get_ref().clone(),
-            token_creator: build_test_token_creator().get_ref().clone(),
-            authenticator: build_test_authenticator().into_inner(),
-            token_validator: build_test_token_validator().into_inner(),
-            scope_store: build_test_scope_store().get_ref().clone(),
-            issuer_configuration: build_test_issuer_config().get_ref().clone(),
+            client_store: build_test_client_store(),
+            user_store: build_test_user_store(),
+            auth_code_store: auth_code_store,
+            token_creator: build_test_token_creator(),
+            authenticator: Arc::new(build_test_authenticator()),
+            token_validator: Arc::new(build_test_token_validator()),
+            scope_store: build_test_scope_store(),
+            issuer_configuration: build_test_issuer_config(),
             cors_checker: Arc::new(CorsChecker::new(build_test_cors_lister())),
         })
     }

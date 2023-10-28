@@ -29,3 +29,84 @@ pub mod scope;
 pub mod store;
 pub mod token;
 pub mod user;
+
+pub mod test_fixtures {
+    use super::*;
+    use crate::authenticator::Authenticator;
+    use crate::issuer_configuration::IssuerConfiguration;
+    use crate::jwk::Jwk;
+    use crate::rate_limiter::RateLimiter;
+    use crate::store::test_fixtures::build_test_user_store;
+    use crate::store::AuthorizationCodeStore;
+    use crate::token::TokenCreator;
+    use crate::token::TokenValidator;
+    use chrono::Duration;
+    use jsonwebtoken::Algorithm;
+    use jsonwebtoken::DecodingKey;
+    use jsonwebtoken::EncodingKey;
+    use std::sync::Arc;
+
+    pub fn build_test_token_creator() -> TokenCreator {
+        TokenCreator::new(
+            build_test_encoding_key(),
+            build_test_issuer_config(),
+            build_test_jwk(),
+        )
+    }
+
+    pub fn build_test_issuer_config() -> IssuerConfiguration {
+        IssuerConfiguration {
+            issuer_url: build_test_token_issuer(),
+            algorithm: build_test_algorithm(),
+        }
+    }
+
+    pub fn build_test_token_issuer() -> String {
+        "https://localhost:8088".to_string()
+    }
+
+    fn build_test_algorithm() -> Algorithm {
+        Algorithm::HS256
+    }
+
+    fn build_test_encoding_key() -> EncodingKey {
+        EncodingKey::from_secret("secret".as_bytes())
+    }
+
+    pub fn build_test_auth_code_store() -> Arc<dyn AuthorizationCodeStore> {
+        store::test_fixtures::build_test_auth_code_store()
+    }
+
+    pub fn build_test_rate_limiter() -> RateLimiter {
+        RateLimiter::new(3, Duration::minutes(5))
+    }
+
+    pub fn build_test_authenticator() -> Authenticator {
+        Authenticator::new(
+            build_test_user_store(),
+            Arc::new(build_test_rate_limiter()),
+            "pepper",
+        )
+    }
+
+    pub fn build_test_decoding_key() -> DecodingKey {
+        DecodingKey::from_secret("secret".as_bytes())
+    }
+
+    pub fn build_test_token_validator() -> TokenValidator {
+        TokenValidator::new(
+            build_test_decoding_key(),
+            build_test_algorithm(),
+            build_test_token_issuer(),
+        )
+    }
+
+    pub fn build_test_jwk() -> Jwk {
+        Jwk::new_rsa(
+            "key_id".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "".to_string(),
+        )
+    }
+}

@@ -19,34 +19,28 @@ use super::deserialise_empty_as_none;
 use super::parse_prompt;
 use super::parse_scope_names;
 use super::render_template;
-use crate::http::endpoints::server_error;
+use crate::endpoints::server_error;
+use actix_session::Session;
+use actix_web::http::StatusCode;
+use actix_web::web;
+use actix_web::HttpResponse;
+use log::debug;
+use log::error;
+use log::info;
+use log::log_enabled;
+use log::Level::Debug;
+use serde_derive::Deserialize;
+use serde_derive::Serialize;
+use std::collections::BTreeSet;
+use std::convert::TryFrom;
+use std::sync::Arc;
+use tera::Tera;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc::OidcResponseType;
 use tiny_auth_business::oidc::Prompt;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::oidc::ResponseType;
 use tiny_auth_business::store::ClientStore;
-
-use std::collections::BTreeSet;
-use std::convert::TryFrom;
-use std::sync::Arc;
-
-use actix_web::http::StatusCode;
-use actix_web::web;
-use actix_web::HttpResponse;
-
-use actix_session::Session;
-
-use serde_derive::Deserialize;
-use serde_derive::Serialize;
-
-use tera::Tera;
-
-use log::debug;
-use log::error;
-use log::info;
-use log::log_enabled;
-use log::Level::Debug;
 
 pub const SESSION_KEY: &str = "a";
 
@@ -315,21 +309,21 @@ pub fn return_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::endpoints::parse_first_request;
-    use crate::http::state::tests::build_test_client_store;
-    use crate::http::state::tests::build_test_tera;
+    use crate::endpoints::parse_first_request;
+    use crate::endpoints::tests::build_test_tera;
+    use actix_session::SessionExt;
+    use actix_web::http;
+    use actix_web::test;
+    use actix_web::web::Data;
+    use actix_web::web::Query;
     use tiny_auth_business::oauth2::ResponseType::Code;
     use tiny_auth_business::oauth2::ResponseType::Token;
     use tiny_auth_business::oidc::OidcResponseType::IdToken;
     use tiny_auth_business::oidc::ResponseType::OAuth2;
     use tiny_auth_business::oidc::ResponseType::Oidc;
+    use tiny_auth_business::store::test_fixtures::build_test_client_store;
     use tiny_auth_business::store::test_fixtures::CONFIDENTIAL_CLIENT;
     use tiny_auth_business::store::test_fixtures::UNKNOWN_CLIENT_ID;
-
-    use actix_session::SessionExt;
-    use actix_web::http;
-    use actix_web::test;
-    use actix_web::web::Query;
     use url::Url;
 
     #[test]
@@ -353,7 +347,13 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(
+            query,
+            build_test_tera(),
+            Data::new(build_test_client_store()),
+            session,
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -379,7 +379,13 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(
+            query,
+            build_test_tera(),
+            Data::new(build_test_client_store()),
+            session,
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -405,7 +411,13 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(
+            query,
+            build_test_tera(),
+            Data::new(build_test_client_store()),
+            session,
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -431,7 +443,13 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(
+            query,
+            build_test_tera(),
+            Data::new(build_test_client_store()),
+            session,
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -461,7 +479,13 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(
+            query,
+            build_test_tera(),
+            Data::new(build_test_client_store()),
+            session,
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
 
@@ -512,7 +536,13 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(
+            query,
+            build_test_tera(),
+            Data::new(build_test_client_store()),
+            session,
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
 
@@ -563,7 +593,13 @@ mod tests {
             acr_values: None,
         });
 
-        let resp = handle(query, build_test_tera(), build_test_client_store(), session).await;
+        let resp = handle(
+            query,
+            build_test_tera(),
+            Data::new(build_test_client_store()),
+            session,
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
 
@@ -615,7 +651,7 @@ mod tests {
         };
         let query = Query(request.clone());
 
-        let resp = handle(query, build_test_tera(), client_store, session).await;
+        let resp = handle(query, build_test_tera(), Data::new(client_store), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
 
@@ -653,7 +689,7 @@ mod tests {
         };
         let query = Query(request.clone());
 
-        let resp = handle(query, build_test_tera(), client_store, session).await;
+        let resp = handle(query, build_test_tera(), Data::new(client_store), session).await;
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
 
