@@ -94,10 +94,6 @@ fn parse_prompt(prompt: &Option<String>) -> BTreeSet<Prompt> {
     }
 }
 
-fn parse_scope_names(names: &str) -> Vec<String> {
-    names.split(' ').map(str::to_string).collect()
-}
-
 #[derive(Serialize, Deserialize)]
 struct ErrorResponse {
     error: ProtocolError,

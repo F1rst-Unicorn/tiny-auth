@@ -63,6 +63,12 @@ pub enum GrantType {
     RefreshToken,
 }
 
+impl Default for GrantType {
+    fn default() -> Self {
+        Self::AuthorizationCode
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ResponseType {
     Code,

@@ -28,16 +28,15 @@ pub mod rate_limiter;
 pub mod scope;
 pub mod store;
 pub mod token;
+pub mod token_endpoint;
 pub mod user;
 
 pub mod test_fixtures {
-    use super::*;
     use crate::authenticator::Authenticator;
     use crate::issuer_configuration::IssuerConfiguration;
     use crate::jwk::Jwk;
     use crate::rate_limiter::RateLimiter;
     use crate::store::test_fixtures::build_test_user_store;
-    use crate::store::AuthorizationCodeStore;
     use crate::token::TokenCreator;
     use crate::token::TokenValidator;
     use chrono::Duration;
@@ -71,10 +70,6 @@ pub mod test_fixtures {
 
     fn build_test_encoding_key() -> EncodingKey {
         EncodingKey::from_secret("secret".as_bytes())
-    }
-
-    pub fn build_test_auth_code_store() -> Arc<dyn AuthorizationCodeStore> {
-        store::test_fixtures::build_test_auth_code_store()
     }
 
     pub fn build_test_rate_limiter() -> RateLimiter {

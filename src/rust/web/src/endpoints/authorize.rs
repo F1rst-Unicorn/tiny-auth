@@ -17,7 +17,6 @@
 
 use super::deserialise_empty_as_none;
 use super::parse_prompt;
-use super::parse_scope_names;
 use super::render_template;
 use crate::endpoints::server_error;
 use actix_session::Session;
@@ -40,6 +39,7 @@ use tiny_auth_business::oidc::OidcResponseType;
 use tiny_auth_business::oidc::Prompt;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::oidc::ResponseType;
+use tiny_auth_business::scope::parse_scope_names;
 use tiny_auth_business::store::ClientStore;
 
 pub const SESSION_KEY: &str = "a";

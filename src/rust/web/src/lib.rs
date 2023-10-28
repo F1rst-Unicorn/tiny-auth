@@ -63,7 +63,6 @@ use tiny_auth_business::jwk::Jwks;
 use tiny_auth_business::store::AuthorizationCodeStore;
 use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::ScopeStore;
-use tiny_auth_business::store::Store;
 use tiny_auth_business::store::UserStore;
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
@@ -125,23 +124,19 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     let jwks = constructor.build_jwks();
     let cors_lister = constructor.build_cors_lister();
     let cors_checker = Arc::new(CorsChecker::new(cors_lister.clone()));
-    let unified_store = Arc::new(Store {
-        user_store: user_store.clone(),
-        client_store: client_store.clone(),
-        scope_store: scope_store.clone(),
-        auth_code_store: auth_code_store.clone(),
-    });
     let user_info_handler =
         endpoints::userinfo::Handler::new(token_validator.clone(), cors_checker.clone());
     let token_handler = endpoints::token::Handler::new(
-        client_store.clone(),
-        user_store.clone(),
-        auth_code_store.clone(),
-        token_creator.clone(),
-        authenticator.clone(),
-        token_validator.clone(),
-        scope_store.clone(),
-        issuer_config.clone(),
+        Arc::new(tiny_auth_business::token_endpoint::Handler::new(
+            client_store.clone(),
+            user_store.clone(),
+            auth_code_store.clone(),
+            token_creator.clone(),
+            authenticator.clone(),
+            token_validator.clone(),
+            scope_store.clone(),
+            issuer_config.clone(),
+        )),
         cors_checker,
     );
 
@@ -168,7 +163,6 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             .app_data(Data::new(jwks.clone()))
             .app_data(Data::new(cors_lister.clone()))
             .app_data(Data::new(token_certificate))
-            .app_data(Data::new(unified_store.clone()))
             .app_data(Data::new(user_info_handler.clone()))
             .app_data(Data::new(token_handler.clone()))
             .wrap(

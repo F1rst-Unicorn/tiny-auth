@@ -25,3 +25,5 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 url.workspace = true
 thiserror.workspace = true
+test-log.workspace = true
+env_logger.workspace = true

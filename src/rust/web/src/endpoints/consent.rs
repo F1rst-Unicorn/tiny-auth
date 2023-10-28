@@ -17,7 +17,6 @@
 
 use super::deserialise_empty_as_none;
 use super::parse_prompt;
-use super::parse_scope_names;
 use super::render_template;
 use super::server_error;
 use crate::endpoints::authenticate;
@@ -44,7 +43,7 @@ use tera::Context;
 use tera::Tera;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
-use tiny_auth_business::scope::ScopeDescription;
+use tiny_auth_business::scope::{parse_scope_names, ScopeDescription};
 use tiny_auth_business::store::AuthorizationCodeStore;
 use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::ScopeStore;

@@ -59,6 +59,11 @@ impl Ord for Scope {
         self.name.cmp(&other.name)
     }
 }
+
+pub fn parse_scope_names(names: &str) -> Vec<String> {
+    names.split(' ').map(str::to_string).collect()
+}
+
 #[derive(Serialize)]
 pub struct ScopeDescription {
     name: String,
