@@ -41,7 +41,9 @@ web:
     - https://correct.example
     - https://localhost:5173
     - https://localhost:34344
-  session timeout: 60000
+  session timeout in seconds: 60000
+  token timeout in seconds: 60
+  refresh token timeout in seconds: 180
   secret key: 6nwYoK0L9J5ADFQE74CkkuLmTGMSd1skxHso9XwZNbsCbVmLIVH6L2aBIi2veuia3aQ3fnBzfwwlIuzCmWTEjAcc
   tls:
     key: test/src/test/resources/keys/tls-key.pem

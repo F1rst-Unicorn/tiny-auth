@@ -18,6 +18,7 @@
 pub mod authenticator;
 pub mod change_password;
 pub mod client;
+pub mod clock;
 pub mod cors;
 pub mod issuer_configuration;
 pub mod jwk;
@@ -50,6 +51,9 @@ pub mod test_fixtures {
             build_test_encoding_key(),
             build_test_issuer_config(),
             build_test_jwk(),
+            Arc::new(crate::clock::test_fixtures::clock()),
+            Duration::minutes(1),
+            Duration::minutes(3),
         )
     }
 

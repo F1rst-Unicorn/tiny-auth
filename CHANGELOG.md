@@ -10,10 +10,19 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 * Allow configuration of the cookie's `SameSite` attribute via configuration
   option `web.session same site policy`.
 
+* Allow configuration of token timeouts via `web.token timeout in seconds` and
+  `web.refresh token timeout in seconds`
+  ([#78](https://j.njsm.de/git/veenj/tiny-auth/issues/78)).
+
 ### Fixed
 
 * Fix panic when authorising a request with unknown scope
   ([#72](https://j.njsm.de/git/veenj/tiny-auth/issues/72))
+
+### Deprecated
+
+* `web.session timeout` was replaced in favour of `web.session timeout in
+  seconds`.
 
 ### Maintenance
 

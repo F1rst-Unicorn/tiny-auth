@@ -54,10 +54,19 @@ methods are `GET`, `POST`, and `OPTIONS` and responses are cacheable for 1 day.
 Directory storing the HTML et al. files. This directory is usually determined
 by the distribution or package maintainer.
 
-#### `session timeout`
+#### `session timeout in seconds`
 
 Optional. Timeout for a single authorization session in seconds. Internally this
 is the `Max-Age` of the session cookie. Default value is `3600`.
+
+#### `token timeout in seconds`
+
+Optional. Timeout for OIDC access and id tokens in seconds. Default value is
+`60`.
+
+#### `refresh token timeout in seconds`
+
+Optional. Timeout for OIDC refresh tokens in seconds. Default value is `180`.
 
 #### `session same site policy`
 

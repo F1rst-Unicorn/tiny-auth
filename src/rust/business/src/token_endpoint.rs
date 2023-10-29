@@ -134,7 +134,7 @@ impl Handler {
     ) -> Result<(String, Option<String>, Vec<Scope>), Error> {
         let (token, scopes, generate_refresh_token) = self.grant_token(request).await?;
 
-        let encoded_token = match self.token_creator.create(token.clone()) {
+        let encoded_token = match self.token_creator.finalize(token.clone()) {
             Err(e) => {
                 debug!("failed to encode token: {}", e);
                 return Err(Error::TokenEncodingFailed);
@@ -142,11 +142,10 @@ impl Handler {
             Ok(token) => token,
         };
         let refresh_token = if generate_refresh_token {
-            match self.token_creator.create_refresh_token(RefreshToken::from(
-                token,
-                Duration::minutes(1),
-                &scopes,
-            )) {
+            match self
+                .token_creator
+                .finalize_refresh_token(self.token_creator.build_refresh_token(token, &scopes))
+            {
                 Err(e) => {
                     debug!("failed to encode refresh token: {}", e);
                     return Err(Error::RefreshTokenEncodingFailed);
@@ -184,14 +183,9 @@ impl Handler {
                 let generate_refresh_token =
                     matches!(client.client_type, ClientType::Confidential { .. });
 
-                let mut token = Token::build(
-                    &user,
-                    &client,
-                    &scopes,
-                    Local::now(),
-                    Duration::minutes(1),
-                    auth_time,
-                );
+                let mut token = self
+                    .token_creator
+                    .build_token(&user, &client, &scopes, auth_time);
                 token.set_nonce(nonce);
 
                 Ok((token, scopes, generate_refresh_token))
@@ -344,7 +338,7 @@ impl Handler {
         }
 
         let mut token = refresh_token.access_token;
-        token.renew(Local::now(), Duration::minutes(1));
+        self.token_creator.renew(&mut token);
 
         let granted_scopes = BTreeSet::from_iter(refresh_token.scopes);
         let requested_scopes = match &request.scope {
@@ -978,16 +972,14 @@ mod tests {
 
     fn build_refresh_token(client_id: &str) -> String {
         let token_creator = build_test_token_creator();
-        let token = Token::build(
+        let token = token_creator.build_token(
             &build_test_user_store().get(USER).unwrap(),
             &build_test_client_store().get(client_id).unwrap(),
             &Vec::new(),
-            Local::now(),
-            Duration::minutes(3),
             0,
         );
         token_creator
-            .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), &Vec::new()))
+            .finalize_refresh_token(token_creator.build_refresh_token(token, &Vec::new()))
             .unwrap()
     }
 }

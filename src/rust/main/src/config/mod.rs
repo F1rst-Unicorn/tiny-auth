@@ -93,7 +93,16 @@ pub struct Web {
 
     #[serde(default = "default_session_timeout")]
     #[serde(alias = "session timeout")]
-    pub session_timeout: Option<i64>,
+    #[serde(alias = "session timeout in seconds")]
+    pub session_timeout_in_seconds: Option<i64>,
+
+    #[serde(default = "default_token_timeout_in_seconds")]
+    #[serde(alias = "token timeout in seconds")]
+    pub token_timeout_in_seconds: Option<i64>,
+
+    #[serde(default = "default_refresh_token_timeout_in_seconds")]
+    #[serde(alias = "refresh token timeout in seconds")]
+    pub refresh_token_timeout_in_seconds: Option<i64>,
 
     #[serde(default = "default_session_same_site_policy")]
     #[serde(alias = "session same site policy")]
@@ -111,6 +120,16 @@ fn default_path() -> Option<String> {
 #[allow(clippy::unnecessary_wraps)]
 fn default_session_timeout() -> Option<i64> {
     Some(3600)
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn default_token_timeout_in_seconds() -> Option<i64> {
+    Some(60)
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn default_refresh_token_timeout_in_seconds() -> Option<i64> {
+    Some(180)
 }
 
 #[allow(clippy::unnecessary_wraps)]

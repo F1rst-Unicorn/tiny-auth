@@ -142,8 +142,6 @@ mod tests {
     use crate::endpoints::tests::read_response;
     use actix_web::http;
     use actix_web::test;
-    use chrono::Duration;
-    use chrono::Local;
     use tiny_auth_business::cors::test_fixtures::build_test_cors_lister;
     use tiny_auth_business::store::test_fixtures::build_test_client_store;
     use tiny_auth_business::store::test_fixtures::build_test_user_store;
@@ -152,7 +150,6 @@ mod tests {
     use tiny_auth_business::store::ClientStore;
     use tiny_auth_business::store::UserStore;
     use tiny_auth_business::test_fixtures::build_test_token_creator;
-    use tiny_auth_business::test_fixtures::build_test_token_issuer;
     use tiny_auth_business::test_fixtures::build_test_token_validator;
     use tiny_auth_business::token::Token;
 
@@ -179,53 +176,15 @@ mod tests {
     }
 
     #[tokio::test]
-    pub async fn expired_token_is_rejected() {
-        let creator = build_test_token_creator();
-        let user = build_test_user_store().get(USER).unwrap();
-        let client = build_test_client_store().get(PUBLIC_CLIENT).unwrap();
-        let expiration = Duration::minutes(3);
-        let request = test::TestRequest::post()
-            .insert_header((
-                "authorization",
-                "Bearer ".to_string()
-                    + &creator
-                        .create(Token::build(
-                            &user,
-                            &client,
-                            &Vec::new(),
-                            Local::now() - expiration,
-                            Duration::zero(),
-                            0,
-                        ))
-                        .unwrap(),
-            ))
-            .to_http_request();
-        let query = Form(Request { access_token: None });
-
-        let resp = post(query, request, build_test_handler()).await;
-
-        assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
-    }
-
-    #[tokio::test]
     pub async fn valid_token_is_returned() {
         let creator = build_test_token_creator();
         let user = build_test_user_store().get(USER).unwrap();
         let client = build_test_client_store().get(PUBLIC_CLIENT).unwrap();
-        let expiration = Duration::minutes(3);
-        let mut token = Token::build(
-            &user,
-            &client,
-            &Vec::new(),
-            Local::now() + expiration,
-            expiration,
-            0,
-        );
-        token.set_issuer(&build_test_token_issuer());
+        let token = creator.build_token(&user, &client, &Vec::new(), 0);
         let request = test::TestRequest::post()
             .insert_header((
                 "authorization",
-                "Bearer ".to_string() + &creator.create(token.clone()).unwrap(),
+                "Bearer ".to_string() + &creator.finalize(token.clone()).unwrap(),
             ))
             .to_http_request();
         let query = Form(Request { access_token: None });

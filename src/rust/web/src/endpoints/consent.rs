@@ -48,8 +48,6 @@ use tiny_auth_business::store::AuthorizationCodeStore;
 use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::ScopeStore;
 use tiny_auth_business::store::UserStore;
-use tiny_auth_business::token::RefreshToken;
-use tiny_auth_business::token::Token;
 use tiny_auth_business::token::TokenCreator;
 use url::Url;
 
@@ -271,10 +269,10 @@ async fn process_skipping_csrf(
 
         let scopes = scope_store.get_all(&scopes);
 
-        let mut token = Token::build(&user, &client, &scopes, Local::now(), expires_in, auth_time);
+        let mut token = token_creator.build_token(&user, &client, &scopes, auth_time);
         token.set_nonce(first_request.nonce);
 
-        let encoded_token = match token_creator.create(token.clone()) {
+        let encoded_token = match token_creator.finalize(token.clone()) {
             Err(e) => {
                 debug!("failed to encode token: {}", e);
                 return server_error(&tera);
@@ -289,7 +287,7 @@ async fn process_skipping_csrf(
         }
         if let oauth2::ClientType::Confidential { .. } = client.client_type {
             let encoded_refresh_token = match token_creator
-                .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), &scopes))
+                .finalize_refresh_token(token_creator.build_refresh_token(token, &scopes))
             {
                 Err(e) => {
                     debug!("failed to encode refresh token: {}", e);

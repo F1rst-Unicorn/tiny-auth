@@ -34,7 +34,9 @@ web:
     domain: localhost
     port: 8088
   static files: /usr/share/tiny-auth/static
-  session timeout: 300
+  session timeout in seconds: 300
+  token timeout in seconds: 60
+  refresh token timeout in seconds: 180
   session same site policy: lax
   secret key: set-a-random-string-of-at-least-32-characters-here
 

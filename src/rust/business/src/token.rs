@@ -16,13 +16,12 @@
  */
 
 use crate::client::Client;
+use crate::clock::Clock;
 use crate::issuer_configuration::IssuerConfiguration;
 use crate::jwk::Jwk;
 use crate::scope::merge;
 use crate::scope::Scope;
 use crate::user::User;
-use chrono::offset::Local;
-use chrono::DateTime;
 use chrono::Duration;
 use jsonwebtoken::decode;
 use jsonwebtoken::encode;
@@ -38,6 +37,7 @@ use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Value;
+use std::sync::Arc;
 
 /// https://openid.net/specs/openid-connect-core-1_0.html#IDToken
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -90,19 +90,80 @@ fn is_zero(n: &i64) -> bool {
 }
 
 impl Token {
-    pub fn build(
+    pub fn set_nonce(&mut self, nonce: Option<String>) {
+        if let Some(nonce) = nonce {
+            self.nonce = nonce;
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum Audience {
+    Single(String),
+    Several(Vec<String>),
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct RefreshToken {
+    #[serde(rename = "iss")]
+    pub issuer: String,
+
+    pub access_token: Token,
+
+    #[serde(rename = "exp")]
+    pub expiration: i64,
+
+    pub scopes: Vec<String>,
+}
+
+#[derive(Clone)]
+pub struct TokenCreator {
+    key: EncodingKey,
+
+    issuer: IssuerConfiguration,
+
+    jwk: Jwk,
+
+    clock: Arc<dyn Clock>,
+
+    token_expiration: Duration,
+
+    refresh_token_expiration: Duration,
+}
+
+impl TokenCreator {
+    pub fn new(
+        key: EncodingKey,
+        issuer: IssuerConfiguration,
+        jwk: Jwk,
+        clock: Arc<dyn Clock>,
+        token_expiration: Duration,
+        refresh_token_expiration: Duration,
+    ) -> Self {
+        Self {
+            key,
+            issuer,
+            jwk,
+            clock,
+            token_expiration,
+            refresh_token_expiration,
+        }
+    }
+
+    pub fn build_token(
+        &self,
         user: &User,
         client: &Client,
         scopes: &[Scope],
-        now: DateTime<Local>,
-        expiration: Duration,
         auth_time: i64,
-    ) -> Self {
-        let mut result = Self {
-            issuer: "".to_string(),
+    ) -> Token {
+        let now = self.clock.now();
+        let mut result = Token {
+            issuer: self.issuer.issuer_url.to_string(),
             subject: user.name.clone(),
             audience: Audience::Single(client.client_id.clone()),
-            expiration: (now + expiration).timestamp(),
+            expiration: (now + self.token_expiration).timestamp(),
             issuance_time: now.timestamp(),
             auth_time,
             nonce: "".to_string(),
@@ -135,82 +196,30 @@ impl Token {
         result
     }
 
-    pub fn set_nonce(&mut self, nonce: Option<String>) {
-        if let Some(nonce) = nonce {
-            self.nonce = nonce;
-        }
+    pub fn renew(&self, token: &mut Token) {
+        let now = self.clock.now();
+        token.issuance_time = now.clone().timestamp();
+        token.expiration = (now + self.token_expiration).timestamp();
     }
 
-    pub fn set_issuer(&mut self, issuer: &str) {
-        self.issuer = issuer.to_string();
-    }
-
-    pub fn renew(&mut self, now: DateTime<Local>, expiration: Duration) {
-        self.issuance_time = now.clone().timestamp();
-        self.expiration = (now + expiration).timestamp();
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum Audience {
-    Single(String),
-    Several(Vec<String>),
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-pub struct RefreshToken {
-    #[serde(rename = "iss")]
-    pub issuer: String,
-
-    pub access_token: Token,
-
-    #[serde(rename = "exp")]
-    pub expiration: i64,
-
-    pub scopes: Vec<String>,
-}
-
-impl RefreshToken {
-    pub fn from(token: Token, additional_expiration: Duration, scopes: &[Scope]) -> Self {
+    pub fn build_refresh_token(&self, mut token: Token, scopes: &[Scope]) -> RefreshToken {
+        token.issuer = self.issuer.issuer_url.to_string();
         RefreshToken {
             issuer: token.issuer.clone(),
-            expiration: token.expiration + additional_expiration.num_seconds(),
+            expiration: token.issuance_time + self.refresh_token_expiration.num_seconds(),
             access_token: token,
             scopes: scopes.iter().map(|v| v.name.to_string()).collect(),
         }
     }
 
-    pub fn set_issuer(&mut self, issuer: &str) {
-        self.issuer = issuer.to_string();
-        self.access_token.set_issuer(issuer);
-    }
-}
-
-#[derive(Clone)]
-pub struct TokenCreator {
-    key: EncodingKey,
-
-    issuer: IssuerConfiguration,
-
-    jwk: Jwk,
-}
-
-impl TokenCreator {
-    pub fn new(key: EncodingKey, issuer: IssuerConfiguration, jwk: Jwk) -> Self {
-        Self { key, issuer, jwk }
-    }
-
-    pub fn create(&self, mut token: Token) -> Result<String> {
-        token.set_issuer(&self.issuer.issuer_url);
+    pub fn finalize(&self, token: Token) -> Result<String> {
         let mut header = Header::new(self.issuer.algorithm);
         header.kid = Some(self.jwk.key_id.clone());
         header.jku = Some(self.issuer.jwks());
         encode(&header, &token, &self.key)
     }
 
-    pub fn create_refresh_token(&self, mut token: RefreshToken) -> Result<String> {
-        token.set_issuer(&self.issuer.issuer_url);
+    pub fn finalize_refresh_token(&self, token: RefreshToken) -> Result<String> {
         let mut header = Header::new(self.issuer.algorithm);
         header.kid = Some(self.jwk.key_id.clone());
         header.jku = Some(self.issuer.jwks());
@@ -227,7 +236,7 @@ pub struct TokenValidator {
 
 impl TokenValidator {
     pub fn new(key: DecodingKey, algorithm: Algorithm, issuer: String) -> Self {
-        let mut validation = jsonwebtoken::Validation::new(algorithm);
+        let mut validation = Validation::new(algorithm);
         validation.leeway = 5;
         validation.validate_exp = true;
         validation.validate_nbf = false;

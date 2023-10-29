@@ -267,6 +267,19 @@ impl<'a> Constructor<'a> {
             self.encoding_key.clone(),
             self.issuer_configuration.clone(),
             self.jwk.clone(),
+            Arc::new(tiny_auth_business::clock::inject::clock()),
+            Duration::seconds(
+                self.config
+                    .web
+                    .token_timeout_in_seconds
+                    .expect("no default given"),
+            ),
+            Duration::seconds(
+                self.config
+                    .web
+                    .refresh_token_timeout_in_seconds
+                    .expect("no default given"),
+            ),
         )
     }
 
@@ -461,7 +474,10 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
     }
 
     fn session_timeout(&self) -> i64 {
-        self.config.web.session_timeout.expect("no default given")
+        self.config
+            .web
+            .session_timeout_in_seconds
+            .expect("no default given")
     }
 
     fn session_same_site_policy(&self) -> SameSite {
@@ -483,7 +499,6 @@ pub mod tests {
     use actix_web::web::Data;
     use jsonwebtoken::Algorithm;
     use jsonwebtoken::DecodingKey;
-    use jsonwebtoken::EncodingKey;
     use std::sync::Arc;
     use tera::Tera;
     use tiny_auth_business::authenticator::Authenticator;
@@ -493,17 +508,8 @@ pub mod tests {
     use tiny_auth_business::store::ClientStore;
     use tiny_auth_business::store::ScopeStore;
     use tiny_auth_business::store::UserStore;
-    use tiny_auth_business::token::TokenCreator;
     use tiny_auth_business::token::TokenValidator;
     use tiny_auth_web::tera::load_template_engine;
-
-    pub fn build_test_token_creator() -> Data<TokenCreator> {
-        Data::new(TokenCreator::new(
-            build_test_encoding_key(),
-            build_test_issuer_config(),
-            build_test_jwk(),
-        ))
-    }
 
     pub fn build_test_issuer_config_for_web() -> Data<IssuerConfiguration> {
         Data::new(build_test_issuer_config())
@@ -522,10 +528,6 @@ pub mod tests {
 
     fn build_test_algorithm() -> Algorithm {
         Algorithm::HS256
-    }
-
-    fn build_test_encoding_key() -> EncodingKey {
-        EncodingKey::from_secret("secret".as_bytes())
     }
 
     pub fn build_test_tera() -> Data<Tera> {

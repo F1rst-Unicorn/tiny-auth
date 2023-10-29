@@ -15,8 +15,6 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use chrono::Duration;
-use chrono::Local;
 use clap::Arg;
 use clap::ArgAction::Count;
 use clap::ArgMatches;
@@ -28,7 +26,6 @@ use log4rs::config::Appender;
 use log4rs::config::Config;
 use log4rs::config::Root;
 use log4rs::encode::pattern::PatternEncoder;
-use tiny_auth_business::token::Token;
 use tiny_auth_main::config::parser::parse_config;
 use tiny_auth_main::constructor::Constructor;
 
@@ -115,17 +112,9 @@ fn main() {
         Some(v) => v,
     };
 
-    let mut token = Token::build(
-        &user,
-        &client,
-        &[scope],
-        Local::now(),
-        Duration::minutes(1),
-        0,
-    );
-
-    let issuer = di.get_issuer_config();
-    token.set_issuer(&issuer.issuer_url);
+    let token = di
+        .build_token_creator()
+        .build_token(&user, &client, &[scope], 0);
 
     match serde_json::to_string_pretty(&token) {
         Err(_) => error!("Failed to serialize data"),
