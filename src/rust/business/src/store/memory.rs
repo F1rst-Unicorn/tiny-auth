@@ -73,7 +73,7 @@ impl MemoryAuthorizationCodeStore {
 }
 
 pub async fn auth_code_clean_job(store: Arc<MemoryAuthorizationCodeStore>) {
-    let mut clock = time::interval(std::time::Duration::from_secs(120));
+    let mut clock = time::interval(time::Duration::from_secs(120));
 
     loop {
         clock.tick().await;

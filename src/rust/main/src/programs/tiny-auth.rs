@@ -25,7 +25,7 @@ use log::info;
 
 fn main() {
     let arguments = cli_parser::parse_arguments();
-    logging::initialise(
+    logging::initialise_from_config_file(
         arguments
             .get_one::<String>(cli_parser::FLAG_LOG_CONFIG)
             .map(String::as_str)

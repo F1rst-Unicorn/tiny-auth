@@ -312,7 +312,6 @@ mod tests {
     use crate::endpoints::parse_first_request;
     use crate::endpoints::tests::build_test_tera;
     use actix_session::SessionExt;
-    use actix_web::http;
     use actix_web::test;
     use actix_web::web::Data;
     use actix_web::web::Query;
@@ -355,7 +354,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[test]
@@ -387,7 +386,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[test]
@@ -419,7 +418,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[test]
@@ -451,7 +450,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     #[test]
@@ -487,7 +486,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
@@ -544,7 +543,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
@@ -601,7 +600,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
@@ -653,7 +652,7 @@ mod tests {
 
         let resp = handle(query, build_test_tera(), Data::new(client_store), session).await;
 
-        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         assert_eq!("authenticate", url);
@@ -691,7 +690,7 @@ mod tests {
 
         let resp = handle(query, build_test_tera(), Data::new(client_store), session).await;
 
-        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
+        assert_eq!(resp.status(), StatusCode::SEE_OTHER);
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         assert_eq!("authenticate", url);

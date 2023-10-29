@@ -15,9 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::cors::render_invalid_request;
-use crate::cors::CorsCheckResult;
-use crate::cors::CorsChecker;
+use crate::endpoints::render_cors_result;
 use actix_web::web::Data;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
@@ -204,13 +202,7 @@ pub async fn get(
         ..Default::default()
     };
 
-    match CorsChecker::new(cors_lister.get_ref().clone()).check(&request) {
-        CorsCheckResult::IllegalOrigin => render_invalid_request(),
-        approved @ (CorsCheckResult::ApprovedOrigin(_) | CorsCheckResult::NoOrigin) => approved
-            .with_headers(HttpResponse::Ok())
-            .content_type("application/json")
-            .json(response),
-    }
+    render_cors_result(cors_lister.get_ref().clone(), &request, response)
 }
 
 pub async fn jwks(
@@ -218,11 +210,5 @@ pub async fn jwks(
     cors_lister: Data<Arc<dyn CorsLister>>,
     request: HttpRequest,
 ) -> HttpResponse {
-    match CorsChecker::new(cors_lister.get_ref().clone()).check(&request) {
-        CorsCheckResult::IllegalOrigin => render_invalid_request(),
-        approved @ (CorsCheckResult::ApprovedOrigin(_) | CorsCheckResult::NoOrigin) => approved
-            .with_headers(HttpResponse::Ok())
-            .content_type("application/json")
-            .json(jwks.get_ref()),
-    }
+    render_cors_result(cors_lister.get_ref().clone(), &request, jwks.get_ref())
 }

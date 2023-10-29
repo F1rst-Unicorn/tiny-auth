@@ -142,7 +142,7 @@ mod tests {
     use crate::endpoints::tests::read_response;
     use actix_web::http;
     use actix_web::test;
-    use tiny_auth_business::cors::test_fixtures::build_test_cors_lister;
+    use tiny_auth_business::cors::test_fixtures::cors_lister;
     use tiny_auth_business::store::test_fixtures::build_test_client_store;
     use tiny_auth_business::store::test_fixtures::build_test_user_store;
     use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
@@ -199,7 +199,7 @@ mod tests {
     fn build_test_handler() -> Data<Handler> {
         Data::new(Handler {
             validator: Arc::new(build_test_token_validator()),
-            cors_checker: Arc::new(CorsChecker::new(build_test_cors_lister())),
+            cors_checker: Arc::new(CorsChecker::new(cors_lister())),
         })
     }
 }

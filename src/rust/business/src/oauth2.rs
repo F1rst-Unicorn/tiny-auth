@@ -111,7 +111,7 @@ pub enum ProtocolError {
 }
 
 impl Display for ProtocolError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         let value = match self {
             ProtocolError::InvalidRequest => "invalid_request",
             ProtocolError::UnauthorizedClient => "unauthorized_client",

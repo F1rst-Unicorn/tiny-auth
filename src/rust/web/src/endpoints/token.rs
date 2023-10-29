@@ -290,7 +290,7 @@ mod tests {
     use actix_web::web::Data;
     use actix_web::web::Form;
     use test_log::test;
-    use tiny_auth_business::cors::test_fixtures::build_test_cors_lister;
+    use tiny_auth_business::cors::test_fixtures::cors_lister;
     use tiny_auth_business::oauth2::ProtocolError;
     use tiny_auth_business::oidc::ProtocolError as OidcError;
     use tiny_auth_business::store::test_fixtures::build_test_auth_code_store;
@@ -342,7 +342,7 @@ mod tests {
                 build_test_scope_store(),
                 build_test_issuer_config(),
             )),
-            cors_checker: Arc::new(CorsChecker::new(build_test_cors_lister())),
+            cors_checker: Arc::new(CorsChecker::new(cors_lister())),
         })
     }
 }

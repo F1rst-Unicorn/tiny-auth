@@ -69,7 +69,7 @@ pub enum ProtocolError {
 }
 
 impl Display for ProtocolError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             ProtocolError::OAuth2(e) => write!(f, "{}", e),
             ProtocolError::Oidc(e) => write!(f, "{}", e),
@@ -113,7 +113,7 @@ pub enum OidcProtocolError {
 }
 
 impl Display for OidcProtocolError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         let value = match self {
             OidcProtocolError::InteractionRequired => "interaction_required",
             OidcProtocolError::LoginRequired => "login_required",

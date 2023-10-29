@@ -44,8 +44,8 @@ use std::sync::Arc;
 use tera::Tera;
 use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::change_password::Handler;
+use tiny_auth_business::cors::inject::cors_lister;
 use tiny_auth_business::cors::CorsLister;
-use tiny_auth_business::cors::CorsListerImpl;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::jwk::Jwk;
 use tiny_auth_business::jwk::Jwks;
@@ -322,7 +322,7 @@ impl<'a> Constructor<'a> {
                 Some(openssl::nid::Nid::SECP384R1) => "P-384".to_string(),
                 Some(_) | None => {
                     error!("Unsupported curve in token key");
-                    return Err(Error::LoggedBeforeError);
+                    return Err(LoggedBeforeError);
                 }
             };
 
@@ -343,7 +343,7 @@ impl<'a> Constructor<'a> {
             Jwk::new_ecdsa(id, url, crv, x, y)
         } else {
             error!("Token key has unknown type, tried RSA and ECDSA");
-            return Err(Error::LoggedBeforeError);
+            return Err(LoggedBeforeError);
         };
 
         Ok(jwk)
@@ -351,10 +351,6 @@ impl<'a> Constructor<'a> {
 
     pub fn build_jwks(&self) -> Jwks {
         Jwks::with_keys(vec![self.jwk.clone()])
-    }
-
-    pub fn build_cors_lister(&self) -> Arc<dyn CorsLister> {
-        Arc::new(CorsListerImpl::new(self.config.web.cors.clone()))
     }
 
     fn encode_bignum(num: &BigNumRef) -> String {
@@ -423,7 +419,7 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
         self.build_jwks()
     }
     fn build_cors_lister(&self) -> Arc<dyn CorsLister> {
-        self.build_cors_lister()
+        Arc::new(cors_lister(self.config.web.cors.clone()))
     }
 
     fn tls_key(&self) -> Option<String> {

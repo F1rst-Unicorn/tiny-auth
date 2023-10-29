@@ -17,19 +17,16 @@
 
 use crate::util::iterate_directory;
 use crate::util::read_file;
+use log::error;
+use regex::Regex;
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 use tiny_auth_business::client::Client;
 use tiny_auth_business::scope::Scope;
 use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::ScopeStore;
 use tiny_auth_business::store::UserStore;
 use tiny_auth_business::user::User;
-
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-
-use regex::Regex;
-
-use log::error;
 
 pub struct FileUserStore {
     users: BTreeMap<String, User>,

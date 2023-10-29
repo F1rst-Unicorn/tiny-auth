@@ -21,13 +21,9 @@ use clap::ArgMatches;
 use clap::Command;
 use log::debug;
 use log::error;
-use log::LevelFilter;
-use log4rs::config::Appender;
-use log4rs::config::Config;
-use log4rs::config::Root;
-use log4rs::encode::pattern::PatternEncoder;
 use tiny_auth_main::config::parser::parse_config;
 use tiny_auth_main::constructor::Constructor;
+use tiny_auth_main::logging::initialise_from_verbosity;
 
 pub const FLAG_VERBOSE: &str = "verbose";
 pub const FLAG_CONFIG: &str = "config";
@@ -37,7 +33,7 @@ pub const FLAG_SCOPE: &str = "scope";
 
 fn main() {
     let args = parse_arguments();
-    initialise_logging(args.get_count(FLAG_VERBOSE));
+    initialise_from_verbosity(args.get_count(FLAG_VERBOSE));
 
     debug!("Starting up");
 
@@ -172,26 +168,4 @@ pub fn parse_arguments() -> ArgMatches {
                 .default_value(tiny_auth_main::cli_parser::FLAG_CONFIG_DEFAULT),
         );
     app.get_matches()
-}
-
-pub fn initialise_logging(verbosity_level: u8) {
-    let stdout = log4rs::append::console::ConsoleAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{level} {m}{n}")))
-        .build();
-
-    let level = match verbosity_level {
-        0 => LevelFilter::Info,
-        1 => LevelFilter::Debug,
-        _ => LevelFilter::Trace,
-    };
-
-    let config = Config::builder().appender(Appender::builder().build("stdout", Box::new(stdout)));
-
-    if let Err(e) = config
-        .build(Root::builder().appender("stdout").build(level))
-        .map(log4rs::init_config)
-    {
-        eprintln!("could not configure logging: {}", e);
-        std::process::exit(1);
-    }
 }

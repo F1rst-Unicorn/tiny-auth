@@ -340,7 +340,7 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     )
 }
 
-fn render_invalid_consent_request(tera: &tera::Tera) -> HttpResponse {
+fn render_invalid_consent_request(tera: &Tera) -> HttpResponse {
     render_template(
         "invalid_consent_request.html.j2",
         StatusCode::BAD_REQUEST,

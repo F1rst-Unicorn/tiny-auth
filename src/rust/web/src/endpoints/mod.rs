@@ -25,12 +25,14 @@ pub mod token;
 pub mod userinfo;
 pub mod webapp_root;
 
+use crate::cors::render_invalid_request;
 use crate::cors::CorsCheckResult;
+use crate::cors::CorsChecker;
 use actix_session::Session;
 use actix_web::http::header::HeaderValue;
 use actix_web::http::StatusCode;
-use actix_web::HttpResponse;
 use actix_web::HttpResponseBuilder;
+use actix_web::{HttpRequest, HttpResponse};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use log::debug;
@@ -38,13 +40,16 @@ use log::error;
 use serde::de::Deserialize as _;
 use serde::de::Visitor;
 use serde::Deserializer;
+use serde::Serialize as BaseSerialize;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::convert::TryFrom;
+use std::sync::Arc;
 use tera::Context;
 use tera::Tera;
+use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::oauth2::ProtocolError as OAuthError;
 use tiny_auth_business::oidc::Prompt;
 use tiny_auth_business::oidc::ProtocolError;
@@ -111,6 +116,20 @@ pub async fn method_not_allowed() -> HttpResponse {
 
 pub async fn not_found() -> HttpResponse {
     HttpResponse::NotFound().body("not found")
+}
+
+fn render_cors_result(
+    cors_lister: Arc<dyn CorsLister>,
+    request: &HttpRequest,
+    response: impl BaseSerialize,
+) -> HttpResponse {
+    match CorsChecker::new(cors_lister.clone()).check(request) {
+        CorsCheckResult::IllegalOrigin => render_invalid_request(),
+        approved @ (CorsCheckResult::ApprovedOrigin(_) | CorsCheckResult::NoOrigin) => approved
+            .with_headers(HttpResponse::Ok())
+            .content_type("application/json")
+            .json(response),
+    }
 }
 
 /// When which HTTP code: https://tools.ietf.org/html/rfc6749#section-5.2

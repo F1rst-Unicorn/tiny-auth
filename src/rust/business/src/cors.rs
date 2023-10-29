@@ -19,14 +19,8 @@ pub trait CorsLister: Send + Sync {
     fn is_cors_allowed(&self, domain: &str) -> bool;
 }
 
-pub struct CorsListerImpl {
+struct CorsListerImpl {
     approved_domains: Vec<String>,
-}
-
-impl CorsListerImpl {
-    pub fn new(approved_domains: Vec<String>) -> Self {
-        Self { approved_domains }
-    }
 }
 
 impl CorsLister for CorsListerImpl {
@@ -35,13 +29,20 @@ impl CorsLister for CorsListerImpl {
     }
 }
 
+pub mod inject {
+    use super::*;
+    pub fn cors_lister(approved_domains: Vec<String>) -> impl CorsLister {
+        CorsListerImpl { approved_domains }
+    }
+}
+
 pub mod test_fixtures {
     use super::*;
     use std::sync::Arc;
 
-    struct TestCorsLister {}
-
     const VALID_CORS_DOMAIN: &str = "http://valid.example";
+
+    struct TestCorsLister {}
 
     impl CorsLister for TestCorsLister {
         fn is_cors_allowed(&self, domain: &str) -> bool {
@@ -49,7 +50,7 @@ pub mod test_fixtures {
         }
     }
 
-    pub fn build_test_cors_lister() -> Arc<dyn CorsLister> {
+    pub fn cors_lister() -> Arc<dyn CorsLister> {
         Arc::new(TestCorsLister {})
     }
 }
