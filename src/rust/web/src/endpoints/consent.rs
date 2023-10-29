@@ -29,7 +29,6 @@ use actix_web::http::StatusCode;
 use actix_web::web;
 use actix_web::HttpResponse;
 use chrono::offset::Local;
-use chrono::Duration;
 use chrono::TimeZone;
 use log::debug;
 use log::warn;
@@ -257,8 +256,6 @@ async fn process_skipping_csrf(
             Some(client) => client,
         };
 
-        let expires_in = Duration::minutes(1);
-
         let auth_time = match session.get::<i64>(authenticate::AUTH_TIME_SESSION_KEY) {
             Err(_) | Ok(None) => {
                 debug!("missing auth_time");
@@ -299,7 +296,10 @@ async fn process_skipping_csrf(
         }
 
         response_parameters.insert("token_type", "bearer".to_string());
-        response_parameters.insert("expires_in", expires_in.num_seconds().to_string());
+        response_parameters.insert(
+            "expires_in",
+            token_creator.expiration().num_seconds().to_string(),
+        );
     }
 
     first_request

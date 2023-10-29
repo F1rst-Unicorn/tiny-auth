@@ -196,6 +196,10 @@ impl TokenCreator {
         result
     }
 
+    pub fn expiration(&self) -> Duration {
+        self.token_expiration
+    }
+
     pub fn renew(&self, token: &mut Token) {
         let now = self.clock.now();
         token.issuance_time = now.clone().timestamp();
