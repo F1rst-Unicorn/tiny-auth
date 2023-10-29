@@ -22,7 +22,8 @@ use crate::issuer_configuration::IssuerConfiguration;
 use crate::oauth2;
 use crate::oauth2::ClientType;
 use crate::oauth2::GrantType;
-use crate::scope::{parse_scope_names, Scope};
+use crate::scope::parse_scope_names;
+use crate::scope::Scope;
 use crate::store::AuthorizationCodeStore;
 use crate::store::ClientStore;
 use crate::store::ScopeStore;
@@ -726,6 +727,238 @@ mod tests {
         assert_eq!(Err(Error::ConfidentialClientMustAutenticate), response);
     }
 
+    #[test(tokio::test)]
+    async fn issue_valid_token_for_correct_password() {
+        let redirect_uri = "fdsa".to_string();
+        let auth_code_store = build_test_auth_code_store();
+        let auth_code = auth_code_store
+            .get_authorization_code(
+                CONFIDENTIAL_CLIENT,
+                USER,
+                &redirect_uri,
+                "",
+                Local::now(),
+                Local::now(),
+                Some("nonce".to_string()),
+            )
+            .await;
+        let request = Request {
+            grant_type: GrantType::AuthorizationCode,
+            code: Some(auth_code),
+            redirect_uri: Some(redirect_uri),
+            basic_authentication: Some((
+                CONFIDENTIAL_CLIENT.to_string(),
+                CONFIDENTIAL_CLIENT.to_string(),
+            )),
+            ..Request::default()
+        };
+
+        let response = uut_with_auth_code_store(auth_code_store)
+            .grant_tokens(request)
+            .await;
+
+        assert!(response.is_ok());
+        let response = response.unwrap();
+        assert!(!response.0.is_empty());
+        assert!(response.1.is_some());
+    }
+
+    #[test(tokio::test)]
+    async fn public_client_cannot_get_access_token_for_itself() {
+        let request = Request {
+            grant_type: GrantType::ClientCredentials,
+            basic_authentication: Some((PUBLIC_CLIENT.to_string(), PUBLIC_CLIENT.to_string())),
+            ..Request::default()
+        };
+
+        let response = uut().grant_tokens(request).await;
+
+        assert_eq!(Err(Error::InvalidAuthorizationHeader), response);
+    }
+
+    #[test(tokio::test)]
+    async fn confidential_client_gets_access_token_for_itself() {
+        let request = Request {
+            grant_type: GrantType::ClientCredentials,
+            basic_authentication: Some((
+                CONFIDENTIAL_CLIENT.to_string(),
+                CONFIDENTIAL_CLIENT.to_string(),
+            )),
+            ..Request::default()
+        };
+
+        let response = uut().grant_tokens(request).await;
+
+        assert!(response.is_ok());
+        let response = response.unwrap();
+        assert!(!response.0.is_empty());
+        assert!(response.1.is_some());
+    }
+
+    #[test(tokio::test)]
+    async fn missing_username_is_rejected_with_password_grant() {
+        let request = Request {
+            grant_type: GrantType::Password,
+            basic_authentication: Some((
+                CONFIDENTIAL_CLIENT.to_string(),
+                CONFIDENTIAL_CLIENT.to_string(),
+            )),
+            password: Some(USER.to_string()),
+            ..Request::default()
+        };
+
+        let response = uut().grant_tokens(request).await;
+
+        assert_eq!(Err(Error::MissingUsername), response);
+    }
+
+    #[test(tokio::test)]
+    async fn missing_password_is_rejected_with_password_grant() {
+        let request = Request {
+            grant_type: GrantType::Password,
+            basic_authentication: Some((
+                CONFIDENTIAL_CLIENT.to_string(),
+                CONFIDENTIAL_CLIENT.to_string(),
+            )),
+            username: Some(USER.to_string()),
+            ..Request::default()
+        };
+
+        let response = uut().grant_tokens(request).await;
+
+        assert_eq!(Err(Error::MissingPassword), response);
+    }
+
+    #[test(tokio::test)]
+    async fn public_client_cannot_use_password_grant() {
+        let request = Request {
+            grant_type: GrantType::Password,
+            basic_authentication: Some((PUBLIC_CLIENT.to_string(), PUBLIC_CLIENT.to_string())),
+            username: Some(USER.to_string()),
+            password: Some(USER.to_string()),
+            ..Request::default()
+        };
+
+        let response = uut().grant_tokens(request).await;
+
+        assert_eq!(Err(Error::InvalidAuthorizationHeader), response);
+    }
+
+    #[test(tokio::test)]
+    async fn confidential_client_can_use_password_grant() {
+        let request = Request {
+            grant_type: GrantType::Password,
+            basic_authentication: Some((
+                CONFIDENTIAL_CLIENT.to_string(),
+                CONFIDENTIAL_CLIENT.to_string(),
+            )),
+            username: Some(USER.to_string()),
+            password: Some(USER.to_string()),
+            ..Request::default()
+        };
+
+        let response = uut().grant_tokens(request).await;
+
+        assert!(response.is_ok());
+        let response = response.unwrap();
+        assert!(!response.0.is_empty());
+        assert!(response.1.is_some());
+    }
+
+    #[test(tokio::test)]
+    async fn missing_refresh_token_is_rejected() {
+        let request = Request {
+            grant_type: GrantType::RefreshToken,
+            ..Request::default()
+        };
+
+        let response = uut().grant_tokens(request).await;
+
+        assert_eq!(Err(Error::MissingRefreshToken), response);
+    }
+
+    #[test(tokio::test)]
+    async fn invalid_refresh_token_is_rejected() {
+        let request = Request {
+            grant_type: GrantType::RefreshToken,
+            refresh_token: Some("invalid".to_string()),
+            ..Request::default()
+        };
+
+        let response = uut().grant_tokens(request).await;
+
+        assert_eq!(Err(Error::InvalidRefreshToken), response);
+    }
+
+    #[test(tokio::test)]
+    async fn invalid_client_credentials_with_refresh_token_are_rejected() {
+        let request = Request {
+            grant_type: GrantType::RefreshToken,
+            basic_authentication: Some((CONFIDENTIAL_CLIENT.to_string(), "wrong".to_string())),
+            refresh_token: Some(build_refresh_token(CONFIDENTIAL_CLIENT)),
+            ..Request::default()
+        };
+
+        let response = uut().grant_tokens(request).await;
+
+        assert_eq!(Err(Error::WrongClientIdOrPassword), response);
+    }
+
+    #[test(tokio::test)]
+    async fn refresh_token_from_different_client_is_rejected() {
+        let request = Request {
+            grant_type: GrantType::RefreshToken,
+            basic_authentication: Some((
+                CONFIDENTIAL_CLIENT.to_string(),
+                CONFIDENTIAL_CLIENT.to_string(),
+            )),
+            refresh_token: Some(build_refresh_token(PUBLIC_CLIENT)),
+            ..Request::default()
+        };
+
+        let response = uut().grant_tokens(request).await;
+
+        assert_eq!(Err(Error::InvalidRefreshToken), response);
+    }
+
+    #[test(tokio::test)]
+    async fn successful_refresh_token_authentication() {
+        let request = Request {
+            grant_type: GrantType::RefreshToken,
+            basic_authentication: Some((
+                CONFIDENTIAL_CLIENT.to_string(),
+                CONFIDENTIAL_CLIENT.to_string(),
+            )),
+            refresh_token: Some(build_refresh_token(CONFIDENTIAL_CLIENT)),
+            ..Request::default()
+        };
+
+        let response = uut().grant_tokens(request).await;
+
+        assert!(response.is_ok());
+        let response = response.unwrap();
+        assert!(!response.0.is_empty());
+        assert!(response.1.is_some());
+    }
+
+    #[test(tokio::test)]
+    async fn successful_authentication_with_secret_as_post_parameter() {
+        let request = Request {
+            grant_type: GrantType::RefreshToken,
+            refresh_token: Some(build_refresh_token(CONFIDENTIAL_CLIENT)),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            client_secret: Some(CONFIDENTIAL_CLIENT.to_string()),
+            ..Request::default()
+        };
+
+        let response = uut().grant_tokens(request).await;
+
+        assert!(response.is_ok());
+        let response = response.unwrap();
+        assert!(!response.0.is_empty());
+        assert!(response.1.is_some());
+    }
+
     fn uut() -> Handler {
         uut_with_auth_code_store(build_test_auth_code_store())
     }
@@ -741,5 +974,20 @@ mod tests {
             scope_store: build_test_scope_store(),
             issuer_configuration: build_test_issuer_config(),
         }
+    }
+
+    fn build_refresh_token(client_id: &str) -> String {
+        let token_creator = build_test_token_creator();
+        let token = Token::build(
+            &build_test_user_store().get(USER).unwrap(),
+            &build_test_client_store().get(client_id).unwrap(),
+            &Vec::new(),
+            Local::now(),
+            Duration::minutes(3),
+            0,
+        );
+        token_creator
+            .create_refresh_token(RefreshToken::from(token, Duration::minutes(1), &Vec::new()))
+            .unwrap()
     }
 }
