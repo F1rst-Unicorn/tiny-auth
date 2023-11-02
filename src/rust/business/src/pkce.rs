@@ -32,8 +32,14 @@ pub enum Error {
     InvalidCharacter,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CodeChallengeMethod {
+    Plain,
+    SHA256,
+}
+
 #[derive(PartialEq, Eq)]
-pub struct CodeChallenge<'a>(Cow<'a, str>);
+pub struct CodeChallenge<'a>(CodeChallengeMethod, Cow<'a, str>);
 
 const PATTERN: &str = "^[-a-zA-Z0-9._~]+$";
 
@@ -46,7 +52,22 @@ impl<'a> TryFrom<&'a str> for CodeChallenge<'a> {
         } else if !pattern.is_match(value) {
             Err(Error::InvalidCharacter)
         } else {
-            Ok(CodeChallenge(Cow::Borrowed(value)))
+            Ok(CodeChallenge(
+                CodeChallengeMethod::SHA256,
+                Cow::Borrowed(value),
+            ))
+        }
+    }
+}
+
+impl<'a> CodeChallenge<'a> {
+    pub fn verify<'b>(&'a self, val: CodeVerifier<'b>) -> bool {
+        match self.0 {
+            CodeChallengeMethod::Plain => self.1 == val.0,
+            CodeChallengeMethod::SHA256 => {
+                self.1
+                    == Cow::<str>::Owned(URL_SAFE_NO_PAD.encode(digest(&SHA256, val.0.as_bytes())))
+            }
         }
     }
 }
@@ -65,14 +86,6 @@ impl<'a> TryFrom<&'a str> for CodeVerifier<'a> {
         } else {
             Ok(CodeVerifier(Cow::Borrowed(value)))
         }
-    }
-}
-
-impl<'a> From<CodeVerifier<'a>> for CodeChallenge<'a> {
-    fn from(val: CodeVerifier<'a>) -> Self {
-        CodeChallenge(Cow::Owned(
-            URL_SAFE_NO_PAD.encode(digest(&SHA256, val.0.as_bytes())),
-        ))
     }
 }
 

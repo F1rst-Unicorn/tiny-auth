@@ -52,8 +52,7 @@ pub trait ScopeStore: Send + Sync {
     fn get_scope_names(&self) -> Vec<String>;
 }
 
-// Recommended lifetime is 10 minutes
-// https://tools.ietf.org/html/rfc6749#section-4.1.2
+/// Recommended lifetime is 10 minutes as of the [RFC](https://tools.ietf.org/html/rfc6749#section-4.1.2)
 pub const AUTH_CODE_LIFE_TIME: i64 = 10;
 
 pub struct AuthorizationCodeRecord {
