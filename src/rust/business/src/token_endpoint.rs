@@ -22,6 +22,7 @@ use crate::issuer_configuration::IssuerConfiguration;
 use crate::oauth2;
 use crate::oauth2::ClientType;
 use crate::oauth2::GrantType;
+use crate::pkce::{CodeChallenge, CodeVerifier};
 use crate::scope::parse_scope_names;
 use crate::scope::Scope;
 use crate::store::ClientStore;
@@ -90,6 +91,7 @@ pub struct Request {
     pub refresh_token: Option<String>,
     pub client_assertion: Option<String>,
     pub client_assertion_type: Option<String>,
+    pub pkce_verifier: Option<String>,
 }
 
 #[derive(Clone)]
@@ -246,6 +248,10 @@ impl Handler {
         if record.stored_duration > Duration::minutes(AUTH_CODE_LIFE_TIME) {
             debug!("code has expired");
             return Err(Error::InvalidAuthorizationCode);
+        }
+
+        if let Some(challenge) = record.pkce_challenge {
+            verify_pkce(challenge, request.pkce_verifier)?;
         }
 
         let user = self.user_store.get(&record.username).ok_or_else(|| {
@@ -532,6 +538,27 @@ pub enum Error {
     UnsupportedGrantType,
     TokenEncodingFailed,
     RefreshTokenEncodingFailed,
+}
+
+fn verify_pkce(challenge: CodeChallenge, verifier: Option<String>) -> Result<(), Error> {
+    if let Some(verifier) = verifier {
+        let verifier = match CodeVerifier::try_from(verifier.as_str()) {
+            Err(e) => {
+                debug!("PKCE verifier '{verifier}' invalid: {e}");
+                return Err(Error::InvalidAuthorizationCode);
+            }
+            Ok(v) => v,
+        };
+        if !challenge.verify(verifier) {
+            debug!("PKCE verifier doesn't match");
+            Err(Error::InvalidAuthorizationCode)
+        } else {
+            Ok(())
+        }
+    } else {
+        debug!("client requires PKCE but request contains none");
+        Err(Error::InvalidAuthorizationCode)
+    }
 }
 
 #[cfg(test)]

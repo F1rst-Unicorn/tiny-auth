@@ -33,7 +33,7 @@ use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::scope::Scope;
 use tiny_auth_business::token_endpoint::Error;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 pub struct Request {
     grant_type: Option<GrantType>,
 
@@ -76,6 +76,10 @@ pub struct Request {
     #[serde(default)]
     #[serde(deserialize_with = "deserialise_empty_as_none")]
     client_assertion_type: Option<String>,
+
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    code_verifier: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -275,6 +279,7 @@ impl Handler {
                 refresh_token: request.refresh_token.take(),
                 client_assertion: request.client_assertion.take(),
                 client_assertion_type: request.client_assertion_type.take(),
+                pkce_verifier: request.code_verifier.take(),
             })
             .await
     }
@@ -306,17 +311,9 @@ mod tests {
     async fn missing_grant_type_is_rejected() {
         let req = TestRequest::post().to_http_request();
         let form = Form(Request {
-            grant_type: None,
             code: Some("fdsa".to_string()),
-            client_id: None,
-            client_secret: None,
             redirect_uri: Some("fdsa".to_string()),
-            scope: None,
-            username: None,
-            password: None,
-            refresh_token: None,
-            client_assertion: None,
-            client_assertion_type: None,
+            ..Request::default()
         });
 
         let resp = post(req, form, build_test_handler()).await;
