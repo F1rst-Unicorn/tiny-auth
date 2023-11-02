@@ -37,7 +37,12 @@ dependencies {
 group = "de.njsm.tiny-auth"
 version = "1.0"
 description = "test"
-java.sourceCompatibility = JavaVersion.VERSION_11
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
 
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
