@@ -85,6 +85,14 @@ public class Identifiers {
 
     public static final String CLIENT_ASSERTION_TYPE_VALUE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
+    public static final String CODE_CHALLENGE = "code_challenge";
+
+    public static final String CODE_VERIFIER = "code_verifier";
+
+    public static final String CODE_CHALLENGE_METHOD = "code_challenge_method";
+
+    public static final String CODE_CHALLENGE_METHOD_S256 = "S256";
+
     public enum ResponseType {
         ID_TOKEN {
             @Override

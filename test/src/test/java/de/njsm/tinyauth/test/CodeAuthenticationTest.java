@@ -25,7 +25,13 @@ import java.util.Set;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.ResponseType;
 
-public class CodeAuthenticationTest extends TinyAuthBrowserTest implements ConformanceTest, RefreshTokenTest, MissingNonceSuccessTest, AuthorizationCodeTests {
+public class CodeAuthenticationTest
+        extends TinyAuthBrowserTest
+        implements
+                ConformanceTest,
+                RefreshTokenTest,
+                MissingNonceSuccessTest,
+                AuthorizationCodeTests {
 
     @BeforeEach
     void setUp() {

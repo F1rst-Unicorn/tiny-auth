@@ -28,6 +28,7 @@ import io.restassured.specification.RequestSpecification;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Map;
 import java.util.Set;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
@@ -43,6 +44,19 @@ public class TokenEndpoint {
                 .contentType(ContentType.JSON)
                 .header("Cache-Control", "no-store")
                 .header("Pragma", "no-cache");
+    }
+
+    public ValidatableResponse requestWithAuthorizationCodeAndBasicAuth(
+            Client client,
+            String authorizationCode,
+            Map<String, String> additionalParameters) {
+        LOG.info("getting token with authorization code");
+        return formAuthCodeRequest(client, authorizationCode)
+                .formParams(additionalParameters)
+                .auth().preemptive().basic(client.getClientId(), client.getPassword())
+                .post()
+        .then()
+                .log().everything();
     }
 
     public ValidatableResponse requestWithAuthorizationCodeAndClientSecretPost(Client client, String authorizationCode) {

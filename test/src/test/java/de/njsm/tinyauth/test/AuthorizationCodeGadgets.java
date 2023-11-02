@@ -71,6 +71,15 @@ public interface AuthorizationCodeGadgets extends Gadgets, RedirectQueryExtracto
         return assertOnRedirect(browser);
     }
 
+    default String fetchAuthCode(Browser browser, Map<String, String> additionalParamters) throws Exception {
+        browser.startAuthenticationWithAdditionalParameters(getClient(), getState(), getScopes(), getNonce(), additionalParamters)
+                .withUser(getUser())
+                .login()
+                .confirm();
+
+        return assertOnRedirect(browser);
+    }
+
     default String assertOnRedirect(Browser browser) throws Exception {
         HttpUrl oidcRedirect = getLastOidcRedirect(browser);
 

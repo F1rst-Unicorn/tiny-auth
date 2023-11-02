@@ -34,6 +34,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockserver.model.HttpRequest.request;
 import static org.mockserver.model.HttpResponse.response;
 
@@ -45,6 +46,8 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
     private String state;
 
     private String nonce;
+
+    private String codeVerifier;
 
     User user;
 
@@ -83,6 +86,14 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
         state = "+" + Base64.getEncoder().encodeToString(randomness);
         rng.nextBytes(randomness);
         nonce = Base64.getEncoder().encodeToString(randomness);
+        randomness = new byte[32];
+        rng.nextBytes(randomness);
+        String string = Base64.getEncoder().withoutPadding().encodeToString(randomness);
+        assertTrue(string.length() >= 43, "code verifier is too short, 43 <= n <= 128");
+        codeVerifier = string
+                .replace("/", "a")
+                .replace("+", "b")
+                .substring(0, Math.min(string.length(), 128));
     }
 
     @BeforeEach
@@ -112,4 +123,8 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
     }
 
     public abstract Set<Identifiers.ResponseType> getResponseTypes();
+
+    public String getCodeVerifier() {
+        return codeVerifier;
+    }
 }
