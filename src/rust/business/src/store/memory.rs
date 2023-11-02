@@ -15,8 +15,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::store::AuthorizationCodeRecord;
+use crate::store::AuthorizationCodeRequest;
+use crate::store::AuthorizationCodeResponse;
 use crate::store::AuthorizationCodeStore;
+use crate::store::ValidationRequest;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -48,7 +50,7 @@ struct AuthCodeValue {
 
     insertion_time: DateTime<Local>,
 
-    auth_time: DateTime<Local>,
+    authentication_time: DateTime<Local>,
 
     nonce: Option<String>,
 }
@@ -87,19 +89,10 @@ pub async fn auth_code_clean_job(store: Arc<MemoryAuthorizationCodeStore>) {
 #[async_trait]
 impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
     #[allow(clippy::too_many_arguments)]
-    async fn get_authorization_code(
-        &self,
-        client_id: &str,
-        user: &str,
-        redirect_uri: &str,
-        scope: &str,
-        now: DateTime<Local>,
-        auth_time: DateTime<Local>,
-        nonce: Option<String>,
-    ) -> String {
+    async fn get_authorization_code<'a>(&self, request: AuthorizationCodeRequest<'a>) -> String {
         let mut store = self.store.write().await;
         let mut key = AuthCodeKey {
-            client_id: client_id.to_string(),
+            client_id: request.client_id.to_string(),
             authorization_code: "".to_string(),
         };
 
@@ -111,12 +104,12 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
                 store.insert(
                     key,
                     AuthCodeValue {
-                        redirect_uri: redirect_uri.to_string(),
-                        user: user.to_string(),
-                        scope: scope.to_string(),
-                        insertion_time: now,
-                        auth_time,
-                        nonce,
+                        redirect_uri: request.redirect_uri.to_string(),
+                        user: request.user.to_string(),
+                        scope: request.scope.to_string(),
+                        insertion_time: request.insertion_time,
+                        authentication_time: request.authentication_time,
+                        nonce: request.nonce,
                     },
                 );
                 break auth_code;
@@ -124,25 +117,25 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
         }
     }
 
-    async fn validate(
+    async fn validate<'a>(
         &self,
-        client_id: &str,
-        authorization_code: &str,
-        now: DateTime<Local>,
-    ) -> Option<AuthorizationCodeRecord> {
+        request: ValidationRequest<'a>,
+    ) -> Option<AuthorizationCodeResponse> {
         let mut store = self.store.write().await;
 
         let value = store.remove(&AuthCodeKey {
-            client_id: client_id.to_string(),
-            authorization_code: authorization_code.to_string(),
+            client_id: request.client_id.to_string(),
+            authorization_code: request.authorization_code.to_string(),
         })?;
 
-        Some(AuthorizationCodeRecord {
+        Some(AuthorizationCodeResponse {
             redirect_uri: value.redirect_uri.clone(),
-            stored_duration: now.signed_duration_since(value.insertion_time),
+            stored_duration: request
+                .validation_time
+                .signed_duration_since(value.insertion_time),
             username: value.user,
             scopes: value.scope,
-            auth_time: value.auth_time,
+            authentication_time: value.authentication_time,
             nonce: value.nonce,
         })
     }
@@ -170,18 +163,24 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code(
-                "client",
-                "user",
-                "redirect_uri",
-                "",
-                date,
-                date,
-                Some("nonce".to_string()),
-            )
+            .get_authorization_code(AuthorizationCodeRequest {
+                client_id: "client",
+                user: "user",
+                redirect_uri: "redirect_uri",
+                scope: "",
+                insertion_time: date,
+                authentication_time: date,
+                nonce: Some("nonce".to_string()),
+            })
             .await;
 
-        let output = uut.validate("client", &auth_code, date + duration).await;
+        let output = uut
+            .validate(ValidationRequest {
+                client_id: "client",
+                authorization_code: &auth_code,
+                validation_time: date + duration,
+            })
+            .await;
 
         assert!(output.is_some());
         let output = output.unwrap();
@@ -197,21 +196,27 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code(
-                "client",
-                "user",
-                "redirect_uri",
-                "",
-                date,
-                date,
-                Some("nonce".to_string()),
-            )
+            .get_authorization_code(AuthorizationCodeRequest {
+                client_id: "client",
+                user: "user",
+                redirect_uri: "redirect_uri",
+                scope: "",
+                insertion_time: date,
+                authentication_time: date,
+                nonce: Some("nonce".to_string()),
+            })
             .await;
 
         uut.clear_expired_codes(date + duration + duration, duration)
             .await;
 
-        let output = uut.validate("client", &auth_code, date + duration).await;
+        let output = uut
+            .validate(ValidationRequest {
+                client_id: "client",
+                authorization_code: &auth_code,
+                validation_time: date + duration,
+            })
+            .await;
 
         assert!(output.is_none());
     }
@@ -222,20 +227,26 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code(
-                "client",
-                "user",
-                "redirect_uri",
-                "",
-                date,
-                date,
-                Some("nonce".to_string()),
-            )
+            .get_authorization_code(AuthorizationCodeRequest {
+                client_id: "client",
+                user: "user",
+                redirect_uri: "redirect_uri",
+                scope: "",
+                insertion_time: date,
+                authentication_time: date,
+                nonce: Some("nonce".to_string()),
+            })
             .await;
 
         uut.clear_expired_codes(date + duration, duration).await;
 
-        let output = uut.validate("client", &auth_code, date + duration).await;
+        let output = uut
+            .validate(ValidationRequest {
+                client_id: "client",
+                authorization_code: &auth_code,
+                validation_time: date + duration,
+            })
+            .await;
 
         assert!(output.is_some());
         let output = output.unwrap();
@@ -251,21 +262,27 @@ mod tests {
         let date = Local::now();
         let duration = Duration::minutes(1);
         let auth_code = uut
-            .get_authorization_code(
-                "client",
-                "user",
-                "redirect_uri",
-                "",
-                date,
-                date,
-                Some("nonce".to_string()),
-            )
+            .get_authorization_code(AuthorizationCodeRequest {
+                client_id: "client",
+                user: "user",
+                redirect_uri: "redirect_uri",
+                scope: "",
+                insertion_time: date,
+                authentication_time: date,
+                nonce: Some("nonce".to_string()),
+            })
             .await;
 
         uut.clear_expired_codes(date + duration + Duration::nanoseconds(1), duration)
             .await;
 
-        let output = uut.validate("client", &auth_code, date + duration).await;
+        let output = uut
+            .validate(ValidationRequest {
+                client_id: "client",
+                authorization_code: &auth_code,
+                validation_time: date + duration,
+            })
+            .await;
 
         assert!(output.is_none());
     }

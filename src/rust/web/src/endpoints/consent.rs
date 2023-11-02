@@ -43,10 +43,10 @@ use tera::Tera;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
 use tiny_auth_business::scope::{parse_scope_names, ScopeDescription};
-use tiny_auth_business::store::AuthorizationCodeStore;
 use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::ScopeStore;
 use tiny_auth_business::store::UserStore;
+use tiny_auth_business::store::{AuthorizationCodeRequest, AuthorizationCodeStore};
 use tiny_auth_business::token::TokenCreator;
 use url::Url;
 
@@ -224,15 +224,15 @@ async fn process_skipping_csrf(
 
     if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Code)) {
         let code = auth_code_store
-            .get_authorization_code(
-                client_name,
-                &username,
-                &redirect_uri,
-                &scopes.join(" "),
-                Local::now(),
-                auth_time,
-                first_request.nonce.clone(),
-            )
+            .get_authorization_code(AuthorizationCodeRequest {
+                client_id: client_name,
+                user: &username,
+                redirect_uri: &redirect_uri,
+                scope: &scopes.join(" "),
+                insertion_time: Local::now(),
+                authentication_time: auth_time,
+                nonce: first_request.nonce.clone(),
+            })
             .await;
         response_parameters.insert("code", code);
     }

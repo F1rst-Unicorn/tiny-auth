@@ -24,11 +24,11 @@ use crate::oauth2::ClientType;
 use crate::oauth2::GrantType;
 use crate::scope::parse_scope_names;
 use crate::scope::Scope;
-use crate::store::AuthorizationCodeStore;
 use crate::store::ClientStore;
 use crate::store::ScopeStore;
 use crate::store::UserStore;
 use crate::store::AUTH_CODE_LIFE_TIME;
+use crate::store::{AuthorizationCodeStore, ValidationRequest};
 use crate::token::RefreshToken;
 use crate::token::Token;
 use crate::token::TokenCreator;
@@ -224,7 +224,11 @@ impl Handler {
 
         let record = self
             .auth_code_store
-            .validate(&client.client_id, code, Local::now())
+            .validate(ValidationRequest {
+                client_id: &client.client_id,
+                authorization_code: code,
+                validation_time: Local::now(),
+            })
             .await
             .ok_or_else(|| {
                 debug!(
@@ -255,7 +259,7 @@ impl Handler {
             user,
             client,
             scopes,
-            record.auth_time.timestamp(),
+            record.authentication_time.timestamp(),
             record.nonce,
         ))
     }
@@ -539,6 +543,7 @@ mod tests {
     use crate::store::test_fixtures::PUBLIC_CLIENT;
     use crate::store::test_fixtures::UNKNOWN_CLIENT_ID;
     use crate::store::test_fixtures::{build_test_auth_code_store, CONFIDENTIAL_CLIENT, USER};
+    use crate::store::AuthorizationCodeRequest;
     use crate::test_fixtures::build_test_authenticator;
     use crate::test_fixtures::build_test_issuer_config;
     use crate::test_fixtures::build_test_token_creator;
@@ -616,15 +621,15 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
-            .get_authorization_code(
-                PUBLIC_CLIENT,
-                USER,
-                &redirect_uri,
-                "",
-                Local::now(),
-                Local::now(),
-                Some("nonce".to_string()),
-            )
+            .get_authorization_code(AuthorizationCodeRequest {
+                client_id: PUBLIC_CLIENT,
+                user: USER,
+                redirect_uri: &redirect_uri,
+                scope: "",
+                insertion_time: Local::now(),
+                authentication_time: Local::now(),
+                nonce: Some("nonce".to_string()),
+            })
             .await;
         let request = Request {
             grant_type: GrantType::AuthorizationCode,
@@ -647,15 +652,15 @@ mod tests {
         let auth_code_store = build_test_auth_code_store();
         let creation_time = Local::now() - Duration::minutes(2 * AUTH_CODE_LIFE_TIME);
         let auth_code = auth_code_store
-            .get_authorization_code(
-                PUBLIC_CLIENT,
-                USER,
-                &redirect_uri,
-                "",
-                creation_time,
-                Local::now(),
-                Some("nonce".to_string()),
-            )
+            .get_authorization_code(AuthorizationCodeRequest {
+                client_id: PUBLIC_CLIENT,
+                user: USER,
+                redirect_uri: &redirect_uri,
+                scope: "",
+                insertion_time: creation_time,
+                authentication_time: Local::now(),
+                nonce: Some("nonce".to_string()),
+            })
             .await;
         let request = Request {
             grant_type: GrantType::AuthorizationCode,
@@ -677,15 +682,15 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
-            .get_authorization_code(
-                PUBLIC_CLIENT,
-                USER,
-                &redirect_uri,
-                "",
-                Local::now(),
-                Local::now(),
-                Some("nonce".to_string()),
-            )
+            .get_authorization_code(AuthorizationCodeRequest {
+                client_id: PUBLIC_CLIENT,
+                user: USER,
+                redirect_uri: &redirect_uri,
+                scope: "",
+                insertion_time: Local::now(),
+                authentication_time: Local::now(),
+                nonce: Some("nonce".to_string()),
+            })
             .await;
         let request = Request {
             grant_type: GrantType::AuthorizationCode,
@@ -726,15 +731,15 @@ mod tests {
         let redirect_uri = "fdsa".to_string();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
-            .get_authorization_code(
-                CONFIDENTIAL_CLIENT,
-                USER,
-                &redirect_uri,
-                "",
-                Local::now(),
-                Local::now(),
-                Some("nonce".to_string()),
-            )
+            .get_authorization_code(AuthorizationCodeRequest {
+                client_id: CONFIDENTIAL_CLIENT,
+                user: USER,
+                redirect_uri: &redirect_uri,
+                scope: "",
+                insertion_time: Local::now(),
+                authentication_time: Local::now(),
+                nonce: Some("nonce".to_string()),
+            })
             .await;
         let request = Request {
             grant_type: GrantType::AuthorizationCode,

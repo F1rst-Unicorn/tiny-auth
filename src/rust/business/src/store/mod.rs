@@ -55,7 +55,23 @@ pub trait ScopeStore: Send + Sync {
 /// Recommended lifetime is 10 minutes as of the [RFC](https://tools.ietf.org/html/rfc6749#section-4.1.2)
 pub const AUTH_CODE_LIFE_TIME: i64 = 10;
 
-pub struct AuthorizationCodeRecord {
+pub struct AuthorizationCodeRequest<'a> {
+    pub client_id: &'a str,
+
+    pub user: &'a str,
+
+    pub redirect_uri: &'a str,
+
+    pub scope: &'a str,
+
+    pub insertion_time: DateTime<Local>,
+
+    pub authentication_time: DateTime<Local>,
+
+    pub nonce: Option<String>,
+}
+
+pub struct AuthorizationCodeResponse {
     pub redirect_uri: String,
 
     pub stored_duration: Duration,
@@ -64,31 +80,27 @@ pub struct AuthorizationCodeRecord {
 
     pub scopes: String,
 
-    pub auth_time: DateTime<Local>,
+    pub authentication_time: DateTime<Local>,
 
     pub nonce: Option<String>,
 }
 
+pub struct ValidationRequest<'a> {
+    pub client_id: &'a str,
+
+    pub authorization_code: &'a str,
+
+    pub validation_time: DateTime<Local>,
+}
+
 #[async_trait]
 pub trait AuthorizationCodeStore: Send + Sync {
-    #[allow(clippy::too_many_arguments)]
-    async fn get_authorization_code(
-        &self,
-        client_id: &str,
-        user: &str,
-        redirect_uri: &str,
-        scope: &str,
-        now: DateTime<Local>,
-        auth_time: DateTime<Local>,
-        nonce: Option<String>,
-    ) -> String;
+    async fn get_authorization_code<'a>(&self, request: AuthorizationCodeRequest<'a>) -> String;
 
-    async fn validate(
+    async fn validate<'a>(
         &self,
-        client_id: &str,
-        authorization_code: &str,
-        now: DateTime<Local>,
-    ) -> Option<AuthorizationCodeRecord>;
+        request: ValidationRequest<'a>,
+    ) -> Option<AuthorizationCodeResponse>;
 }
 
 pub mod test_fixtures {
@@ -198,46 +210,44 @@ pub mod test_fixtures {
     #[async_trait]
     impl AuthorizationCodeStore for TestAuthorizationCodeStore {
         #[allow(clippy::too_many_arguments)]
-        async fn get_authorization_code(
+        async fn get_authorization_code<'a>(
             &self,
-            client_id: &str,
-            user: &str,
-            redirect_uri: &str,
-            scope: &str,
-            now: DateTime<Local>,
-            auth_time: DateTime<Local>,
-            nonce: Option<String>,
+            request: AuthorizationCodeRequest<'a>,
         ) -> String {
             self.store.borrow_mut().insert(
-                (client_id.to_string(), now.to_rfc3339()),
                 (
-                    redirect_uri.to_string(),
-                    user.to_string(),
-                    scope.to_string(),
-                    now,
-                    auth_time,
-                    nonce,
+                    request.client_id.to_string(),
+                    request.insertion_time.to_rfc3339(),
+                ),
+                (
+                    request.redirect_uri.to_string(),
+                    request.user.to_string(),
+                    request.scope.to_string(),
+                    request.insertion_time,
+                    request.authentication_time,
+                    request.nonce,
                 ),
             );
-            now.to_rfc3339()
+            request.insertion_time.to_rfc3339()
         }
 
-        async fn validate(
+        async fn validate<'a>(
             &self,
-            client_id: &str,
-            authorization_code: &str,
-            now: DateTime<Local>,
-        ) -> Option<AuthorizationCodeRecord> {
-            let (redirect_uri, user, scope, creation_datetime, auth_time, nonce) = self
-                .store
-                .borrow_mut()
-                .remove(&(client_id.to_string(), authorization_code.to_string()))?;
-            Some(AuthorizationCodeRecord {
+            request: ValidationRequest<'a>,
+        ) -> Option<AuthorizationCodeResponse> {
+            let (redirect_uri, user, scope, insertion_time, authentication_time, nonce) =
+                self.store.borrow_mut().remove(&(
+                    request.client_id.to_string(),
+                    request.authorization_code.to_string(),
+                ))?;
+            Some(AuthorizationCodeResponse {
                 redirect_uri,
-                stored_duration: now.signed_duration_since(creation_datetime),
+                stored_duration: request
+                    .validation_time
+                    .signed_duration_since(insertion_time),
                 username: user,
                 scopes: scope,
-                auth_time,
+                authentication_time,
                 nonce,
             })
         }

@@ -39,13 +39,13 @@ pub enum CodeChallengeMethod {
 }
 
 #[derive(PartialEq, Eq)]
-pub struct CodeChallenge<'a>(CodeChallengeMethod, Cow<'a, str>);
+pub struct CodeChallenge(CodeChallengeMethod, String);
 
 const PATTERN: &str = "^[-a-zA-Z0-9._~]+$";
 
-impl<'a> TryFrom<&'a str> for CodeChallenge<'a> {
+impl TryFrom<&str> for CodeChallenge {
     type Error = Error;
-    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
         let pattern = Regex::new(PATTERN).unwrap();
         if value.len() < 43 || value.len() > 128 {
             Err(Error::InvalidLength)
@@ -54,14 +54,14 @@ impl<'a> TryFrom<&'a str> for CodeChallenge<'a> {
         } else {
             Ok(CodeChallenge(
                 CodeChallengeMethod::SHA256,
-                Cow::Borrowed(value),
+                value.to_string(),
             ))
         }
     }
 }
 
-impl<'a> CodeChallenge<'a> {
-    pub fn verify<'b>(&'a self, val: CodeVerifier<'b>) -> bool {
+impl CodeChallenge {
+    pub fn verify(&self, val: CodeVerifier) -> bool {
         match self.0 {
             CodeChallengeMethod::Plain => self.1 == val.0,
             CodeChallengeMethod::SHA256 => {
