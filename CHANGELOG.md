@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Support for [PKCE](https://www.rfc-editor.org/rfc/rfc7636)
+  ([#75](https://j.njsm.de/git/veenj/tiny-auth/issues/75)).
+
 * Allow configuration of the cookie's `SameSite` attribute via configuration
   option `web.session same site policy`.
 
