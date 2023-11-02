@@ -32,7 +32,6 @@ url = "2.1.1"
 futures = "0.3"
 tera = "1.5.0"
 base64 = "0.21.2"
-systemd = "0.10.0"
 jsonwebtoken = "8.3.0"
 rand = "0.8.5"
 async-trait = "0.1.40"
@@ -40,12 +39,14 @@ rustls = { version = "0.20.8", features = ["dangerous_configuration"]}
 rustls-pemfile = "1.0.2"
 test-log = "0.2.12"
 env_logger = "*"
+systemd = "0.10.0"
 tonic = { version = "0.10.2", features = ["transport", "tls"] }
 tonic-reflection = "0.10.2"
 tonic-web = "0.10.2"
 prost = "0.12"
 tonic-build = "0.10.2"
 thiserror = "1.0.40"
+
 
 [workspace.dependencies.openssl]
 version = "0.10"

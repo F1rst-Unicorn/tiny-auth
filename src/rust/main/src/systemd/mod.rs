@@ -15,14 +15,19 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use systemd::daemon::notify;
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+use linux::notify_systemd;
+#[cfg(not(target_os = "linux"))]
+mod other;
+#[cfg(not(target_os = "linux"))]
+use other::notify_systemd;
 
 use std::str::FromStr;
 use std::time::Duration;
 
 use log::debug;
-use log::error;
-use log::trace;
 use log::warn;
 
 use tokio::task::spawn_blocking;
@@ -80,13 +85,4 @@ fn compute_watchdog_interval() -> u64 {
         .and_then(Result::ok)
         .unwrap_or(default);
     microseconds * 4 / 5
-}
-
-fn notify_systemd(message: &[(&str, &str)]) {
-    let result = notify(false, message.iter());
-    match result {
-        Ok(false) => trace!("Running outside systemd"),
-        Err(e) => error!("error notifying systemd: {}", e),
-        _ => (),
-    }
 }

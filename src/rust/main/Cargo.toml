@@ -38,7 +38,6 @@ actix-rt.workspace = true
 actix-web.workspace = true
 tera.workspace = true
 base64.workspace = true
-systemd.workspace = true
 jsonwebtoken.workspace = true
 rustls.workspace = true
 openssl.workspace = true
@@ -46,6 +45,9 @@ log.workspace = true
 log4rs.workspace = true
 test-log.workspace = true
 env_logger.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+systemd.workspace = true
 
 [build-dependencies]
 vergen.workspace = true
