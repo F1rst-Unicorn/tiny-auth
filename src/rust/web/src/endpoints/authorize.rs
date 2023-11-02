@@ -18,6 +18,7 @@
 use super::deserialise_empty_as_none;
 use super::parse_prompt;
 use super::render_template;
+use crate::endpoints::render_redirect_error;
 use crate::endpoints::server_error;
 use actix_session::Session;
 use actix_web::http::StatusCode;
@@ -39,6 +40,8 @@ use tiny_auth_business::oidc::OidcResponseType;
 use tiny_auth_business::oidc::Prompt;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::oidc::ResponseType;
+use tiny_auth_business::pkce::CodeChallengeMethod::Plain;
+use tiny_auth_business::pkce::{CodeChallenge, CodeChallengeMethod};
 use tiny_auth_business::scope::parse_scope_names;
 use tiny_auth_business::store::ClientStore;
 
@@ -114,6 +117,14 @@ pub struct Request {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub acr_values: Option<String>,
+
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    pub code_challenge_method: Option<String>,
+
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    pub code_challenge: Option<String>,
 }
 
 impl Request {
@@ -223,6 +234,59 @@ pub async fn handle(
         );
     }
 
+    match (
+        query.code_challenge.as_ref(),
+        query.code_challenge_method.as_ref(),
+    ) {
+        (None, None) => (),
+        (Some(challenge), Some(method)) => {
+            match CodeChallengeMethod::try_from(method) {
+                Err(_) => {
+                    debug!("unknown code_challenge_method '{method}'");
+                    return render_redirect_error(
+                        &redirect_uri,
+                        ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                        "code_challenge_method invalid",
+                        &client_state,
+                        query.encode_redirect_to_fragment(),
+                    );
+                }
+                Ok(method) => {
+                    if method == Plain {
+                        debug!("code_challenge_method {method} is insecure and not supported");
+                        return render_redirect_error(
+                            &redirect_uri,
+                            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                            "code_challenge_method invalid",
+                            &client_state,
+                            query.encode_redirect_to_fragment(),
+                        );
+                    }
+                }
+            }
+            if let Err(e) = CodeChallenge::try_from(challenge) {
+                debug!("invalid code_challenge '{challenge}': {e}");
+                return render_redirect_error(
+                    &redirect_uri,
+                    ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                    "code_challenge invalid",
+                    &client_state,
+                    query.encode_redirect_to_fragment(),
+                );
+            }
+        }
+        _ => {
+            debug!("code_challenge and code_challenge_method must both be present or absent");
+            return render_redirect_error(
+                &redirect_uri,
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "code_challenge invalid",
+                &client_state,
+                query.encode_redirect_to_fragment(),
+            );
+        }
+    };
+
     let response_type = match query.response_type.as_deref().map(parse_response_type) {
         None | Some(None) => {
             debug!("Missing or invalid response_type");
@@ -330,20 +394,7 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let query = Query(Request {
-            scope: None,
-            response_type: None,
-            client_id: None,
-            redirect_uri: None,
-            state: None,
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
+            ..Request::default()
         });
 
         let resp = handle(
@@ -362,20 +413,8 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let query = Query(Request {
-            scope: None,
-            response_type: None,
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
-            redirect_uri: None,
-            state: None,
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
+            ..Request::default()
         });
 
         let resp = handle(
@@ -394,20 +433,8 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let query = Query(Request {
-            scope: None,
-            response_type: None,
             client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
-            redirect_uri: None,
-            state: None,
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
+            ..Request::default()
         });
 
         let resp = handle(
@@ -426,20 +453,9 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let query = Query(Request {
-            scope: None,
-            response_type: None,
             client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
             redirect_uri: Some("invalid".to_string()),
-            state: None,
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
+            ..Request::default()
         });
 
         let resp = handle(
@@ -462,20 +478,11 @@ mod tests {
             client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
         let client_state = "somestate".to_string();
         let query = Query(Request {
-            scope: None,
             response_type: Some("code".to_string()),
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri.to_string()),
             state: Some(client_state.clone()),
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
+            ..Request::default()
         });
 
         let resp = handle(
@@ -524,15 +531,8 @@ mod tests {
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri.to_string()),
             state: Some(client_state.clone()),
-            response_mode: None,
-            nonce: None,
-            display: None,
             prompt: Some("none login".to_string()),
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
+            ..Request::default()
         });
 
         let resp = handle(
@@ -577,19 +577,10 @@ mod tests {
         let client_state = "somestate".to_string();
         let query = Query(Request {
             scope: Some("email".to_string()),
-            response_type: None,
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri.to_string()),
             state: Some(client_state.clone()),
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
+            ..Request::default()
         });
 
         let resp = handle(
@@ -638,15 +629,7 @@ mod tests {
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri.to_string()),
             state: Some(client_state.clone()),
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
+            ..Request::default()
         };
         let query = Query(request.clone());
 
@@ -676,15 +659,7 @@ mod tests {
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             redirect_uri: Some(redirect_uri.to_string()),
             state: Some(client_state.clone()),
-            response_mode: None,
-            nonce: None,
-            display: None,
-            prompt: None,
-            max_age: None,
-            ui_locales: None,
-            id_token_hint: None,
-            login_hint: None,
-            acr_values: None,
+            ..Request::default()
         };
         let query = Query(request.clone());
 

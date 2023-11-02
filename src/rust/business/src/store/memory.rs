@@ -32,6 +32,7 @@ use chrono::DateTime;
 use chrono::Duration;
 use chrono::Local;
 
+use crate::pkce::CodeChallenge;
 use log::trace;
 
 #[derive(PartialEq, Eq, Hash)]
@@ -53,6 +54,8 @@ struct AuthCodeValue {
     authentication_time: DateTime<Local>,
 
     nonce: Option<String>,
+
+    pkce_challenge: Option<CodeChallenge>,
 }
 
 pub struct MemoryAuthorizationCodeStore {
@@ -110,6 +113,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
                         insertion_time: request.insertion_time,
                         authentication_time: request.authentication_time,
                         nonce: request.nonce,
+                        pkce_challenge: request.pkce_challenge,
                     },
                 );
                 break auth_code;
@@ -137,6 +141,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
             scopes: value.scope,
             authentication_time: value.authentication_time,
             nonce: value.nonce,
+            pkce_challenge: value.pkce_challenge,
         })
     }
 }
@@ -171,6 +176,7 @@ mod tests {
                 insertion_time: date,
                 authentication_time: date,
                 nonce: Some("nonce".to_string()),
+                pkce_challenge: None,
             })
             .await;
 
@@ -204,6 +210,7 @@ mod tests {
                 insertion_time: date,
                 authentication_time: date,
                 nonce: Some("nonce".to_string()),
+                pkce_challenge: None,
             })
             .await;
 
@@ -235,6 +242,7 @@ mod tests {
                 insertion_time: date,
                 authentication_time: date,
                 nonce: Some("nonce".to_string()),
+                pkce_challenge: None,
             })
             .await;
 
@@ -270,6 +278,7 @@ mod tests {
                 insertion_time: date,
                 authentication_time: date,
                 nonce: Some("nonce".to_string()),
+                pkce_challenge: None,
             })
             .await;
 

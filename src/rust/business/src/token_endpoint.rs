@@ -629,6 +629,7 @@ mod tests {
                 insertion_time: Local::now(),
                 authentication_time: Local::now(),
                 nonce: Some("nonce".to_string()),
+                pkce_challenge: None,
             })
             .await;
         let request = Request {
@@ -660,6 +661,7 @@ mod tests {
                 insertion_time: creation_time,
                 authentication_time: Local::now(),
                 nonce: Some("nonce".to_string()),
+                pkce_challenge: None,
             })
             .await;
         let request = Request {
@@ -690,6 +692,7 @@ mod tests {
                 insertion_time: Local::now(),
                 authentication_time: Local::now(),
                 nonce: Some("nonce".to_string()),
+                pkce_challenge: None,
             })
             .await;
         let request = Request {
@@ -739,6 +742,7 @@ mod tests {
                 insertion_time: Local::now(),
                 authentication_time: Local::now(),
                 nonce: Some("nonce".to_string()),
+                pkce_challenge: None,
             })
             .await;
         let request = Request {

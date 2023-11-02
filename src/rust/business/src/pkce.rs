@@ -23,6 +23,7 @@ use regex::Regex;
 use ring::digest::digest;
 use ring::digest::SHA256;
 use std::borrow::Cow;
+use std::fmt::{Display, Formatter};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -38,14 +39,35 @@ pub enum CodeChallengeMethod {
     SHA256,
 }
 
+impl TryFrom<&String> for CodeChallengeMethod {
+    type Error = ();
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "plain" => Ok(CodeChallengeMethod::Plain),
+            "S256" => Ok(CodeChallengeMethod::SHA256),
+            _ => Err(()),
+        }
+    }
+}
+
+impl Display for CodeChallengeMethod {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let value = match self {
+            CodeChallengeMethod::Plain => "plain",
+            CodeChallengeMethod::SHA256 => "S256",
+        };
+        write!(f, "{}", value)
+    }
+}
+
 #[derive(PartialEq, Eq)]
 pub struct CodeChallenge(CodeChallengeMethod, String);
 
 const PATTERN: &str = "^[-a-zA-Z0-9._~]+$";
 
-impl TryFrom<&str> for CodeChallenge {
+impl TryFrom<&String> for CodeChallenge {
     type Error = Error;
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
         let pattern = Regex::new(PATTERN).unwrap();
         if value.len() < 43 || value.len() > 128 {
             Err(Error::InvalidLength)
@@ -101,6 +123,9 @@ pub mod tests {
 
     #[test]
     pub fn valid_code_challenges_are_converted() {
-        assert!(CodeChallenge::try_from("gfBGhTnM-57jV7buSQcDkmizJPPtIxJSJFjL0VHkS4s").is_ok());
+        assert!(CodeChallenge::try_from(
+            &"gfBGhTnM-57jV7buSQcDkmizJPPtIxJSJFjL0VHkS4s".to_string()
+        )
+        .is_ok());
     }
 }

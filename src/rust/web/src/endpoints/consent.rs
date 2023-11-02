@@ -222,6 +222,18 @@ async fn process_skipping_csrf(
         .map(Clone::clone)
         .collect::<Vec<String>>();
 
+    let pkce_challenge = match (
+        first_request.code_challenge.as_ref(),
+        first_request.code_challenge_method,
+    ) {
+        (None, _) | (_, None) => None,
+        (Some(code_challenge), Some(_)) => Some(
+            code_challenge
+                .try_into()
+                .expect("should have been validated upon authorization"),
+        ),
+    };
+
     if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Code)) {
         let code = auth_code_store
             .get_authorization_code(AuthorizationCodeRequest {
@@ -232,6 +244,7 @@ async fn process_skipping_csrf(
                 insertion_time: Local::now(),
                 authentication_time: auth_time,
                 nonce: first_request.nonce.clone(),
+                pkce_challenge,
             })
             .await;
         response_parameters.insert("code", code);
@@ -444,17 +457,9 @@ mod tests {
             client_id: Some(PUBLIC_CLIENT.to_string()),
             redirect_uri: Some("http://localhost/".to_string()),
             state: Some("state".to_string()),
-            acr_values: None,
-            display: None,
-            id_token_hint: None,
-            login_hint: None,
-            nonce: None,
-            max_age: None,
-            prompt: None,
-            response_mode: None,
             response_type: Some("code".to_string()),
             scope: Some("openid".to_string()),
-            ui_locales: None,
+            ..authorize::Request::default()
         };
         session
             .insert(
@@ -569,17 +574,9 @@ mod tests {
             client_id: Some(PUBLIC_CLIENT.to_string()),
             redirect_uri: Some("http://localhost/".to_string()),
             state: Some("state".to_string()),
-            acr_values: None,
-            display: None,
-            id_token_hint: None,
-            login_hint: None,
-            nonce: None,
-            max_age: None,
-            prompt: None,
-            response_mode: None,
             response_type: Some("code".to_string()),
             scope: Some("".to_string()),
-            ui_locales: None,
+            ..authorize::Request::default()
         };
         session
             .insert(
@@ -639,17 +636,9 @@ mod tests {
             client_id: Some(PUBLIC_CLIENT.to_string()),
             redirect_uri: Some("http://localhost/".to_string()),
             state: Some("state".to_string()),
-            acr_values: None,
-            display: None,
-            id_token_hint: None,
-            login_hint: None,
-            nonce: None,
-            max_age: None,
-            prompt: None,
-            response_mode: None,
             response_type: Some("id_token code".to_string()),
             scope: Some("".to_string()),
-            ui_locales: None,
+            ..authorize::Request::default()
         };
         session
             .insert(

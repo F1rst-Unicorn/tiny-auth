@@ -18,6 +18,7 @@
 pub mod memory;
 
 use crate::client::Client;
+use crate::pkce::CodeChallenge;
 use crate::scope::Scope;
 use crate::user::User;
 use async_trait::async_trait;
@@ -69,6 +70,8 @@ pub struct AuthorizationCodeRequest<'a> {
     pub authentication_time: DateTime<Local>,
 
     pub nonce: Option<String>,
+
+    pub pkce_challenge: Option<CodeChallenge>,
 }
 
 pub struct AuthorizationCodeResponse {
@@ -83,6 +86,8 @@ pub struct AuthorizationCodeResponse {
     pub authentication_time: DateTime<Local>,
 
     pub nonce: Option<String>,
+
+    pub pkce_challenge: Option<CodeChallenge>,
 }
 
 pub struct ValidationRequest<'a> {
@@ -198,6 +203,7 @@ pub mod test_fixtures {
         DateTime<Local>,
         DateTime<Local>,
         Option<String>,
+        Option<CodeChallenge>,
     );
 
     struct TestAuthorizationCodeStore {
@@ -226,6 +232,7 @@ pub mod test_fixtures {
                     request.insertion_time,
                     request.authentication_time,
                     request.nonce,
+                    request.pkce_challenge,
                 ),
             );
             request.insertion_time.to_rfc3339()
@@ -235,11 +242,18 @@ pub mod test_fixtures {
             &self,
             request: ValidationRequest<'a>,
         ) -> Option<AuthorizationCodeResponse> {
-            let (redirect_uri, user, scope, insertion_time, authentication_time, nonce) =
-                self.store.borrow_mut().remove(&(
-                    request.client_id.to_string(),
-                    request.authorization_code.to_string(),
-                ))?;
+            let (
+                redirect_uri,
+                user,
+                scope,
+                insertion_time,
+                authentication_time,
+                nonce,
+                pkce_challenge,
+            ) = self.store.borrow_mut().remove(&(
+                request.client_id.to_string(),
+                request.authorization_code.to_string(),
+            ))?;
             Some(AuthorizationCodeResponse {
                 redirect_uri,
                 stored_duration: request
@@ -249,6 +263,7 @@ pub mod test_fixtures {
                 scopes: scope,
                 authentication_time,
                 nonce,
+                pkce_challenge,
             })
         }
     }
