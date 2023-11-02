@@ -2546,6 +2546,7 @@ dependencies = [
  "jsonwebtoken",
  "log",
  "rand",
+ "regex",
  "ring",
  "serde",
  "serde_derive",

@@ -27,3 +27,4 @@ url.workspace = true
 thiserror.workspace = true
 test-log.workspace = true
 env_logger.workspace = true
+regex.workspace = true

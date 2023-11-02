@@ -25,6 +25,7 @@ pub mod jwk;
 pub mod oauth2;
 pub mod oidc;
 pub mod password;
+mod pkce;
 pub mod rate_limiter;
 pub mod scope;
 pub mod store;
