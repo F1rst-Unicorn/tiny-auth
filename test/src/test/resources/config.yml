@@ -20,8 +20,9 @@ store:
     base: test/src/test/resources/store
 
 crypto:
-  key: test/src/test/resources/keys/key.pem
-  public key: test/src/test/resources/keys/public_key.pem
+  keys:
+    - key: test/src/test/resources/keys/key.pem
+      public key: test/src/test/resources/keys/public_key.pem
   pepper: x5ePiX0TmUF2HzuraKuab9exzumu2sO54bnlVhgCS5AAXxqyhSSuHbCiUmx0FxmjZH9Gb2obp0ff2imMS6z40Qcc
 
 rate limit:

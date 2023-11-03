@@ -212,11 +212,16 @@ impl From<TlsVersion> for &'static rustls::SupportedProtocolVersion {
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]
-pub struct Crypto {
+pub struct CryptoKey {
     pub key: String,
 
     #[serde(rename = "public key")]
     pub public_key: String,
+}
+
+#[derive(Default, Clone, Debug, Deserialize)]
+pub struct Crypto {
+    pub keys: Vec<CryptoKey>,
 
     pub pepper: String,
 }

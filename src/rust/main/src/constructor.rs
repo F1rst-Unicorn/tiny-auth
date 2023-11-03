@@ -68,13 +68,13 @@ pub struct Constructor<'a> {
 
     tera: Option<Tera>,
 
-    public_key: String,
+    public_keys: Vec<String>,
 
     issuer_configuration: IssuerConfiguration,
 
     encoding_key: EncodingKey,
 
-    jwk: Jwk,
+    jwks: Jwks,
 
     token_validator: Arc<TokenValidator>,
 
@@ -94,13 +94,41 @@ impl<'a> Constructor<'a> {
         let scope_store = Self::build_scope_store(config);
         let tera = Some(Self::build_template_engine(config)?);
         let issuer_url = Self::build_issuer_url(config);
-        let public_key = read_file(&config.crypto.public_key)?;
-        let private_key = read_file(&config.crypto.key)?;
+        let public_keys: Vec<String> = config
+            .crypto
+            .keys
+            .iter()
+            .map(|k| read_file(&k.public_key))
+            .try_fold(vec![], |mut v, i| {
+                v.push(i?);
+                Result::Ok::<Vec<String>, Error>(v)
+            })?;
+        let private_key = config
+            .crypto
+            .keys
+            .iter()
+            .map(|k| read_file(&k.key))
+            .try_fold(vec![], |mut v, i| {
+                v.push(i?);
+                Result::Ok::<Vec<String>, Error>(v)
+            })?
+            .first()
+            .unwrap()
+            .clone();
         let (encoding_key, algorithm) = Self::build_encoding_key(&private_key)?;
         let issuer_configuration = Self::build_issuer_config(issuer_url.clone(), algorithm);
-        let jwk = Self::build_jwk(&public_key, &issuer_url)?;
-        let token_validator = Arc::new(Self::build_token_validator(
-            &public_key,
+        let jwks = Jwks::with_keys(
+            public_keys
+                .iter()
+                .enumerate()
+                .map(|(_, k)| Self::build_jwk(k, &issuer_url))
+                .try_fold(vec![], |mut v, i| {
+                    v.push(i?);
+                    Result::Ok::<Vec<Jwk>, Error>(v)
+                })?,
+        );
+        let token_validator: Arc<TokenValidator> = Arc::new(Self::build_token_validator(
+            public_keys.first().unwrap(),
             algorithm,
             &issuer_url,
         )?);
@@ -128,10 +156,10 @@ impl<'a> Constructor<'a> {
             client_store,
             scope_store,
             tera,
-            public_key,
+            public_keys,
             issuer_configuration,
             encoding_key,
-            jwk,
+            jwks,
             token_validator,
             authenticator,
             tls_cert,
@@ -218,7 +246,7 @@ impl<'a> Constructor<'a> {
     }
 
     pub fn get_public_key(&self) -> TokenCertificate {
-        TokenCertificate(self.public_key.clone())
+        TokenCertificate(self.public_keys.first().unwrap().clone())
     }
 
     fn build_issuer_url(config: &'a Config) -> String {
@@ -266,7 +294,7 @@ impl<'a> Constructor<'a> {
         TokenCreator::new(
             self.encoding_key.clone(),
             self.issuer_configuration.clone(),
-            self.jwk.clone(),
+            self.jwks.keys.first().unwrap().clone(),
             Arc::new(tiny_auth_business::clock::inject::clock()),
             Duration::seconds(
                 self.config
@@ -329,13 +357,14 @@ impl<'a> Constructor<'a> {
             let mut context = BigNumContext::new()?;
             let mut x = BigNum::new()?;
             let mut y = BigNum::new()?;
+
+            key.public_key()
+                .affine_coordinates_gfp(key.group(), &mut x, &mut y, &mut context)?;
+
             let mut hasher = Hasher::new(MessageDigest::sha1())?;
             hasher.update(&x.to_vec())?;
             hasher.update(&y.to_vec())?;
             hasher.update(crv.as_bytes())?;
-
-            key.public_key()
-                .affine_coordinates_gfp(key.group(), &mut x, &mut y, &mut context)?;
 
             let x = Self::encode_bignum(&x);
             let y = Self::encode_bignum(&y);
@@ -350,7 +379,7 @@ impl<'a> Constructor<'a> {
     }
 
     pub fn build_jwks(&self) -> Jwks {
-        Jwks::with_keys(vec![self.jwk.clone()])
+        self.jwks.clone()
     }
 
     fn encode_bignum(num: &BigNumRef) -> String {
