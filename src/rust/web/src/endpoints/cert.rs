@@ -19,10 +19,19 @@ use crate::cors::render_invalid_request;
 use crate::cors::CorsCheckResult;
 use crate::cors::CorsChecker;
 use actix_web::web::Data;
+use actix_web::web::Path;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
+use serde_derive::Deserialize;
 use std::sync::Arc;
 use tiny_auth_business::cors::CorsLister;
+
+use super::not_found;
+
+#[derive(Deserialize)]
+pub struct Index {
+    index: usize,
+}
 
 #[derive(Clone)]
 pub struct TokenCertificate(pub String);
@@ -30,12 +39,20 @@ pub struct TokenCertificate(pub String);
 pub async fn get(
     request: HttpRequest,
     cors_lister: Data<Arc<dyn CorsLister>>,
-    token_certificate: Data<TokenCertificate>,
+    token_certificate: Data<Vec<TokenCertificate>>,
+    index: Path<Index>,
 ) -> HttpResponse {
     match CorsChecker::new(cors_lister.get_ref().clone()).check(&request) {
         CorsCheckResult::IllegalOrigin => render_invalid_request(),
-        approved @ (CorsCheckResult::ApprovedOrigin(_) | CorsCheckResult::NoOrigin) => approved
-            .with_headers(HttpResponse::Ok())
-            .body(token_certificate.0.clone()),
+        approved @ (CorsCheckResult::ApprovedOrigin(_) | CorsCheckResult::NoOrigin) => {
+            let index = index.into_inner().index;
+            if index >= token_certificate.len() {
+                not_found().await
+            } else {
+                approved
+                    .with_headers(HttpResponse::Ok())
+                    .body(token_certificate[index].0.clone())
+            }
+        }
     }
 }

@@ -71,7 +71,7 @@ use Error::LoggedBeforeError;
 
 pub trait Constructor<'a> {
     fn get_template_engine(&self) -> Option<Tera>;
-    fn get_public_key(&self) -> TokenCertificate;
+    fn get_public_keys(&self) -> Vec<TokenCertificate>;
     fn build_token_creator(&self) -> TokenCreator;
     fn token_validator(&self) -> Arc<TokenValidator>;
     fn user_store(&self) -> Arc<dyn UserStore>;
@@ -111,7 +111,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     let workers = constructor.workers();
 
     let tera = constructor.get_template_engine().ok_or(LoggedBeforeError)?;
-    let token_certificate = constructor.get_public_key();
+    let token_certificates = constructor.get_public_keys();
     let token_creator = constructor.build_token_creator();
     let token_validator = constructor.token_validator();
     let user_store = constructor.user_store();
@@ -152,7 +152,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     let secret_key = constructor.secret_key();
 
     let server = HttpServer::new(move || {
-        let token_certificate = token_certificate.clone();
+        let token_certificates = token_certificates.clone();
         App::new()
             .app_data(Data::new(tera.clone()))
             .app_data(Data::from(authenticator.clone()))
@@ -165,7 +165,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             .app_data(Data::new(issuer_config.clone()))
             .app_data(Data::new(jwks.clone()))
             .app_data(Data::new(cors_lister.clone()))
-            .app_data(Data::new(token_certificate))
+            .app_data(Data::new(token_certificates))
             .app_data(Data::new(user_info_handler.clone()))
             .app_data(Data::new(token_handler.clone()))
             .app_data(Data::new(authorize_handler.clone()))
@@ -247,9 +247,12 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
                     .route("/consent", all().to(endpoints::method_not_allowed))
                     .route("/consent/cancel", get().to(endpoints::consent::cancel))
                     .route("/consent/cancel", all().to(endpoints::method_not_allowed))
-                    .route("/cert", get().to(endpoints::cert::get))
-                    .route("/cert", method(Method::OPTIONS).to(cors_options_preflight))
-                    .route("/cert", all().to(endpoints::method_not_allowed))
+                    .route("/cert/{index}", get().to(endpoints::cert::get))
+                    .route(
+                        "/cert/{index}",
+                        method(Method::OPTIONS).to(cors_options_preflight),
+                    )
+                    .route("/cert/{index}", all().to(endpoints::method_not_allowed))
                     .route("/health", get().to(endpoints::health::get))
                     .route(
                         "/health",

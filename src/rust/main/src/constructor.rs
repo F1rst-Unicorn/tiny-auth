@@ -121,7 +121,7 @@ impl<'a> Constructor<'a> {
             public_keys
                 .iter()
                 .enumerate()
-                .map(|(_, k)| Self::build_jwk(k, &issuer_url))
+                .map(|(i, k)| Self::build_jwk(k, &issuer_url, i))
                 .try_fold(vec![], |mut v, i| {
                     v.push(i?);
                     Result::Ok::<Vec<Jwk>, Error>(v)
@@ -245,8 +245,12 @@ impl<'a> Constructor<'a> {
         )?)
     }
 
-    pub fn get_public_key(&self) -> TokenCertificate {
-        TokenCertificate(self.public_keys.first().unwrap().clone())
+    pub fn get_public_keys(&self) -> Vec<TokenCertificate> {
+        self.public_keys
+            .iter()
+            .map(Clone::clone)
+            .map(TokenCertificate)
+            .collect()
     }
 
     fn build_issuer_url(config: &'a Config) -> String {
@@ -325,9 +329,13 @@ impl<'a> Constructor<'a> {
     }
 
     // See https://tools.ietf.org/html/rfc7518#section-6
-    fn build_jwk(public_key: &str, issuer_url: &str) -> Result<Jwk, Error> {
+    fn build_jwk(
+        public_key: &str,
+        issuer_url: &str,
+        public_key_index: usize,
+    ) -> Result<Jwk, Error> {
         let key = public_key.as_bytes();
-        let url = issuer_url.to_string() + "/cert";
+        let url = format!("{issuer_url}/cert/{public_key_index}").to_string();
         let jwk = if let Ok(key) = Rsa::public_key_from_pem_pkcs1(key) {
             let n = Self::encode_bignum(key.n());
             let e = Self::encode_bignum(key.e());
@@ -417,8 +425,8 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
     fn get_template_engine(&self) -> Option<Tera> {
         self.get_template_engine()
     }
-    fn get_public_key(&self) -> TokenCertificate {
-        self.get_public_key()
+    fn get_public_keys(&self) -> Vec<TokenCertificate> {
+        self.get_public_keys()
     }
     fn build_token_creator(&self) -> TokenCreator {
         self.build_token_creator()
