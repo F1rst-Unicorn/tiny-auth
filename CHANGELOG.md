@@ -44,6 +44,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 * Fix linter issues
 
+* Due to a change in the cookie storage format, all sessions are invalidated.
+
 ## [0.8.2]
 
 ### Added
