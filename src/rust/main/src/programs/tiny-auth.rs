@@ -44,6 +44,6 @@ fn main() {
     let config = parse_config(config_path);
 
     if let Err(e) = runtime::run(config) {
-        error!("Server failed: {:#?}", e);
+        error!("{e}");
     }
 }

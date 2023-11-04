@@ -35,19 +35,19 @@ pub enum Error {
     #[error("Config error: {0}")]
     ConfigError(String),
 
-    #[error("IO error")]
+    #[error("IO error: {0}")]
     StdIoError(#[from] std::io::Error),
 
-    #[error("JWT error")]
+    #[error("JWT error: {0}")]
     JwtError(#[from] jsonwebtoken::errors::Error),
 
-    #[error("Template error")]
+    #[error("Template error: {0}")]
     TeraError(#[from] tera::Error),
 
-    #[error("Crypto error")]
+    #[error("Crypto error: {0}")]
     OpensslError(#[from] ErrorStack),
 
-    #[error("Web error")]
+    #[error("Web error: {0}")]
     WebError(#[from] tiny_auth_web::Error),
 }
 
