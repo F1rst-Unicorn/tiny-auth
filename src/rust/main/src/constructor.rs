@@ -261,6 +261,10 @@ impl<'a> Constructor<'a> {
     }
 
     fn read_token_keypairs(config: &'a Config) -> Result<(Vec<String>, String), Error> {
+        if config.crypto.keys.is_empty() {
+            error!("At least one crypto.keys entry must be given");
+            return Err(LoggedBeforeError);
+        }
         let public_keys = config
             .crypto
             .keys
