@@ -13,6 +13,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 * Support for [PKCE](https://www.rfc-editor.org/rfc/rfc7636)
   ([#75](https://j.njsm.de/git/veenj/tiny-auth/issues/75)).
 
+* Support rotation of token signing keys
+  ([#55](https://j.njsm.de/git/veenj/tiny-auth/issues/55)). See documentation
+  section `crypto` configuration.
+
 * Allow configuration of the cookie's `SameSite` attribute via configuration
   option `web.session same site policy`.
 
@@ -25,10 +29,16 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 * Fix panic when authorising a request with unknown scope
   ([#72](https://j.njsm.de/git/veenj/tiny-auth/issues/72))
 
+* Fix key-independent key ID (`kid`) in JWKS when using ECDSA keys.
+
 ### Deprecated
 
 * `web.session timeout` was replaced in favour of `web.session timeout in
   seconds`.
+
+* `crypto.key` and `crypto.public key` were replaced in favour of a list of such
+  keys
+  ([#55](https://j.njsm.de/git/veenj/tiny-auth/issues/75)).
 
 ### Maintenance
 
