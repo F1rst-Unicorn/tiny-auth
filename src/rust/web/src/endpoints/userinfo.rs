@@ -15,7 +15,6 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::deserialise_empty_as_none;
 use super::parse_bearer_authorization;
 use crate::cors::render_invalid_request;
 use crate::cors::CorsCheckResult;
@@ -27,6 +26,7 @@ use actix_web::HttpResponse;
 use log::debug;
 use serde_derive::Deserialize;
 use std::sync::Arc;
+use tiny_auth_business::serde::deserialise_empty_as_none;
 use tiny_auth_business::token::Token;
 use tiny_auth_business::token::TokenValidator;
 

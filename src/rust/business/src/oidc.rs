@@ -21,13 +21,21 @@ use super::oauth2::ResponseType as OAuth2ResponseType;
 use std::convert::TryFrom;
 use std::fmt::Display;
 
+use crate::oauth2;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResponseType {
     OAuth2(OAuth2ResponseType),
     Oidc(OidcResponseType),
+}
+
+impl ResponseType {
+    pub fn encode_redirect_to_fragment(response_types: &[ResponseType]) -> bool {
+        response_types.contains(&ResponseType::Oidc(OidcResponseType::IdToken))
+            || response_types.contains(&ResponseType::OAuth2(oauth2::ResponseType::Token))
+    }
 }
 
 impl TryFrom<&str> for ResponseType {
@@ -38,14 +46,14 @@ impl TryFrom<&str> for ResponseType {
             "code" => ResponseType::OAuth2(OAuth2ResponseType::Code),
             "token" => ResponseType::OAuth2(OAuth2ResponseType::Token),
             "id_token" => ResponseType::Oidc(OidcResponseType::IdToken),
-            _ => return Err(format!("invalid response_type {}", value)),
+            _ => return Err(format!("invalid response_type '{value}'")),
         };
 
         Ok(result)
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OidcResponseType {
     IdToken,
 }
@@ -129,7 +137,7 @@ impl Display for OidcProtocolError {
     }
 }
 
-#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
+#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug)]
 pub enum Prompt {
     None,
     Login,

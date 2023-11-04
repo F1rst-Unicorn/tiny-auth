@@ -15,11 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::deserialise_empty_as_none;
-use super::parse_prompt;
 use super::render_template;
 use super::server_error;
-use crate::endpoints::authorize;
 use crate::endpoints::parse_first_request;
 use crate::endpoints::render_template_with_context;
 use actix_session::Session;
@@ -38,6 +35,8 @@ use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::authenticator::Error;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
+use tiny_auth_business::oidc::Prompt;
+use tiny_auth_business::serde::deserialise_empty_as_none;
 
 pub const SESSION_KEY: &str = "b";
 pub const AUTH_TIME_SESSION_KEY: &str = "t";
@@ -63,14 +62,6 @@ pub struct Request {
 }
 
 pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
-    match session.get::<String>(authorize::SESSION_KEY) {
-        Err(_) | Ok(None) => {
-            debug!("unsolicited authentication request");
-            return render_invalid_authentication_request(&tera);
-        }
-        _ => {}
-    }
-
     let first_request = match parse_first_request(&session) {
         None => {
             return render_invalid_authentication_request(&tera);
@@ -78,10 +69,9 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
         Some(req) => req,
     };
 
-    let prompts = parse_prompt(&first_request.prompt);
-
     if let Ok(Some(username)) = session.get::<String>(SESSION_KEY) {
-        if prompts.contains(&oidc::Prompt::Login) || prompts.contains(&oidc::Prompt::SelectAccount)
+        if first_request.prompts.contains(&Prompt::Login)
+            || first_request.prompts.contains(&Prompt::SelectAccount)
         {
             debug!("Recognised user '{}' but client demands login", username);
             render_login_form(session, tera)
@@ -111,14 +101,14 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
             debug!("Recognised authenticated user '{}'", username);
             redirect_successfully()
         }
-    } else if prompts.contains(&oidc::Prompt::None) {
+    } else if first_request.prompts.contains(&oidc::Prompt::None) {
         debug!("No user recognised but client demands no interaction");
         render_redirect_error(
             session,
             &tera,
             oidc::ProtocolError::Oidc(oidc::OidcProtocolError::LoginRequired),
             "No username found",
-            first_request.encode_redirect_to_fragment(),
+            first_request.encode_redirect_to_fragment,
         )
     } else {
         render_login_form(session, tera)
@@ -153,14 +143,6 @@ pub async fn post(
         }
         Some(req) => req,
     };
-
-    match session.get::<String>(authorize::SESSION_KEY) {
-        Err(_) | Ok(None) => {
-            debug!("unsolicited authentication request");
-            return render_invalid_authentication_request(&tera);
-        }
-        _ => {}
-    }
 
     let tries_left = match session.get::<i32>(TRIES_LEFT_SESSION_KEY) {
         Err(_) => {
@@ -215,7 +197,7 @@ pub async fn post(
             &tera,
             oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
             "user failed to authenticate",
-            first_request.encode_redirect_to_fragment(),
+            first_request.encode_redirect_to_fragment,
         )
     }
 }
@@ -233,7 +215,7 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
         &tera,
         oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
         "user denied authentication",
-        first_request.encode_redirect_to_fragment(),
+        first_request.encode_redirect_to_fragment,
     )
 }
 
@@ -260,9 +242,8 @@ fn render_redirect_error(
         Some(req) => req,
     };
 
-    let redirect_uri = first_request.redirect_uri.unwrap();
     super::render_redirect_error(
-        &redirect_uri,
+        &first_request.redirect_uri,
         error,
         description,
         &first_request.state,
@@ -337,17 +318,20 @@ mod tests {
     use super::super::generate_csrf_token;
     use super::super::CSRF_SESSION_KEY;
     use super::*;
+    use crate::endpoints::authorize;
     use crate::endpoints::tests::build_test_authenticator;
     use crate::endpoints::tests::build_test_tera;
     use actix_session::SessionExt;
     use actix_web::http;
     use actix_web::test;
     use actix_web::web::Form;
+    use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
+    use tiny_auth_business::oidc::ResponseType;
     use tiny_auth_business::store::test_fixtures::UNKNOWN_USER;
     use tiny_auth_business::store::test_fixtures::USER;
     use url::Url;
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn empty_session_gives_error() {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
@@ -357,22 +341,26 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn authorization_in_session_gives_login_form() {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
-        session.insert(authorize::SESSION_KEY, "dummy").unwrap();
+        session
+            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .unwrap();
 
         let resp = get(session, build_test_tera()).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn recognising_user_redirects_to_consent() {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
-        session.insert(authorize::SESSION_KEY, "dummy").unwrap();
+        session
+            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .unwrap();
         session.insert(SESSION_KEY, "dummy").unwrap();
 
         let resp = get(session, build_test_tera()).await;
@@ -380,12 +368,18 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn recognising_user_but_login_demanded_gives_form() {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
         session
-            .insert(authorize::SESSION_KEY, "prompt=login")
+            .insert(
+                authorize::SESSION_KEY,
+                AuthorizeRequestState {
+                    prompts: vec![Prompt::Login],
+                    ..Default::default()
+                },
+            )
             .unwrap();
         session.insert(SESSION_KEY, "dummy").unwrap();
 
@@ -394,12 +388,18 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn recognising_user_but_account_selection_demanded_gives_form() {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
         session
-            .insert(authorize::SESSION_KEY, "prompt=select_account")
+            .insert(
+                authorize::SESSION_KEY,
+                AuthorizeRequestState {
+                    prompts: vec![Prompt::SelectAccount],
+                    ..Default::default()
+                },
+            )
             .unwrap();
         session.insert(SESSION_KEY, "dummy").unwrap();
 
@@ -408,14 +408,19 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn no_user_recognised_but_no_prompt_demanded_gives_error() {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
         session
             .insert(
                 authorize::SESSION_KEY,
-                "response_type=code&prompt=none&redirect_uri=http%3A%2F%2Flocalhost%2Fpublic",
+                AuthorizeRequestState {
+                    prompts: vec![Prompt::None],
+                    response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
+                    redirect_uri: "http://localhost/public".to_string(),
+                    ..Default::default()
+                },
             )
             .unwrap();
 
@@ -424,11 +429,19 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::FOUND);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn user_recognised_but_login_too_old_gives_login_form() {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
-        session.insert(authorize::SESSION_KEY, "max_age=0").unwrap();
+        session
+            .insert(
+                authorize::SESSION_KEY,
+                AuthorizeRequestState {
+                    max_age: Some(0),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
         session.insert(SESSION_KEY, "dummy").unwrap();
         session
             .insert(AUTH_TIME_SESSION_KEY, Local::now().timestamp() - 1)
@@ -439,7 +452,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn missing_csrf_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -454,7 +467,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn emtpy_session_login_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -471,11 +484,13 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn missing_username_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        session.insert(authorize::SESSION_KEY, "dummy").unwrap();
+        session
+            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .unwrap();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
@@ -497,11 +512,13 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn missing_password_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        session.insert(authorize::SESSION_KEY, "dummy").unwrap();
+        session
+            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .unwrap();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
@@ -523,11 +540,13 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn unknown_user_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        session.insert(authorize::SESSION_KEY, "dummy").unwrap();
+        session
+            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .unwrap();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
@@ -549,11 +568,13 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn wrong_password_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        session.insert(authorize::SESSION_KEY, "dummy").unwrap();
+        session
+            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .unwrap();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
@@ -575,11 +596,13 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn correct_login_is_reported() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        session.insert(authorize::SESSION_KEY, "dummy").unwrap();
+        session
+            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .unwrap();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
@@ -599,11 +622,13 @@ mod tests {
         assert_eq!(session.get::<String>(SESSION_KEY).unwrap().unwrap(), USER);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn default_try_count_is_two() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        session.insert(authorize::SESSION_KEY, "dummy").unwrap();
+        session
+            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .unwrap();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
@@ -629,19 +654,18 @@ mod tests {
         );
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn no_tries_left_will_redirect_to_client() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         session
             .insert(
                 authorize::SESSION_KEY,
-                serde_urlencoded::to_string(authorize::Request {
-                    redirect_uri: Some("http://redirect_uri.example".to_string()),
-                    response_type: Some("code".to_string()),
+                AuthorizeRequestState {
+                    redirect_uri: "http://redirect_uri.example".to_string(),
+                    response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
                     ..Default::default()
-                })
-                .unwrap(),
+                },
             )
             .unwrap();
         session.insert(TRIES_LEFT_SESSION_KEY, 1).unwrap();

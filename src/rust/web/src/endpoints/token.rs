@@ -15,7 +15,6 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::deserialise_empty_as_none;
 use super::parse_basic_authorization;
 use crate::cors::CorsCheckResult;
 use crate::cors::CorsChecker;
@@ -31,6 +30,7 @@ use tiny_auth_business::oauth2;
 use tiny_auth_business::oauth2::GrantType;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::scope::Scope;
+use tiny_auth_business::serde::deserialise_empty_as_none;
 use tiny_auth_business::token_endpoint::Error;
 
 #[derive(Deserialize, Default)]

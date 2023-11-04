@@ -16,6 +16,7 @@
  */
 
 pub mod authenticator;
+pub mod authorize_endpoint;
 pub mod change_password;
 pub mod client;
 pub mod clock;
@@ -28,6 +29,7 @@ pub mod password;
 pub mod pkce;
 pub mod rate_limiter;
 pub mod scope;
+pub mod serde;
 pub mod store;
 pub mod token;
 pub mod token_endpoint;

@@ -15,35 +15,23 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::deserialise_empty_as_none;
-use super::parse_prompt;
 use super::render_template;
-use crate::endpoints::render_redirect_error;
 use crate::endpoints::server_error;
+use crate::session::AuthorizeSession;
 use actix_session::Session;
 use actix_web::http::StatusCode;
 use actix_web::web;
 use actix_web::HttpResponse;
-use log::debug;
-use log::error;
-use log::info;
-use log::log_enabled;
-use log::Level::Debug;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
-use std::collections::BTreeSet;
-use std::convert::TryFrom;
-use std::sync::Arc;
 use tera::Tera;
+use tiny_auth_business::authorize_endpoint::{Error, Handler};
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc::OidcResponseType;
-use tiny_auth_business::oidc::Prompt;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::oidc::ResponseType;
-use tiny_auth_business::pkce::CodeChallengeMethod::Plain;
-use tiny_auth_business::pkce::{CodeChallenge, CodeChallengeMethod};
-use tiny_auth_business::scope::parse_scope_names;
-use tiny_auth_business::store::ClientStore;
+use tiny_auth_business::serde::deserialise_empty_as_none;
+use web::Data;
 
 pub const SESSION_KEY: &str = "a";
 
@@ -128,217 +116,94 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn get_response_types(&self) -> Vec<ResponseType> {
-        self.response_type
+    fn encode_redirect_to_fragment(&self) -> bool {
+        let response_types = self
+            .response_type
             .as_deref()
-            .and_then(parse_response_type)
-            .unwrap()
-    }
-
-    pub fn encode_redirect_to_fragment(&self) -> bool {
-        let response_types = self.get_response_types();
+            .and_then(Handler::parse_response_type)
+            .unwrap_or_default();
         response_types.contains(&ResponseType::Oidc(OidcResponseType::IdToken))
             || response_types.contains(&ResponseType::OAuth2(oauth2::ResponseType::Token))
     }
 }
 
 pub async fn handle(
-    mut query: web::Query<Request>,
-    tera: web::Data<Tera>,
-    client_store: web::Data<Arc<dyn ClientStore>>,
+    query: web::Query<Request>,
+    tera: Data<Tera>,
     session: Session,
+    handler: Data<Handler>,
 ) -> HttpResponse {
-    let redirect_uri = match query.redirect_uri.as_ref() {
-        None => {
-            debug!("missing redirect_uri");
-            return render_invalid_redirect_uri_error(&tera);
-        }
-        Some(uri) => uri.clone(),
-    };
-
-    let client_id = match query.client_id.as_ref() {
-        None => {
-            debug!("missing client_id");
-            return render_invalid_client_id_error(&tera);
-        }
-        Some(client_id) => client_id,
-    };
-
-    let client = match client_store.get(client_id) {
-        None => {
-            info!("client '{}' not found", client_id);
-            return render_invalid_client_id_error(&tera);
-        }
-        Some(client) => client,
-    };
-
-    if !client.is_redirect_uri_valid(&redirect_uri) {
-        info!(
-            "invalid redirect_uri '{}' for client '{}'",
-            redirect_uri, client_id
-        );
-        return render_invalid_redirect_uri_error(&tera);
-    }
-
-    let client_state = query.state.clone();
-
-    if query.scope.is_none() {
-        debug!("Missing scope");
-        return return_error(
-            &redirect_uri,
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-            "Missing required parameter scope",
-            &client_state,
-            query.encode_redirect_to_fragment(),
-        );
-    }
-
-    let scopes = parse_scope_names(query.scope.as_deref().unwrap());
-    let scopes: BTreeSet<String> = scopes.into_iter().collect();
-
-    if log_enabled!(Debug) {
-        let forbidden_scopes = scopes
-            .difference(&client.allowed_scopes)
-            .map(Clone::clone)
-            .collect::<Vec<String>>()
-            .join(" ");
-        if !forbidden_scopes.is_empty() {
-            debug!(
-                "Client '{}' requested forbidden scopes '{}'. These are dropped silently",
-                client.client_id, forbidden_scopes
-            );
-        }
-    }
-
-    let scopes = scopes
-        .intersection(&client.allowed_scopes)
-        .map(Clone::clone)
-        .collect::<Vec<String>>()
-        .join(" ");
-
-    query.scope.replace(scopes);
-
-    let prompts = parse_prompt(&query.prompt);
-    if (prompts.contains(&Prompt::Login)
-        || prompts.contains(&Prompt::Consent)
-        || prompts.contains(&Prompt::SelectAccount))
-        && prompts.contains(&Prompt::None)
-    {
-        debug!("Contradicting prompt requirements");
-        return return_error(
-            &redirect_uri,
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-            "contradicting prompt requirements",
-            &client_state,
-            query.encode_redirect_to_fragment(),
-        );
-    }
-
-    match (
-        query.code_challenge.as_ref(),
-        query.code_challenge_method.as_ref(),
-    ) {
-        (None, None) => (),
-        (Some(challenge), Some(method)) => {
-            match CodeChallengeMethod::try_from(method) {
-                Err(_) => {
-                    debug!("unknown code_challenge_method '{method}'");
-                    return render_redirect_error(
-                        &redirect_uri,
-                        ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-                        "code_challenge_method invalid",
-                        &client_state,
-                        query.encode_redirect_to_fragment(),
-                    );
-                }
-                Ok(method) => {
-                    if method == Plain {
-                        debug!("code_challenge_method {method} is insecure and not supported");
-                        return render_redirect_error(
-                            &redirect_uri,
-                            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-                            "code_challenge_method invalid",
-                            &client_state,
-                            query.encode_redirect_to_fragment(),
-                        );
-                    }
-                }
-            }
-            if let Err(e) = CodeChallenge::try_from(challenge) {
-                debug!("invalid code_challenge '{challenge}': {e}");
-                return render_redirect_error(
-                    &redirect_uri,
-                    ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-                    "code_challenge invalid",
-                    &client_state,
-                    query.encode_redirect_to_fragment(),
-                );
-            }
-        }
-        _ => {
-            debug!("code_challenge and code_challenge_method must both be present or absent");
-            return render_redirect_error(
+    let query = query.into_inner();
+    let encode_redirect_to_fragment = query.encode_redirect_to_fragment();
+    return match handler
+        .handle(
+            tiny_auth_business::authorize_endpoint::Request {
+                scope: query.scope,
+                response_type: query.response_type,
+                client_id: query.client_id,
+                redirect_uri: query.redirect_uri.clone(),
+                nonce: query.nonce,
+                state: query.state.clone(),
+                prompt: query.prompt,
+                max_age: query.max_age,
+                login_hint: query.login_hint,
+                code_challenge_method: query.code_challenge_method,
+                code_challenge: query.code_challenge,
+            },
+            AuthorizeSession::from(session),
+        )
+        .map_err(|e| match e {
+            Error::InvalidRedirectUri => render_invalid_redirect_uri_error(&tera),
+            Error::InvalidClientId => render_invalid_client_id_error(&tera),
+            Error::MissingScopes { redirect_uri } => return_error(
+                &redirect_uri,
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "Missing required parameter scope",
+                &query.state,
+                encode_redirect_to_fragment,
+            ),
+            Error::ContradictingPrompts { redirect_uri } => return_error(
+                &redirect_uri,
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "contradicting prompt requirements",
+                &query.state,
+                encode_redirect_to_fragment,
+            ),
+            Error::CodeChallengeMethodInvalid { redirect_uri } => return_error(
+                &redirect_uri,
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "code_challenge_method invalid",
+                &query.state,
+                encode_redirect_to_fragment,
+            ),
+            Error::CodeChallengeInvalid { redirect_uri } => return_error(
                 &redirect_uri,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
                 "code_challenge invalid",
-                &client_state,
-                query.encode_redirect_to_fragment(),
-            );
-        }
-    };
-
-    let response_type = match query.response_type.as_deref().map(parse_response_type) {
-        None | Some(None) => {
-            debug!("Missing or invalid response_type");
-            return return_error(
+                &query.state,
+                encode_redirect_to_fragment,
+            ),
+            Error::MissingResponseType { redirect_uri } => return_error(
                 &redirect_uri,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
                 "Invalid required parameter response_type",
-                &client_state,
-                false,
-            );
-        }
-        Some(Some(response_type)) => response_type,
+                &query.state,
+                encode_redirect_to_fragment,
+            ),
+            Error::MissingNonceForImplicitFlow { redirect_uri } => return_error(
+                &redirect_uri,
+                ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
+                "Invalid required parameter response_type",
+                &query.state,
+                encode_redirect_to_fragment,
+            ),
+            Error::ServerError => server_error(&tera),
+        }) {
+        Err(e) => e,
+        Ok(_) => HttpResponse::SeeOther()
+            .insert_header(("Location", "authenticate"))
+            .finish(),
     };
-
-    // https://openid.net/specs/openid-connect-core-1_0.html#ImplicitAuthRequest
-    if response_type.contains(&ResponseType::Oidc(OidcResponseType::IdToken))
-        && query.nonce.is_none()
-    {
-        debug!("Missing required parameter nonce for implicit flow");
-        return return_error(
-            &redirect_uri,
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-            "Invalid required parameter nonce",
-            &client_state,
-            query.encode_redirect_to_fragment(),
-        );
-    }
-
-    if let Err(e) = session.insert(SESSION_KEY, serde_urlencoded::to_string(query.0).unwrap()) {
-        error!("Failed to serialise session: {}", e);
-        return server_error(&tera);
-    }
-
-    HttpResponse::SeeOther()
-        .insert_header(("Location", "authenticate"))
-        .finish()
-}
-
-pub fn parse_response_type(input: &str) -> Option<Vec<ResponseType>> {
-    let mut result = Vec::new();
-    for word in input.split(' ') {
-        let parsed_word = ResponseType::try_from(word);
-        match parsed_word {
-            Err(e) => {
-                debug!("invalid response_type {}. Error was: {}", word, e);
-                return None;
-            }
-            Ok(response_type) => result.push(response_type),
-        }
-    }
-
-    Some(result)
 }
 
 fn render_invalid_client_id_error(tera: &Tera) -> HttpResponse {
@@ -353,7 +218,7 @@ fn render_invalid_redirect_uri_error(tera: &Tera) -> HttpResponse {
     )
 }
 
-pub fn return_error(
+fn return_error(
     redirect_uri: &str,
     error: ProtocolError,
     description: &str,
@@ -379,17 +244,14 @@ mod tests {
     use actix_web::test;
     use actix_web::web::Data;
     use actix_web::web::Query;
-    use tiny_auth_business::oauth2::ResponseType::Code;
-    use tiny_auth_business::oauth2::ResponseType::Token;
-    use tiny_auth_business::oidc::OidcResponseType::IdToken;
-    use tiny_auth_business::oidc::ResponseType::OAuth2;
-    use tiny_auth_business::oidc::ResponseType::Oidc;
+    use tiny_auth_business::authorize_endpoint::test_fixtures::handler;
     use tiny_auth_business::store::test_fixtures::build_test_client_store;
     use tiny_auth_business::store::test_fixtures::CONFIDENTIAL_CLIENT;
     use tiny_auth_business::store::test_fixtures::UNKNOWN_CLIENT_ID;
+    use tiny_auth_business::store::ClientStore;
     use url::Url;
 
-    #[test]
+    #[test_log::test(actix_web::test)]
     async fn missing_client_id_is_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -397,18 +259,12 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(
-            query,
-            build_test_tera(),
-            Data::new(build_test_client_store()),
-            session,
-        )
-        .await;
+        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
-    #[test]
+    #[test_log::test(actix_web::test)]
     async fn missing_redirect_uri_is_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -417,18 +273,12 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(
-            query,
-            build_test_tera(),
-            Data::new(build_test_client_store()),
-            session,
-        )
-        .await;
+        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
-    #[test]
+    #[test_log::test(actix_web::test)]
     async fn unknown_client_id_is_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -437,18 +287,12 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(
-            query,
-            build_test_tera(),
-            Data::new(build_test_client_store()),
-            session,
-        )
-        .await;
+        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
-    #[test]
+    #[test_log::test(actix_web::test)]
     async fn unregistered_redirect_uri_is_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -458,18 +302,12 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(
-            query,
-            build_test_tera(),
-            Data::new(build_test_client_store()),
-            session,
-        )
-        .await;
+        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
-    #[test]
+    #[test_log::test(actix_web::test)]
     async fn missing_scope_is_redirected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -485,13 +323,7 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(
-            query,
-            build_test_tera(),
-            Data::new(build_test_client_store()),
-            session,
-        )
-        .await;
+        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
 
@@ -517,7 +349,7 @@ mod tests {
             .any(|param| param == ("error".to_string(), expected_error.to_string())));
     }
 
-    #[test]
+    #[test_log::test(actix_web::test)]
     async fn contradicting_prompts_are_rejected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -535,13 +367,7 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(
-            query,
-            build_test_tera(),
-            Data::new(build_test_client_store()),
-            session,
-        )
-        .await;
+        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
 
@@ -567,7 +393,7 @@ mod tests {
             .any(|param| param == ("error".to_string(), expected_error.to_string())));
     }
 
-    #[test]
+    #[test_log::test(actix_web::test)]
     async fn missing_response_type_is_redirected() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -583,13 +409,7 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(
-            query,
-            build_test_tera(),
-            Data::new(build_test_client_store()),
-            session,
-        )
-        .await;
+        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
 
@@ -615,7 +435,7 @@ mod tests {
             .any(|param| param == ("error".to_string(), expected_error.to_string())));
     }
 
-    #[test]
+    #[test_log::test(actix_web::test)]
     async fn disallowed_scope_is_dropped() {
         let req = test::TestRequest::post().to_http_request();
         let client_store = build_test_client_store();
@@ -633,7 +453,7 @@ mod tests {
         };
         let query = Query(request.clone());
 
-        let resp = handle(query, build_test_tera(), Data::new(client_store), session).await;
+        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::SEE_OTHER);
 
@@ -642,10 +462,10 @@ mod tests {
 
         let session = req.get_session();
         let first_request = parse_first_request(&session).unwrap();
-        assert_eq!(Some("email".to_string()), first_request.scope);
+        assert_eq!(vec!["email".to_string()], first_request.scopes);
     }
 
-    #[test]
+    #[test_log::test(actix_web::test)]
     async fn successful_authorization_is_redirected() {
         let req = test::TestRequest::post().to_http_request();
         let client_store = build_test_client_store();
@@ -663,43 +483,15 @@ mod tests {
         };
         let query = Query(request.clone());
 
-        let resp = handle(query, build_test_tera(), Data::new(client_store), session).await;
+        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::SEE_OTHER);
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         assert_eq!("authenticate", url);
-
-        let session = req.get_session();
-        let first_request = parse_first_request(&session).unwrap();
-        assert_eq!(request, first_request);
     }
 
-    #[test]
-    async fn single_response_types_are_parsed() {
-        assert_eq!(Some(vec![OAuth2(Code)]), parse_response_type("code"));
-        assert_eq!(Some(vec![OAuth2(Token)]), parse_response_type("token"));
-        assert_eq!(Some(vec![Oidc(IdToken)]), parse_response_type("id_token"));
-    }
-
-    #[test]
-    async fn composite_response_types_are_parsed() {
-        assert_eq!(
-            Some(vec![OAuth2(Code), Oidc(IdToken)]),
-            parse_response_type("code id_token")
-        );
-        assert_eq!(
-            Some(vec![OAuth2(Token), Oidc(IdToken)]),
-            parse_response_type("token id_token")
-        );
-        assert_eq!(
-            Some(vec![Oidc(IdToken), OAuth2(Token), OAuth2(Code)]),
-            parse_response_type("id_token token code")
-        );
-    }
-
-    #[test]
-    async fn errors_are_reported() {
-        assert_eq!(None, parse_response_type("code id_token invalid"));
+    fn build_test_handler() -> Data<Handler> {
+        Data::new(handler())
     }
 }

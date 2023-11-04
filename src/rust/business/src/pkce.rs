@@ -22,6 +22,7 @@ use base64::Engine;
 use regex::Regex;
 use ring::digest::digest;
 use ring::digest::SHA256;
+use serde_derive::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
@@ -33,7 +34,7 @@ pub enum Error {
     InvalidCharacter,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CodeChallengeMethod {
     Plain,
     SHA256,
@@ -60,7 +61,7 @@ impl Display for CodeChallengeMethod {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct CodeChallenge(CodeChallengeMethod, String);
 
 const PATTERN: &str = "^[-a-zA-Z0-9._~]+$";

@@ -17,6 +17,7 @@
 
 pub mod cors;
 pub mod endpoints;
+pub mod session;
 pub mod tera;
 
 use crate::cors::cors_options_preflight;
@@ -139,6 +140,8 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
         )),
         cors_checker,
     );
+    let authorize_handler =
+        tiny_auth_business::authorize_endpoint::inject::handler(client_store.clone());
 
     let web_path = constructor.web_path();
     let static_files = constructor.static_files();
@@ -165,6 +168,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             .app_data(Data::new(token_certificate))
             .app_data(Data::new(user_info_handler.clone()))
             .app_data(Data::new(token_handler.clone()))
+            .app_data(Data::new(authorize_handler.clone()))
             .wrap(
                 SessionMiddleware::builder(
                     CookieSessionStore::default(),
@@ -179,9 +183,8 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
                 .session_lifecycle(
                     PersistentSession::default().session_ttl(Duration::seconds(session_timeout)),
                 )
-                .cookie_content_security(CookieContentSecurity::Private)
+                .cookie_content_security(CookieContentSecurity::Signed)
                 .build(),
-                // ^- encryption is only needed to avoid encoding problems
             )
             .wrap(DefaultHeaders::new().add(("Cache-Control", "no-store")))
             .wrap(DefaultHeaders::new().add(("Pragma", "no-cache")))

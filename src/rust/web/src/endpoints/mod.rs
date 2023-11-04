@@ -36,22 +36,16 @@ use actix_web::{HttpRequest, HttpResponse};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use log::debug;
-use log::error;
-use serde::de::Deserialize as _;
-use serde::de::Visitor;
-use serde::Deserializer;
 use serde::Serialize as BaseSerialize;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::convert::TryFrom;
 use std::sync::Arc;
 use tera::Context;
 use tera::Tera;
+use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
 use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::oauth2::ProtocolError as OAuthError;
-use tiny_auth_business::oidc::Prompt;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::scope::render_tera_error;
 use tiny_auth_business::store::memory::generate_random_string;
@@ -67,35 +61,13 @@ const USER_NAME_CONTEXT: &str = "user";
 const SCOPES_CONTEXT: &str = "scopes";
 const LOGIN_HINT_CONTEXT: &str = "login_hint";
 
-fn parse_first_request(session: &Session) -> Option<authorize::Request> {
-    let first_request = match session.get::<String>(authorize::SESSION_KEY) {
+fn parse_first_request(session: &Session) -> Option<AuthorizeRequestState> {
+    match session.get::<AuthorizeRequestState>(authorize::SESSION_KEY) {
         Err(_) | Ok(None) => {
-            debug!("unsolicited consent request, lacks authorization session key");
-            return None;
-        }
-        Ok(Some(req)) => req,
-    };
-
-    let first_request = match serde_urlencoded::from_str::<authorize::Request>(&first_request) {
-        Err(e) => {
-            error!("Failed to deserialize initial request. {}", e);
-            return None;
+            debug!("unsolicited request, lacks authorization session key");
+            None
         }
         Ok(req) => req,
-    };
-
-    Some(first_request)
-}
-
-fn parse_prompt(prompt: &Option<String>) -> BTreeSet<Prompt> {
-    match prompt {
-        None => Default::default(),
-        Some(value) => value
-            .split(' ')
-            .map(Prompt::try_from)
-            .filter(Result::is_ok)
-            .map(Result::unwrap)
-            .collect(),
     }
 }
 
@@ -291,65 +263,6 @@ fn parse_authorization(value: &HeaderValue, auth_type: &str) -> Option<String> {
     Some(value.replacen(&auth_type, "", 1))
 }
 
-#[allow(clippy::unnecessary_wraps)]
-fn deserialise_empty_as_none<'de, D: Deserializer<'de>>(
-    value: D,
-) -> Result<Option<String>, D::Error> {
-    struct OptionVisitor {
-        marker: std::marker::PhantomData<String>,
-    }
-
-    impl<'de> Visitor<'de> for OptionVisitor {
-        type Value = Option<String>;
-
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            formatter.write_str("option")
-        }
-
-        #[inline]
-        fn visit_none<E>(self) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            Ok(None)
-        }
-
-        #[inline]
-        fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            String::deserialize(deserializer).map(Some)
-        }
-
-        #[inline]
-        fn visit_unit<E>(self) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error,
-        {
-            Ok(None)
-        }
-
-        #[doc(hidden)]
-        fn __private_visit_untagged_option<D>(self, deserializer: D) -> Result<Self::Value, ()>
-        where
-            D: Deserializer<'de>,
-        {
-            Ok(String::deserialize(deserializer).ok())
-        }
-    }
-    let mut result = value
-        .deserialize_option(OptionVisitor {
-            marker: std::marker::PhantomData,
-        })
-        .ok()
-        .flatten();
-    if result.is_some() && result.as_ref().unwrap().is_empty() {
-        result = None;
-    }
-    Ok(result)
-}
-
 #[cfg(test)]
 mod tests {
 
@@ -364,6 +277,7 @@ mod tests {
     use serde::de::DeserializeOwned;
     use serde_derive::Deserialize;
     use tiny_auth_business::authenticator::Authenticator;
+    use tiny_auth_business::serde::deserialise_empty_as_none;
 
     #[derive(Debug, Deserialize, Serialize)]
     struct Test {

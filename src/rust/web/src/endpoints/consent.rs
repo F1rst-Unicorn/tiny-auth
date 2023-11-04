@@ -15,8 +15,6 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::deserialise_empty_as_none;
-use super::parse_prompt;
 use super::render_template;
 use super::server_error;
 use crate::endpoints::authenticate;
@@ -42,7 +40,8 @@ use tera::Context;
 use tera::Tera;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
-use tiny_auth_business::scope::{parse_scope_names, ScopeDescription};
+use tiny_auth_business::scope::ScopeDescription;
+use tiny_auth_business::serde::deserialise_empty_as_none;
 use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::ScopeStore;
 use tiny_auth_business::store::UserStore;
@@ -92,13 +91,10 @@ pub async fn get(
         Some(v) => v,
     };
 
-    let prompt = parse_prompt(&first_request.prompt);
-
-    let allowed_scopes = user.get_allowed_scopes(&first_request.client_id.clone().unwrap());
-    let scopes = parse_scope_names(first_request.scope.as_ref().unwrap_or(&"".to_string()));
-    let scopes = BTreeSet::from_iter(scopes);
+    let allowed_scopes = user.get_allowed_scopes(&first_request.client_id.clone());
+    let scopes = BTreeSet::from_iter(first_request.scopes);
     if scopes.is_subset(&allowed_scopes) {
-        if prompt.contains(&oidc::Prompt::Consent) {
+        if first_request.prompts.contains(&oidc::Prompt::Consent) {
             debug!(
                 "user '{}' gave consent to all scopes but client requires explicit consent",
                 username
@@ -123,13 +119,13 @@ pub async fn get(
             )
             .await;
         }
-    } else if prompt.contains(&oidc::Prompt::None) {
+    } else if first_request.prompts.contains(&oidc::Prompt::None) {
         return render_redirect_error(
-            first_request.redirect_uri.as_ref().unwrap(),
+            &first_request.redirect_uri,
             oidc::ProtocolError::Oidc(oidc::OidcProtocolError::ConsentRequired),
             "User didn't give consent to all scopes",
             &first_request.state,
-            first_request.encode_redirect_to_fragment(),
+            first_request.encode_redirect_to_fragment,
         );
     }
 
@@ -207,51 +203,42 @@ async fn process_skipping_csrf(
         .single()
         .unwrap_or(Local::now());
 
-    let encode_to_fragment = first_request.encode_redirect_to_fragment();
-    let client_name = first_request.client_id.as_ref().unwrap();
-    let response_type = first_request.get_response_types();
-    let redirect_uri = first_request.redirect_uri.unwrap();
-    let mut url = Url::parse(&redirect_uri).expect("should have been validated upon registration");
+    let mut url = Url::parse(&first_request.redirect_uri)
+        .expect("should have been validated upon registration");
     let mut response_parameters = HashMap::new();
 
-    let requested_scopes = parse_scope_names(&first_request.scope.clone().unwrap_or_default());
-    let requested_scopes = BTreeSet::from_iter(requested_scopes);
+    let requested_scopes = BTreeSet::from_iter(first_request.scopes);
     let allowed_scopes: BTreeSet<String> = query.scopes.keys().map(Clone::clone).collect();
     let scopes = allowed_scopes
         .intersection(&requested_scopes)
         .map(Clone::clone)
         .collect::<Vec<String>>();
 
-    let pkce_challenge = match (
-        first_request.code_challenge.as_ref(),
-        first_request.code_challenge_method,
-    ) {
-        (None, _) | (_, None) => None,
-        (Some(code_challenge), Some(_)) => Some(
-            code_challenge
-                .try_into()
-                .expect("should have been validated upon authorization"),
-        ),
-    };
-
-    if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Code)) {
+    if first_request
+        .response_types
+        .contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Code))
+    {
         let code = auth_code_store
             .get_authorization_code(AuthorizationCodeRequest {
-                client_id: client_name,
+                client_id: &first_request.client_id,
                 user: &username,
-                redirect_uri: &redirect_uri,
+                redirect_uri: &first_request.redirect_uri,
                 scope: &scopes.join(" "),
                 insertion_time: Local::now(),
                 authentication_time: auth_time,
                 nonce: first_request.nonce.clone(),
-                pkce_challenge,
+                pkce_challenge: first_request.code_challenge,
             })
             .await;
         response_parameters.insert("code", code);
     }
 
-    if response_type.contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken))
-        || response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token))
+    if first_request
+        .response_types
+        .contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken))
+        || first_request
+            .response_types
+            .contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token))
     {
         let user = match user_store.get(&username) {
             None => {
@@ -261,9 +248,9 @@ async fn process_skipping_csrf(
             Some(user) => user,
         };
 
-        let client = match client_store.get(client_name) {
+        let client = match client_store.get(&first_request.client_id) {
             None => {
-                debug!("client {} not found", client_name);
+                debug!("client {} not found", first_request.client_id);
                 return render_invalid_consent_request(&tera);
             }
             Some(client) => client,
@@ -289,10 +276,16 @@ async fn process_skipping_csrf(
             }
             Ok(token) => token,
         };
-        if response_type.contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken)) {
+        if first_request
+            .response_types
+            .contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken))
+        {
             response_parameters.insert("id_token", encoded_token.clone());
         }
-        if response_type.contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token)) {
+        if first_request
+            .response_types
+            .contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token))
+        {
             response_parameters.insert("access_token", encoded_token);
         }
         if let oauth2::ClientType::Confidential { .. } = client.client_type {
@@ -319,7 +312,7 @@ async fn process_skipping_csrf(
         .state
         .and_then(|v| response_parameters.insert("state", v));
 
-    if encode_to_fragment {
+    if first_request.encode_redirect_to_fragment {
         let fragment =
             serde_urlencoded::to_string(response_parameters).expect("failed to serialize");
         url.set_fragment(Some(&fragment));
@@ -345,11 +338,11 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     session.remove(authorize::SESSION_KEY);
 
     render_redirect_error(
-        first_request.redirect_uri.as_ref().unwrap(),
+        &first_request.redirect_uri,
         oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
         "user denied consent",
         &first_request.state,
-        first_request.encode_redirect_to_fragment(),
+        first_request.encode_redirect_to_fragment,
     )
 }
 
@@ -368,11 +361,11 @@ fn build_context(
     let mut context = Context::new();
 
     let first_request = parse_first_request(session)?;
-    context.insert(super::CLIENT_ID_CONTEXT, &first_request.client_id.unwrap());
+    context.insert(super::CLIENT_ID_CONTEXT, &first_request.client_id);
 
     let mut scopes: Vec<ScopeDescription> = Vec::new();
-    for scope_name in parse_scope_names(&first_request.scope.unwrap()) {
-        if let Some(scope) = scope_store.get(&scope_name) {
+    for scope_name in &first_request.scopes {
+        if let Some(scope) = scope_store.get(scope_name) {
             scopes.push(scope.into());
         }
     }
@@ -402,6 +395,8 @@ mod tests {
     use actix_web::test;
     use actix_web::web::Data;
     use actix_web::web::Form;
+    use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
+    use tiny_auth_business::oidc::ResponseType;
     use tiny_auth_business::store::test_fixtures::build_test_auth_code_store;
     use tiny_auth_business::store::test_fixtures::build_test_client_store;
     use tiny_auth_business::store::test_fixtures::build_test_scope_store;
@@ -410,7 +405,7 @@ mod tests {
     use tiny_auth_business::store::test_fixtures::USER;
     use tiny_auth_business::test_fixtures::build_test_token_creator;
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn empty_session_gives_error() {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
@@ -429,11 +424,13 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn missing_authentication_gives_error() {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
-        session.insert(authorize::SESSION_KEY, "dummy").unwrap();
+        session
+            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .unwrap();
 
         let resp = get(
             build_test_tera(),
@@ -449,7 +446,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn valid_request_is_rendered() {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
@@ -464,7 +461,14 @@ mod tests {
         session
             .insert(
                 authorize::SESSION_KEY,
-                &serde_urlencoded::to_string(first_request).unwrap(),
+                AuthorizeRequestState {
+                    client_id: PUBLIC_CLIENT.to_string(),
+                    redirect_uri: first_request.redirect_uri.unwrap().clone(),
+                    state: first_request.state.clone(),
+                    response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
+                    scopes: vec!["openid".to_string()],
+                    ..AuthorizeRequestState::default()
+                },
             )
             .unwrap();
 
@@ -484,7 +488,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn wrong_csrf_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -510,7 +514,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn posting_empty_session_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -536,11 +540,13 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn posting_missing_authentication_gives_error() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
-        session.insert(authorize::SESSION_KEY, "dummy").unwrap();
+        session
+            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .unwrap();
         session
             .insert(authenticate::AUTH_TIME_SESSION_KEY, 0)
             .unwrap();
@@ -566,7 +572,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn successful_request_is_forwarded() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -581,7 +587,14 @@ mod tests {
         session
             .insert(
                 authorize::SESSION_KEY,
-                &serde_urlencoded::to_string(first_request.clone()).unwrap(),
+                AuthorizeRequestState {
+                    client_id: PUBLIC_CLIENT.to_string(),
+                    redirect_uri: first_request.redirect_uri.clone().unwrap(),
+                    state: first_request.state.clone(),
+                    response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
+                    scopes: vec!["openid".to_string()],
+                    ..AuthorizeRequestState::default()
+                },
             )
             .unwrap();
         session
@@ -628,7 +641,7 @@ mod tests {
             .any(|param| param.0 == "code".to_string() && !param.1.is_empty()));
     }
 
-    #[actix_rt::test]
+    #[test_log::test(actix_web::test)]
     async fn successful_request_with_id_token_is_forwarded() {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
@@ -643,7 +656,18 @@ mod tests {
         session
             .insert(
                 authorize::SESSION_KEY,
-                &serde_urlencoded::to_string(first_request.clone()).unwrap(),
+                AuthorizeRequestState {
+                    client_id: PUBLIC_CLIENT.to_string(),
+                    redirect_uri: first_request.redirect_uri.clone().unwrap(),
+                    state: first_request.state.clone(),
+                    response_types: vec![
+                        ResponseType::OAuth2(oauth2::ResponseType::Code),
+                        ResponseType::Oidc(oidc::OidcResponseType::IdToken),
+                    ],
+                    scopes: vec!["openid".to_string()],
+                    encode_redirect_to_fragment: true,
+                    ..AuthorizeRequestState::default()
+                },
             )
             .unwrap();
         session
@@ -672,7 +696,7 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::FOUND);
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        let url = Url::parse(url).unwrap();
+        let url = dbg!(Url::parse(url).unwrap());
         let expected_url = Url::parse(first_request.redirect_uri.as_ref().unwrap()).unwrap();
 
         assert_eq!(expected_url.scheme(), url.scheme());

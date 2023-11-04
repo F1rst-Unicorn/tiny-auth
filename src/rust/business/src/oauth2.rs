@@ -69,7 +69,7 @@ impl Default for GrantType {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum ResponseType {
     Code,
     Token,
