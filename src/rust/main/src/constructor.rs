@@ -94,27 +94,7 @@ impl<'a> Constructor<'a> {
         let scope_store = Self::build_scope_store(config);
         let tera = Some(Self::build_template_engine(config)?);
         let issuer_url = Self::build_issuer_url(config);
-        let public_keys: Vec<String> = config
-            .crypto
-            .keys
-            .iter()
-            .map(|k| read_file(&k.public_key))
-            .try_fold(vec![], |mut v, i| {
-                v.push(i?);
-                Result::Ok::<Vec<String>, Error>(v)
-            })?;
-        let private_key = config
-            .crypto
-            .keys
-            .iter()
-            .map(|k| read_file(&k.key))
-            .try_fold(vec![], |mut v, i| {
-                v.push(i?);
-                Result::Ok::<Vec<String>, Error>(v)
-            })?
-            .first()
-            .unwrap()
-            .clone();
+        let (public_keys, private_key) = Self::read_token_keypairs(config)?;
         let (encoding_key, algorithm) = Self::build_encoding_key(&private_key)?;
         let issuer_configuration = Self::build_issuer_config(issuer_url.clone(), algorithm);
         let jwks = Jwks::with_keys(
@@ -124,7 +104,7 @@ impl<'a> Constructor<'a> {
                 .map(|(i, k)| Self::build_jwk(k, &issuer_url, i))
                 .try_fold(vec![], |mut v, i| {
                     v.push(i?);
-                    Result::Ok::<Vec<Jwk>, Error>(v)
+                    Ok::<Vec<Jwk>, Error>(v)
                 })?,
         );
         let token_validator: Arc<TokenValidator> = Arc::new(Self::build_token_validator(
@@ -278,6 +258,32 @@ impl<'a> Constructor<'a> {
         }
 
         token_issuer
+    }
+
+    fn read_token_keypairs(config: &'a Config) -> Result<(Vec<String>, String), Error> {
+        let public_keys = config
+            .crypto
+            .keys
+            .iter()
+            .map(|k| read_file(&k.public_key))
+            .try_fold(vec![], |mut v, i| {
+                v.push(i?);
+                Ok::<Vec<String>, Error>(v)
+            })?;
+        let private_key = config
+            .crypto
+            .keys
+            .iter()
+            .map(|k| read_file(&k.key))
+            .try_fold(vec![], |mut v, i| {
+                v.push(i?);
+                Ok::<Vec<String>, Error>(v)
+            })?
+            .first()
+            .unwrap()
+            .clone();
+
+        Ok((public_keys, private_key))
     }
 
     fn build_encoding_key(private_key: &str) -> Result<(EncodingKey, Algorithm), Error> {
