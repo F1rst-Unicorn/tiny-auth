@@ -277,15 +277,9 @@ impl<'a> Constructor<'a> {
         let private_key = config
             .crypto
             .keys
-            .iter()
-            .map(|k| read_file(&k.key))
-            .try_fold(vec![], |mut v, i| {
-                v.push(i?);
-                Ok::<Vec<String>, Error>(v)
-            })?
             .first()
-            .unwrap()
-            .clone();
+            .map(|k| read_file(&k.key))
+            .expect("presence of at least one key was verified above")?;
 
         Ok((public_keys, private_key))
     }
