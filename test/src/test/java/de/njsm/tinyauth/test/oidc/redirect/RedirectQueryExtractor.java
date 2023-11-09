@@ -24,6 +24,6 @@ public interface RedirectQueryExtractor extends RedirectExtractor {
 
     @Override
     default HttpUrl getLastOidcRedirect(Browser browser) {
-        return HttpUrl.get(browser.getCurrentlUrl());
+        return HttpUrl.get(browser.getCurrentUrl());
     }
 }

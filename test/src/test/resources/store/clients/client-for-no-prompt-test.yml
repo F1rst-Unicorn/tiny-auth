@@ -29,7 +29,7 @@ client_type:
         salt: bqcKUBMEn0zc6qEjbRsJda9Q2Y2FhQdR6gWat3F7KmhjbGllbnQtZm9yLW5vLXByb21wdC10ZXN0
 
 redirect_uris:
-  - http://localhost:34345/redirect/client-for-no-prompt-test
+  - http://client:80/redirect/client-for-no-prompt-test.html
 
 allowed_scopes:
   - email

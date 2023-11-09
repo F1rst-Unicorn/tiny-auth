@@ -21,6 +21,7 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.OidcToken;
 import de.njsm.tinyauth.test.data.User;
+import de.njsm.tinyauth.test.repository.Endpoint;
 
 import java.util.Map;
 import java.util.Set;
@@ -31,9 +32,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TokenAsserterWithNonce implements TokenAsserter {
 
+    private final Endpoint endpoint;
+
     private final String nonce;
 
-    public TokenAsserterWithNonce(String nonce) {
+    public TokenAsserterWithNonce(Endpoint endpoint, String nonce) {
+        this.endpoint = endpoint;
         this.nonce = nonce;
     }
 
@@ -55,5 +59,10 @@ public class TokenAsserterWithNonce implements TokenAsserter {
     public void verifyAccessTokenClaims(Map<String, Object> claims, Client client, User user) {
         TokenAsserter.super.verifyAccessTokenClaims(claims, client, user);
         assertEquals(nonce, claims.get(NONCE));
+    }
+
+    @Override
+    public Endpoint endpoint() {
+        return endpoint;
     }
 }

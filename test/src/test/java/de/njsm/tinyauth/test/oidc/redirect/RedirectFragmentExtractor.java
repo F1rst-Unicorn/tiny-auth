@@ -24,7 +24,7 @@ public interface RedirectFragmentExtractor extends RedirectQueryExtractor {
 
     @Override
     default HttpUrl getLastOidcRedirect(Browser browser) {
-        HttpUrl oidcRedirect = HttpUrl.get(browser.getCurrentlUrl());
+        HttpUrl oidcRedirect = HttpUrl.get(browser.getCurrentUrl());
         oidcRedirect = oidcRedirect.newBuilder()
                 .encodedQuery(oidcRedirect.encodedFragment())
                 .build();

@@ -18,7 +18,7 @@
 package de.njsm.tinyauth.test.runtime;
 
 import de.njsm.tinyauth.test.data.Client;
-import de.njsm.tinyauth.test.repository.Endpoints;
+import de.njsm.tinyauth.test.repository.Endpoint;
 import de.njsm.tinyauth.test.runtime.webpage.AuthenticationPage;
 import de.njsm.tinyauth.test.runtime.webpage.AuthorisationPage;
 import de.njsm.tinyauth.test.runtime.webpage.InvalidRedirectUriPage;
@@ -26,7 +26,7 @@ import de.njsm.tinyauth.test.runtime.webpage.RedirectPage;
 import okhttp3.HttpUrl;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.remote.RemoteWebDriver;
 
 import java.util.Collections;
 import java.util.Map;
@@ -39,12 +39,15 @@ public class Browser {
 
     private static final Logger LOG = LogManager.getLogger(Browser.class);
 
-    private final FirefoxDriver driver;
+    private final RemoteWebDriver driver;
 
     private Set<ResponseType> responseType;
 
-    public Browser(FirefoxDriver driver) {
+    private final Endpoint endpoint;
+
+    public Browser(RemoteWebDriver driver, Endpoint endpoint) {
         this.driver = driver;
+        this.endpoint = endpoint;
     }
 
     public void setResponseType(Set<ResponseType> responseTypes) {
@@ -52,6 +55,8 @@ public class Browser {
     }
 
     public void resetCookies() {
+        // go to tiny-auth site as deleteAllCookies() only deletes cookies of the current domain
+        driver.navigate().to(endpoint.inContainer().getHealthUrl());
         driver.manage().deleteAllCookies();
     }
 
@@ -124,7 +129,7 @@ public class Browser {
     }
 
     HttpUrl generateUrlForHappyPath(Client client, String state, Set<String> scopes, String nonce) {
-        return HttpUrl.get(Endpoints.getAuthorizationUrl())
+        return HttpUrl.get(endpoint.inContainer().getAuthorizationUrl())
                 .newBuilder()
                 .addQueryParameter(CLIENT_ID, client.getClientId())
                 .addQueryParameter(STATE, state)
@@ -135,7 +140,7 @@ public class Browser {
                 .build();
     }
 
-    public String getCurrentlUrl() {
+    public String getCurrentUrl() {
         return driver.getCurrentUrl();
     }
 }

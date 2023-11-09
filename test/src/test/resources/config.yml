@@ -30,9 +30,9 @@ rate limit:
   period in seconds: 30
 
 web:
-  bind: localhost:34344
+  bind: 0.0.0.0:34344
   public host:
-    domain: localhost
+    domain: tiny-auth
     port: 34344
   static files: src/static
   cors:

@@ -29,7 +29,7 @@ import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.OidcToken;
 import de.njsm.tinyauth.test.data.User;
-import de.njsm.tinyauth.test.repository.Endpoints;
+import de.njsm.tinyauth.test.repository.Endpoint;
 import io.restassured.path.json.JsonPath;
 
 import java.net.URL;
@@ -45,6 +45,8 @@ public interface TokenAsserter {
     OidcToken verifyAccessToken(String token, Client client, User user) throws Exception;
 
     OidcToken verifyRefreshToken(String token, Client client, User user, Set<String> scopes) throws Exception;
+
+    Endpoint endpoint();
 
     default void verifyUserinfo(JsonPath userinfo, JWTClaimsSet accessTokenClaims) {
         Map<String, Object> convertedClaims = new HashMap<>(accessTokenClaims.getClaims());
@@ -69,7 +71,7 @@ public interface TokenAsserter {
 
     default JWTClaimsSet verifyToken(String token) throws Exception {
         ConfigurableJWTProcessor<SecurityContext> jwtProcessor = new DefaultJWTProcessor<>();
-        JWKSource<SecurityContext> keySource = new RemoteJWKSet<>(new URL(Endpoints.getJwksUrl()));
+        JWKSource<SecurityContext> keySource = new RemoteJWKSet<>(new URL(endpoint().getJwksUrl()));
         JWSAlgorithm expectedJWSAlg = JWSAlgorithm.ES384;
         JWSKeySelector<SecurityContext> keySelector = new JWSVerificationKeySelector<>(expectedJWSAlg, keySource);
         jwtProcessor.setJWSKeySelector(keySelector);
@@ -79,7 +81,7 @@ public interface TokenAsserter {
     default void verifyAccessTokenClaims(Map<String, Object> claims, Client client, User user) {
         Date now = new Date();
 
-        assertEquals(Endpoints.getIssuer(), claims.get(ISSUER));
+        assertEquals(endpoint().inContainer().getIssuer(), claims.get(ISSUER));
         assertEquals(client.getClientId(), claims.get(AUTHORIZED_PARTY));
         assertEquals(user.getUsername(), claims.get(SUBJECT));
 
@@ -108,7 +110,7 @@ public interface TokenAsserter {
     default JWTClaimsSet verifyRefreshTokenSpecificClaims(String token, Set<String> scopes) throws Exception {
         JWTClaimsSet claims = verifyToken(token);
 
-        assertEquals(Endpoints.getIssuer(), claims.getStringClaim(ISSUER));
+        assertEquals(endpoint().inContainer().getIssuer(), claims.getStringClaim(ISSUER));
         assertEquals(scopes, new HashSet<>(claims.getStringListClaim(SCOPES)));
         assertTrue(claims.getExpirationTime().after(new Date()), "token has already expired");
 

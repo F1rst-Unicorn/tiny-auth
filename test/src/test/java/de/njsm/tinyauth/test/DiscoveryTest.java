@@ -17,8 +17,9 @@
 
 package de.njsm.tinyauth.test;
 
-import de.njsm.tinyauth.test.repository.Endpoints;
+import de.njsm.tinyauth.test.repository.Endpoint;
 import io.restassured.http.ContentType;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
@@ -27,21 +28,23 @@ import static org.hamcrest.Matchers.equalTo;
 
 public class DiscoveryTest implements TinyAuthTest {
 
+    private Endpoint endpoint;
+
     @Test
-    void verifyDiscoverySettings() {
+    void verifyDiscoverySettings(Endpoint endpoint) {
         given()
                 .log().everything().
         when()
-                .get(Endpoints.getDiscoveryUrl()).
+                .get(endpoint.getDiscoveryUrl()).
         then()
                 .log().everything()
                 .statusCode(200)
                 .contentType(ContentType.JSON)
-                .body("issuer", equalTo(Endpoints.getIssuer()))
-                .body("authorization_endpoint", equalTo(Endpoints.getAuthorizationUrl()))
-                .body("token_endpoint", equalTo(Endpoints.getTokenUrl()))
-                .body("userinfo_endpoint", equalTo(Endpoints.getUserinfoUrl()))
-                .body("jwks_uri", equalTo(Endpoints.getJwksUrl()))
+                .body("issuer", equalTo(endpoint.inContainer().getIssuer()))
+                .body("authorization_endpoint", equalTo(endpoint.inContainer().getAuthorizationUrl()))
+                .body("token_endpoint", equalTo(endpoint.inContainer().getTokenUrl()))
+                .body("userinfo_endpoint", equalTo(endpoint.inContainer().getUserinfoUrl()))
+                .body("jwks_uri", equalTo(endpoint.inContainer().getJwksUrl()))
                 .body("scopes_supported", containsInAnyOrder("openid", "email", "profile", "phone", "address"))
                 .body("response_types_supported", containsInAnyOrder("code", "token", "id_token", "code token", "code id_token", "token id_token", "code token id_token"))
                 .body("grant_types_supported", containsInAnyOrder("authorization_code", "implicit", "client_credentials", "password", "refresh_token"))
@@ -56,5 +59,15 @@ public class DiscoveryTest implements TinyAuthTest {
                 .body("request_parameter_supported", equalTo(false))
                 .body("request_uri_parameter_supported", equalTo(false))
                 .body("require_request_uri_registration", equalTo(false));
+    }
+
+    @Override
+    public Endpoint endpoint() {
+        return endpoint;
+    }
+
+    @BeforeEach
+    void setUp(Endpoint endpoint) {
+        this.endpoint = endpoint;
     }
 }

@@ -24,6 +24,7 @@ import de.njsm.tinyauth.test.oidc.Identifiers;
 import de.njsm.tinyauth.test.oidc.TokenAsserter;
 import de.njsm.tinyauth.test.oidc.TokenAsserterWithNonce;
 import de.njsm.tinyauth.test.oidc.redirect.RedirectExtractor;
+import de.njsm.tinyauth.test.repository.Endpoint;
 import de.njsm.tinyauth.test.runtime.Browser;
 import okhttp3.HttpUrl;
 
@@ -50,13 +51,15 @@ public interface Gadgets extends TinyAuthTest, RedirectExtractor, ApiGadgets {
 
     Set<String> getScopes();
 
+    Endpoint endpoint();
+
     default void assertUrlParameter(HttpUrl oidcRedirect, String key, String value) {
         assertTrue(oidcRedirect.queryParameterValues(key).contains(value),
                 key + " was '" + oidcRedirect.queryParameter(key) + "', expected '" + value + "'");
     }
 
     default TokenAsserter tokenAsserter() {
-        return new TokenAsserterWithNonce(getNonce());
+        return new TokenAsserterWithNonce(endpoint(), getNonce());
     }
 
     Set<Identifiers.ResponseType> getResponseTypes();

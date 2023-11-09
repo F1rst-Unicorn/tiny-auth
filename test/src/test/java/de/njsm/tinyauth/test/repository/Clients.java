@@ -21,20 +21,20 @@ import de.njsm.tinyauth.test.data.Client;
 
 public class Clients {
     public static Client getConfidentialClient() {
-        return new Client("confidential", "password", "http://localhost:34345/redirect/confidential");
+        return new Client("confidential", "password", "http://client:80/redirect/confidential.html");
     }
 
     public static Client getClientForNoPromptTest() {
-        return new Client("client-for-no-prompt-test", "password", "http://localhost:34345/redirect/client-for-no-prompt-test");
+        return new Client("client-for-no-prompt-test", "password", "http://client:80/redirect/client-for-no-prompt-test.html");
     }
 
     public static Client getClientForTokenSwitchAttack() {
-        return new Client("needed-for-token-switch-attack", "password", "http://localhost:34345/redirect/needed-for-token-switch-attack");
+        return new Client("needed-for-token-switch-attack", "password", "http://client:80/redirect/needed-for-token-switch-attack.html");
     }
 
     public static Client getAdvancedAuthClient() {
         return new Client("advanced-client-auth", "passwordpasswordpasswordpasswordpasswordpassword",
-                "http://localhost:34345/redirect/advanced-client-auth",
+                "http://client:80/redirect/advanced-client-auth.html",
                 "-----BEGIN PRIVATE KEY-----\n" +
                 "MIG2AgEAMBAGByqGSM49AgEGBSuBBAAiBIGeMIGbAgEBBDDcQ4w1qyBpSr7kHk7M\n" +
                 "lK6tEOBDE0gTozttlqB6qW71JcfhGp7YxECP13XUa/XfkNuhZANiAARfBFqROixP\n" +
@@ -49,10 +49,10 @@ public class Clients {
     }
 
     public static Client getPublicClient() {
-        return new Client("public", "", "http://localhost:34345/redirect/public");
+        return new Client("public", "", "http://client:80/redirect/public.html");
     }
 
     public static Client getRestrictedScopeClient() {
-        return new Client("restricted-scopes", "password", "http://localhost:34345/redirect/restricted-scopes");
+        return new Client("restricted-scopes", "password", "http://client:80/redirect/restricted-scopes.html");
     }
 }

@@ -32,7 +32,7 @@ client_type:
       -----END PUBLIC KEY-----
 
 redirect_uris:
-  - http://localhost:34345/redirect/advanced-client-auth
+  - http://client:80/redirect/advanced-client-auth.html
 
 allowed_scopes:
   - email

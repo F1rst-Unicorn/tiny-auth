@@ -28,10 +28,11 @@ import com.nimbusds.jwt.SignedJWT;
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.User;
 import de.njsm.tinyauth.test.repository.Clients;
-import de.njsm.tinyauth.test.repository.Endpoints;
+import de.njsm.tinyauth.test.repository.Endpoint;
 import de.njsm.tinyauth.test.repository.Users;
 import io.restassured.path.json.JsonPath;
 import io.restassured.response.ValidatableResponse;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -50,6 +51,13 @@ public class ApiTests implements TinyAuthTest, ApiGadgets {
     private final User user = Users.getUser();
 
     private Set<String> scopes = Set.of("openid");
+
+    private Endpoint endpoint;
+
+    @BeforeEach
+    void setUp(Endpoint endpoint) {
+        this.endpoint = endpoint;
+    }
 
     @Test
     void testClientCredentialsGrant() throws Exception {
@@ -153,7 +161,7 @@ public class ApiTests implements TinyAuthTest, ApiGadgets {
         JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
                 .subject(client.getClientId())
                 .issuer(client.getClientId())
-                .audience(Endpoints.getTokenUrl())
+                .audience(endpoint.inContainer().getTokenUrl())
                 .jwtID("jti")
                 .expirationTime(new Date(now.getTime() + 5 * 1000))
                 .issueTime(now)
@@ -170,7 +178,7 @@ public class ApiTests implements TinyAuthTest, ApiGadgets {
         JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
                 .subject(client.getClientId())
                 .issuer(client.getClientId())
-                .audience(Endpoints.getTokenUrl())
+                .audience(endpoint.inContainer().getTokenUrl())
                 .jwtID("jti")
                 .expirationTime(new Date(now.getTime() + 5 * 1000))
                 .issueTime(now)
@@ -178,5 +186,10 @@ public class ApiTests implements TinyAuthTest, ApiGadgets {
         SignedJWT signedJWT = new SignedJWT(new JWSHeader(JWSAlgorithm.ES384), claimsSet);
         signedJWT.sign(signer);
         return signedJWT.serialize();
+    }
+
+    @Override
+    public Endpoint endpoint() {
+        return endpoint;
     }
 }

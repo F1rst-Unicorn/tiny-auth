@@ -20,26 +20,19 @@ package de.njsm.tinyauth.test;
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.User;
 import de.njsm.tinyauth.test.oidc.Identifiers;
+import de.njsm.tinyauth.test.repository.Endpoint;
 import de.njsm.tinyauth.test.repository.Users;
 import de.njsm.tinyauth.test.runtime.Browser;
 import de.njsm.tinyauth.test.runtime.SeleniumLifecycleManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockserver.client.MockServerClient;
-import org.mockserver.junit.jupiter.MockServerExtension;
-import org.mockserver.junit.jupiter.MockServerSettings;
-import org.mockserver.model.MediaType;
 
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockserver.model.HttpRequest.request;
-import static org.mockserver.model.HttpResponse.response;
 
-@ExtendWith(MockServerExtension.class)
-@MockServerSettings(ports = {34345}, perTestSuite = true)
 @ExtendWith(SeleniumLifecycleManager.class)
 public abstract class TinyAuthBrowserTest implements TinyAuthTest {
 
@@ -49,6 +42,8 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
 
     private String codeVerifier;
 
+    private Endpoint endpoint;
+
     User user;
 
     Client client;
@@ -56,25 +51,7 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
     Set<String> scopes;
 
     @BeforeEach
-    public void resetMockServer(MockServerClient client, Browser browser) {
-        client.reset();
-        client.when(
-                request().withPath("/redirect/.*")
-        ).respond(
-                response()
-                        .withStatusCode(200)
-                        .withContentType(MediaType.HTML_UTF_8)
-                        .withBody("<!doctype html>" +
-                                "<html>" +
-                                "<head>" +
-                                "<meta charset=\"UTF-8\">" +
-                                "</head>" +
-                                "<body>" +
-                                "<h1 id=\"result\">Hello World!</h1>" +
-                                "</body>" +
-                                "</html>")
-        );
-
+    public void configureBrowser(Browser browser) {
         browser.setResponseType(getResponseTypes());
     }
 
@@ -94,6 +71,11 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
                 .replace("/", "a")
                 .replace("+", "b")
                 .substring(0, Math.min(string.length(), 128));
+    }
+
+    @BeforeEach
+    public void setEndpoint(Endpoint endpoint) {
+        this.endpoint = endpoint;
     }
 
     @BeforeEach
@@ -126,5 +108,10 @@ public abstract class TinyAuthBrowserTest implements TinyAuthTest {
 
     public String getCodeVerifier() {
         return codeVerifier;
+    }
+
+    @Override
+    public Endpoint endpoint() {
+        return endpoint;
     }
 }

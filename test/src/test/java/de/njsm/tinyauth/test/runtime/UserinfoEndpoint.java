@@ -17,7 +17,7 @@
 
 package de.njsm.tinyauth.test.runtime;
 
-import de.njsm.tinyauth.test.repository.Endpoints;
+import de.njsm.tinyauth.test.repository.Endpoint;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.path.json.JsonPath;
@@ -32,6 +32,12 @@ import static de.njsm.tinyauth.test.oidc.Identifiers.TOKEN_TYPE_CONTENT;
 public class UserinfoEndpoint {
 
     private static final Logger LOG = LogManager.getLogger(UserinfoEndpoint.class);
+
+    private final Endpoint endpoint;
+
+    public UserinfoEndpoint(Endpoint endpoint) {
+        this.endpoint = endpoint;
+    }
 
     public JsonPath getUserinfo(String accessToken) {
         LOG.info("getting userinfo");
@@ -58,7 +64,7 @@ public class UserinfoEndpoint {
     private RequestSpecification when() {
         return RestAssured.given()
                 .log().everything()
-                .baseUri(Endpoints.getUserinfoUrl())
+                .baseUri(endpoint.getUserinfoUrl())
                 .when();
     }
 

@@ -17,8 +17,9 @@
 
 package de.njsm.tinyauth.test;
 
-import de.njsm.tinyauth.test.repository.Endpoints;
+import de.njsm.tinyauth.test.repository.Endpoint;
 import io.restassured.http.ContentType;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
@@ -26,16 +27,28 @@ import static org.hamcrest.Matchers.equalTo;
 
 public class HealthTest implements TinyAuthTest {
 
+    private Endpoint endpoint;
+
     @Test
     void getHealth() {
         given()
                 .log().everything().
         when()
-                .get(Endpoints.getHealthUrl()).
+                .get(endpoint().getHealthUrl()).
         then()
                 .log().everything()
                 .statusCode(200)
                 .contentType(ContentType.JSON)
                 .body("ok", equalTo(true));
+    }
+
+    @Override
+    public Endpoint endpoint() {
+        return endpoint;
+    }
+
+    @BeforeEach
+    void setUp(Endpoint endpoint) {
+        this.endpoint = endpoint;
     }
 }

@@ -20,7 +20,7 @@ package de.njsm.tinyauth.test.runtime.webpage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.By;
-import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.remote.RemoteWebDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,7 +31,7 @@ public class AuthorisationPage extends Page {
 
     private By submit;
 
-    public AuthorisationPage(FirefoxDriver driver) {
+    public AuthorisationPage(RemoteWebDriver driver) {
         super(driver);
     }
 

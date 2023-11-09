@@ -20,7 +20,7 @@ package de.njsm.tinyauth.test.runtime;
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.OidcToken;
 import de.njsm.tinyauth.test.data.User;
-import de.njsm.tinyauth.test.repository.Endpoints;
+import de.njsm.tinyauth.test.repository.Endpoint;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.ValidatableResponse;
@@ -36,6 +36,12 @@ import static de.njsm.tinyauth.test.oidc.Identifiers.*;
 public class TokenEndpoint {
 
     private static final Logger LOG = LogManager.getLogger(TokenEndpoint.class);
+
+    private final Endpoint endpoint;
+
+    public TokenEndpoint(Endpoint endpoint) {
+        this.endpoint = endpoint;
+    }
 
     public ValidatableResponse requestWithAuthorizationCodeAndBasicAuth(Client client, String authorizationCode) {
         LOG.info("getting token with authorization code");
@@ -160,7 +166,7 @@ public class TokenEndpoint {
     private RequestSpecification given() {
         return RestAssured.given()
                 .log().everything()
-                .baseUri(Endpoints.getTokenUrl())
+                .baseUri(endpoint.getTokenUrl())
         .when();
     }
 }

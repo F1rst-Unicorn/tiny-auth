@@ -17,89 +17,77 @@
 
 package de.njsm.tinyauth.test.runtime;
 
-import de.njsm.tinyauth.test.repository.Endpoints;
+import de.njsm.tinyauth.test.repository.Endpoint;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.junit.jupiter.api.extension.BeforeAllCallback;
-import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.*;
+import org.junit.jupiter.api.extension.support.TypeBasedParameterResolver;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.Network;
+import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.utility.DockerImageName;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.ConnectException;
-import java.net.URL;
-
-import static org.junit.jupiter.api.extension.ExtensionContext.Namespace.GLOBAL;
-
-public class UutLifecycleManager implements BeforeAllCallback, ExtensionContext.Store.CloseableResource {
+public class UutLifecycleManager extends TypeBasedParameterResolver<Endpoint> implements BeforeAllCallback, ExtensionContext.Store.CloseableResource {
 
     private static final Logger LOG = LogManager.getLogger(UutLifecycleManager.class);
 
-    private static boolean started = false;
+    private boolean started = false;
 
-    private Process tinyAuth;
+    private Network network;
 
-    private Thread stdoutForwarder;
+    private GenericContainer<?> tinyAuthContainer;
 
-    private Thread stderrForwarder;
+    private Endpoint endpoint;
 
     @Override
-    public void beforeAll(ExtensionContext extensionContext) throws Exception {
+    public void beforeAll(ExtensionContext extensionContext) {
         if (!started) {
             started = true;
             startTinyAuth();
-            extensionContext.getRoot().getStore(GLOBAL).put(this.getClass().getCanonicalName(), this);
+            extensionContext.getStore(ExtensionContext.Namespace.create(extensionContext.getRequiredTestClass()))
+                    .put(this.getClass().getCanonicalName(), this);
         }
     }
 
-    private void startTinyAuth() throws Exception {
-        String[] command = new String[] {
-                Config.getBinaryPath(),
-                "-c",
-                Config.getConfigPath(),
-                "-l",
-                Config.getLogConfigPath()
-        };
+    private void startTinyAuth() {
+        network = Network.newNetwork();
+        int port = 34344;
+        tinyAuthContainer = new GenericContainer<>(DockerImageName.parse("archlinux:latest"))
+                .withNetwork(network)
+                .withNetworkAliases("tiny-auth")
+                .withFileSystemBind(Config.getRoot(), "/app")
+                .withWorkingDirectory("/app")
+                .withCommand(
+                        "src/rust/target/debug/tiny-auth",
+                        "-c",
+                        "/app/test/src/test/resources/config.yml",
+                        "-l",
+                        "/app/test/src/test/resources/log4rs.yml")
+                .withExposedPorts(port)
+                .waitingFor(Wait.forListeningPorts(port))
+                .withLogConsumer(v -> LOG.info(v.getUtf8StringWithoutLineEnding()));
 
-        tinyAuth = Runtime.getRuntime().exec(command, null, new File(".."));
-
-        stdoutForwarder = new Thread(() -> {
-            try {
-                tinyAuth.getInputStream().transferTo(System.out);
-            } catch (IOException e) {}
-        });
-        stdoutForwarder.start();
-
-        stderrForwarder = new Thread(() -> {
-            try {
-                tinyAuth.getErrorStream().transferTo(System.err);
-            } catch (IOException e) {}
-        });
-        stderrForwarder.start();
-
-        waitForStartup();
-    }
-
-    private void waitForStartup() {
-        while (true) {
-            try {
-                Thread.sleep(1000);
-                URL u = new URL(Endpoints.getHealthUrl());
-                u.openConnection();
-                LOG.debug("tiny-auth is up");
-                return;
-            } catch (ConnectException e) {
-                LOG.debug("Waiting for tiny-auth...");
-            } catch (InterruptedException | IOException e) {
-                LOG.error("Failed to connect", e);
-            }
-        }
+        tinyAuthContainer.start();
+        endpoint = new Endpoint(tinyAuthContainer.getHost(), tinyAuthContainer.getFirstMappedPort());
     }
 
     @Override
-    public void close() throws Throwable {
-        tinyAuth.destroy();
-        tinyAuth.waitFor();
-        stdoutForwarder.join();
-        stderrForwarder.join();
+    public void close() {
+        tinyAuthContainer.close();
+        network.close();
+        started = false;
+    }
+
+    @Override
+    public Endpoint resolveParameter(ParameterContext parameterContext, ExtensionContext extensionContext) throws ParameterResolutionException {
+        return endpoint;
+    }
+
+    public Endpoint endpoint() {
+        return endpoint;
+    }
+
+    public Network network() {
+        return network;
     }
 }

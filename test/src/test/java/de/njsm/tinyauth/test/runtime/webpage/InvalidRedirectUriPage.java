@@ -20,7 +20,7 @@ package de.njsm.tinyauth.test.runtime.webpage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.By;
-import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.remote.RemoteWebDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,11 +31,11 @@ public class InvalidRedirectUriPage extends Page {
 
     private By headline;
 
-    public InvalidRedirectUriPage(FirefoxDriver driver) {
+    public InvalidRedirectUriPage(RemoteWebDriver driver) {
         super(driver);
     }
 
-    public static void assertShown(FirefoxDriver driver) {
+    public static void assertShown(RemoteWebDriver driver) {
         new InvalidRedirectUriPage(driver);
     }
 

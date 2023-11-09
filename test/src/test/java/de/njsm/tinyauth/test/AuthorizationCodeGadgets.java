@@ -71,8 +71,8 @@ public interface AuthorizationCodeGadgets extends Gadgets, RedirectQueryExtracto
         return assertOnRedirect(browser);
     }
 
-    default String fetchAuthCode(Browser browser, Map<String, String> additionalParamters) throws Exception {
-        browser.startAuthenticationWithAdditionalParameters(getClient(), getState(), getScopes(), getNonce(), additionalParamters)
+    default String fetchAuthCode(Browser browser, Map<String, String> additionalParameters) throws Exception {
+        browser.startAuthenticationWithAdditionalParameters(getClient(), getState(), getScopes(), getNonce(), additionalParameters)
                 .withUser(getUser())
                 .login()
                 .confirm();

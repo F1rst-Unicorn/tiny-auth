@@ -22,7 +22,7 @@
 client_id: public
 client_type: public
 redirect_uris:
-  - http://localhost:34345/redirect/public
+  - http://client:80/redirect/public.html
 
 allowed_scopes:
   - email

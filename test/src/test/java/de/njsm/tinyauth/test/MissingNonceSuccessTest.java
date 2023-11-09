@@ -35,7 +35,7 @@ public interface MissingNonceSuccessTest extends AuthorizationCodeGadgets {
 
     @Override
     default TokenAsserter tokenAsserter() {
-        return new TokenAsserterWithoutNonce();
+        return new TokenAsserterWithoutNonce(endpoint());
     }
 
     @Test

@@ -29,7 +29,7 @@ client_type:
         salt: sY6ea0Rd0pYnQQ6opmV0EsaNM0fd7+9PPsvH8Mcj6bNuZWVkZWQtZm9yLXRva2VuLXN3aXRjaC1hdHRhY2s=
 
 redirect_uris:
-  - http://localhost:34345/redirect/needed-for-token-switch-attack
+  - http://client:80/redirect/needed-for-token-switch-attack.html
 
 allowed_scopes:
   - email

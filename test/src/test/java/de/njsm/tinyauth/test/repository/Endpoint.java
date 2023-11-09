@@ -17,63 +17,65 @@
 
 package de.njsm.tinyauth.test.repository;
 
-public class Endpoints {
+public record Endpoint(String host, int port) {
 
-    public static String getBaseUri() {
-        return "https://localhost:34344/";
+    public Endpoint inContainer() {
+        return new Endpoint("tiny-auth", 34344);
     }
 
-    public static String getIssuer() {
-        String result = getBaseUri();
-        result = result.substring(0, result.length() - 1);
-        return result;
+    public String getBaseUri() {
+        return "https://" + host + ":" + port;
     }
 
-    public static String getAuthorizationUrl() {
+    public String getIssuer() {
+        return getBaseUri();
+    }
+
+    public String getAuthorizationUrl() {
         return getBaseUri() + getAuthorizationPath();
     }
 
-    public static String getJwksUrl() {
+    public String getJwksUrl() {
         return getBaseUri() + getJwksPath();
     }
 
-    public static String getHealthUrl() {
+    public String getHealthUrl() {
         return getBaseUri() + getHealthPath();
     }
 
-    public static String getDiscoveryUrl() {
+    public String getDiscoveryUrl() {
         return getBaseUri() + getDiscoveryPath();
     }
 
-    public static String getTokenUrl() {
+    public String getTokenUrl() {
         return getBaseUri() + getTokenPath();
     }
 
-    public static String getUserinfoUrl() {
+    public String getUserinfoUrl() {
         return getBaseUri() + getUserinfoPath();
     }
 
     private static String getUserinfoPath() {
-        return "userinfo";
+        return "/userinfo";
     }
 
     private static String getDiscoveryPath() {
-        return ".well-known/openid-configuration";
+        return "/.well-known/openid-configuration";
     }
 
     private static String getTokenPath() {
-        return "token";
+        return "/token";
     }
 
     private static String getAuthorizationPath() {
-        return "authorize";
+        return "/authorize";
     }
 
-    public static String getJwksPath() {
-        return "jwks";
+    private static String getJwksPath() {
+        return "/jwks";
     }
 
-    public static String getHealthPath() {
-        return "health";
+    private static String getHealthPath() {
+        return "/health";
     }
 }

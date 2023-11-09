@@ -17,15 +17,15 @@
 
 package de.njsm.tinyauth.test.runtime.webpage;
 
-import org.openqa.selenium.firefox.FirefoxDriver;
+import org.openqa.selenium.remote.RemoteWebDriver;
 import org.openqa.selenium.support.ui.ExpectedCondition;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 public abstract class Page {
 
-    FirefoxDriver driver;
+    RemoteWebDriver driver;
 
-    public Page(FirefoxDriver driver) {
+    public Page(RemoteWebDriver driver) {
         this.driver = driver;
         initialise();
         assertDriverIsOnThisPage();
@@ -36,6 +36,6 @@ public abstract class Page {
     void assertDriverIsOnThisPage() {}
 
     <T> T waitUntil(ExpectedCondition<T> condition) {
-        return new WebDriverWait(driver, 10).until(condition::apply);
+        return new WebDriverWait(driver, 10).until(condition);
     }
 }

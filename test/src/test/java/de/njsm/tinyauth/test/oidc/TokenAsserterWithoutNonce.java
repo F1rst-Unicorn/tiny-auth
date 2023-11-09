@@ -21,12 +21,19 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.OidcToken;
 import de.njsm.tinyauth.test.data.User;
+import de.njsm.tinyauth.test.repository.Endpoint;
 
 import java.util.Set;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.ACCESS_TOKEN;
 
 public class TokenAsserterWithoutNonce implements TokenAsserter {
+
+    private final Endpoint endpoint;
+
+    public TokenAsserterWithoutNonce(Endpoint endpoint) {
+        this.endpoint = endpoint;
+    }
 
     @Override
     public OidcToken verifyAccessToken(String token, Client client, User user) throws Exception {
@@ -40,5 +47,10 @@ public class TokenAsserterWithoutNonce implements TokenAsserter {
         JWTClaimsSet claims = verifyRefreshTokenSpecificClaims(token, scopes);
         verifyAccessTokenClaims(claims.getJSONObjectClaim(ACCESS_TOKEN), client, user);
         return new OidcToken(token, claims);
+    }
+
+    @Override
+    public Endpoint endpoint() {
+        return endpoint;
     }
 }

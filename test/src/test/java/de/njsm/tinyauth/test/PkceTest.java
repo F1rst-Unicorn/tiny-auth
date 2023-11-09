@@ -56,7 +56,7 @@ public class PkceTest extends TinyAuthBrowserTest implements AuthorizationCodeGa
                         CODE_CHALLENGE_METHOD, CODE_CHALLENGE_METHOD_S256));
 
         tokenEndpoint().requestWithAuthorizationCodeAndBasicAuth(getClient(), authorizationCode, Map.of(
-                        CODE_VERIFIER, "wrong-code"
+                        CODE_VERIFIER, "wrong-codewrong-codewrong-codewrong-codewrong-code"
                 ))
                 .statusCode(400)
                 .body(ERROR, equalTo(INVALID_GRANT))

@@ -29,7 +29,7 @@ client_type:
         salt: 7WeGcR2fdMnFHN1a5aSCA7tTtj+pHEH6Ij8ClWscgM9jb25maWRlbnRpYWw=
 
 redirect_uris:
-  - http://localhost:34345/redirect/confidential
+  - http://client:80/redirect/confidential.html
 
 allowed_scopes:
   - email

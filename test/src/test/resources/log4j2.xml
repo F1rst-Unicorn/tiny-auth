@@ -28,6 +28,21 @@
         </Console>
     </Appenders>
     <Loggers>
+        <Logger name="org.testcontainers" level="info" additivity="false">
+            <AppenderRef ref="console"/>
+        </Logger>
+        <Logger name="tc" level="info" additivity="false">
+            <AppenderRef ref="console"/>
+        </Logger>
+        <Logger name="com.github.dockerjava" level="warn" additivity="false">
+            <AppenderRef ref="console"/>
+        </Logger>
+        <Logger name="com.github.dockerjava.zerodep.shaded.org.apache.hc.client5.http.wire" level="off" additivity="false">
+            <AppenderRef ref="console"/>
+        </Logger>
+        <Logger name="com.networknt" level="info" additivity="false">
+            <AppenderRef ref="console"/>
+        </Logger>
         <Root level="debug">
             <AppenderRef ref="console"/>
         </Root>

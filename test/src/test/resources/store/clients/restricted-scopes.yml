@@ -29,7 +29,7 @@ client_type:
         salt: A4krFqry/Zs5mYslrwYr/hUmFJoQZH47pIl9ry77+sJyZXN0cmljdGVkLXNjb3Blcw==
 
 redirect_uris:
-  - http://localhost:34345/redirect/restricted-scopes
+  - http://client:80/redirect/restricted-scopes.html
 
 allowed_scopes:
   - openid

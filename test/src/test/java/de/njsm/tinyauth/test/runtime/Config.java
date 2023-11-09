@@ -19,27 +19,13 @@ package de.njsm.tinyauth.test.runtime;
 
 public class Config {
 
-    static final String BINARY_PATH = "de.njsm.tinyauth.test.config.binary";
+    static final String CONFIG_ROOT = "de.njsm.tinyauth.test.root";
 
-    static final String CONFIG_PATH = "de.njsm.tinyauth.test.config.configfile";
-
-    static final String LOG_CONFIG_PATH = "de.njsm.tinyauth.test.config.logconfigfile";
-
-    static final String PROFILE_PATH = "de.njsm.tinyauth.test.selenium.profile";
-
-    static String getBinaryPath() {
-        return System.getProperty(BINARY_PATH);
-    }
-
-    static String getConfigPath() {
-        return System.getProperty(CONFIG_PATH);
-    }
-
-    static String getLogConfigPath() {
-        return System.getProperty(LOG_CONFIG_PATH);
+    static String getRoot() {
+        return System.getProperty(CONFIG_ROOT);
     }
 
     static String getProfilePath() {
-        return System.getProperty(PROFILE_PATH);
+        return System.getProperty("/app/test/src/test/resources/firefox");
     }
 }

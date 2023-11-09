@@ -19,10 +19,13 @@ package de.njsm.tinyauth.test;
 
 import de.njsm.tinyauth.test.oidc.TokenAsserter;
 import de.njsm.tinyauth.test.oidc.TokenAsserterWithoutNonce;
+import de.njsm.tinyauth.test.repository.Endpoint;
 
 public interface ApiGadgets {
 
+    Endpoint endpoint();
+
     default TokenAsserter tokenAsserter() {
-        return new TokenAsserterWithoutNonce();
+        return new TokenAsserterWithoutNonce(endpoint());
     }
 }

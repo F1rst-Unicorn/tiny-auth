@@ -17,6 +17,7 @@
 
 package de.njsm.tinyauth.test;
 
+import de.njsm.tinyauth.test.repository.Endpoint;
 import de.njsm.tinyauth.test.runtime.RestAssuredConfiguration;
 import de.njsm.tinyauth.test.runtime.TokenEndpoint;
 import de.njsm.tinyauth.test.runtime.UserinfoEndpoint;
@@ -27,11 +28,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 @ExtendWith(RestAssuredConfiguration.class)
 public interface TinyAuthTest {
 
+    Endpoint endpoint();
+
     default TokenEndpoint tokenEndpoint() {
-        return new TokenEndpoint();
+        return new TokenEndpoint(endpoint());
     }
 
     default UserinfoEndpoint userinfoEndpoint() {
-        return new UserinfoEndpoint();
+        return new UserinfoEndpoint(endpoint());
     }
 }
