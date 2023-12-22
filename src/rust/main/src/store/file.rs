@@ -42,7 +42,7 @@ impl FileUserStore {
     pub fn new(base: &str) -> Option<Self> {
         let mut users = BTreeMap::new();
         let user_store = base.to_string() + "/users";
-        for file in iterate_directory(&user_store)? {
+        for file in iterate_directory(user_store)? {
             let file = match file {
                 Err(e) => {
                     error!("Could not read store file: {}", e);
@@ -105,7 +105,7 @@ impl FileClientStore {
     pub fn new(base: &str) -> Option<Self> {
         let mut clients = BTreeMap::new();
         let client_store = base.to_string() + "/clients";
-        for file in iterate_directory(&client_store)? {
+        for file in iterate_directory(client_store)? {
             let file = match file {
                 Err(e) => {
                     error!("Could not read store file: {}", e);
@@ -177,7 +177,7 @@ impl FileScopeStore {
     pub fn new(base: &str) -> Option<Self> {
         let mut scopes = BTreeMap::new();
         let scope_store = base.to_string() + "/scopes";
-        for file in iterate_directory(&scope_store)? {
+        for file in iterate_directory(scope_store)? {
             let file = match file {
                 Err(e) => {
                     error!("Could not read store file: {}", e);
