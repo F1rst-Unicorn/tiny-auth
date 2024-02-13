@@ -20,6 +20,7 @@ pub mod authorize_endpoint;
 pub mod change_password;
 pub mod client;
 pub mod clock;
+pub mod consent;
 pub mod cors;
 pub mod issuer_configuration;
 pub mod jwk;

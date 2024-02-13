@@ -101,7 +101,7 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
             debug!("Recognised authenticated user '{}'", username);
             redirect_successfully()
         }
-    } else if first_request.prompts.contains(&oidc::Prompt::None) {
+    } else if first_request.prompts.contains(&Prompt::None) {
         debug!("No user recognised but client demands no interaction");
         render_redirect_error(
             session,

@@ -91,7 +91,6 @@ pub async fn auth_code_clean_job(store: Arc<MemoryAuthorizationCodeStore>) {
 
 #[async_trait]
 impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
-    #[allow(clippy::too_many_arguments)]
     async fn get_authorization_code<'a>(&self, request: AuthorizationCodeRequest<'a>) -> String {
         let mut store = self.store.write().await;
         let mut key = AuthCodeKey {

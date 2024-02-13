@@ -32,41 +32,26 @@ use log::debug;
 use log::warn;
 use serde_derive::Deserialize;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::iter::FromIterator;
 use std::sync::Arc;
 use tera::Context;
 use tera::Tera;
+use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
+use tiny_auth_business::consent::Error;
+use tiny_auth_business::consent::Handler;
+use tiny_auth_business::consent::Request as BusinessRequest;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
 use tiny_auth_business::scope::ScopeDescription;
 use tiny_auth_business::serde::deserialise_empty_as_none;
-use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::ScopeStore;
-use tiny_auth_business::store::UserStore;
-use tiny_auth_business::store::{AuthorizationCodeRequest, AuthorizationCodeStore};
-use tiny_auth_business::token::TokenCreator;
 use url::Url;
-
-#[derive(Deserialize)]
-pub struct Request {
-    #[serde(default)]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    csrftoken: Option<String>,
-
-    #[serde(flatten)]
-    scopes: BTreeMap<String, String>,
-}
 
 pub async fn get(
     tera: web::Data<Tera>,
     session: Session,
+    handler: web::Data<Handler>,
     scope_store: web::Data<Arc<dyn ScopeStore>>,
-    user_store: web::Data<Arc<dyn UserStore>>,
-    client_store: web::Data<Arc<dyn ClientStore>>,
-    auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
-    token_creator: web::Data<TokenCreator>,
 ) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
@@ -83,17 +68,18 @@ pub async fn get(
         Ok(Some(v)) => v,
     };
 
-    let user = match user_store.get(&username) {
-        None => {
-            debug!("authenticated user not found");
+    let can_skip_consent_screen = match handler.can_skip_consent_screen(
+        &username,
+        &first_request.client_id,
+        &first_request.scopes,
+    ) {
+        Err(_) => {
             return render_invalid_consent_request(&tera);
         }
-        Some(v) => v,
+        Ok(v) => v,
     };
 
-    let allowed_scopes = user.get_allowed_scopes(&first_request.client_id.clone());
-    let scopes = BTreeSet::from_iter(first_request.scopes);
-    if scopes.is_subset(&allowed_scopes) {
+    if can_skip_consent_screen {
         if first_request.prompts.contains(&oidc::Prompt::Consent) {
             debug!(
                 "user '{}' gave consent to all scopes but client requires explicit consent",
@@ -107,15 +93,16 @@ pub async fn get(
             return process_skipping_csrf(
                 web::Form(Request {
                     csrftoken: None,
-                    scopes: scopes.into_iter().map(|v| (v, String::new())).collect(),
+                    scopes: first_request
+                        .scopes
+                        .iter()
+                        .map(|v| (v.clone(), String::new()))
+                        .collect(),
                 }),
                 session,
                 tera,
-                client_store,
-                user_store,
-                auth_code_store,
-                token_creator,
-                scope_store,
+                handler,
+                &first_request,
             )
             .await;
         }
@@ -137,52 +124,42 @@ pub async fn get(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(Deserialize)]
+pub struct Request {
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialise_empty_as_none")]
+    csrftoken: Option<String>,
+
+    #[serde(flatten)]
+    scopes: BTreeMap<String, String>,
+}
+
 pub async fn post(
     query: web::Form<Request>,
     session: Session,
     tera: web::Data<Tera>,
-    client_store: web::Data<Arc<dyn ClientStore>>,
-    user_store: web::Data<Arc<dyn UserStore>>,
-    auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
-    token_creator: web::Data<TokenCreator>,
-    scope_store: web::Data<Arc<dyn ScopeStore>>,
+    handler: web::Data<Handler>,
 ) -> HttpResponse {
     if !super::is_csrf_valid(&query.csrftoken, &session) {
         debug!("CSRF protection violation detected");
         return render_invalid_consent_request(&tera);
     }
-    process_skipping_csrf(
-        query,
-        session,
-        tera,
-        client_store,
-        user_store,
-        auth_code_store,
-        token_creator,
-        scope_store,
-    )
-    .await
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn process_skipping_csrf(
-    query: web::Form<Request>,
-    session: Session,
-    tera: web::Data<Tera>,
-    client_store: web::Data<Arc<dyn ClientStore>>,
-    user_store: web::Data<Arc<dyn UserStore>>,
-    auth_code_store: web::Data<Arc<dyn AuthorizationCodeStore>>,
-    token_creator: web::Data<TokenCreator>,
-    scope_store: web::Data<Arc<dyn ScopeStore>>,
-) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
             return render_invalid_consent_request(&tera);
         }
-        Some(req) => req,
+        Some(v) => v,
     };
+    process_skipping_csrf(query, session, tera, handler, &first_request).await
+}
 
+async fn process_skipping_csrf(
+    query: web::Form<Request>,
+    session: Session,
+    tera: web::Data<Tera>,
+    handler: web::Data<Handler>,
+    first_request: &AuthorizeRequestState,
+) -> HttpResponse {
     let username = match session.get::<String>(authenticate::SESSION_KEY) {
         Err(_) | Ok(None) => {
             debug!("unsolicited consent request");
@@ -207,110 +184,49 @@ async fn process_skipping_csrf(
         .expect("should have been validated upon registration");
     let mut response_parameters = HashMap::new();
 
-    let requested_scopes = BTreeSet::from_iter(first_request.scopes);
-    let allowed_scopes: BTreeSet<String> = query.scopes.keys().map(Clone::clone).collect();
-    let scopes = allowed_scopes
-        .intersection(&requested_scopes)
-        .map(Clone::clone)
-        .collect::<Vec<String>>();
-
-    if first_request
-        .response_types
-        .contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Code))
+    let response = match handler
+        .issue_token(BusinessRequest {
+            client_id: &first_request.client_id,
+            redirect_uri: &first_request.redirect_uri,
+            authenticated_username: &username,
+            requested_scopes: &first_request.scopes,
+            user_confirmed_scopes: &query.scopes.keys().map(Clone::clone).collect(),
+            response_types: &first_request.response_types,
+            auth_time,
+            nonce: first_request.nonce.as_ref(),
+            code_challenge: first_request.code_challenge.as_ref(),
+        })
+        .await
     {
-        let code = auth_code_store
-            .get_authorization_code(AuthorizationCodeRequest {
-                client_id: &first_request.client_id,
-                user: &username,
-                redirect_uri: &first_request.redirect_uri,
-                scope: &scopes.join(" "),
-                insertion_time: Local::now(),
-                authentication_time: auth_time,
-                nonce: first_request.nonce.clone(),
-                pkce_challenge: first_request.code_challenge,
-            })
-            .await;
-        response_parameters.insert("code", code);
-    }
-
-    if first_request
-        .response_types
-        .contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken))
-        || first_request
-            .response_types
-            .contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token))
-    {
-        let user = match user_store.get(&username) {
-            None => {
-                debug!("user {} not found", username);
-                return render_invalid_consent_request(&tera);
-            }
-            Some(user) => user,
-        };
-
-        let client = match client_store.get(&first_request.client_id) {
-            None => {
-                debug!("client {} not found", first_request.client_id);
-                return render_invalid_consent_request(&tera);
-            }
-            Some(client) => client,
-        };
-
-        let auth_time = match session.get::<i64>(authenticate::AUTH_TIME_SESSION_KEY) {
-            Err(_) | Ok(None) => {
-                debug!("missing auth_time");
-                return render_invalid_consent_request(&tera);
-            }
-            Ok(Some(req)) => req,
-        };
-
-        let scopes = scope_store.get_all(&scopes);
-
-        let mut token = token_creator.build_token(&user, &client, &scopes, auth_time);
-        token.set_nonce(first_request.nonce);
-
-        let encoded_token = match token_creator.finalize(token.clone()) {
-            Err(e) => {
-                debug!("failed to encode token: {}", e);
-                return server_error(&tera);
-            }
-            Ok(token) => token,
-        };
-        if first_request
-            .response_types
-            .contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken))
-        {
-            response_parameters.insert("id_token", encoded_token.clone());
+        Ok(v) => v,
+        Err(Error::ClientNotFound) | Err(Error::UserNotFound) => {
+            return render_invalid_consent_request(&tera);
         }
-        if first_request
-            .response_types
-            .contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token))
-        {
-            response_parameters.insert("access_token", encoded_token);
-        }
-        if let oauth2::ClientType::Confidential { .. } = client.client_type {
-            let encoded_refresh_token = match token_creator
-                .finalize_refresh_token(token_creator.build_refresh_token(token, &scopes))
-            {
-                Err(e) => {
-                    debug!("failed to encode refresh token: {}", e);
-                    return server_error(&tera);
-                }
-                Ok(token) => token,
-            };
-            response_parameters.insert("refresh_token", encoded_refresh_token);
-        }
+        Err(Error::TokenEncodingError) => return server_error(&tera),
+    };
 
-        response_parameters.insert("token_type", "bearer".to_string());
-        response_parameters.insert(
-            "expires_in",
-            token_creator.expiration().num_seconds().to_string(),
-        );
-    }
-
+    response
+        .code
+        .and_then(|v| response_parameters.insert("code", v));
+    response
+        .access_token
+        .and_then(|v| response_parameters.insert("access_token", v));
+    response
+        .id_token
+        .and_then(|v| response_parameters.insert("id_token", v));
+    response
+        .refresh_token
+        .and_then(|v| response_parameters.insert("refresh_token", v));
+    response
+        .expiration
+        .and_then(|v| response_parameters.insert("expires_in", v.num_seconds().to_string()));
+    response
+        .expiration
+        .and_then(|_| response_parameters.insert("token_type", "bearer".to_string()));
     first_request
         .state
-        .and_then(|v| response_parameters.insert("state", v));
+        .as_ref()
+        .and_then(|v| response_parameters.insert("state", v.to_string()));
 
     if first_request.encode_redirect_to_fragment {
         let fragment =
@@ -395,15 +311,14 @@ mod tests {
     use actix_web::test;
     use actix_web::web::Data;
     use actix_web::web::Form;
+    use std::collections::HashMap;
     use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
+    use tiny_auth_business::consent::test_fixtures::handler;
     use tiny_auth_business::oidc::ResponseType;
-    use tiny_auth_business::store::test_fixtures::build_test_auth_code_store;
-    use tiny_auth_business::store::test_fixtures::build_test_client_store;
     use tiny_auth_business::store::test_fixtures::build_test_scope_store;
-    use tiny_auth_business::store::test_fixtures::build_test_user_store;
     use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
     use tiny_auth_business::store::test_fixtures::USER;
-    use tiny_auth_business::test_fixtures::build_test_token_creator;
+    use url::Url;
 
     #[test_log::test(actix_web::test)]
     async fn empty_session_gives_error() {
@@ -413,11 +328,8 @@ mod tests {
         let resp = get(
             build_test_tera(),
             session,
+            Data::new(handler()),
             Data::new(build_test_scope_store()),
-            Data::new(build_test_user_store()),
-            Data::new(build_test_client_store()),
-            Data::new(build_test_auth_code_store()),
-            Data::new(build_test_token_creator()),
         )
         .await;
 
@@ -435,11 +347,8 @@ mod tests {
         let resp = get(
             build_test_tera(),
             session,
+            Data::new(handler()),
             Data::new(build_test_scope_store()),
-            Data::new(build_test_user_store()),
-            Data::new(build_test_client_store()),
-            Data::new(build_test_auth_code_store()),
-            Data::new(build_test_token_creator()),
         )
         .await;
 
@@ -477,11 +386,8 @@ mod tests {
         let resp = get(
             build_test_tera(),
             session,
+            Data::new(handler()),
             Data::new(build_test_scope_store()),
-            Data::new(build_test_user_store()),
-            Data::new(build_test_client_store()),
-            Data::new(build_test_auth_code_store()),
-            Data::new(build_test_token_creator()),
         )
         .await;
 
@@ -499,17 +405,7 @@ mod tests {
             scopes: Default::default(),
         });
 
-        let resp = post(
-            request,
-            session,
-            build_test_tera(),
-            Data::new(build_test_client_store()),
-            Data::new(build_test_user_store()),
-            Data::new(build_test_auth_code_store()),
-            Data::new(build_test_token_creator()),
-            Data::new(build_test_scope_store()),
-        )
-        .await;
+        let resp = post(request, session, build_test_tera(), Data::new(handler())).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -525,17 +421,7 @@ mod tests {
             scopes: Default::default(),
         });
 
-        let resp = post(
-            request,
-            session,
-            build_test_tera(),
-            Data::new(build_test_client_store()),
-            Data::new(build_test_user_store()),
-            Data::new(build_test_auth_code_store()),
-            Data::new(build_test_token_creator()),
-            Data::new(build_test_scope_store()),
-        )
-        .await;
+        let resp = post(request, session, build_test_tera(), Data::new(handler())).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -557,17 +443,7 @@ mod tests {
             scopes: Default::default(),
         });
 
-        let resp = post(
-            request,
-            session,
-            build_test_tera(),
-            Data::new(build_test_client_store()),
-            Data::new(build_test_user_store()),
-            Data::new(build_test_auth_code_store()),
-            Data::new(build_test_token_creator()),
-            Data::new(build_test_scope_store()),
-        )
-        .await;
+        let resp = post(request, session, build_test_tera(), Data::new(handler())).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -608,17 +484,7 @@ mod tests {
             scopes: Default::default(),
         });
 
-        let resp = post(
-            request,
-            session,
-            build_test_tera(),
-            Data::new(build_test_client_store()),
-            Data::new(build_test_user_store()),
-            Data::new(build_test_auth_code_store()),
-            Data::new(build_test_token_creator()),
-            Data::new(build_test_scope_store()),
-        )
-        .await;
+        let resp = post(request, session, build_test_tera(), Data::new(handler())).await;
 
         assert_eq!(resp.status(), http::StatusCode::FOUND);
 
@@ -681,17 +547,7 @@ mod tests {
             scopes: Default::default(),
         });
 
-        let resp = post(
-            request,
-            session,
-            build_test_tera(),
-            Data::new(build_test_client_store()),
-            Data::new(build_test_user_store()),
-            Data::new(build_test_auth_code_store()),
-            Data::new(build_test_token_creator()),
-            Data::new(build_test_scope_store()),
-        )
-        .await;
+        let resp = post(request, session, build_test_tera(), Data::new(handler())).await;
 
         assert_eq!(resp.status(), http::StatusCode::FOUND);
 

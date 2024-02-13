@@ -215,7 +215,6 @@ pub mod test_fixtures {
 
     #[async_trait]
     impl AuthorizationCodeStore for TestAuthorizationCodeStore {
-        #[allow(clippy::too_many_arguments)]
         async fn get_authorization_code<'a>(
             &self,
             request: AuthorizationCodeRequest<'a>,

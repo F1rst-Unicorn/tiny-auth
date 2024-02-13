@@ -142,6 +142,13 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     );
     let authorize_handler =
         tiny_auth_business::authorize_endpoint::inject::handler(client_store.clone());
+    let consent_handler = tiny_auth_business::consent::inject::handler(
+        scope_store.clone(),
+        user_store.clone(),
+        client_store.clone(),
+        auth_code_store.clone(),
+        token_creator.clone(),
+    );
 
     let web_path = constructor.web_path();
     let static_files = constructor.static_files();
@@ -169,6 +176,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             .app_data(Data::new(user_info_handler.clone()))
             .app_data(Data::new(token_handler.clone()))
             .app_data(Data::new(authorize_handler.clone()))
+            .app_data(Data::new(consent_handler.clone()))
             .wrap(
                 SessionMiddleware::builder(
                     CookieSessionStore::default(),

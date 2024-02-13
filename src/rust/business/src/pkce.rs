@@ -61,7 +61,7 @@ impl Display for CodeChallengeMethod {
     }
 }
 
-#[derive(PartialEq, Eq, Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Eq, Serialize, Deserialize, Debug, Clone)]
 pub struct CodeChallenge(CodeChallengeMethod, String);
 
 const PATTERN: &str = "^[-a-zA-Z0-9._~]+$";
