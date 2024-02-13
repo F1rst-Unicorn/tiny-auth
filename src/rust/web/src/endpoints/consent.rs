@@ -32,6 +32,7 @@ use log::debug;
 use log::warn;
 use serde_derive::Deserialize;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tera::Context;
@@ -91,14 +92,7 @@ pub async fn get(
                 username
             );
             return process_skipping_csrf(
-                web::Form(Request {
-                    csrftoken: None,
-                    scopes: first_request
-                        .scopes
-                        .iter()
-                        .map(|v| (v.clone(), String::new()))
-                        .collect(),
-                }),
+                first_request.scopes.iter().map(Clone::clone).collect(),
                 session,
                 tera,
                 handler,
@@ -150,11 +144,18 @@ pub async fn post(
         }
         Some(v) => v,
     };
-    process_skipping_csrf(query, session, tera, handler, &first_request).await
+    process_skipping_csrf(
+        query.0.scopes.into_keys().collect(),
+        session,
+        tera,
+        handler,
+        &first_request,
+    )
+    .await
 }
 
 async fn process_skipping_csrf(
-    query: web::Form<Request>,
+    scopes: BTreeSet<String>,
     session: Session,
     tera: web::Data<Tera>,
     handler: web::Data<Handler>,
@@ -190,7 +191,7 @@ async fn process_skipping_csrf(
             redirect_uri: &first_request.redirect_uri,
             authenticated_username: &username,
             requested_scopes: &first_request.scopes,
-            user_confirmed_scopes: &query.scopes.keys().map(Clone::clone).collect(),
+            user_confirmed_scopes: &scopes,
             response_types: &first_request.response_types,
             auth_time,
             nonce: first_request.nonce.as_ref(),
