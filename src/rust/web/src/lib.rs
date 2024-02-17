@@ -21,8 +21,8 @@ pub mod session;
 pub mod tera;
 
 use crate::cors::cors_options_preflight;
-use crate::cors::CorsChecker;
 use crate::endpoints::cert::TokenCertificate;
+use crate::endpoints::discovery::Handler as DiscoveryHandler;
 use ::tera::Tera;
 use actix_session::config::CookieContentSecurity;
 use actix_session::config::PersistentSession;
@@ -44,6 +44,8 @@ use actix_web::web::Data;
 use actix_web::App;
 use actix_web::HttpResponse;
 use actix_web::HttpServer;
+use endpoints::token::Handler as TokenHandler;
+use endpoints::userinfo::Handler as UserInfoHandler;
 use log::error;
 use log::warn;
 use rustls::server::AllowAnyAuthenticatedClient;
@@ -58,27 +60,23 @@ use rustls_pemfile::pkcs8_private_keys;
 use std::io::BufReader;
 use std::sync::Arc;
 use tiny_auth_business::authenticator::Authenticator;
+use tiny_auth_business::authorize_endpoint::Handler as AuthorizeHandler;
+use tiny_auth_business::consent::Handler as ConsentHandler;
 use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::jwk::Jwks;
-use tiny_auth_business::store::AuthorizationCodeStore;
-use tiny_auth_business::store::ClientStore;
-use tiny_auth_business::store::ScopeStore;
-use tiny_auth_business::store::UserStore;
-use tiny_auth_business::token::TokenCreator;
-use tiny_auth_business::token::TokenValidator;
 use Error::LoggedBeforeError;
 
 pub trait Constructor<'a> {
+    fn authorize_handler(&self) -> Arc<AuthorizeHandler>;
+    fn authenticator(&self) -> Arc<Authenticator>;
+    fn consent_handler(&self) -> Arc<ConsentHandler>;
+    fn token_handler(&self) -> Arc<TokenHandler>;
+    fn user_info_handler(&self) -> Arc<UserInfoHandler>;
+    fn discovery_handler(&self) -> Arc<DiscoveryHandler>;
+
     fn get_template_engine(&self) -> Option<Tera>;
     fn get_public_keys(&self) -> Vec<TokenCertificate>;
-    fn build_token_creator(&self) -> TokenCreator;
-    fn token_validator(&self) -> Arc<TokenValidator>;
-    fn user_store(&self) -> Arc<dyn UserStore>;
-    fn get_client_store(&self) -> Option<Arc<dyn ClientStore>>;
-    fn get_scope_store(&self) -> Option<Arc<dyn ScopeStore>>;
-    fn build_auth_code_store(&self) -> Option<Arc<dyn AuthorizationCodeStore>>;
-    fn authenticator(&self) -> Arc<Authenticator>;
     fn get_issuer_config(&self) -> IssuerConfiguration;
     fn build_jwks(&self) -> Jwks;
     fn build_cors_lister(&self) -> Arc<dyn CorsLister>;
@@ -107,49 +105,20 @@ pub enum Error {
 }
 
 pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
-    let bind = constructor.bind();
-    let workers = constructor.workers();
-
     let tera = constructor.get_template_engine().ok_or(LoggedBeforeError)?;
     let token_certificates = constructor.get_public_keys();
-    let token_creator = constructor.build_token_creator();
-    let token_validator = constructor.token_validator();
-    let user_store = constructor.user_store();
-    let client_store = constructor.get_client_store().ok_or(LoggedBeforeError)?;
-    let scope_store = constructor.get_scope_store().ok_or(LoggedBeforeError)?;
-    let auth_code_store = constructor
-        .build_auth_code_store()
-        .ok_or(LoggedBeforeError)?;
-    let authenticator = constructor.authenticator();
     let issuer_config = constructor.get_issuer_config();
     let jwks = constructor.build_jwks();
     let cors_lister = constructor.build_cors_lister();
-    let cors_checker = Arc::new(CorsChecker::new(cors_lister.clone()));
-    let user_info_handler =
-        endpoints::userinfo::Handler::new(token_validator.clone(), cors_checker.clone());
-    let token_handler = endpoints::token::Handler::new(
-        Arc::new(tiny_auth_business::token_endpoint::Handler::new(
-            client_store.clone(),
-            user_store.clone(),
-            auth_code_store.clone(),
-            token_creator.clone(),
-            authenticator.clone(),
-            token_validator.clone(),
-            scope_store.clone(),
-            issuer_config.clone(),
-        )),
-        cors_checker,
-    );
-    let authorize_handler =
-        tiny_auth_business::authorize_endpoint::inject::handler(client_store.clone());
-    let consent_handler = tiny_auth_business::consent::inject::handler(
-        scope_store.clone(),
-        user_store.clone(),
-        client_store.clone(),
-        auth_code_store.clone(),
-        token_creator.clone(),
-    );
+    let authorize_handler = constructor.authorize_handler();
+    let authenticate_handler = constructor.authenticator();
+    let consent_handler = constructor.consent_handler();
+    let token_handler = constructor.token_handler();
+    let user_info_handler = constructor.user_info_handler();
+    let discovery_handler = constructor.discovery_handler();
 
+    let bind = constructor.bind();
+    let workers = constructor.workers();
     let web_path = constructor.web_path();
     let static_files = constructor.static_files();
     let tls_enabled = constructor.tls_enabled();
@@ -159,24 +128,18 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     let secret_key = constructor.secret_key();
 
     let server = HttpServer::new(move || {
-        let token_certificates = token_certificates.clone();
         App::new()
             .app_data(Data::new(tera.clone()))
-            .app_data(Data::from(authenticator.clone()))
-            .app_data(Data::new(client_store.clone()))
-            .app_data(Data::new(scope_store.clone()))
-            .app_data(Data::new(user_store.clone()))
-            .app_data(Data::new(auth_code_store.clone()))
-            .app_data(Data::new(token_creator.clone()))
-            .app_data(Data::new(token_validator.clone()))
             .app_data(Data::new(issuer_config.clone()))
             .app_data(Data::new(jwks.clone()))
             .app_data(Data::new(cors_lister.clone()))
-            .app_data(Data::new(token_certificates))
-            .app_data(Data::new(user_info_handler.clone()))
-            .app_data(Data::new(token_handler.clone()))
-            .app_data(Data::new(authorize_handler.clone()))
-            .app_data(Data::new(consent_handler.clone()))
+            .app_data(Data::new(token_certificates.clone()))
+            .app_data(Data::from(authorize_handler.clone()))
+            .app_data(Data::from(authenticate_handler.clone()))
+            .app_data(Data::from(consent_handler.clone()))
+            .app_data(Data::from(token_handler.clone()))
+            .app_data(Data::from(user_info_handler.clone()))
+            .app_data(Data::from(discovery_handler.clone()))
             .wrap(
                 SessionMiddleware::builder(
                     CookieSessionStore::default(),

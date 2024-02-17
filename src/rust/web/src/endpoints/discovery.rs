@@ -130,79 +130,106 @@ struct Response {
     op_tos_uri: String,
 }
 
-pub async fn get(
-    request: HttpRequest,
-    cors_lister: Data<Arc<dyn CorsLister>>,
-    config: Data<IssuerConfiguration>,
-    scopes: Data<Arc<dyn ScopeStore>>,
-) -> HttpResponse {
-    let response = Response {
-        issuer: config.issuer_url.clone(),
-        authorization_endpoint: config.issuer_url.clone() + "/authorize",
-        token_endpoint: config.issuer_url.clone() + "/token",
-        userinfo_endpoint: config.issuer_url.clone() + "/userinfo",
-        jwks_uri: config.issuer_url.clone() + "/jwks",
-        scopes_supported: scopes.get_scope_names(),
-        response_types_supported: vec![
-            "code".to_string(),
-            "token".to_string(),
-            "id_token".to_string(),
-            "code id_token".to_string(),
-            "token id_token".to_string(),
-            "code token".to_string(),
-            "code token id_token".to_string(),
-        ],
-        grant_types_supported: vec![
-            "authorization_code".to_string(),
-            "implicit".to_string(),
-            "client_credentials".to_string(),
-            "password".to_string(),
-            "refresh_token".to_string(),
-        ],
-        subject_types_supported: vec!["public".to_string()],
-        id_token_signing_alg_values_supported: vec![
-            "HS256".to_string(),
-            "HS384".to_string(),
-            "HS512".to_string(),
-            "ES256".to_string(),
-            "ES384".to_string(),
-            "RS256".to_string(),
-            "RS384".to_string(),
-            "RS512".to_string(),
-            "PS256".to_string(),
-            "PS384".to_string(),
-            "PS512".to_string(),
-        ],
+pub struct Handler {
+    cors_lister: Arc<dyn CorsLister>,
+    issuer_configuration: IssuerConfiguration,
+    scope_store: Arc<dyn ScopeStore>,
+}
 
-        token_endpoint_auth_methods_supported: vec![
-            "client_secret_basic".to_string(),
-            "client_secret_post".to_string(),
-            "client_secret_jwt".to_string(),
-            "private_key_jwt".to_string(),
-        ],
+pub async fn get(request: HttpRequest, handler: Data<Handler>) -> HttpResponse {
+    handler.handle(request)
+}
 
-        claims_supported: vec![
-            "iss".to_string(),
-            "sub".to_string(),
-            "aud".to_string(),
-            "exp".to_string(),
-            "iat".to_string(),
-            "auth_time".to_string(),
-            "nonce".to_string(),
-            "acr".to_string(),
-            "amr".to_string(),
-            "azp".to_string(),
-        ],
-        service_documentation: env!("CARGO_PKG_HOMEPAGE").to_string(),
-        claims_locales_supported: vec!["en".to_string()],
-        ui_locales_supported: vec!["en".to_string()],
-        claims_parameter_supported: false,
-        request_parameter_supported: false,
-        request_uri_parameter_supported: false,
-        ..Default::default()
-    };
+impl Handler {
+    fn handle(&self, request: HttpRequest) -> HttpResponse {
+        let response = Response {
+            issuer: self.issuer_configuration.issuer_url.clone(),
+            authorization_endpoint: self.issuer_configuration.issuer_url.clone() + "/authorize",
+            token_endpoint: self.issuer_configuration.issuer_url.clone() + "/token",
+            userinfo_endpoint: self.issuer_configuration.issuer_url.clone() + "/userinfo",
+            jwks_uri: self.issuer_configuration.issuer_url.clone() + "/jwks",
+            scopes_supported: self.scope_store.get_scope_names(),
+            response_types_supported: vec![
+                "code".to_string(),
+                "token".to_string(),
+                "id_token".to_string(),
+                "code id_token".to_string(),
+                "token id_token".to_string(),
+                "code token".to_string(),
+                "code token id_token".to_string(),
+            ],
+            grant_types_supported: vec![
+                "authorization_code".to_string(),
+                "implicit".to_string(),
+                "client_credentials".to_string(),
+                "password".to_string(),
+                "refresh_token".to_string(),
+            ],
+            subject_types_supported: vec!["public".to_string()],
+            id_token_signing_alg_values_supported: vec![
+                "HS256".to_string(),
+                "HS384".to_string(),
+                "HS512".to_string(),
+                "ES256".to_string(),
+                "ES384".to_string(),
+                "RS256".to_string(),
+                "RS384".to_string(),
+                "RS512".to_string(),
+                "PS256".to_string(),
+                "PS384".to_string(),
+                "PS512".to_string(),
+            ],
 
-    render_cors_result(cors_lister.get_ref().clone(), &request, response)
+            token_endpoint_auth_methods_supported: vec![
+                "client_secret_basic".to_string(),
+                "client_secret_post".to_string(),
+                "client_secret_jwt".to_string(),
+                "private_key_jwt".to_string(),
+            ],
+
+            claims_supported: vec![
+                "iss".to_string(),
+                "sub".to_string(),
+                "aud".to_string(),
+                "exp".to_string(),
+                "iat".to_string(),
+                "auth_time".to_string(),
+                "nonce".to_string(),
+                "acr".to_string(),
+                "amr".to_string(),
+                "azp".to_string(),
+            ],
+            service_documentation: env!("CARGO_PKG_HOMEPAGE").to_string(),
+            claims_locales_supported: vec!["en".to_string()],
+            ui_locales_supported: vec!["en".to_string()],
+            claims_parameter_supported: false,
+            request_parameter_supported: false,
+            request_uri_parameter_supported: false,
+            ..Default::default()
+        };
+
+        render_cors_result(self.cors_lister.clone(), &request, response)
+    }
+}
+
+pub mod inject {
+    use crate::endpoints::discovery::Handler;
+    use std::sync::Arc;
+    use tiny_auth_business::cors::CorsLister;
+    use tiny_auth_business::issuer_configuration::IssuerConfiguration;
+    use tiny_auth_business::store::ScopeStore;
+
+    pub fn handler(
+        cors_lister: Arc<dyn CorsLister>,
+        issuer_configuration: IssuerConfiguration,
+        scope_store: Arc<dyn ScopeStore>,
+    ) -> Handler {
+        Handler {
+            cors_lister,
+            issuer_configuration,
+            scope_store,
+        }
+    }
 }
 
 pub async fn jwks(

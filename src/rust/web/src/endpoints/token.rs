@@ -329,7 +329,7 @@ mod tests {
     fn build_test_handler() -> Data<Handler> {
         let auth_code_store = build_test_auth_code_store();
         Data::new(Handler {
-            handler: Arc::new(tiny_auth_business::token_endpoint::Handler::new(
+            handler: Arc::new(tiny_auth_business::token_endpoint::inject::handler(
                 build_test_client_store(),
                 build_test_user_store(),
                 auth_code_store,

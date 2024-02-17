@@ -22,10 +22,10 @@ use chrono::Duration;
 use serde_derive::Deserialize;
 use std::convert::From;
 
-#[derive(Default, Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(with = "serde_yaml::with::singleton_map")]
-    pub store: Option<Store>,
+    pub store: Store,
 
     #[serde(default)]
     #[serde(alias = "rate limit")]
@@ -36,16 +36,6 @@ pub struct Config {
     pub api: Api,
 
     pub crypto: Crypto,
-}
-
-impl Config {
-    pub fn new() -> Config {
-        Default::default()
-    }
-
-    pub fn merge(self, other: Self) -> Config {
-        other
-    }
 }
 
 #[derive(Clone, Debug, Deserialize)]

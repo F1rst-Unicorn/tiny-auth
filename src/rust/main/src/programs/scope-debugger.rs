@@ -55,7 +55,6 @@ fn main() {
     };
 
     let store = di.user_store();
-
     let user = match store.get(
         args.get_one::<String>(FLAG_USER)
             .map(String::as_str)
@@ -68,14 +67,7 @@ fn main() {
         Some(v) => v,
     };
 
-    let store = match di.get_client_store() {
-        None => {
-            error!("Failed to read clients");
-            return;
-        }
-        Some(v) => v,
-    };
-
+    let store = di.get_client_store();
     let client = match store.get(
         args.get_one::<String>(FLAG_CLIENT)
             .map(String::as_str)
@@ -88,14 +80,7 @@ fn main() {
         Some(v) => v,
     };
 
-    let store = match di.get_scope_store() {
-        None => {
-            error!("Failed to read scopes");
-            return;
-        }
-        Some(v) => v,
-    };
-
+    let store = di.get_scope_store();
     let scope = match store.get(
         args.get_one::<String>(FLAG_SCOPE)
             .map(String::as_str)

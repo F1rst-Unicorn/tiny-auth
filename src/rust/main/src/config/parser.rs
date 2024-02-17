@@ -20,21 +20,20 @@ use crate::util::read_file as read;
 
 use std::fs;
 use std::process::exit;
-use std::result::Result;
 
 use log::{debug, error, trace, warn};
 
 const EXIT_CODE: i32 = 1;
 
 pub fn parse_config(path: &str) -> Config {
-    let raw_config = read_config(path);
-    debug!(
-        "Complete configuration:\n{}",
-        raw_config
-            .iter()
-            .flat_map(|s| s.chars())
-            .collect::<String>()
-    );
+    let raw_config = match read_config(path).into_iter().next() {
+        None => {
+            error!("config file {} not found", path);
+            exit(EXIT_CODE);
+        }
+        Some(v) => v,
+    };
+    debug!("Complete configuration:\n{}", raw_config);
     parse_raw_config(&raw_config)
 }
 
@@ -90,26 +89,17 @@ fn traverse_directory(path: &str) -> Vec<String> {
     result
 }
 
-fn parse_raw_config(raw_config: &[String]) -> Config {
-    let parse_result = raw_config.iter().map(|s| serde_yaml::from_str(s));
-
-    let parse_errors: Vec<serde_yaml::Result<Config>> =
-        parse_result.clone().filter(Result::is_err).collect();
-
-    if !parse_errors.is_empty() {
-        log_config_errors(parse_errors);
-        exit(EXIT_CODE);
-    } else {
-        parse_result
-            .map(Result::unwrap)
-            .fold(Config::new(), Config::merge)
+fn parse_raw_config(raw_config: &str) -> Config {
+    match serde_yaml::from_str(raw_config) {
+        Err(e) => {
+            log_config_error(e);
+            exit(EXIT_CODE);
+        }
+        Ok(v) => v,
     }
 }
 
-fn log_config_errors(parse_errors: Vec<serde_yaml::Result<Config>>) {
-    error!("Could not parse config: ");
-    for error in parse_errors {
-        error!("{:#?}", error.unwrap_err());
-    }
+fn log_config_error(parse_error: serde_yaml::Error) {
+    error!("Could not parse config: {:#?}", parse_error);
     trace!("Error in configuration file");
 }

@@ -107,29 +107,6 @@ pub struct Handler {
 }
 
 impl Handler {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        client_store: Arc<dyn ClientStore>,
-        user_store: Arc<dyn UserStore>,
-        auth_code_store: Arc<dyn AuthorizationCodeStore>,
-        token_creator: TokenCreator,
-        authenticator: Arc<Authenticator>,
-        token_validator: Arc<TokenValidator>,
-        scope_store: Arc<dyn ScopeStore>,
-        issuer_configuration: IssuerConfiguration,
-    ) -> Self {
-        Self {
-            client_store,
-            user_store,
-            auth_code_store,
-            token_creator,
-            authenticator,
-            token_validator,
-            scope_store,
-            issuer_configuration,
-        }
-    }
-
     pub async fn grant_tokens(
         &self,
         request: Request,
@@ -558,6 +535,38 @@ fn verify_pkce(challenge: CodeChallenge, verifier: Option<String>) -> Result<(),
     } else {
         debug!("client requires PKCE but request contains none");
         Err(Error::InvalidAuthorizationCode)
+    }
+}
+
+pub mod inject {
+    use super::Handler;
+    use crate::authenticator::Authenticator;
+    use crate::issuer_configuration::IssuerConfiguration;
+    use crate::store::{AuthorizationCodeStore, ClientStore, ScopeStore, UserStore};
+    use crate::token::{TokenCreator, TokenValidator};
+    use std::sync::Arc;
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn handler(
+        client_store: Arc<dyn ClientStore>,
+        user_store: Arc<dyn UserStore>,
+        auth_code_store: Arc<dyn AuthorizationCodeStore>,
+        token_creator: TokenCreator,
+        authenticator: Arc<Authenticator>,
+        token_validator: Arc<TokenValidator>,
+        scope_store: Arc<dyn ScopeStore>,
+        issuer_configuration: IssuerConfiguration,
+    ) -> Handler {
+        Handler {
+            client_store,
+            user_store,
+            auth_code_store,
+            token_creator,
+            authenticator,
+            token_validator,
+            scope_store,
+            issuer_configuration,
+        }
     }
 }
 

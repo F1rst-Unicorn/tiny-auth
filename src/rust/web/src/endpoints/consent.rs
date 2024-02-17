@@ -34,7 +34,6 @@ use serde_derive::Deserialize;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::sync::Arc;
 use tera::Context;
 use tera::Tera;
 use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
@@ -45,14 +44,12 @@ use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
 use tiny_auth_business::scope::ScopeDescription;
 use tiny_auth_business::serde::deserialise_empty_as_none;
-use tiny_auth_business::store::ScopeStore;
 use url::Url;
 
 pub async fn get(
     tera: web::Data<Tera>,
     session: Session,
     handler: web::Data<Handler>,
-    scope_store: web::Data<Arc<dyn ScopeStore>>,
 ) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
@@ -110,7 +107,7 @@ pub async fn get(
         );
     }
 
-    match build_context(&session, scope_store) {
+    match build_context(&session, handler) {
         Some(context) => {
             render_template_with_context("consent.html.j2", StatusCode::OK, &tera, &context)
         }
@@ -271,10 +268,7 @@ fn render_invalid_consent_request(tera: &Tera) -> HttpResponse {
     )
 }
 
-fn build_context(
-    session: &Session,
-    scope_store: web::Data<Arc<dyn ScopeStore>>,
-) -> Option<Context> {
+fn build_context(session: &Session, handler: web::Data<Handler>) -> Option<Context> {
     let mut context = Context::new();
 
     let first_request = parse_first_request(session)?;
@@ -282,7 +276,7 @@ fn build_context(
 
     let mut scopes: Vec<ScopeDescription> = Vec::new();
     for scope_name in &first_request.scopes {
-        if let Some(scope) = scope_store.get(scope_name) {
+        if let Some(scope) = handler.get_scope(scope_name) {
             scopes.push(scope.into());
         }
     }
@@ -316,7 +310,6 @@ mod tests {
     use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
     use tiny_auth_business::consent::test_fixtures::handler;
     use tiny_auth_business::oidc::ResponseType;
-    use tiny_auth_business::store::test_fixtures::build_test_scope_store;
     use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
     use tiny_auth_business::store::test_fixtures::USER;
     use url::Url;
@@ -326,13 +319,7 @@ mod tests {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
 
-        let resp = get(
-            build_test_tera(),
-            session,
-            Data::new(handler()),
-            Data::new(build_test_scope_store()),
-        )
-        .await;
+        let resp = get(build_test_tera(), session, Data::new(handler())).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -345,13 +332,7 @@ mod tests {
             .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
             .unwrap();
 
-        let resp = get(
-            build_test_tera(),
-            session,
-            Data::new(handler()),
-            Data::new(build_test_scope_store()),
-        )
-        .await;
+        let resp = get(build_test_tera(), session, Data::new(handler())).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -384,13 +365,7 @@ mod tests {
 
         session.insert(authenticate::SESSION_KEY, USER).unwrap();
 
-        let resp = get(
-            build_test_tera(),
-            session,
-            Data::new(handler()),
-            Data::new(build_test_scope_store()),
-        )
-        .await;
+        let resp = get(build_test_tera(), session, Data::new(handler())).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
     }

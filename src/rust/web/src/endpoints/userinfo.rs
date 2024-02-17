@@ -86,13 +86,6 @@ pub struct Handler {
 }
 
 impl Handler {
-    pub fn new(validator: Arc<TokenValidator>, cors_checker: Arc<CorsChecker>) -> Self {
-        Self {
-            validator,
-            cors_checker,
-        }
-    }
-
     fn check_cors<'a>(&self, request: &'a HttpRequest) -> CorsCheckResult<'a> {
         self.cors_checker.check(request)
     }
@@ -126,6 +119,20 @@ impl Handler {
                     Err(Error::MissingAuthorizationHeader)
                 }
             }
+        }
+    }
+}
+
+pub mod inject {
+    use super::Handler;
+    use crate::cors::CorsChecker;
+    use std::sync::Arc;
+    use tiny_auth_business::token::TokenValidator;
+
+    pub fn handler(validator: Arc<TokenValidator>, cors_checker: Arc<CorsChecker>) -> Handler {
+        Handler {
+            validator,
+            cors_checker,
         }
     }
 }

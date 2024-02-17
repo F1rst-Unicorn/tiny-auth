@@ -19,7 +19,6 @@ use crate::config::Config;
 use crate::config::Store;
 use crate::config::TlsVersion;
 use crate::runtime::Error;
-use crate::runtime::Error::ConfigError;
 use crate::runtime::Error::LoggedBeforeError;
 use crate::store::file::*;
 use crate::util::read_file;
@@ -43,7 +42,9 @@ use rustls::SupportedProtocolVersion;
 use std::sync::Arc;
 use tera::Tera;
 use tiny_auth_business::authenticator::Authenticator;
-use tiny_auth_business::change_password::Handler;
+use tiny_auth_business::authorize_endpoint::Handler as AuthorizeHandler;
+use tiny_auth_business::change_password::Handler as ChangePasswordHandler;
+use tiny_auth_business::consent::Handler as ConsentHandler;
 use tiny_auth_business::cors::inject::cors_lister;
 use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
@@ -54,7 +55,11 @@ use tiny_auth_business::store::memory::*;
 use tiny_auth_business::store::*;
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
+use tiny_auth_web::cors::CorsChecker;
 use tiny_auth_web::endpoints::cert::TokenCertificate;
+use tiny_auth_web::endpoints::discovery::Handler as DiscoveryHandler;
+use tiny_auth_web::endpoints::token::Handler as TokenHandler;
+use tiny_auth_web::endpoints::userinfo::Handler as UserInfoHandler;
 use tiny_auth_web::tera::load_template_engine;
 
 pub struct Constructor<'a> {
@@ -62,9 +67,11 @@ pub struct Constructor<'a> {
 
     user_store: Arc<dyn UserStore>,
 
-    client_store: Option<Arc<dyn ClientStore>>,
+    client_store: Arc<dyn ClientStore>,
 
-    scope_store: Option<Arc<dyn ScopeStore>>,
+    scope_store: Arc<dyn ScopeStore>,
+
+    authorization_code_store: Arc<dyn AuthorizationCodeStore>,
 
     tera: Option<Tera>,
 
@@ -90,8 +97,8 @@ pub struct Constructor<'a> {
 impl<'a> Constructor<'a> {
     pub fn new(config: &'a Config) -> Result<Self, Error> {
         let user_store = Self::build_user_store(config)?;
-        let client_store = Self::build_client_store(config);
-        let scope_store = Self::build_scope_store(config);
+        let client_store = Self::build_client_store(config)?;
+        let scope_store = Self::build_scope_store(config)?;
         let tera = Some(Self::build_template_engine(config)?);
         let issuer_url = Self::build_issuer_url(config);
         let (public_keys, private_key) = Self::read_token_keypairs(config)?;
@@ -135,6 +142,7 @@ impl<'a> Constructor<'a> {
             user_store,
             client_store,
             scope_store,
+            authorization_code_store: Self::build_auth_code_store(),
             tera,
             public_keys,
             issuer_configuration,
@@ -176,42 +184,43 @@ impl<'a> Constructor<'a> {
 
     fn build_user_store(config: &'a Config) -> Result<Arc<dyn UserStore>, Error> {
         match &config.store {
-            None => Err(ConfigError("no user store configured".to_string())),
-            Some(Store::Config { base }) => {
+            Store::Config { base } => {
                 Ok(Arc::new(FileUserStore::new(base).ok_or(LoggedBeforeError)?))
             }
         }
     }
 
-    pub fn get_client_store(&self) -> Option<Arc<dyn ClientStore>> {
+    pub fn get_client_store(&self) -> Arc<dyn ClientStore> {
         self.client_store.clone()
     }
 
-    fn build_client_store(config: &'a Config) -> Option<Arc<dyn ClientStore>> {
+    fn build_client_store(config: &'a Config) -> Result<Arc<dyn ClientStore>, Error> {
         match &config.store {
-            None => None,
-            Some(Store::Config { base }) => Some(Arc::new(FileClientStore::new(base)?)),
+            Store::Config { base } => Ok(Arc::new(
+                FileClientStore::new(base).ok_or(LoggedBeforeError)?,
+            )),
         }
     }
 
-    pub fn get_scope_store(&self) -> Option<Arc<dyn ScopeStore>> {
+    pub fn get_scope_store(&self) -> Arc<dyn ScopeStore> {
         self.scope_store.clone()
     }
 
-    fn build_scope_store(config: &'a Config) -> Option<Arc<dyn ScopeStore>> {
+    fn build_scope_store(config: &'a Config) -> Result<Arc<dyn ScopeStore>, Error> {
         match &config.store {
-            None => None,
-            Some(Store::Config { base }) => Some(Arc::new(FileScopeStore::new(base)?)),
+            Store::Config { base } => Ok(Arc::new(
+                FileScopeStore::new(base).ok_or(LoggedBeforeError)?,
+            )),
         }
     }
 
-    pub fn build_auth_code_store(&self) -> Option<Arc<dyn AuthorizationCodeStore>> {
+    pub fn build_auth_code_store() -> Arc<dyn AuthorizationCodeStore> {
         let result = Arc::new(MemoryAuthorizationCodeStore::default());
         let arg = result.clone();
         tokio::spawn(async {
             auth_code_clean_job(arg).await;
         });
-        Some(result)
+        result
     }
 
     pub fn get_template_engine(&self) -> Option<Tera> {
@@ -420,8 +429,8 @@ impl<'a> tiny_auth_api::Constructor<'a> for Constructor<'a> {
         self.client_ca.clone()
     }
 
-    fn change_password_handler(&self) -> Handler {
-        Handler::new(self.authenticator.clone(), self.token_validator.clone())
+    fn change_password_handler(&self) -> ChangePasswordHandler {
+        ChangePasswordHandler::new(self.authenticator.clone(), self.token_validator.clone())
     }
 }
 
@@ -431,24 +440,6 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
     }
     fn get_public_keys(&self) -> Vec<TokenCertificate> {
         self.get_public_keys()
-    }
-    fn build_token_creator(&self) -> TokenCreator {
-        self.build_token_creator()
-    }
-    fn token_validator(&self) -> Arc<TokenValidator> {
-        self.token_validator.clone()
-    }
-    fn user_store(&self) -> Arc<dyn UserStore> {
-        self.user_store.clone()
-    }
-    fn get_client_store(&self) -> Option<Arc<dyn ClientStore>> {
-        self.get_client_store()
-    }
-    fn get_scope_store(&self) -> Option<Arc<dyn ScopeStore>> {
-        self.get_scope_store()
-    }
-    fn build_auth_code_store(&self) -> Option<Arc<dyn AuthorizationCodeStore>> {
-        self.build_auth_code_store()
     }
     fn authenticator(&self) -> Arc<Authenticator> {
         self.authenticator.clone()
@@ -527,6 +518,53 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
 
     fn secret_key(&self) -> String {
         self.config.web.secret_key.clone()
+    }
+
+    fn authorize_handler(&self) -> Arc<AuthorizeHandler> {
+        Arc::new(tiny_auth_business::authorize_endpoint::inject::handler(
+            self.client_store.clone(),
+        ))
+    }
+
+    fn consent_handler(&self) -> Arc<ConsentHandler> {
+        Arc::new(tiny_auth_business::consent::inject::handler(
+            self.scope_store.clone(),
+            self.user_store.clone(),
+            self.client_store.clone(),
+            self.authorization_code_store.clone(),
+            self.build_token_creator(),
+        ))
+    }
+
+    fn token_handler(&self) -> Arc<TokenHandler> {
+        Arc::new(tiny_auth_web::endpoints::token::Handler::new(
+            Arc::new(tiny_auth_business::token_endpoint::inject::handler(
+                self.client_store.clone(),
+                self.user_store.clone(),
+                self.authorization_code_store.clone(),
+                self.build_token_creator(),
+                self.authenticator.clone(),
+                self.token_validator.clone(),
+                self.scope_store.clone(),
+                self.issuer_configuration.clone(),
+            )),
+            Arc::new(CorsChecker::new(self.build_cors_lister())),
+        ))
+    }
+
+    fn user_info_handler(&self) -> Arc<UserInfoHandler> {
+        Arc::new(tiny_auth_web::endpoints::userinfo::inject::handler(
+            self.token_validator.clone(),
+            Arc::new(CorsChecker::new(self.build_cors_lister())),
+        ))
+    }
+
+    fn discovery_handler(&self) -> Arc<DiscoveryHandler> {
+        Arc::new(tiny_auth_web::endpoints::discovery::inject::handler(
+            self.build_cors_lister(),
+            self.issuer_configuration.clone(),
+            self.scope_store.clone(),
+        ))
     }
 }
 

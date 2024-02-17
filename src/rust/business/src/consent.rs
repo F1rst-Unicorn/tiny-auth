@@ -18,6 +18,7 @@
 use crate::oauth2;
 use crate::oidc;
 use crate::pkce::CodeChallenge;
+use crate::scope::Scope;
 use crate::store::AuthorizationCodeRequest;
 use crate::store::AuthorizationCodeStore;
 use crate::store::ClientStore;
@@ -84,6 +85,10 @@ impl Handler {
         let allowed_scopes = user.get_allowed_scopes(client_id);
         let requested_scopes = BTreeSet::from_iter(requested_scopes);
         return Ok(requested_scopes.is_subset(&allowed_scopes.iter().collect()));
+    }
+
+    pub fn get_scope(&self, key: &str) -> Option<Scope> {
+        self.scope_store.get(key)
     }
 
     pub async fn issue_token<'a>(&self, request: Request<'a>) -> Result<Response, Error> {
