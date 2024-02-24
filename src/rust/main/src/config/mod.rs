@@ -164,6 +164,13 @@ pub struct Host {
 pub struct Api {
     #[serde(alias = "endpoint")]
     pub endpoint: String,
+
+    #[serde(default = "default_path")]
+    #[serde(alias = "public path")]
+    pub public_path: Option<String>,
+
+    #[serde(default = "default_path")]
+    pub path: Option<String>,
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]

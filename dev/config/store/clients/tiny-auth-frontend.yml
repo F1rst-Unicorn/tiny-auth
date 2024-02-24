@@ -22,18 +22,12 @@
 client_id: tiny-auth-frontend
 client_type: public
 redirect_uris:
-  - http://localhost:5173
-  - http://localhost:5173/
   - http://localhost:5173/oidc-login-redirect
-  - http://localhost:5173/oidc-login-redirect-silent.html
-  - http://localhost:34344
-  - http://localhost:34344/
-  - http://localhost:34344/oidc-login-redirect
-  - http://localhost:34344/oidc-login-redirect-silent
-  - https://localhost:34344
-  - https://localhost:34344/
-  - https://localhost:34344/oidc-login-redirect
-  - https://localhost:34344/oidc-login-redirect-silent
+  - http://localhost:5173/oidc-login-redirect-silent
+  - http://localhost:34344/oidc/oidc-login-redirect
+  - http://localhost:34344/oidc/oidc-login-redirect-silent
+  - https://localhost:34344/oidc/oidc-login-redirect
+  - https://localhost:34344/oidc/oidc-login-redirect-silent
 
 allowed_scopes:
   - email

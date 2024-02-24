@@ -20,20 +20,31 @@ backup=("etc/${pkgname}/config.yml"
 build() {
     cd "$srcdir"
     chmod u+rw . -R
-    cd src/rust
-    cargo build --release
-    cd ../..
-    cd src/typescript
+
+    cd "$srcdir/src/rust"
+    cargo build
+
+    cd "$srcdir/src/typescript"
     npm install
+    mkdir -p src/generated
+    npx protoc \
+            --ts_out src/generated \
+            --ts_opt long_type_string,generate_dependencies,optimize_code_size \
+            --proto_path ../proto \
+            ../proto/tiny-auth/tiny-auth.proto
     npm run build
 }
 
 check() {
-    cd "$srcdir"
-    cd src/rust
+    cd "$srcdir/src/rust"
     cargo fmt --all -- --check
     cargo clippy --release -j 8 -- -D clippy::all
     cargo test -j 1
+
+    cd "$srcdir/src/typescript"
+    npx prettier . --write
+    npm run lint
+    npm audit
 }
 
 package() {
@@ -51,17 +62,13 @@ package() {
     install -D -m 644 pkg/systemd.sysusers $pkgdir/usr/lib/sysusers.d/${pkgname}.conf
     install -D -m 644 pkg/systemd.tmpfiles $pkgdir/usr/lib/tmpfiles.d/${pkgname}.conf
 
-    mkdir -p $pkgdir/usr/share/${pkgname}/static/css
+    mkdir -p $pkgdir/usr/share/${pkgname}/static
     cp -r src/static/css $pkgdir/usr/share/${pkgname}/static
-    mkdir -p $pkgdir/usr/share/${pkgname}/static/templates
+    cp -r src/static/img $pkgdir/usr/share/${pkgname}/static
+    cp -r src/typescript/dist/assets $pkgdir/usr/share/${pkgname}/static
     cp -r src/static/templates $pkgdir/usr/share/${pkgname}/static
     rm $pkgdir/usr/share/${pkgname}/static/templates/index.html.j2
-    mkdir -p $pkgdir/usr/share/${pkgname}/static/img
-    cp -r src/static/img $pkgdir/usr/share/${pkgname}/static
-    mkdir -p $pkgdir/usr/share/${pkgname}/static/js
-    cp -r src/typescript/dist/* $pkgdir/usr/share/${pkgname}/static/js
     cp -r src/typescript/dist/index.html $pkgdir/usr/share/${pkgname}/static/templates/index.html.j2
-    rm $pkgdir/usr/share/${pkgname}/static/js/index.html
 
     mkdir -p $pkgdir/etc/${pkgname}/store/{users,clients,scopes}
     cp -r pkg/scopes/* $pkgdir/etc/${pkgname}/store/scopes

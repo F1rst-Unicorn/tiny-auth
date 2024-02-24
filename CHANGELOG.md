@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Web UI to change passwords
+  ([#57](https://j.njsm.de/git/veenj/tiny-auth/issues/57)).
+
 * Support to run under MacOS
   ([#79](https://j.njsm.de/git/veenj/tiny-auth/issues/79)).
 

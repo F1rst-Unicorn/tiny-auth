@@ -10,6 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.15.1",
+    "@mui/material": "^5.15.1",
+    "@protobuf-ts/grpcweb-transport": "^2.9.3",
     "oidc-client-ts": "^2.2.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -18,14 +23,18 @@
     "react-router-dom": "^6.14.0"
   },
   "devDependencies": {
+    "@protobuf-ts/plugin": "^2.9.3",
     "@types/react": "^18.0.37",
     "@types/react-dom": "^18.0.11",
+    "@types/react-router": "^5.1.20",
     "@typescript-eslint/eslint-plugin": "^5.59.0",
     "@typescript-eslint/parser": "^5.59.0",
     "@vitejs/plugin-react-swc": "^3.0.0",
     "eslint": "^8.38.0",
+    "eslint-config-prettier": "9.1.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.3.4",
+    "prettier": "3.2.5",
     "typescript": "^5.0.2",
     "vite": "^4.3.9",
     "vite-plugin-checker": "^0.6.1"

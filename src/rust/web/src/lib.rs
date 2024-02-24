@@ -42,7 +42,6 @@ use actix_web::web::scope;
 use actix_web::web::to;
 use actix_web::web::Data;
 use actix_web::App;
-use actix_web::HttpResponse;
 use actix_web::HttpServer;
 use endpoints::token::Handler as TokenHandler;
 use endpoints::userinfo::Handler as UserInfoHandler;
@@ -93,7 +92,13 @@ pub trait Constructor<'a> {
     fn session_same_site_policy(&self) -> SameSite;
     fn public_domain(&self) -> String;
     fn secret_key(&self) -> String;
+    fn api_url(&self) -> ApiUrl;
 }
+
+#[derive(Clone)]
+pub struct ApiUrl(pub String);
+#[derive(Clone)]
+pub struct WebBasePath(String);
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -108,6 +113,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     let tera = constructor.get_template_engine().ok_or(LoggedBeforeError)?;
     let token_certificates = constructor.get_public_keys();
     let issuer_config = constructor.get_issuer_config();
+    let api_url = constructor.api_url();
     let jwks = constructor.build_jwks();
     let cors_lister = constructor.build_cors_lister();
     let authorize_handler = constructor.authorize_handler();
@@ -131,6 +137,8 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
         App::new()
             .app_data(Data::new(tera.clone()))
             .app_data(Data::new(issuer_config.clone()))
+            .app_data(Data::new(api_url.clone()))
+            .app_data(Data::new(WebBasePath(web_path.clone())))
             .app_data(Data::new(jwks.clone()))
             .app_data(Data::new(cors_lister.clone()))
             .app_data(Data::new(token_certificates.clone()))
@@ -166,6 +174,10 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             .service(actix_files::Files::new(
                 &(web_path.clone() + "/static/img"),
                 static_files.clone() + "/img",
+            ))
+            .service(actix_files::Files::new(
+                &(web_path.clone() + "/assets"),
+                static_files.clone() + "/assets",
             ))
             .service(
                 scope(&web_path)
@@ -230,25 +242,11 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
                         method(Method::OPTIONS).to(cors_options_preflight),
                     )
                     .route("/health", all().to(endpoints::method_not_allowed))
-                    .route(
-                        "/oidc-login-redirect-silent",
-                        get().to(|| async { HttpResponse::NoContent().finish() }),
-                    )
-                    .route(
-                        "/oidc-login-redirect-silent",
-                        all().to(endpoints::method_not_allowed),
-                    )
                     .route("/", get().to(endpoints::webapp_root::get))
                     .route("/", all().to(endpoints::method_not_allowed))
-                    .route("/index.html", get().to(endpoints::webapp_root::get))
-                    .route("/index.html", all().to(endpoints::method_not_allowed))
-                    .service(actix_files::Files::new(
-                        &(web_path.clone()),
-                        static_files.clone() + "/js",
-                    ))
-                    .default_service(to(endpoints::webapp_root::get)),
+                    .default_service(to(endpoints::webapp_root::redirect)),
             )
-            .default_service(to(endpoints::webapp_root::get))
+            .default_service(to(endpoints::webapp_root::redirect))
     })
     .disable_signals()
     .keep_alive(KeepAlive::Timeout(core::time::Duration::from_secs(60)))

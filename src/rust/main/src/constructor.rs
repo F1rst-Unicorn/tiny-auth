@@ -61,6 +61,7 @@ use tiny_auth_web::endpoints::discovery::Handler as DiscoveryHandler;
 use tiny_auth_web::endpoints::token::Handler as TokenHandler;
 use tiny_auth_web::endpoints::userinfo::Handler as UserInfoHandler;
 use tiny_auth_web::tera::load_template_engine;
+use tiny_auth_web::ApiUrl;
 
 pub struct Constructor<'a> {
     config: &'a Config,
@@ -417,6 +418,10 @@ impl<'a> tiny_auth_api::Constructor<'a> for Constructor<'a> {
         self.config.api.endpoint.as_str()
     }
 
+    fn path(&self) -> &'a str {
+        self.config.api.path.as_deref().expect("no default set")
+    }
+
     fn tls_key(&self) -> Option<String> {
         self.tls_key.clone()
     }
@@ -565,6 +570,24 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
             self.issuer_configuration.clone(),
             self.scope_store.clone(),
         ))
+    }
+
+    fn api_url(&self) -> ApiUrl {
+        ApiUrl(
+            if self.config.web.tls.is_some() {
+                "https://"
+            } else {
+                "http://"
+            }
+            .to_string()
+                + &self.config.api.endpoint
+                + self
+                    .config
+                    .api
+                    .public_path
+                    .as_deref()
+                    .expect("no default given"),
+        )
     }
 }
 

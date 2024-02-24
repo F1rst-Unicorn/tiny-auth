@@ -16,15 +16,34 @@
  */
 
 use crate::endpoints::render_template_with_context;
+use crate::{ApiUrl, WebBasePath};
 use actix_web::http::StatusCode;
 use actix_web::web::Data;
-use actix_web::HttpResponse;
+use actix_web::{HttpRequest, HttpResponse};
 use tera::Context;
 use tera::Tera;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 
-pub async fn get(tera: Data<Tera>, issuer_config: Data<IssuerConfiguration>) -> HttpResponse {
+pub async fn redirect(request: HttpRequest, web_base_path: Data<WebBasePath>) -> HttpResponse {
+    let location = if request.query_string() != "" {
+        web_base_path.0.to_string() + "/?" + request.query_string()
+    } else {
+        web_base_path.0.to_string() + "/"
+    };
+    HttpResponse::TemporaryRedirect()
+        .append_header(("Location", location))
+        .finish()
+}
+
+pub async fn get(
+    tera: Data<Tera>,
+    issuer_config: Data<IssuerConfiguration>,
+    api_url: Data<ApiUrl>,
+    web_base_path: Data<WebBasePath>,
+) -> HttpResponse {
     let mut context = Context::new();
     context.insert("tiny_auth_provider_url", &issuer_config.issuer_url);
+    context.insert("tiny_auth_api_url", &api_url.0);
+    context.insert("tiny_auth_web_base", &web_base_path.0);
     render_template_with_context("index.html.j2", StatusCode::OK, &tera, &context)
 }

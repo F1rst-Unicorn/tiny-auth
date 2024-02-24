@@ -24,8 +24,9 @@ rate limit:
   period in seconds: 300
 
 crypto:
-  key: /etc/tiny-auth/key.pem
-  public key: /etc/tiny-auth/public-key.pem
+  keys:
+    - key: /etc/tiny-auth/key.pem
+      public key: /etc/tiny-auth/public-key.pem
   pepper: a random string used to secure passwords
 
 web:
@@ -38,7 +39,7 @@ web:
   token timeout in seconds: 60
   refresh token timeout in seconds: 180
   session same site policy: lax
-  secret key: set-a-random-string-of-at-least-32-characters-here
+  secret key: set-a-random-string-of-at-least-64-characters-here
 
 api:
   endpoint: localhost:8089

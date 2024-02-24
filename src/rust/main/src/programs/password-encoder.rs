@@ -21,6 +21,7 @@ use clap::ArgMatches;
 use clap::Command;
 use log::debug;
 use log::error;
+use serde::Serialize;
 use tiny_auth_business::password::Password;
 use tiny_auth_main::config::parser::parse_config;
 use tiny_auth_main::logging::initialise_from_verbosity;
@@ -45,15 +46,17 @@ fn main() {
     debug!("Parsing config");
     let config = parse_config(config_path);
 
-    let password = Password::new(
-        args.get_one::<String>(FLAG_USERNAME)
-            .map(String::as_str)
-            .unwrap(),
-        args.get_one::<String>(FLAG_PASSWORD)
-            .map(String::as_str)
-            .unwrap(),
-        &config.crypto.pepper,
-    );
+    let password = PasswordWrapper {
+        password: Password::new(
+            args.get_one::<String>(FLAG_USERNAME)
+                .map(String::as_str)
+                .unwrap(),
+            args.get_one::<String>(FLAG_PASSWORD)
+                .map(String::as_str)
+                .unwrap(),
+            &config.crypto.pepper,
+        ),
+    };
 
     match serde_yaml::to_string(&password) {
         Err(e) => {
@@ -63,6 +66,12 @@ fn main() {
             println!("{}", password);
         }
     }
+}
+
+#[derive(Serialize)]
+struct PasswordWrapper {
+    #[serde(with = "serde_yaml::with::singleton_map")]
+    password: Password,
 }
 
 pub fn parse_arguments() -> ArgMatches {

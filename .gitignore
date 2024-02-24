@@ -1,5 +1,6 @@
 
 src/rust/target
+src/typescript/src/generated
 
 pkg/Archlinux/pkg
 pkg/Archlinux/*.pkg.tar*

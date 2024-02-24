@@ -18,7 +18,7 @@
 use log::debug;
 use tonic::metadata::MetadataMap;
 
-const AUTHORIZATION_HEADER_KEY: &str = "x-authorization";
+pub const AUTHORIZATION_HEADER_KEY: &str = "x-authorization";
 const AUTHORIZATION_HEADER_BEARER_VALUE: &str = "Bearer ";
 
 pub(crate) async fn extract_token(metadata: &MetadataMap) -> Option<&str> {

@@ -2596,7 +2596,9 @@ name = "tiny_auth_api"
 version = "0.8.2"
 dependencies = [
  "async-trait",
+ "http",
  "log",
+ "pin-project-lite",
  "prost",
  "thiserror",
  "tiny_auth_business",
@@ -2606,6 +2608,8 @@ dependencies = [
  "tonic-build",
  "tonic-reflection",
  "tonic-web",
+ "tower",
+ "tower-http",
 ]
 
 [[package]]
