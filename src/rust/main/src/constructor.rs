@@ -415,7 +415,7 @@ impl<'a> Constructor<'a> {
 
 impl<'a> tiny_auth_api::Constructor<'a> for Constructor<'a> {
     fn endpoint(&self) -> &'a str {
-        self.config.api.endpoint.as_str()
+        self.config.api.bind.as_str()
     }
 
     fn path(&self) -> &'a str {
@@ -580,7 +580,15 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
                 "http://"
             }
             .to_string()
-                + &self.config.api.endpoint
+                + &self.config.api.public_host.domain
+                + &self
+                    .config
+                    .api
+                    .public_host
+                    .port
+                    .as_ref()
+                    .map(|v| ":".to_string() + &v)
+                    .unwrap_or("".to_string())
                 + self
                     .config
                     .api

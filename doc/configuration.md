@@ -92,9 +92,23 @@ See [`tls.md`](tls.md) for details.
 
 Options for the gRPC API used by the web frontend.
 
-#### `endpoint`
+#### `bind`
 
 Host and port of the API.
+
+#### `public host`
+
+Set where tiny-auth API is reachable from client perspective.
+
+##### `domain`
+
+The domain under which clients and users can reach tiny-auth. Used to connect
+from the frontend.
+
+##### `port`
+
+The domain under which clients and users can reach tiny-auth. Used to connect
+from the frontend.
 
 #### `public path`
 

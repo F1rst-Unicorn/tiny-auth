@@ -163,7 +163,10 @@ pub struct Host {
 #[derive(Default, Clone, Debug, Deserialize)]
 pub struct Api {
     #[serde(alias = "endpoint")]
-    pub endpoint: String,
+    pub bind: String,
+
+    #[serde(alias = "public host")]
+    pub public_host: Host,
 
     #[serde(default = "default_path")]
     #[serde(alias = "public path")]
