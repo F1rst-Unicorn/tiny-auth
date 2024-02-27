@@ -141,13 +141,13 @@ function renderSuccessfulPasswordChange(data: HashedPasswordPbkdf2HmacSha256) {
       <Typography sx={{ fontFamily: "monospace" }}>
         password:
         <br />
-        &nbsp&nbspPbkdf2HmacSha256:
+        &nbsp;&nbsp;Pbkdf2HmacSha256:
         <br />
-        &nbsp&nbsp&nbsp&nbspcredential: {data.credential}
+        &nbsp;&nbsp;&nbsp;&nbsp;credential: {data.credential}
         <br />
-        &nbsp&nbsp&nbsp&nbspiterations: {data.iterations}
+        &nbsp;&nbsp;&nbsp;&nbsp;iterations: {data.iterations}
         <br />
-        &nbsp&nbsp&nbsp&nbspsalt: {data.salt}
+        &nbsp;&nbsp;&nbsp;&nbsp;salt: {data.salt}
         <br />
       </Typography>
     </Alert>
