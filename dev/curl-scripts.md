@@ -52,3 +52,10 @@ grpcurl \
     -H 'x-authorization:Bearer <access token>' \
     localhost:8089 api.TinyAuthApi/ChangePassword
 ```
+
+# LDAP
+
+```bash
+docker run --rm --tty --interactive -p 1389:1389 docker.io/bitnami/openldap
+ldapsearch -D cn=user01,ou=users,dc=example,dc=org -w bitnami1 -x -b dc=example,dc=org -H ldap://localhost:1389
+```

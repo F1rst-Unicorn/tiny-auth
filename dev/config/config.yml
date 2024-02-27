@@ -16,8 +16,17 @@
 
 ---
 store:
-  configuration file:
-    base: dev/config/store
+  - configuration file:
+      name: file store
+      base: dev/config/store
+  - ldap:
+      name: LDAP
+      bind dn format: cn={{ user }},ou=users,dc=example,dc=org
+      urls:
+        - ldap://localhost:1389
+        - ldap://localhost:1390
+      connect timeout: 5
+      starttls: true
 
 crypto:
   keys:
@@ -48,13 +57,13 @@ web:
   token timeout in seconds: 60
   refresh token timeout in seconds: 180
   secret key: 6nwYoK0L9J5ADFQE74CkkuLmTGMSd1skxHso9XwZNbsCbVmLIVH6L2aBIi2veuia3aQ3fnBzfwwlIuzCmWTEjAcc
-  tls:
-    key: test/src/test/resources/keys/tls-key.pem
-    certificate: test/src/test/resources/keys/tls-chain.pem
-    client ca: test/src/test/resources/keys/ca.pem
-    versions:
-      - 1.2
-      - 1.3
+#  tls:
+#    key: test/src/test/resources/keys/tls-key.pem
+#    certificate: test/src/test/resources/keys/tls-chain.pem
+#    client ca: test/src/test/resources/keys/ca.pem
+#    versions:
+#      - 1.2
+#      - 1.3
 
 api:
   endpoint: localhost:8089

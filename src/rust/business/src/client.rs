@@ -68,20 +68,6 @@ impl Client {
         self.redirect_uris.contains(&uri.to_string())
     }
 
-    pub fn is_password_correct(&self, password: &str, pepper: &str) -> bool {
-        match &self.client_type {
-            ClientType::Public => {
-                error!("verified password on public client '{}'", self.client_id);
-                false
-            }
-
-            ClientType::Confidential {
-                password: stored_password,
-                ..
-            } => stored_password.verify(&self.client_id, password, pepper),
-        }
-    }
-
     pub fn get_decoding_key(&self, algorithm: Algorithm) -> Option<DecodingKey> {
         match (algorithm, &self.client_type) {
             (

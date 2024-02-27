@@ -37,11 +37,9 @@ pub mod token_endpoint;
 pub mod user;
 
 pub mod test_fixtures {
-    use crate::authenticator::Authenticator;
     use crate::issuer_configuration::IssuerConfiguration;
     use crate::jwk::Jwk;
     use crate::rate_limiter::RateLimiter;
-    use crate::store::test_fixtures::build_test_user_store;
     use crate::token::TokenCreator;
     use crate::token::TokenValidator;
     use chrono::Duration;
@@ -82,14 +80,6 @@ pub mod test_fixtures {
 
     pub fn build_test_rate_limiter() -> RateLimiter {
         RateLimiter::new(3, Duration::minutes(5))
-    }
-
-    pub fn build_test_authenticator() -> Authenticator {
-        Authenticator::new(
-            build_test_user_store(),
-            Arc::new(build_test_rate_limiter()),
-            "pepper",
-        )
     }
 
     pub fn build_test_decoding_key() -> DecodingKey {

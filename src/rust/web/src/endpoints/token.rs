@@ -172,7 +172,7 @@ pub async fn post(
                 ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
                 "Missing parameter client_id",
             ),
-            Error::ConfidentialClientMustAutenticate => render_json_error(
+            Error::ConfidentialClientMustAuthenticate => render_json_error(
                 cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::UnauthorizedClient),
                 "Confidential client has to authenticate",
@@ -211,6 +211,11 @@ pub async fn post(
                 cors_check_result,
                 ProtocolError::OAuth2(oauth2::ProtocolError::UnsupportedGrantType),
                 "invalid grant_type",
+            ),
+            Error::AuthenticationFailed => render_json_error(
+                cors_check_result,
+                ProtocolError::OAuth2(oauth2::ProtocolError::ServerError),
+                "authentication failed",
             ),
         }) {
         Err(e) => return e,

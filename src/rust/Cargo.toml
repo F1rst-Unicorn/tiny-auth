@@ -1,5 +1,5 @@
 [workspace]
-members = ["main", "business", "web", "api"]
+members = ["main", "business", "web", "api", "ldap"]
 resolver = "2"
 
 [workspace.package]
@@ -32,7 +32,7 @@ tower-http = { version = "0.4.4", features = [ "cors" ] }
 tower = { version = "0.4.4" }
 pin-project-lite = "0.2.13"
 http = "0.2.11"
-url = "2.1.1"
+url = { version = "2.1.1", features = ["serde"] }
 futures = "0.3"
 tera = "1.5.0"
 base64 = "0.21.2"
@@ -50,7 +50,7 @@ tonic-web = "0.10.2"
 prost = "0.12"
 tonic-build = "0.10.2"
 thiserror = "1.0.40"
-
+ldap3 = { version = "0.11.3", default-features = false, features = ["sync", "tls-rustls"]}
 
 [workspace.dependencies.openssl]
 version = "0.10"

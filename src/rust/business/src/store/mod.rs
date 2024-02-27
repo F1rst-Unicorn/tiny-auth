@@ -18,6 +18,7 @@
 pub mod memory;
 
 use crate::client::Client;
+use crate::password::{Error, Password};
 use crate::pkce::CodeChallenge;
 use crate::scope::Scope;
 use crate::user::User;
@@ -33,6 +34,16 @@ pub trait UserStore: Send + Sync {
 
 pub trait ClientStore: Send + Sync {
     fn get(&self, key: &str) -> Option<Client>;
+}
+
+#[async_trait]
+pub trait PasswordStore: Send + Sync {
+    async fn verify(
+        &self,
+        username: &str,
+        stored_password: &Password,
+        password_to_check: &str,
+    ) -> Result<bool, Error>;
 }
 
 pub trait ScopeStore: Send + Sync {

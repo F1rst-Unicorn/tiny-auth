@@ -39,8 +39,10 @@ use openssl::hash::Hasher;
 use openssl::hash::MessageDigest;
 use openssl::rsa::Rsa;
 use rustls::SupportedProtocolVersion;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use tera::Tera;
+use tiny_auth_business::authenticator::inject::authenticator;
 use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::authorize_endpoint::Handler as AuthorizeHandler;
 use tiny_auth_business::change_password::Handler as ChangePasswordHandler;
@@ -50,6 +52,8 @@ use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::jwk::Jwk;
 use tiny_auth_business::jwk::Jwks;
+use tiny_auth_business::password::inject::{dispatching_password_store, in_place_password_store};
+use tiny_auth_business::password::DispatchingPasswordStore;
 use tiny_auth_business::rate_limiter::RateLimiter;
 use tiny_auth_business::store::memory::*;
 use tiny_auth_business::store::*;
@@ -98,6 +102,7 @@ pub struct Constructor<'a> {
 impl<'a> Constructor<'a> {
     pub fn new(config: &'a Config) -> Result<Self, Error> {
         let user_store = Self::build_user_store(config)?;
+        let password_store = Self::build_password_store(config)?;
         let client_store = Self::build_client_store(config)?;
         let scope_store = Self::build_scope_store(config)?;
         let tera = Some(Self::build_template_engine(config)?);
@@ -124,7 +129,7 @@ impl<'a> Constructor<'a> {
         let authenticator = Self::build_authenticator(
             user_store.clone(),
             rate_limiter.clone(),
-            &config.crypto.pepper,
+            password_store.clone(),
         );
         let (tls_cert, tls_key, client_ca) = match &config.web.tls {
             None => (None, None, None),
@@ -178,9 +183,9 @@ impl<'a> Constructor<'a> {
     pub fn build_authenticator(
         user_store: Arc<dyn UserStore>,
         rate_limiter: Arc<RateLimiter>,
-        pepper: &str,
+        password_store: Arc<DispatchingPasswordStore>,
     ) -> Arc<Authenticator> {
-        Arc::new(Authenticator::new(user_store, rate_limiter, pepper))
+        Arc::new(authenticator(user_store, rate_limiter, password_store))
     }
 
     fn build_user_store(config: &'a Config) -> Result<Arc<dyn UserStore>, Error> {
@@ -189,6 +194,30 @@ impl<'a> Constructor<'a> {
                 Ok(Arc::new(FileUserStore::new(base).ok_or(LoggedBeforeError)?))
             }
         }
+    }
+
+    fn build_password_store(config: &'a Config) -> Arc<DispatchingPasswordStore> {
+        Arc::new(dispatching_password_store(
+            Self::build_delegated_stores(config.store),
+            in_place_password_store(&config.crypto.pepper),
+        ))
+    }
+
+    fn build_delegated_stores(stores: &[Store]) -> BTreeMap<String, Arc<dyn PasswordStore>> {
+        let mut result = BTreeMap::default();
+        for store in stores {
+            match store {
+                Store::Ldap {
+                    name,
+                    urls,
+                    bind_dn_format,
+                    connect_timeout_in_seconds,
+                    starttls,
+                } => result.insert(name.clone(), tiny_auth_ldap::inject::password_store()),
+                _ => {}
+            }
+        }
+        result
     }
 
     pub fn get_client_store(&self) -> Arc<dyn ClientStore> {

@@ -41,10 +41,6 @@ pub struct User {
 }
 
 impl User {
-    pub fn is_password_correct(&self, password: &str, pepper: &str) -> bool {
-        self.password.verify(&self.name, password, pepper)
-    }
-
     pub fn get_allowed_scopes(&self, client_id: &str) -> BTreeSet<String> {
         self.allowed_scopes
             .get(client_id)

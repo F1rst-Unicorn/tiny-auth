@@ -21,11 +21,12 @@ use actix_web::cookie::SameSite;
 use chrono::Duration;
 use serde_derive::Deserialize;
 use std::convert::From;
+use url::Url;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
     #[serde(with = "serde_yaml::with::singleton_map")]
-    pub store: Store,
+    pub store: Vec<Store>,
 
     #[serde(default)]
     #[serde(alias = "rate limit")]
@@ -41,7 +42,22 @@ pub struct Config {
 #[derive(Clone, Debug, Deserialize)]
 pub enum Store {
     #[serde(rename = "configuration file")]
-    Config { base: String },
+    Config { name: String, base: String },
+
+    #[serde(rename = "ldap")]
+    Ldap {
+        name: String,
+
+        #[serde(rename = "bind dn format")]
+        bind_dn_format: String,
+
+        urls: Vec<Url>,
+
+        #[serde(rename = "connect timeout in seconds")]
+        connect_timeout: i64,
+
+        starttls: bool,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize)]

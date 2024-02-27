@@ -51,11 +51,10 @@ impl Handler {
             .token_validator
             .validate::<Token>(token)
             .ok_or(Error::TokenAuthentication)?;
-        self.authenticator
+        let user = self
+            .authenticator
             .authenticate_user(&token.subject, current_password)
             .await?;
-        Ok(self
-            .authenticator
-            .construct_password(&token.subject, new_password))
+        Ok(self.authenticator.construct_password(user, new_password))
     }
 }

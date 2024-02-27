@@ -16,9 +16,9 @@
  */
 
 use crate::client::Client;
-use crate::password::Password;
+use crate::password::{DispatchingPasswordStore, Password};
 use crate::rate_limiter::RateLimiter;
-use crate::store::UserStore;
+use crate::store::{PasswordStore, UserStore};
 use crate::user::User;
 use chrono::Local;
 use log::debug;
@@ -29,9 +29,9 @@ use std::sync::Arc;
 pub struct Authenticator {
     user_store: Arc<dyn UserStore>,
 
-    rate_limiter: Arc<RateLimiter>,
+    password_store: Arc<DispatchingPasswordStore>,
 
-    pepper: String,
+    rate_limiter: Arc<RateLimiter>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -40,21 +40,11 @@ pub enum Error {
     RateLimited,
     #[error("username or password wrong")]
     WrongCredentials,
+    #[error("{0}")]
+    StoreError(#[from] crate::password::Error),
 }
 
 impl Authenticator {
-    pub fn new(
-        user_store: Arc<dyn UserStore>,
-        rate_limiter: Arc<RateLimiter>,
-        pepper: &str,
-    ) -> Self {
-        Self {
-            user_store,
-            rate_limiter,
-            pepper: pepper.to_string(),
-        }
-    }
-
     pub async fn authenticate_user_and_forget(
         &self,
         username: &str,
@@ -81,7 +71,11 @@ impl Authenticator {
             return Err(Error::RateLimited);
         }
 
-        if user.is_password_correct(password, &self.pepper) {
+        if self
+            .password_store
+            .verify(username, &user.password, password)
+            .await?
+        {
             self.rate_limiter.remove_event(username, now).await;
             Ok(user)
         } else {
@@ -90,11 +84,54 @@ impl Authenticator {
         }
     }
 
-    pub fn authenticate_client(&self, client: &Client, password: &str) -> bool {
-        client.is_password_correct(password, &self.pepper)
+    pub async fn authenticate_client(
+        &self,
+        client: &Client,
+        stored_password: &Password,
+        password_to_check: &str,
+    ) -> Result<bool, Error> {
+        Ok(self
+            .password_store
+            .verify(&client.client_id, stored_password, password_to_check)
+            .await?)
     }
 
-    pub fn construct_password(&self, username: &str, password: &str) -> Password {
-        Password::new(username, password, &self.pepper)
+    pub fn construct_password(&self, user: User, password: &str) -> Password {
+        self.password_store.construct_password(user, password)
+    }
+}
+
+pub mod inject {
+    use super::*;
+
+    pub fn authenticator(
+        user_store: Arc<dyn UserStore>,
+        rate_limiter: Arc<RateLimiter>,
+        password_store: Arc<DispatchingPasswordStore>,
+    ) -> Authenticator {
+        Authenticator {
+            user_store,
+            rate_limiter,
+            password_store,
+        }
+    }
+}
+
+pub mod test_fixtures {
+    use crate::authenticator::Authenticator;
+    use crate::password::inject::{dispatching_password_store, in_place_password_store};
+    use crate::store::test_fixtures::build_test_user_store;
+    use crate::test_fixtures::build_test_rate_limiter;
+    use std::sync::Arc;
+
+    pub fn authenticator() -> Authenticator {
+        Authenticator {
+            user_store: build_test_user_store(),
+            rate_limiter: Arc::new(build_test_rate_limiter()),
+            password_store: Arc::new(dispatching_password_store(
+                Default::default(),
+                Arc::new(in_place_password_store("pepper")),
+            )),
+        }
     }
 }

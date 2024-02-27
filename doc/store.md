@@ -125,7 +125,7 @@ which must be put as a dictionary inside the `password` field. Mind the
 indentation.
 
 The [`client_secret_jwt`](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication)
-method is supported by tiny-auth. However it is NOT RECOMMENDED as it requires
+method is supported by tiny-auth. However, it is NOT RECOMMENDED as it requires
 tiny-auth to store the client secret in plain. Note that if the client is able
 to keep a secret password, it can also keep a secret key, making
 `private_key_jwt` the better authentication option. If the client really requires
