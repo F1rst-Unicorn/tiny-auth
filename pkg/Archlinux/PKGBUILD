@@ -1,6 +1,6 @@
 # Maintainer: Jan Veen <jan.veen æt posteo.de>
 pkgname=tiny-auth
-pkgver=1.0.0
+pkgver=1.0.1
 pkgrel=2
 pkgdesc="OIDC Provider"
 arch=('x86_64')

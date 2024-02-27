@@ -5,6 +5,15 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [1.0.1]
+
+### Fixed
+
+* Allow proper deployment on public domain which is different from the own
+  hostname.
+
+* Indent password result on changing password properly.
+
 ## [1.0.0]
 
 ### Added

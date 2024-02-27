@@ -2593,7 +2593,7 @@ dependencies = [
 
 [[package]]
 name = "tiny_auth_api"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "async-trait",
  "http",
@@ -2614,7 +2614,7 @@ dependencies = [
 
 [[package]]
 name = "tiny_auth_business"
-version = "0.8.2"
+version = "1.0.1"
 dependencies = [
  "async-trait",
  "base64 0.21.5",
@@ -2638,7 +2638,7 @@ dependencies = [
 
 [[package]]
 name = "tiny_auth_main"
-version = "0.8.2"
+version = "1.0.1"
 dependencies = [
  "actix-rt",
  "actix-web",
@@ -2669,7 +2669,7 @@ dependencies = [
 
 [[package]]
 name = "tiny_auth_web"
-version = "0.8.2"
+version = "1.0.1"
 dependencies = [
  "actix-files",
  "actix-rt",
