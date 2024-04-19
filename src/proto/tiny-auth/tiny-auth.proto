@@ -13,9 +13,12 @@ message HashedPasswordPbkdf2HmacSha256 {
   string salt = 3;
 }
 
+message Managed {}
+
 message PasswordChangeResponse {
   oneof hashed_password {
     HashedPasswordPbkdf2HmacSha256 pbkdf2_hmac_sha256 = 1;
+    Managed managed = 2;
   }
 }
 

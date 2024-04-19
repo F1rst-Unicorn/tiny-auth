@@ -1,0 +1,22 @@
+[package]
+name = "tiny_auth_ldap"
+authors.workspace = true
+description.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+version.workspace = true
+
+[lib]
+
+[dependencies]
+tiny_auth_business = { path = "../business" }
+
+url.workspace = true
+ldap3.workspace = true
+log.workspace = true
+tera.workspace = true
+thiserror.workspace = true
+test-log.workspace = true
+tokio.workspace = true
+async-trait.workspace = true

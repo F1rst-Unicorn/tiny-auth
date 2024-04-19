@@ -16,8 +16,9 @@
 
 ---
 store:
-  configuration file:
-    base: /etc/tiny-auth/store
+  - configuration file:
+      name: configuration file
+      base: /etc/tiny-auth/store
 
 rate limit:
   events: 3

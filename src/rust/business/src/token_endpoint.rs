@@ -184,7 +184,7 @@ impl Handler {
             .code
             .as_ref()
             .ok_or(Error::MissingAuthorizationCode)?;
-        let client = match self.authenticate_client(&request) {
+        let client = match self.authenticate_client(&request).await {
             Err(_) => {
                 let client_id = &request.client_id.as_ref().ok_or(Error::MissingClientId)?;
                 let client = self.client_store.get(client_id).ok_or_else(|| {
@@ -193,7 +193,7 @@ impl Handler {
                 })?;
 
                 if let ClientType::Confidential { .. } = client.client_type {
-                    return Err(Error::ConfidentialClientMustAutenticate);
+                    return Err(Error::ConfidentialClientMustAuthenticate);
                 }
 
                 client
@@ -251,7 +251,7 @@ impl Handler {
         &self,
         request: Request,
     ) -> Result<(User, Client, Vec<Scope>, i64), Error> {
-        let client = self.authenticate_client(&request)?;
+        let client = self.authenticate_client(&request).await?;
         let allowed_scopes = BTreeSet::from_iter(client.allowed_scopes.clone());
         let requested_scopes = match &request.scope {
             None => Default::default(),
@@ -278,7 +278,7 @@ impl Handler {
     ) -> Result<(User, Client, Vec<Scope>, i64), Error> {
         let username = &request.username.as_ref().ok_or(Error::MissingUsername)?;
         let password = &request.password.as_ref().ok_or(Error::MissingPassword)?;
-        let client = self.authenticate_client(&request)?;
+        let client = self.authenticate_client(&request).await?;
         let user = self
             .authenticator
             .authenticate_user(username, password)
@@ -314,7 +314,7 @@ impl Handler {
             .validate::<RefreshToken>(raw_token)
             .ok_or(Error::InvalidRefreshToken)?;
 
-        let client = self.authenticate_client(&request)?;
+        let client = self.authenticate_client(&request).await?;
 
         if client.client_id != refresh_token.access_token.authorized_party {
             warn!(
@@ -344,17 +344,17 @@ impl Handler {
         Ok((token, actual_scopes, true))
     }
 
-    fn authenticate_client(&self, request: &Request) -> Result<Client, Error> {
+    async fn authenticate_client(&self, request: &Request) -> Result<Client, Error> {
         if let (Some(assertion), Some(assertion_type)) =
             (&request.client_assertion, &request.client_assertion_type)
         {
             self.authenticate_client_by_jwt(assertion_type.clone(), assertion.clone())
         } else {
-            self.authenticate_client_by_password(request)
+            self.authenticate_client_by_password(request).await
         }
     }
 
-    fn authenticate_client_by_password(&self, request: &Request) -> Result<Client, Error> {
+    async fn authenticate_client_by_password(&self, request: &Request) -> Result<Client, Error> {
         let (client_id, password) = Self::look_for_client_password(
             request.basic_authentication.as_ref(),
             request.client_id.as_ref(),
@@ -369,16 +369,27 @@ impl Handler {
             Some(c) => c,
         };
 
-        if let ClientType::Public = client.client_type {
-            debug!("tried to authenticate public client");
-            return Err(Error::InvalidAuthorizationHeader);
-        }
-
-        if !self.authenticator.authenticate_client(&client, &password) {
-            debug!("password for client '{}' was wrong", client_id);
-            Err(Error::WrongClientIdOrPassword)
-        } else {
-            Ok(client)
+        match &client.client_type {
+            ClientType::Public => {
+                debug!("tried to authenticate public client");
+                return Err(Error::InvalidAuthorizationHeader);
+            }
+            ClientType::Confidential {
+                password: stored_password,
+                ..
+            } => {
+                if self
+                    .authenticator
+                    .authenticate_client(&client, &stored_password, &password)
+                    .await
+                    .map_err(|_| Error::AuthenticationFailed)?
+                {
+                    Ok(client)
+                } else {
+                    debug!("password for client '{}' was wrong", client_id);
+                    Err(Error::WrongClientIdOrPassword)
+                }
+            }
         }
     }
 
@@ -510,11 +521,12 @@ pub enum Error {
     MissingRedirectUri,
     MissingAuthorizationCode,
     MissingClientId,
-    ConfidentialClientMustAutenticate,
+    ConfidentialClientMustAuthenticate,
     InvalidAuthorizationCode,
     UnsupportedGrantType,
     TokenEncodingFailed,
     RefreshTokenEncodingFailed,
+    AuthenticationFailed,
 }
 
 fn verify_pkce(challenge: CodeChallenge, verifier: Option<String>) -> Result<(), Error> {
@@ -762,7 +774,7 @@ mod tests {
 
         let response = uut().grant_tokens(request).await;
 
-        assert_eq!(Err(Error::ConfidentialClientMustAutenticate), response);
+        assert_eq!(Err(Error::ConfidentialClientMustAuthenticate), response);
     }
 
     #[test(tokio::test)]

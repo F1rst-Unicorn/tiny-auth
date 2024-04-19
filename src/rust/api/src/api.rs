@@ -18,8 +18,8 @@
 use crate::auth;
 use crate::tiny_auth_proto::password_change_response::HashedPassword;
 use crate::tiny_auth_proto::tiny_auth_api_server::TinyAuthApi;
-use crate::tiny_auth_proto::PasswordChangeResponse;
 use crate::tiny_auth_proto::{HashedPasswordPbkdf2HmacSha256, PasswordChangeRequest};
+use crate::tiny_auth_proto::{Managed, PasswordChangeResponse};
 use async_trait::async_trait;
 use log::debug;
 use log::error;
@@ -70,6 +70,12 @@ impl TinyAuthApi for TinyAuthApiImpl {
                             salt,
                         },
                     )),
+                };
+                Ok(Response::new(response))
+            }
+            Ok(Password::Ldap { .. }) => {
+                let response = PasswordChangeResponse {
+                    hashed_password: Some(HashedPassword::Managed(Managed {})),
                 };
                 Ok(Response::new(response))
             }
