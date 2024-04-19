@@ -17,7 +17,7 @@
 
 use async_trait::async_trait;
 use ldap3::{drive, Ldap, LdapConnAsync, LdapConnSettings};
-use log::{error, warn};
+use log::{debug, error, warn};
 use std::error::Error as StdError;
 use std::sync::Arc;
 use std::time::Duration;
@@ -40,12 +40,14 @@ impl LdapPasswordStore {
             let settings = LdapConnSettings::new()
                 .set_conn_timeout(self.connect_timeout)
                 .set_starttls(self.starttls);
+            debug!("connecting to {}", &url);
             match LdapConnAsync::from_url_with_settings(settings, &url).await {
                 Err(e) => {
                     warn!("ldap connection to '{}' failed: {}", url, e);
                 }
                 Ok((conn, ldap)) => {
                     drive!(conn);
+                    debug!("connected to {}", &url);
                     return Ok(ldap);
                 }
             }
@@ -59,6 +61,7 @@ impl LdapPasswordStore {
         username: &str,
         password: &str,
     ) -> Result<bool, Error> {
+        debug!("authenticating to LDAP '{}'", self.name);
         let result = ldap
             .simple_bind(
                 &Self::format_username(&self.bind_dn_format, username)?,
@@ -68,7 +71,10 @@ impl LdapPasswordStore {
             .map_err(|v| Arc::new(v) as Arc<dyn StdError + Send + Sync>)?;
         match result.rc {
             0 => Ok(true),
-            49 => Ok(false),
+            49 => {
+                debug!("wrong username or password");
+                Ok(false)
+            }
             v => {
                 warn!(
                     "Unexpected LDAP result code while binding: {}. {}",
@@ -145,50 +151,89 @@ pub mod inject {
 #[cfg(test)]
 pub mod tests {
     use crate::LdapPasswordStore;
+    use pretty_assertions::assert_eq;
+    use rstest::fixture;
+    use rstest::rstest;
     use std::time::Duration;
     use test_log::test;
-    use tiny_auth_business::password::Error;
+    use testcontainers::clients::Cli;
+    use testcontainers::core::WaitFor;
+    use testcontainers::GenericImage;
+    use tiny_auth_business::password::{Error, Password};
     use tiny_auth_business::store::PasswordStore;
     use url::Url;
 
+    #[rstest]
     #[test(tokio::test)]
-    pub async fn successful_authentication_works() {
-        let url = Url::parse("ldap://localhost:1389").unwrap();
-        let uut = setup_uut(url);
+    pub async fn successful_authentication_works(
+        image: GenericImage,
+        name: String,
+        password: Password,
+    ) {
+        let cli = Cli::default();
+        let container = cli.run(image);
+        let uut = uut(name, container.get_host_port_ipv4(1389));
 
-        let actual = uut.verify("user01", "bitnami1").await;
+        let actual = uut.verify("user01", &password, "bitnami1").await;
 
         assert_eq!(true, actual.unwrap());
     }
 
+    #[rstest]
     #[test(tokio::test)]
-    pub async fn failing_authentication_works() {
-        let url = Url::parse("ldap://localhost:1389").unwrap();
-        let uut = setup_uut(url);
+    pub async fn failing_authentication_works(
+        image: GenericImage,
+        name: String,
+        password: Password,
+    ) {
+        let cli = Cli::default();
+        let container = cli.run(image);
+        let uut = uut(name, container.get_host_port_ipv4(1389));
 
-        let actual = uut.verify("user01", "wrong").await;
+        let actual = uut.verify("user01", &password, "wrong").await;
 
         assert_eq!(false, actual.unwrap());
     }
 
+    #[rstest]
     #[test(tokio::test)]
-    pub async fn invalid_connection_is_reported() {
-        let url = Url::parse("ldap://localhost:1390").unwrap();
-        let uut = setup_uut(url);
+    pub async fn invalid_connection_is_reported(name: String, password: Password) {
+        let uut = uut(name, 1390);
 
-        let actual = uut.verify("user01", "wrong").await;
+        let actual = uut.verify("user01", &password, "wrong").await;
 
         assert!(matches!(actual.unwrap_err(), Error::BackendError));
     }
 
-    fn setup_uut(url: Url) -> LdapPasswordStore {
-        let uut = LdapPasswordStore {
-            name: "LDAP".to_string(),
+    #[fixture]
+    fn image() -> GenericImage {
+        let image = GenericImage::new("docker.io/bitnami/openldap", "latest")
+            .with_exposed_port(1389)
+            .with_wait_for(WaitFor::StdErrMessage {
+                message: "slapd starting".to_string(),
+            });
+        image
+    }
+
+    fn uut(name: String, port: u16) -> LdapPasswordStore {
+        let url = Url::parse(&format!("ldap://localhost:{}", port)).unwrap();
+
+        LdapPasswordStore {
+            name,
             urls: vec![url],
             bind_dn_format: "cn={{ user }},ou=users,dc=example,dc=org".to_string(),
             connect_timeout: Duration::from_millis(50),
             starttls: false,
-        };
-        uut
+        }
+    }
+
+    #[fixture]
+    fn password(name: String) -> Password {
+        Password::Ldap { name }
+    }
+
+    #[fixture]
+    fn name() -> String {
+        "LDAP".to_string()
     }
 }
