@@ -20,6 +20,48 @@ Notes:
 1. Authorization codes issued for the authorization code flow and the
    authentication rate limit enforcer are invalidated on restart.
 
+## LDAP
+
+Authentication can be delegated to LDAP. To use it for password authentication,
+it first has to be declared as store here:
+
+```yaml
+---
+store:
+  ldap:
+    name: LDAP
+    bind dn format: cn={{ user }},ou=users,dc=example,dc=org
+    urls:
+      - ldap://localhost:1389
+      - ldap://localhost:1390
+    connect timeout in seconds: 5
+    starttls: false
+```
+
+### name
+
+An arbitrary name to be used to reference this LDAP configuration. See user /
+client password for details.
+
+### bind dn format
+
+A template to describe how to transform the name of a user into a distinguished
+name. The only available variable is `user` and is the string the user passes as
+its username.
+
+### urls
+
+A list of URLs tried in order to bind to the LDAP. Use the `ldap` protocol for
+plain connections, `ldaps` for TLS or `ldapi` for UNIX domain sockets.
+
+### connect timeout in seconds
+
+Timeout for each connection attempt. After expiry, the next entry is tried.
+
+### starttls
+
+Enable STARTTLS on `ldap` connection.
+
 ## Configuration File Store
 
 To activate, use the following basic configuration:
@@ -65,6 +107,16 @@ The encoded password of the user. Use tiny-auth's password encoder (usually
 installed as `tiny-auth-password-encoder`) to generate a valid structure for
 the user. The tool will output a YAML object which must be put as a dictionary
 inside the `password` field. Mind the indentation.
+
+To delegate password authentication to LDAP, use this structure:
+
+```yaml
+password:
+  LDAP:
+    name: my-ldap
+```
+
+`my-ldap` is the name you chose in `store.ldap.name` above.
 
 #### allowed_scopes
 
@@ -122,7 +174,8 @@ The `...` is meant to be replaced by the output of tiny-auth's password
 encoder (usually installed as `tiny-auth-password-encoder`). Use it to
 generate a valid password for the client. The tool will output a YAML object
 which must be put as a dictionary inside the `password` field. Mind the
-indentation.
+indentation. Alternatively embed an LDAP reference, see the user password
+section.
 
 The [`client_secret_jwt`](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication)
 method is supported by tiny-auth. However, it is NOT RECOMMENDED as it requires
