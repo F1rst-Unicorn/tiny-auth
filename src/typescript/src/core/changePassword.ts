@@ -10,14 +10,14 @@ export class Interactor {
 
   public async changePassword(
     data: ChangePasswordData,
-  ): Promise<HashedPasswordPbkdf2HmacSha256> {
+  ): Promise<ChangePasswordResult> {
     return await this.apiService.changePassword(data);
   }
 }
 
 export async function changePassword(
   data: ChangePasswordData,
-): Promise<HashedPasswordPbkdf2HmacSha256 | Error> {
+): Promise<ChangePasswordResult | Error> {
   return changePasswordInteractor.changePassword(data);
 }
 
@@ -41,6 +41,8 @@ export class ChangePasswordData {
 }
 
 export class ChangePasswordResult {}
+
+export class ManagedPassword {}
 
 export class HashedPasswordPbkdf2HmacSha256 extends ChangePasswordResult {
   private readonly _credential: string;

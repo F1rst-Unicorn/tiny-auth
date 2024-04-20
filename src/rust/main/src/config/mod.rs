@@ -25,7 +25,6 @@ use url::Url;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Config {
-    #[serde(with = "serde_yaml::with::singleton_map")]
     pub store: Vec<Store>,
 
     #[serde(default)]

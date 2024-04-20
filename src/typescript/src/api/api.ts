@@ -1,6 +1,8 @@
 import {
   ChangePasswordData,
+  ChangePasswordResult,
   HashedPasswordPbkdf2HmacSha256,
+  ManagedPassword,
 } from "../core/changePassword.ts";
 import { TinyAuthApiClient } from "../generated/tiny-auth/tiny-auth.client.ts";
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
@@ -28,7 +30,7 @@ export class ApiService {
 
   async changePassword(
     data: ChangePasswordData,
-  ): Promise<HashedPasswordPbkdf2HmacSha256> {
+  ): Promise<ChangePasswordResult> {
     try {
       const response = await this.service.changePassword(
         {
@@ -43,6 +45,8 @@ export class ApiService {
           response.response.hashedPassword.pbkdf2HmacSha256.iterations,
           response.response.hashedPassword.pbkdf2HmacSha256.salt,
         );
+      } else if (response.response.hashedPassword.oneofKind === "managed") {
+        return new ManagedPassword();
       } else {
         throw new Error(UNKNOWN_PASSWORD_TYPE);
       }

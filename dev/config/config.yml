@@ -25,8 +25,8 @@ store:
       urls:
         - ldap://localhost:1389
         - ldap://localhost:1390
-      connect timeout: 5
-      starttls: true
+      connect timeout in seconds: 5
+      starttls: false
 
 crypto:
   keys:
@@ -67,3 +67,6 @@ web:
 
 api:
   endpoint: localhost:8089
+  public host:
+    domain: localhost
+    port: 8089

@@ -90,7 +90,8 @@ fn traverse_directory(path: &str) -> Vec<String> {
 }
 
 fn parse_raw_config(raw_config: &str) -> Config {
-    match serde_yaml::from_str(raw_config) {
+    let deserializer = serde_yaml::Deserializer::from_str(raw_config);
+    match serde_yaml::with::singleton_map_recursive::deserialize(deserializer) {
         Err(e) => {
             log_config_error(e);
             exit(EXIT_CODE);

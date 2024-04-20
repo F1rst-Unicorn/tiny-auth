@@ -57,7 +57,8 @@ pub enum Password {
     #[serde(alias = "plain")]
     Plain(String),
 
-    #[serde(rename = "ldap")]
+    #[serde(alias = "ldap")]
+    #[serde(alias = "LDAP")]
     Ldap { name: String },
 }
 

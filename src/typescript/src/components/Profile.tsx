@@ -11,7 +11,10 @@ import {
 import { useAuth } from "react-oidc-context";
 import { useFetcher } from "react-router-dom";
 import { useState } from "react";
-import { HashedPasswordPbkdf2HmacSha256 } from "../core/changePassword.ts";
+import {
+  HashedPasswordPbkdf2HmacSha256,
+  ManagedPassword,
+} from "../core/changePassword.ts";
 import { CURRENT, NEW } from "./actions/changePassword.ts";
 import { buildUserName } from "../core/auth.ts";
 
@@ -23,6 +26,7 @@ export default function Profile() {
   const actionData = fetcher.data as
     | undefined
     | HashedPasswordPbkdf2HmacSha256
+    | ManagedPassword
     | Error;
 
   let resultAlert;
@@ -30,6 +34,8 @@ export default function Profile() {
     resultAlert = null;
   } else if (actionData instanceof HashedPasswordPbkdf2HmacSha256) {
     resultAlert = renderSuccessfulPasswordChange(actionData);
+  } else if (actionData instanceof ManagedPassword) {
+    resultAlert = renderSuccessfulManagedPasswordChange();
   } else if (actionData) {
     resultAlert = (
       <Alert
@@ -150,6 +156,19 @@ function renderSuccessfulPasswordChange(data: HashedPasswordPbkdf2HmacSha256) {
         &nbsp;&nbsp;&nbsp;&nbsp;salt: {data.salt}
         <br />
       </Typography>
+    </Alert>
+  );
+}
+
+function renderSuccessfulManagedPasswordChange() {
+  return (
+    <Alert
+      severity="info"
+      sx={{
+        marginBottom: 4,
+      }}
+    >
+      Your password is not stored in tiny-auth and thus cannot be changed here.
     </Alert>
   );
 }
