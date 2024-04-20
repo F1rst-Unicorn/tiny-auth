@@ -6,7 +6,7 @@ which store type serves you best.
 
 |                    | OIDC | Persistence | Multiple Instances |
 |--------------------|:----:|:-----------:|:------------------:|
-| Configuration File | Y    | N (1)       | N                  |
+| Configuration File |  Y   |    N (1)    |         N          |
 
 Feature glossary:
 
@@ -151,7 +151,8 @@ requests. It must be unique between all clients.
 
 #### client_type
 
-The type of the client as defined in the [OAuth2 RFC](https://tools.ietf.org/html/rfc6749#section-2.1).
+The type of the client as defined in
+the [OAuth2 RFC](https://tools.ietf.org/html/rfc6749#section-2.1).
 
 Either `client_type: public` or
 
@@ -166,7 +167,8 @@ client_type:
 are allowed.
 
 Confidential clients can register with a public key to support authentication
-via the [`private_key_jwt`](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication)
+via
+the [`private_key_jwt`](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication)
 method. The public key can be generated in the same way as the keys for
 tiny-auth's [own key material](configuration.md#key-and-public-key).
 
@@ -181,7 +183,8 @@ The [`client_secret_jwt`](https://openid.net/specs/openid-connect-core-1_0.html#
 method is supported by tiny-auth. However, it is NOT RECOMMENDED as it requires
 tiny-auth to store the client secret in plain. Note that if the client is able
 to keep a secret password, it can also keep a secret key, making
-`private_key_jwt` the better authentication option. If the client really requires
+`private_key_jwt` the better authentication option. If the client really
+requires
 this authentication method, specify the password like this:
 
 ```yaml
