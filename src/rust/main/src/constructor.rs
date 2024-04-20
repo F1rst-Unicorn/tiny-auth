@@ -102,7 +102,7 @@ pub struct Constructor<'a> {
 impl<'a> Constructor<'a> {
     pub fn new(config: &'a Config) -> Result<Self, Error> {
         let user_store = Self::build_user_store(config)?;
-        let password_store = Self::build_password_store(config)?;
+        let password_store = Self::build_password_store(config);
         let client_store = Self::build_client_store(config)?;
         let scope_store = Self::build_scope_store(config)?;
         let tera = Some(Self::build_template_engine(config)?);
@@ -189,32 +189,45 @@ impl<'a> Constructor<'a> {
     }
 
     fn build_user_store(config: &'a Config) -> Result<Arc<dyn UserStore>, Error> {
-        match &config.store {
-            Store::Config { base } => {
-                Ok(Arc::new(FileUserStore::new(base).ok_or(LoggedBeforeError)?))
+        let mut result = FileUserStore::default();
+        for store in &config.store {
+            if let Store::Config { name: _, base } = store {
+                if !result.read_users(base) {
+                    return Err(LoggedBeforeError);
+                }
             }
         }
+        Ok(Arc::new(result))
     }
 
     fn build_password_store(config: &'a Config) -> Arc<DispatchingPasswordStore> {
         Arc::new(dispatching_password_store(
-            Self::build_delegated_stores(config.store),
-            in_place_password_store(&config.crypto.pepper),
+            Self::build_delegated_stores(&config.store),
+            Arc::new(in_place_password_store(&config.crypto.pepper)),
         ))
     }
 
     fn build_delegated_stores(stores: &[Store]) -> BTreeMap<String, Arc<dyn PasswordStore>> {
         let mut result = BTreeMap::default();
         for store in stores {
-            match store {
-                Store::Ldap {
-                    name,
-                    urls,
-                    bind_dn_format,
-                    connect_timeout_in_seconds,
-                    starttls,
-                } => result.insert(name.clone(), tiny_auth_ldap::inject::password_store()),
-                _ => {}
+            if let Store::Ldap {
+                name,
+                urls,
+                bind_dn_format,
+                connect_timeout_in_seconds,
+                starttls,
+            } = store
+            {
+                result.insert(
+                    name.clone(),
+                    tiny_auth_ldap::inject::password_store(
+                        name.as_str(),
+                        urls.as_slice(),
+                        bind_dn_format.as_str(),
+                        std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
+                        *starttls,
+                    ),
+                );
             }
         }
         result
@@ -225,11 +238,15 @@ impl<'a> Constructor<'a> {
     }
 
     fn build_client_store(config: &'a Config) -> Result<Arc<dyn ClientStore>, Error> {
-        match &config.store {
-            Store::Config { base } => Ok(Arc::new(
-                FileClientStore::new(base).ok_or(LoggedBeforeError)?,
-            )),
+        let mut result = FileClientStore::default();
+        for store in &config.store {
+            if let Store::Config { name: _, base } = store {
+                if !result.read_clients(base) {
+                    return Err(LoggedBeforeError);
+                }
+            }
         }
+        Ok(Arc::new(result))
     }
 
     pub fn get_scope_store(&self) -> Arc<dyn ScopeStore> {
@@ -237,11 +254,15 @@ impl<'a> Constructor<'a> {
     }
 
     fn build_scope_store(config: &'a Config) -> Result<Arc<dyn ScopeStore>, Error> {
-        match &config.store {
-            Store::Config { base } => Ok(Arc::new(
-                FileScopeStore::new(base).ok_or(LoggedBeforeError)?,
-            )),
+        let mut result = FileScopeStore::default();
+        for store in &config.store {
+            if let Store::Config { name: _, base } = store {
+                if !result.read_scopes(base) {
+                    return Err(LoggedBeforeError);
+                }
+            }
         }
+        Ok(Arc::new(result))
     }
 
     pub fn build_auth_code_store() -> Arc<dyn AuthorizationCodeStore> {
@@ -636,7 +657,6 @@ pub mod tests {
     use jsonwebtoken::DecodingKey;
     use std::sync::Arc;
     use tera::Tera;
-    use tiny_auth_business::authenticator::Authenticator;
     use tiny_auth_business::issuer_configuration::IssuerConfiguration;
     use tiny_auth_business::jwk::Jwk;
     use tiny_auth_business::store::AuthorizationCodeStore;
@@ -693,14 +713,6 @@ pub mod tests {
 
     pub fn build_test_rate_limiter() -> RateLimiter {
         RateLimiter::new(3, Duration::minutes(5))
-    }
-
-    pub fn build_test_authenticator() -> Data<Authenticator> {
-        Data::new(Authenticator::new(
-            test_fixtures::build_test_user_store(),
-            Arc::new(build_test_rate_limiter()),
-            "pepper",
-        ))
     }
 
     pub fn build_test_decoding_key() -> DecodingKey {

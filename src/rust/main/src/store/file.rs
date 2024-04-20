@@ -28,25 +28,29 @@ use tiny_auth_business::store::ScopeStore;
 use tiny_auth_business::store::UserStore;
 use tiny_auth_business::user::User;
 
+#[derive(Default)]
 pub struct FileUserStore {
     users: BTreeMap<String, User>,
 }
 
 impl UserStore for FileUserStore {
     fn get(&self, key: &str) -> Option<User> {
-        self.users.get(key).map(Clone::clone)
+        self.users.get(key).cloned()
     }
 }
 
 impl FileUserStore {
-    pub fn new(base: &str) -> Option<Self> {
-        let mut users = BTreeMap::new();
+    pub fn read_users(&mut self, base: &str) -> bool {
         let user_store = base.to_string() + "/users";
-        for file in iterate_directory(user_store)? {
+        let directory_entries = match iterate_directory(user_store) {
+            None => return false,
+            Some(v) => v,
+        };
+        for file in directory_entries {
             let file = match file {
                 Err(e) => {
                     error!("Could not read store file: {}", e);
-                    return None;
+                    return false;
                 }
                 Ok(f) => {
                     if !f.path().is_file() {
@@ -54,7 +58,7 @@ impl FileUserStore {
                             "{:?} is no file. Only files are allowed inside the store",
                             f.path()
                         );
-                        return None;
+                        return false;
                     }
                     f
                 }
@@ -62,7 +66,7 @@ impl FileUserStore {
             let raw_content = match read_file(file.path()) {
                 Err(e) => {
                     error!("Could not read file {:?}: {}", file.path(), e);
-                    return None;
+                    return false;
                 }
                 Ok(content) => content,
             };
@@ -70,7 +74,7 @@ impl FileUserStore {
             let user = match serde_yaml::from_str::<User>(&raw_content) {
                 Err(e) => {
                     error!("File {:?} is malformed: {}", file.path(), e);
-                    return None;
+                    return false;
                 }
                 Ok(user) => user,
             };
@@ -82,34 +86,37 @@ impl FileUserStore {
                     file.path(),
                     user.name
                 );
-                return None;
+                return false;
             }
-            users.insert(user.name.clone(), user);
+            self.users.insert(user.name.clone(), user);
         }
-
-        Some(FileUserStore { users })
+        true
     }
 }
 
+#[derive(Default)]
 pub struct FileClientStore {
     clients: BTreeMap<String, Client>,
 }
 
 impl ClientStore for FileClientStore {
     fn get(&self, key: &str) -> Option<Client> {
-        self.clients.get(key).map(Clone::clone)
+        self.clients.get(key).cloned()
     }
 }
 
 impl FileClientStore {
-    pub fn new(base: &str) -> Option<Self> {
-        let mut clients = BTreeMap::new();
+    pub fn read_clients(&mut self, base: &str) -> bool {
         let client_store = base.to_string() + "/clients";
-        for file in iterate_directory(client_store)? {
+        let directory_entries = match iterate_directory(client_store) {
+            None => return false,
+            Some(v) => v,
+        };
+        for file in directory_entries {
             let file = match file {
                 Err(e) => {
                     error!("Could not read store file: {}", e);
-                    return None;
+                    return false;
                 }
                 Ok(f) => {
                     if !f.path().is_file() {
@@ -117,7 +124,7 @@ impl FileClientStore {
                             "{:?} is no file. Only files are allowed inside the store",
                             f.path()
                         );
-                        return None;
+                        return false;
                     }
                     f
                 }
@@ -125,7 +132,7 @@ impl FileClientStore {
             let raw_content = match read_file(file.path()) {
                 Err(e) => {
                     error!("Could not read file {:?}: {}", file.path(), e);
-                    return None;
+                    return false;
                 }
                 Ok(content) => content,
             };
@@ -133,7 +140,7 @@ impl FileClientStore {
             let client = match serde_yaml::from_str::<Client>(&raw_content) {
                 Err(e) => {
                     error!("File {:?} is malformed: {}", file.path(), e);
-                    return None;
+                    return false;
                 }
                 Ok(client) => client,
             };
@@ -145,27 +152,27 @@ impl FileClientStore {
                     file.path(),
                     client.client_id
                 );
-                return None;
+                return false;
             }
 
             if !client.are_all_redirect_uris_valid() {
-                return None;
+                return false;
             }
 
-            clients.insert(client.client_id.clone(), client);
+            self.clients.insert(client.client_id.clone(), client);
         }
-
-        Some(FileClientStore { clients })
+        true
     }
 }
 
+#[derive(Default)]
 pub struct FileScopeStore {
     scopes: BTreeMap<String, Scope>,
 }
 
 impl ScopeStore for FileScopeStore {
     fn get(&self, key: &str) -> Option<Scope> {
-        self.scopes.get(key).map(Clone::clone)
+        self.scopes.get(key).cloned()
     }
 
     fn get_scope_names(&self) -> Vec<String> {
@@ -174,14 +181,17 @@ impl ScopeStore for FileScopeStore {
 }
 
 impl FileScopeStore {
-    pub fn new(base: &str) -> Option<Self> {
-        let mut scopes = BTreeMap::new();
+    pub fn read_scopes(&mut self, base: &str) -> bool {
         let scope_store = base.to_string() + "/scopes";
-        for file in iterate_directory(scope_store)? {
+        let directory_entries = match iterate_directory(scope_store) {
+            None => return false,
+            Some(v) => v,
+        };
+        for file in directory_entries {
             let file = match file {
                 Err(e) => {
                     error!("Could not read store file: {}", e);
-                    return None;
+                    return false;
                 }
                 Ok(f) => {
                     if !f.path().is_file() {
@@ -189,7 +199,7 @@ impl FileScopeStore {
                             "{:?} is no file. Only files are allowed inside the store",
                             f.path()
                         );
-                        return None;
+                        return false;
                     }
                     f
                 }
@@ -197,7 +207,7 @@ impl FileScopeStore {
             let raw_content = match read_file(file.path()) {
                 Err(e) => {
                     error!("Could not read file {:?}: {}", file.path(), e);
-                    return None;
+                    return false;
                 }
                 Ok(content) => content,
             };
@@ -205,7 +215,7 @@ impl FileScopeStore {
             let scope = match serde_yaml::from_str::<Scope>(&raw_content) {
                 Err(e) => {
                     error!("File {:?} is malformed: {}", file.path(), e);
-                    return None;
+                    return false;
                 }
                 Ok(scope) => scope,
             };
@@ -213,7 +223,7 @@ impl FileScopeStore {
             let pattern = Regex::new(r"^[\x21\x23-\x5B\x5D-\x7E]+$").unwrap();
             if !pattern.is_match(&scope.name) {
                 error!("Invalid scope name {}", scope.name);
-                return None;
+                return false;
             }
 
             if PathBuf::from(scope.name.clone() + ".yml") != file.file_name() {
@@ -223,11 +233,10 @@ impl FileScopeStore {
                     file.path(),
                     scope.name
                 );
-                return None;
+                return false;
             }
-            scopes.insert(scope.name.clone(), scope);
+            self.scopes.insert(scope.name.clone(), scope);
         }
-
-        Some(FileScopeStore { scopes })
+        true
     }
 }

@@ -372,7 +372,7 @@ impl Handler {
         match &client.client_type {
             ClientType::Public => {
                 debug!("tried to authenticate public client");
-                return Err(Error::InvalidAuthorizationHeader);
+                Err(Error::InvalidAuthorizationHeader)
             }
             ClientType::Confidential {
                 password: stored_password,
@@ -380,7 +380,7 @@ impl Handler {
             } => {
                 if self
                     .authenticator
-                    .authenticate_client(&client, &stored_password, &password)
+                    .authenticate_client(&client, stored_password, &password)
                     .await
                     .map_err(|_| Error::AuthenticationFailed)?
                 {
@@ -585,6 +585,7 @@ pub mod inject {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::authenticator::test_fixtures::authenticator;
     use crate::store::test_fixtures::build_test_client_store;
     use crate::store::test_fixtures::build_test_scope_store;
     use crate::store::test_fixtures::build_test_user_store;
@@ -592,7 +593,6 @@ mod tests {
     use crate::store::test_fixtures::UNKNOWN_CLIENT_ID;
     use crate::store::test_fixtures::{build_test_auth_code_store, CONFIDENTIAL_CLIENT, USER};
     use crate::store::AuthorizationCodeRequest;
-    use crate::test_fixtures::build_test_authenticator;
     use crate::test_fixtures::build_test_issuer_config;
     use crate::test_fixtures::build_test_token_creator;
     use crate::test_fixtures::build_test_token_validator;
@@ -1020,7 +1020,7 @@ mod tests {
             user_store: build_test_user_store(),
             auth_code_store: auth_code_store.clone(),
             token_creator: build_test_token_creator(),
-            authenticator: Arc::new(build_test_authenticator()),
+            authenticator: Arc::new(authenticator()),
             token_validator: Arc::new(build_test_token_validator()),
             scope_store: build_test_scope_store(),
             issuer_configuration: build_test_issuer_config(),

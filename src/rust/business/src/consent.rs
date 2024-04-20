@@ -95,7 +95,7 @@ impl Handler {
         let requested_scopes = BTreeSet::from_iter(request.requested_scopes);
         let scopes = request
             .user_confirmed_scopes
-            .intersection(&requested_scopes.into_iter().map(Clone::clone).collect())
+            .intersection(&requested_scopes.into_iter().cloned().collect())
             .map(Clone::clone)
             .collect::<Vec<String>>();
 

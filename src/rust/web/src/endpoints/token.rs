@@ -300,6 +300,7 @@ mod tests {
     use actix_web::web::Data;
     use actix_web::web::Form;
     use test_log::test;
+    use tiny_auth_business::authenticator::test_fixtures::authenticator;
     use tiny_auth_business::cors::test_fixtures::cors_lister;
     use tiny_auth_business::oauth2::ProtocolError;
     use tiny_auth_business::oidc::ProtocolError as OidcError;
@@ -307,7 +308,6 @@ mod tests {
     use tiny_auth_business::store::test_fixtures::build_test_client_store;
     use tiny_auth_business::store::test_fixtures::build_test_scope_store;
     use tiny_auth_business::store::test_fixtures::build_test_user_store;
-    use tiny_auth_business::test_fixtures::build_test_authenticator;
     use tiny_auth_business::test_fixtures::build_test_issuer_config;
     use tiny_auth_business::test_fixtures::build_test_token_creator;
     use tiny_auth_business::test_fixtures::build_test_token_validator;
@@ -339,7 +339,7 @@ mod tests {
                 build_test_user_store(),
                 auth_code_store,
                 build_test_token_creator(),
-                Arc::new(build_test_authenticator()),
+                Arc::new(authenticator()),
                 Arc::new(build_test_token_validator()),
                 build_test_scope_store(),
                 build_test_issuer_config(),

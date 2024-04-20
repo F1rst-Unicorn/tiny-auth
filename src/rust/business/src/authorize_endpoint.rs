@@ -257,12 +257,7 @@ impl Handler {
     fn parse_prompt(prompt: Option<&str>) -> BTreeSet<Prompt> {
         match prompt {
             None => Default::default(),
-            Some(value) => value
-                .split(' ')
-                .map(Prompt::try_from)
-                .filter(Result::is_ok)
-                .map(Result::unwrap)
-                .collect(),
+            Some(value) => value.split(' ').flat_map(Prompt::try_from).collect(),
         }
     }
 

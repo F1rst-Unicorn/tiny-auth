@@ -44,7 +44,7 @@ impl User {
     pub fn get_allowed_scopes(&self, client_id: &str) -> BTreeSet<String> {
         self.allowed_scopes
             .get(client_id)
-            .map(Clone::clone)
+            .cloned()
             .unwrap_or_default()
     }
 }

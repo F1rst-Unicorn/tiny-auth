@@ -41,7 +41,7 @@ impl LdapPasswordStore {
                 .set_conn_timeout(self.connect_timeout)
                 .set_starttls(self.starttls);
             debug!("connecting to {}", &url);
-            match LdapConnAsync::from_url_with_settings(settings, &url).await {
+            match LdapConnAsync::from_url_with_settings(settings, url).await {
                 Err(e) => {
                     warn!("ldap connection to '{}' failed: {}", url, e);
                 }

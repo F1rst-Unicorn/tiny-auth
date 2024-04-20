@@ -54,7 +54,7 @@ pub enum Store {
         urls: Vec<Url>,
 
         #[serde(rename = "connect timeout in seconds")]
-        connect_timeout: i64,
+        connect_timeout_in_seconds: i64,
 
         starttls: bool,
     },
