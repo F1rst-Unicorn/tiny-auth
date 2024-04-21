@@ -21,13 +21,21 @@ store:
       base: dev/config/store
   - ldap:
       name: LDAP
-      bind dn format:
-        - cn={{ user }},ou=users,dc=example,dc=org
       urls:
         - ldap://localhost:1389
         - ldap://localhost:1390
       connect timeout in seconds: 5
       starttls: false
+      mode:
+        simple bind:
+          bind dn format:
+            - cn={{ user }},ou=users,dc=example,dc=org
+        search bind:
+          bind dn: "cn=user02,ou=users,dc=example,dc=org"
+          bind dn password: "bitnami2"
+          searches:
+            - base dn: ou=users,dc=example,dc=org
+              search filter: "(|(uid={{ user }})(mail={{ user }}))"
 
 crypto:
   keys:

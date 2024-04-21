@@ -22,16 +22,18 @@ Notes:
 
 ## LDAP
 
-Authentication can be delegated to LDAP. To use it for password authentication,
-it first has to be declared as store here:
+Authentication can be delegated to LDAP to verify user passwords. There are two
+modes: simple bind and search-bind.
+
+### General Settings
+
+The following options are shared for both modes
 
 ```yaml
 ---
 store:
   ldap:
     name: LDAP
-    bind dn format:
-      - cn={{ user }},ou=users,dc=example,dc=org
     urls:
       - ldap://localhost:1389
       - ldap://localhost:1390
@@ -43,12 +45,6 @@ store:
 
 An arbitrary name to be used to reference this LDAP configuration. See user /
 client password for details.
-
-### bind dn format
-
-A list of templates to describe how to transform the name of a user into a
-distinguished name. Entries are tried in order. The only available variable is
-`user` and is the string the user passes as its username.
 
 ### urls
 
@@ -62,6 +58,63 @@ Timeout for each connection attempt. After expiry, the next entry is tried.
 ### starttls
 
 Enable STARTTLS on `ldap` connection.
+
+### Simple Bind Mode
+
+tiny-auth binds as the `user` name passed by the user and the supplied password.
+
+```yaml
+---
+store:
+  ldap:
+    # see above for common options
+    mode:
+      simple bind:
+        bind dn format:
+          - cn={{ user }},ou=users,dc=example,dc=org
+```
+
+### bind dn format
+
+A list of templates to describe how to transform the name of a user into a
+distinguished name. Entries are tried in order. The only available variable is
+`user` and is the string the user passes as its username.
+
+## Search-Bind Mode
+
+Tiny-auth searches for the user by trying the search queries in order. On
+matching of an entry, it binds as this user, supplying the password for
+verification.
+
+```yaml
+---
+store:
+  ldap:
+    # see above for common options
+    mode:
+      search bind:
+        bind dn: "cn=tiny-auth-user,ou=users,dc=example,dc=org"
+        bind dn password: "password"
+        searches:
+          - base dn: ou=users,dc=example,dc=org
+            search filter: "(|(uid={{ user }})(mail={{ user }}))"
+```
+
+### bind dn
+
+The user as which the search query is run. If none is given, an anonymous bind
+is attempted.
+
+### bind dn password
+
+The password used for binding for the search query.
+
+### searches
+
+A list of search queries to run against the directory. The first match of the
+first query is used to bind as. `base dn` is the base dn to run the query and
+`search filter` is an LPAD search filter to match users. The only available
+variable is `user` and is the string the user passes as its username.
 
 ## Configuration File Store
 
