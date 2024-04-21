@@ -48,7 +48,7 @@ pub enum Store {
         name: String,
 
         #[serde(rename = "bind dn format")]
-        bind_dn_format: String,
+        bind_dn_format: Vec<String>,
 
         urls: Vec<Url>,
 

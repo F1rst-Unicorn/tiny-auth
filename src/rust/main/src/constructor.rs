@@ -223,7 +223,7 @@ impl<'a> Constructor<'a> {
                     tiny_auth_ldap::inject::password_store(
                         name.as_str(),
                         urls.as_slice(),
-                        bind_dn_format.as_str(),
+                        bind_dn_format.as_slice(),
                         std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
                         *starttls,
                     ),

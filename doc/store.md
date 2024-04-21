@@ -30,7 +30,8 @@ it first has to be declared as store here:
 store:
   ldap:
     name: LDAP
-    bind dn format: cn={{ user }},ou=users,dc=example,dc=org
+    bind dn format:
+      - cn={{ user }},ou=users,dc=example,dc=org
     urls:
       - ldap://localhost:1389
       - ldap://localhost:1390
@@ -45,9 +46,9 @@ client password for details.
 
 ### bind dn format
 
-A template to describe how to transform the name of a user into a distinguished
-name. The only available variable is `user` and is the string the user passes as
-its username.
+A list of templates to describe how to transform the name of a user into a
+distinguished name. Entries are tried in order. The only available variable is
+`user` and is the string the user passes as its username.
 
 ### urls
 

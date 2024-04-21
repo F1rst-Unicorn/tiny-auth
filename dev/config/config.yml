@@ -21,7 +21,8 @@ store:
       base: dev/config/store
   - ldap:
       name: LDAP
-      bind dn format: cn={{ user }},ou=users,dc=example,dc=org
+      bind dn format:
+        - cn={{ user }},ou=users,dc=example,dc=org
       urls:
         - ldap://localhost:1389
         - ldap://localhost:1390

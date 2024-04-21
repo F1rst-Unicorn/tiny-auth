@@ -29,7 +29,7 @@ use url::Url;
 struct LdapPasswordStore {
     name: String,
     urls: Vec<Url>,
-    bind_dn_format: String,
+    bind_dn_format: Vec<String>,
     connect_timeout: Duration,
     starttls: bool,
 }
@@ -61,28 +61,29 @@ impl LdapPasswordStore {
         username: &str,
         password: &str,
     ) -> Result<bool, Error> {
-        debug!("authenticating to LDAP '{}'", self.name);
-        let result = ldap
-            .simple_bind(
-                &Self::format_username(&self.bind_dn_format, username)?,
-                password,
-            )
-            .await
-            .map_err(|v| Arc::new(v) as Arc<dyn StdError + Send + Sync>)?;
-        match result.rc {
-            0 => Ok(true),
-            49 => {
-                debug!("wrong username or password");
-                Ok(false)
-            }
-            v => {
-                warn!(
-                    "Unexpected LDAP result code while binding: {}. {}",
-                    v, result.text
-                );
-                Err(Error::BackendError)
+        for bind_template in &self.bind_dn_format {
+            let bind_dn = Self::format_username(bind_template, username)?;
+            debug!("authenticating to LDAP '{}' as '{}'", self.name, bind_dn);
+            let result = ldap
+                .simple_bind(&bind_dn, password)
+                .await
+                .map_err(|v| Arc::new(v) as Arc<dyn StdError + Send + Sync>)?;
+            match result.rc {
+                0 => return Ok(true),
+                49 => {
+                    debug!("wrong username or password");
+                    continue;
+                }
+                v => {
+                    warn!(
+                        "Unexpected LDAP result code while binding: {}. {}",
+                        v, result.text
+                    );
+                    return Err(Error::BackendError);
+                }
             }
         }
+        Ok(false)
     }
 
     fn format_username(format: &str, username: &str) -> Result<String, Error> {
@@ -134,14 +135,14 @@ pub mod inject {
     pub fn password_store(
         name: &str,
         urls: &[Url],
-        bind_dn_format: &str,
+        bind_dn_format: &[String],
         connect_timeout: Duration,
         starttls: bool,
     ) -> Arc<dyn PasswordStore> {
         Arc::new(LdapPasswordStore {
             name: name.to_string(),
             urls: urls.iter().map(Clone::clone).collect(),
-            bind_dn_format: bind_dn_format.to_string(),
+            bind_dn_format: bind_dn_format.to_vec(),
             connect_timeout,
             starttls,
         })
@@ -221,7 +222,7 @@ pub mod tests {
         LdapPasswordStore {
             name,
             urls: vec![url],
-            bind_dn_format: "cn={{ user }},ou=users,dc=example,dc=org".to_string(),
+            bind_dn_format: vec!["cn={{ user }},ou=users,dc=example,dc=org".to_string()],
             connect_timeout: Duration::from_millis(50),
             starttls: false,
         }
