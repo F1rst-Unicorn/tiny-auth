@@ -5,6 +5,28 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+
+Support password verification via LDAP. See [doc](doc/store.md) for
+configuration. **Breaking**: The store is now a list and each entry needs a 
+name. Pick any name that lets you easily distinguish your stores. It will be
+used in logs and user/client passwords. Change your store from
+
+```yaml
+store:
+  configuration file:
+    base: /etc/tiny-auth/store
+```
+
+to
+
+```yaml
+store:
+  - configuration file:
+      name: configuration file
+      base: /etc/tiny-auth/store
+```
+
 ## [1.0.1]
 
 ### Fixed
