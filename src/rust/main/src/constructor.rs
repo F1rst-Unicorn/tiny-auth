@@ -218,23 +218,40 @@ impl<'a> Constructor<'a> {
                 starttls,
             } = store
             {
-                match mode {
+                let password_store = match mode {
                     LdapMode::SimpleBind { bind_dn_format } => {
-                        result.insert(
-                            name.clone(),
-                            tiny_auth_ldap::inject::simple_bind_store(
-                                name.as_str(),
-                                urls.as_slice(),
-                                bind_dn_format.as_slice(),
-                                std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
-                                *starttls,
-                            ),
-                        );
+                        tiny_auth_ldap::inject::simple_bind_store(
+                            name.as_str(),
+                            urls.as_slice(),
+                            bind_dn_format.as_slice(),
+                            std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
+                            *starttls,
+                        )
                     }
-                    LdapMode::SearchBind { .. } => {
-                        todo!("search bind mode is currently built")
+                    LdapMode::SearchBind {
+                        bind_dn,
+                        bind_dn_password,
+                        searches,
+                    } => {
+                        let searches = searches
+                            .iter()
+                            .map(|v| tiny_auth_ldap::LdapSearch {
+                                base_dn: v.base_dn.clone(),
+                                search_filter: v.search_filter.clone(),
+                            })
+                            .collect();
+                        tiny_auth_ldap::inject::search_bind_store(
+                            name.as_str(),
+                            urls.as_slice(),
+                            bind_dn,
+                            bind_dn_password,
+                            searches,
+                            std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
+                            *starttls,
+                        )
                     }
-                }
+                };
+                result.insert(name.clone(), password_store);
             }
         }
         result

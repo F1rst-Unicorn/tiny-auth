@@ -107,7 +107,7 @@ is attempted.
 
 ### bind dn password
 
-The password used for binding for the search query.
+The password used for binding for the search query. Omit for anonymous binding.
 
 ### searches
 

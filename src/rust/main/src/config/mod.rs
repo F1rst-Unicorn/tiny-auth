@@ -70,8 +70,10 @@ pub enum LdapMode {
 
     #[serde(rename = "search bind")]
     SearchBind {
+        #[serde(default)]
         #[serde(rename = "bind dn")]
         bind_dn: String,
+        #[serde(default)]
         #[serde(rename = "bind dn password")]
         bind_dn_password: String,
         searches: Vec<LdapSearch>,
@@ -81,9 +83,9 @@ pub enum LdapMode {
 #[derive(Clone, Debug, Deserialize)]
 pub struct LdapSearch {
     #[serde(rename = "base dn")]
-    base_dn: String,
+    pub base_dn: String,
     #[serde(rename = "search filter")]
-    search_filter: String,
+    pub search_filter: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
