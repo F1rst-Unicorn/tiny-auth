@@ -16,6 +16,7 @@
  */
 
 use async_trait::async_trait;
+use enum_dispatch::enum_dispatch;
 use ldap3::{drive, Ldap, LdapConnAsync, LdapConnSettings};
 use log::{debug, error, warn};
 use std::error::Error as StdError;
@@ -29,8 +30,8 @@ use url::Url;
 struct LdapPasswordStore {
     name: String,
     urls: Vec<Url>,
-    bind_dn_format: Vec<String>,
     connect_timeout: Duration,
+    authenticator: AuthenticatorDispatcher,
     starttls: bool,
 }
 
@@ -53,47 +54,6 @@ impl LdapPasswordStore {
             }
         }
         Err(Error::BackendError)
-    }
-
-    async fn authenticate(
-        &self,
-        mut ldap: Ldap,
-        username: &str,
-        password: &str,
-    ) -> Result<bool, Error> {
-        for bind_template in &self.bind_dn_format {
-            let bind_dn = Self::format_username(bind_template, username)?;
-            debug!("authenticating to LDAP '{}' as '{}'", self.name, bind_dn);
-            let result = ldap
-                .simple_bind(&bind_dn, password)
-                .await
-                .map_err(|v| Arc::new(v) as Arc<dyn StdError + Send + Sync>)?;
-            match result.rc {
-                0 => return Ok(true),
-                49 => {
-                    debug!("wrong username or password");
-                    continue;
-                }
-                v => {
-                    warn!(
-                        "Unexpected LDAP result code while binding: {}. {}",
-                        v, result.text
-                    );
-                    return Err(Error::BackendError);
-                }
-            }
-        }
-        Ok(false)
-    }
-
-    fn format_username(format: &str, username: &str) -> Result<String, Error> {
-        let mut tera = Tera::default();
-        let mut context = Context::new();
-        context.insert("user", username);
-        tera.render_str(format, &context).map_err(|e| {
-            warn!("failed to construct bind dn: {}", e);
-            Error::BackendErrorWithContext(Arc::new(e))
-        })
     }
 }
 
@@ -121,12 +81,74 @@ impl PasswordStore for LdapPasswordStore {
         }
 
         let ldap = self.connect().await?;
-        self.authenticate(ldap, username, password_to_check).await
+        self.authenticator
+            .authenticate(ldap, username, password_to_check)
+            .await
     }
 }
 
+#[enum_dispatch(Authenticator)]
+enum AuthenticatorDispatcher {
+    SimpleBind,
+}
+
+#[async_trait]
+#[enum_dispatch]
+trait Authenticator {
+    async fn authenticate(&self, ldap: Ldap, username: &str, password: &str)
+        -> Result<bool, Error>;
+}
+
+struct SimpleBind {
+    bind_dn_format: Vec<String>,
+}
+
+#[async_trait]
+impl Authenticator for SimpleBind {
+    async fn authenticate(
+        &self,
+        mut ldap: Ldap,
+        username: &str,
+        password: &str,
+    ) -> Result<bool, Error> {
+        for bind_template in &self.bind_dn_format {
+            let bind_dn = format_username(bind_template, username)?;
+            debug!("authenticating to LDAP as '{}'", bind_dn);
+            let result = ldap
+                .simple_bind(&bind_dn, password)
+                .await
+                .map_err(|v| Arc::new(v) as Arc<dyn StdError + Send + Sync>)?;
+            match result.rc {
+                0 => return Ok(true),
+                49 => {
+                    debug!("wrong username or password");
+                    continue;
+                }
+                v => {
+                    warn!(
+                        "Unexpected LDAP result code while binding: {}. {}",
+                        v, result.text
+                    );
+                    return Err(Error::BackendError);
+                }
+            }
+        }
+        Ok(false)
+    }
+}
+
+fn format_username(format: &str, username: &str) -> Result<String, Error> {
+    let mut tera = Tera::default();
+    let mut context = Context::new();
+    context.insert("user", username);
+    tera.render_str(format, &context).map_err(|e| {
+        warn!("failed to construct bind dn: {}", e);
+        Error::BackendErrorWithContext(Arc::new(e))
+    })
+}
+
 pub mod inject {
-    use crate::LdapPasswordStore;
+    use crate::{LdapPasswordStore, SimpleBind};
     use std::sync::Arc;
     use std::time::Duration;
     use tiny_auth_business::store::PasswordStore;
@@ -142,7 +164,10 @@ pub mod inject {
         Arc::new(LdapPasswordStore {
             name: name.to_string(),
             urls: urls.iter().map(Clone::clone).collect(),
-            bind_dn_format: bind_dn_format.to_vec(),
+            authenticator: SimpleBind {
+                bind_dn_format: bind_dn_format.to_vec(),
+            }
+            .into(),
             connect_timeout,
             starttls,
         })
@@ -151,7 +176,7 @@ pub mod inject {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::LdapPasswordStore;
+    use super::*;
     use pretty_assertions::assert_eq;
     use rstest::fixture;
     use rstest::rstest;
@@ -222,7 +247,10 @@ pub mod tests {
         LdapPasswordStore {
             name,
             urls: vec![url],
-            bind_dn_format: vec!["cn={{ user }},ou=users,dc=example,dc=org".to_string()],
+            authenticator: SimpleBind {
+                bind_dn_format: vec!["cn={{ user }},ou=users,dc=example,dc=org".to_string()],
+            }
+            .into(),
             connect_timeout: Duration::from_millis(50),
             starttls: false,
         }
