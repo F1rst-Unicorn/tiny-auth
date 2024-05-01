@@ -47,16 +47,43 @@ pub enum Store {
     Ldap {
         name: String,
 
-        #[serde(rename = "bind dn format")]
-        bind_dn_format: Vec<String>,
+        #[serde(rename = "mode")]
+        mode: LdapMode,
 
         urls: Vec<Url>,
 
         #[serde(rename = "connect timeout in seconds")]
         connect_timeout_in_seconds: i64,
 
+        #[serde(default)]
         starttls: bool,
     },
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub enum LdapMode {
+    #[serde(rename = "simple bind")]
+    SimpleBind {
+        #[serde(rename = "bind dn format")]
+        bind_dn_format: Vec<String>,
+    },
+
+    #[serde(rename = "search bind")]
+    SearchBind {
+        #[serde(rename = "bind dn")]
+        bind_dn: String,
+        #[serde(rename = "bind dn password")]
+        bind_dn_password: String,
+        searches: Vec<LdapSearch>,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct LdapSearch {
+    #[serde(rename = "base dn")]
+    base_dn: String,
+    #[serde(rename = "search filter")]
+    search_filter: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]

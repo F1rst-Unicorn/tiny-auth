@@ -132,7 +132,7 @@ pub mod inject {
     use tiny_auth_business::store::PasswordStore;
     use url::Url;
 
-    pub fn password_store(
+    pub fn simple_bind_store(
         name: &str,
         urls: &[Url],
         bind_dn_format: &[String],

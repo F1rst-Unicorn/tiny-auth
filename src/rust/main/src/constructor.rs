@@ -15,9 +15,9 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::config::Config;
 use crate::config::Store;
 use crate::config::TlsVersion;
+use crate::config::{Config, LdapMode};
 use crate::runtime::Error;
 use crate::runtime::Error::LoggedBeforeError;
 use crate::store::file::*;
@@ -213,21 +213,28 @@ impl<'a> Constructor<'a> {
             if let Store::Ldap {
                 name,
                 urls,
-                bind_dn_format,
+                mode,
                 connect_timeout_in_seconds,
                 starttls,
             } = store
             {
-                result.insert(
-                    name.clone(),
-                    tiny_auth_ldap::inject::password_store(
-                        name.as_str(),
-                        urls.as_slice(),
-                        bind_dn_format.as_slice(),
-                        std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
-                        *starttls,
-                    ),
-                );
+                match mode {
+                    LdapMode::SimpleBind { bind_dn_format } => {
+                        result.insert(
+                            name.clone(),
+                            tiny_auth_ldap::inject::simple_bind_store(
+                                name.as_str(),
+                                urls.as_slice(),
+                                bind_dn_format.as_slice(),
+                                std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
+                                *starttls,
+                            ),
+                        );
+                    }
+                    LdapMode::SearchBind { .. } => {
+                        todo!("search bind mode is currently built")
+                    }
+                }
             }
         }
         result
