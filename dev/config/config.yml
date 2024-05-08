@@ -27,9 +27,6 @@ store:
       connect timeout in seconds: 5
       starttls: false
       mode:
-        simple bind:
-          bind dn format:
-            - cn={{ user }},ou=users,dc=example,dc=org
         search bind:
           bind dn: "cn=user02,ou=users,dc=example,dc=org"
           bind dn password: "bitnami2"
