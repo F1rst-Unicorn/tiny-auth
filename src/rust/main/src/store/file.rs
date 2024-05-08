@@ -19,6 +19,7 @@ use crate::util::iterate_directory;
 use crate::util::read_file;
 use log::error;
 use regex::Regex;
+use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use tiny_auth_business::client::Client;
@@ -41,56 +42,31 @@ impl UserStore for FileUserStore {
 
 impl FileUserStore {
     pub fn read_users(&mut self, base: &str) -> bool {
-        let user_store = base.to_string() + "/users";
-        let directory_entries = match iterate_directory(user_store) {
-            None => return false,
-            Some(v) => v,
-        };
-        for file in directory_entries {
-            let file = match file {
-                Err(e) => {
-                    error!("Could not read store file: {}", e);
-                    return false;
+        if let Some(users) = read_object(
+            (base.to_string() + "/users").as_str(),
+            |user: User, file| {
+                if PathBuf::from(user.name.clone() + ".yml") != file.file_name() {
+                    error!(
+                        "user '{}' is stored in '{:?}' but was expected to be stored in '{}.yml'",
+                        user.name,
+                        file.path(),
+                        user.name
+                    );
+                    return None;
                 }
-                Ok(f) => {
-                    if !f.path().is_file() {
-                        error!(
-                            "{:?} is no file. Only files are allowed inside the store",
-                            f.path()
-                        );
-                        return false;
-                    }
-                    f
-                }
-            };
-            let raw_content = match read_file(file.path()) {
-                Err(e) => {
-                    error!("Could not read file {:?}: {}", file.path(), e);
-                    return false;
-                }
-                Ok(content) => content,
-            };
-
-            let user = match serde_yaml::from_str::<User>(&raw_content) {
-                Err(e) => {
-                    error!("File {:?} is malformed: {}", file.path(), e);
-                    return false;
-                }
-                Ok(user) => user,
-            };
-
-            if PathBuf::from(user.name.clone() + ".yml") != file.file_name() {
-                error!(
-                    "user '{}' is stored in '{:?}' but was expected to be stored in '{}.yml'",
-                    user.name,
-                    file.path(),
-                    user.name
-                );
-                return false;
-            }
-            self.users.insert(user.name.clone(), user);
+                Some(user)
+            },
+        ) {
+            users
+                .into_iter()
+                .map(|v| (v.name.clone(), v))
+                .for_each(|v| {
+                    self.users.insert(v.0, v.1);
+                });
+            true
+        } else {
+            false
         }
-        true
     }
 }
 
@@ -107,61 +83,35 @@ impl ClientStore for FileClientStore {
 
 impl FileClientStore {
     pub fn read_clients(&mut self, base: &str) -> bool {
-        let client_store = base.to_string() + "/clients";
-        let directory_entries = match iterate_directory(client_store) {
-            None => return false,
-            Some(v) => v,
-        };
-        for file in directory_entries {
-            let file = match file {
-                Err(e) => {
-                    error!("Could not read store file: {}", e);
-                    return false;
+        if let Some(clients) = read_object(
+            (base.to_string() + "/clients").as_str(),
+            |client: Client, file| {
+                if PathBuf::from(client.client_id.clone() + ".yml") != file.file_name() {
+                    error!(
+                        "client '{}' is stored in '{:?}' but was expected to be stored in '{}.yml'",
+                        client.client_id,
+                        file.path(),
+                        client.client_id
+                    );
+                    return None;
                 }
-                Ok(f) => {
-                    if !f.path().is_file() {
-                        error!(
-                            "{:?} is no file. Only files are allowed inside the store",
-                            f.path()
-                        );
-                        return false;
-                    }
-                    f
+
+                if !client.are_all_redirect_uris_valid() {
+                    return None;
                 }
-            };
-            let raw_content = match read_file(file.path()) {
-                Err(e) => {
-                    error!("Could not read file {:?}: {}", file.path(), e);
-                    return false;
-                }
-                Ok(content) => content,
-            };
-
-            let client = match serde_yaml::from_str::<Client>(&raw_content) {
-                Err(e) => {
-                    error!("File {:?} is malformed: {}", file.path(), e);
-                    return false;
-                }
-                Ok(client) => client,
-            };
-
-            if PathBuf::from(client.client_id.clone() + ".yml") != file.file_name() {
-                error!(
-                    "client '{}' is stored in '{:?}' but was expected to be stored in '{}.yml'",
-                    client.client_id,
-                    file.path(),
-                    client.client_id
-                );
-                return false;
-            }
-
-            if !client.are_all_redirect_uris_valid() {
-                return false;
-            }
-
-            self.clients.insert(client.client_id.clone(), client);
+                Some(client)
+            },
+        ) {
+            clients
+                .into_iter()
+                .map(|v| (v.client_id.clone(), v))
+                .for_each(|v| {
+                    self.clients.insert(v.0, v.1);
+                });
+            true
+        } else {
+            false
         }
-        true
     }
 }
 
@@ -182,61 +132,82 @@ impl ScopeStore for FileScopeStore {
 
 impl FileScopeStore {
     pub fn read_scopes(&mut self, base: &str) -> bool {
-        let scope_store = base.to_string() + "/scopes";
-        let directory_entries = match iterate_directory(scope_store) {
-            None => return false,
-            Some(v) => v,
-        };
-        for file in directory_entries {
-            let file = match file {
-                Err(e) => {
-                    error!("Could not read store file: {}", e);
-                    return false;
+        if let Some(scopes) = read_object(
+            (base.to_string() + "/scopes").as_str(),
+            |scope: Scope, file| {
+                let pattern = Regex::new(r"^[\x21\x23-\x5B\x5D-\x7E]+$").unwrap();
+                if !pattern.is_match(&scope.name) {
+                    error!("Invalid scope name {}", scope.name);
+                    return None;
                 }
-                Ok(f) => {
-                    if !f.path().is_file() {
-                        error!(
-                            "{:?} is no file. Only files are allowed inside the store",
-                            f.path()
-                        );
-                        return false;
-                    }
-                    f
-                }
-            };
-            let raw_content = match read_file(file.path()) {
-                Err(e) => {
-                    error!("Could not read file {:?}: {}", file.path(), e);
-                    return false;
-                }
-                Ok(content) => content,
-            };
 
-            let scope = match serde_yaml::from_str::<Scope>(&raw_content) {
-                Err(e) => {
-                    error!("File {:?} is malformed: {}", file.path(), e);
-                    return false;
+                if PathBuf::from(scope.name.clone() + ".yml") != file.file_name() {
+                    error!(
+                        "scope '{}' is stored in '{:?}' but was expected to be stored in '{}.yml'",
+                        scope.name,
+                        file.path(),
+                        scope.name
+                    );
+                    return None;
                 }
-                Ok(scope) => scope,
-            };
-
-            let pattern = Regex::new(r"^[\x21\x23-\x5B\x5D-\x7E]+$").unwrap();
-            if !pattern.is_match(&scope.name) {
-                error!("Invalid scope name {}", scope.name);
-                return false;
-            }
-
-            if PathBuf::from(scope.name.clone() + ".yml") != file.file_name() {
-                error!(
-                    "scope '{}' is stored in '{:?}' but was expected to be stored in '{}.yml'",
-                    scope.name,
-                    file.path(),
-                    scope.name
-                );
-                return false;
-            }
-            self.scopes.insert(scope.name.clone(), scope);
+                Some(scope)
+            },
+        ) {
+            scopes
+                .into_iter()
+                .map(|v| (v.name.clone(), v))
+                .for_each(|v| {
+                    self.scopes.insert(v.0, v.1);
+                });
+            true
+        } else {
+            false
         }
-        true
     }
+}
+
+fn read_object<O, T>(base: &str, transformer: T) -> Option<Vec<O>>
+where
+    O: for<'a> Deserialize<'a>,
+    T: Fn(O, &std::fs::DirEntry) -> Option<O>,
+{
+    let mut result = Vec::default();
+    let directory_entries = iterate_directory(base)?;
+    for file in directory_entries {
+        let file = match file {
+            Err(e) => {
+                error!("Could not read store file: {}", e);
+                return None;
+            }
+            Ok(f) => {
+                if !f.path().is_file() {
+                    error!(
+                        "{:?} is no file. Only files are allowed inside the store",
+                        f.path()
+                    );
+                    return None;
+                }
+                f
+            }
+        };
+        let raw_content = match read_file(file.path()) {
+            Err(e) => {
+                error!("Could not read file {:?}: {}", file.path(), e);
+                return None;
+            }
+            Ok(content) => content,
+        };
+
+        let object = match serde_yaml::from_str::<O>(&raw_content) {
+            Err(e) => {
+                error!("File {:?} is malformed: {}", file.path(), e);
+                return None;
+            }
+            Ok(v) => v,
+        };
+
+        let object = transformer(object, &file)?;
+        result.push(object);
+    }
+    Some(result)
 }
