@@ -661,7 +661,7 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
                     .public_host
                     .port
                     .as_ref()
-                    .map(|v| ":".to_string() + &v)
+                    .map(|v| ":".to_string() + v)
                     .unwrap_or("".to_string())
                 + self
                     .config

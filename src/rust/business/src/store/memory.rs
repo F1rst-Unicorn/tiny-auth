@@ -100,7 +100,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
 
         loop {
             let auth_code = generate_random_string(32);
-            key.authorization_code = auth_code.clone();
+            key.authorization_code.clone_from(&auth_code);
 
             if store.get(&key).is_none() {
                 store.insert(
