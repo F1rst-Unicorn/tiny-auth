@@ -16,8 +16,9 @@
 
 ---
 store:
-  configuration file:
-    base: test/src/test/resources/store
+  - configuration file:
+      name: configuration file
+      base: test/src/test/resources/store
 
 crypto:
   keys:
@@ -46,8 +47,11 @@ web:
     certificate: test/src/test/resources/keys/tls-chain.pem
     client ca: test/src/test/resources/keys/ca.pem
     versions:
-      - 1.2
-      - 1.3
+      - "1.2"
+      - "1.3"
 
 api:
   endpoint: localhost:8089
+  public host:
+    domain: localhost
+    port: 8089
