@@ -18,6 +18,7 @@
 use crate::client::Client;
 use crate::oauth2::ClientType;
 use crate::password::Password;
+use log::debug;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -46,6 +47,35 @@ impl User {
             .get(client_id)
             .cloned()
             .unwrap_or_default()
+    }
+
+    pub fn merge(mut self, other: User) -> User {
+        if let Password::Plain(_) = self.password {
+            self.password = other.password;
+        };
+
+        for (client_id, mut other_scopes) in other.allowed_scopes {
+            match self.allowed_scopes.get_mut(&client_id) {
+                None => {
+                    self.allowed_scopes.insert(client_id, other_scopes);
+                }
+                Some(scopes) => {
+                    scopes.append(&mut other_scopes);
+                }
+            }
+        }
+
+        for (name, value) in other.attributes {
+            match self.attributes.get_mut(&name) {
+                None => {
+                    self.attributes.insert(name, value);
+                }
+                _ => {
+                    debug!("Ignoring duplicate attribute {name}");
+                }
+            }
+        }
+        self
     }
 }
 

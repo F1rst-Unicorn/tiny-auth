@@ -31,7 +31,8 @@ pub const FLAG_USER: &str = "user";
 pub const FLAG_CLIENT: &str = "client";
 pub const FLAG_SCOPE: &str = "scope";
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     let args = parse_arguments();
     initialise_from_verbosity(args.get_count(FLAG_VERBOSE));
 
@@ -55,11 +56,14 @@ fn main() {
     };
 
     let store = di.user_store();
-    let user = match store.get(
-        args.get_one::<String>(FLAG_USER)
-            .map(String::as_str)
-            .unwrap(),
-    ) {
+    let user = match store
+        .get(
+            args.get_one::<String>(FLAG_USER)
+                .map(String::as_str)
+                .unwrap(),
+        )
+        .await
+    {
         None => {
             error!("user not found");
             return;

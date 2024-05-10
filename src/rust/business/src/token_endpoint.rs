@@ -231,7 +231,7 @@ impl Handler {
             verify_pkce(challenge, request.pkce_verifier)?;
         }
 
-        let user = self.user_store.get(&record.username).ok_or_else(|| {
+        let user = self.user_store.get(&record.username).await.ok_or_else(|| {
             debug!("user {} not found", record.username);
             Error::WrongUsernameOrPassword(format!("{}", WrongCredentials))
         })?;
@@ -946,7 +946,7 @@ mod tests {
         let request = Request {
             grant_type: GrantType::RefreshToken,
             basic_authentication: Some((CONFIDENTIAL_CLIENT.to_string(), "wrong".to_string())),
-            refresh_token: Some(build_refresh_token(CONFIDENTIAL_CLIENT)),
+            refresh_token: Some(build_refresh_token(CONFIDENTIAL_CLIENT).await),
             ..Request::default()
         };
 
@@ -963,7 +963,7 @@ mod tests {
                 CONFIDENTIAL_CLIENT.to_string(),
                 CONFIDENTIAL_CLIENT.to_string(),
             )),
-            refresh_token: Some(build_refresh_token(PUBLIC_CLIENT)),
+            refresh_token: Some(build_refresh_token(PUBLIC_CLIENT).await),
             ..Request::default()
         };
 
@@ -980,7 +980,7 @@ mod tests {
                 CONFIDENTIAL_CLIENT.to_string(),
                 CONFIDENTIAL_CLIENT.to_string(),
             )),
-            refresh_token: Some(build_refresh_token(CONFIDENTIAL_CLIENT)),
+            refresh_token: Some(build_refresh_token(CONFIDENTIAL_CLIENT).await),
             ..Request::default()
         };
 
@@ -996,7 +996,7 @@ mod tests {
     async fn successful_authentication_with_secret_as_post_parameter() {
         let request = Request {
             grant_type: GrantType::RefreshToken,
-            refresh_token: Some(build_refresh_token(CONFIDENTIAL_CLIENT)),
+            refresh_token: Some(build_refresh_token(CONFIDENTIAL_CLIENT).await),
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
             client_secret: Some(CONFIDENTIAL_CLIENT.to_string()),
             ..Request::default()
@@ -1027,10 +1027,10 @@ mod tests {
         }
     }
 
-    fn build_refresh_token(client_id: &str) -> String {
+    async fn build_refresh_token(client_id: &str) -> String {
         let token_creator = build_test_token_creator();
         let token = token_creator.build_token(
-            &build_test_user_store().get(USER).unwrap(),
+            &build_test_user_store().get(USER).await.unwrap(),
             &build_test_client_store().get(client_id).unwrap(),
             &Vec::new(),
             0,

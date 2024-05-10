@@ -17,6 +17,7 @@
 
 use crate::util::iterate_directory;
 use crate::util::read_file;
+use async_trait::async_trait;
 use log::error;
 use regex::Regex;
 use serde::Deserialize;
@@ -34,8 +35,9 @@ pub struct FileUserStore {
     users: BTreeMap<String, User>,
 }
 
+#[async_trait]
 impl UserStore for FileUserStore {
-    fn get(&self, key: &str) -> Option<User> {
+    async fn get(&self, key: &str) -> Option<User> {
         self.users.get(key).cloned()
     }
 }

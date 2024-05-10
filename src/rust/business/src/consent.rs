@@ -68,13 +68,13 @@ pub struct Handler {
 }
 
 impl Handler {
-    pub fn can_skip_consent_screen(
+    pub async fn can_skip_consent_screen(
         &self,
         authenticated_username: &str,
         client_id: &str,
         requested_scopes: &[String],
     ) -> Result<bool, UserNotFound> {
-        let user = match self.user_store.get(authenticated_username) {
+        let user = match self.user_store.get(authenticated_username).await {
             None => {
                 debug!("authenticated user not found");
                 return Err(UserNotFound);
@@ -116,7 +116,7 @@ impl Handler {
                 .response_types
                 .contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token))
         {
-            let user = match self.user_store.get(request.authenticated_username) {
+            let user = match self.user_store.get(request.authenticated_username).await {
                 None => {
                     debug!("user {} not found", request.authenticated_username);
                     return Err(Error::UserNotFound);

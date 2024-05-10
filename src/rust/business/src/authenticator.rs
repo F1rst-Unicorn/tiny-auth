@@ -54,7 +54,7 @@ impl Authenticator {
     }
 
     pub async fn authenticate_user(&self, username: &str, password: &str) -> Result<User, Error> {
-        let user = match self.user_store.get(username) {
+        let user = match self.user_store.get(username).await {
             None => {
                 debug!("user '{}' not found", username);
                 return Err(Error::WrongCredentials);
