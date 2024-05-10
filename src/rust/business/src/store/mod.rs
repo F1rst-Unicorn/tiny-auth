@@ -26,10 +26,28 @@ use async_trait::async_trait;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Local;
+use futures_util::future::join_all;
 use log::info;
+use std::sync::Arc;
 
+#[async_trait]
 pub trait UserStore: Send + Sync {
-    fn get(&self, key: &str) -> Option<User>;
+    async fn get(&self, key: &str) -> Option<User>;
+}
+
+pub struct MergingUserStore {
+    stores: Vec<Arc<dyn UserStore>>,
+}
+
+#[async_trait]
+impl UserStore for MergingUserStore {
+    async fn get(&self, key: &str) -> Option<User> {
+        join_all(self.stores.iter().map(|v| v.get(key)))
+            .await
+            .into_iter()
+            .flatten()
+            .reduce(User::merge)
+    }
 }
 
 pub trait ClientStore: Send + Sync {
@@ -138,8 +156,9 @@ pub mod test_fixtures {
 
     struct TestUserStore {}
 
+    #[async_trait]
     impl UserStore for TestUserStore {
-        fn get(&self, key: &str) -> Option<User> {
+        async fn get(&self, key: &str) -> Option<User> {
             match key {
                 "user1" | "user2" | "user3" => Some(User {
                     name: key.to_string(),

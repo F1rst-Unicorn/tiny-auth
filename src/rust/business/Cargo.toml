@@ -28,3 +28,4 @@ thiserror.workspace = true
 test-log.workspace = true
 env_logger.workspace = true
 regex.workspace = true
+futures-util.workspace = true

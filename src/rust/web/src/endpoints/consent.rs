@@ -66,11 +66,10 @@ pub async fn get(
         Ok(Some(v)) => v,
     };
 
-    let can_skip_consent_screen = match handler.can_skip_consent_screen(
-        &username,
-        &first_request.client_id,
-        &first_request.scopes,
-    ) {
+    let can_skip_consent_screen = match handler
+        .can_skip_consent_screen(&username, &first_request.client_id, &first_request.scopes)
+        .await
+    {
         Err(_) => {
             return render_invalid_consent_request(&tera);
         }

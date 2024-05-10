@@ -47,6 +47,7 @@ log4rs.workspace = true
 test-log.workspace = true
 env_logger.workspace = true
 url.workspace = true
+async-trait.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 systemd.workspace = true
