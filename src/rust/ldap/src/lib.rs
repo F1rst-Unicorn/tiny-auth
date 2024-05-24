@@ -19,24 +19,42 @@ use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use ldap3::{drive, Ldap, LdapConnAsync, LdapConnSettings, Scope, SearchEntry};
 use log::{debug, error, warn};
-use std::error::Error as StdError;
+use moka::future::Cache;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tera::{Context, Tera};
+use thiserror::Error;
 use tiny_auth_business::password::{Error, Password};
-use tiny_auth_business::store::PasswordStore;
+use tiny_auth_business::store::{PasswordStore, UserStore};
+use tiny_auth_business::user::Error as UserError;
+use tiny_auth_business::user::User;
+use tiny_auth_business::util::wrap_err;
 use url::Url;
 
-struct LdapPasswordStore {
+struct LdapStore {
     name: String,
     urls: Vec<Url>,
     connect_timeout: Duration,
     authenticator: AuthenticatorDispatcher,
     starttls: bool,
+    user_cache: Cache<String, (String, User)>,
 }
 
-impl LdapPasswordStore {
-    async fn connect(&self) -> Result<Ldap, Error> {
+#[derive(Error, Debug)]
+enum LdapError {
+    #[error("LDAP connecting failed")]
+    ConnectError,
+    #[error("search formatting failed: {0}")]
+    FormatError(tera::Error),
+    #[error("LDAP binding failed")]
+    BindError,
+    #[error("LDAP binding failed: {0}")]
+    BindErrorWithContext(ldap3::LdapError),
+}
+
+impl LdapStore {
+    async fn connect(&self) -> Result<Ldap, LdapError> {
         for url in &self.urls {
             let settings = LdapConnSettings::new()
                 .set_conn_timeout(self.connect_timeout)
@@ -53,12 +71,58 @@ impl LdapPasswordStore {
                 }
             }
         }
-        Err(Error::BackendError)
+        warn!("failed to connect to any backend of LDAP {}", self.name);
+        Err(LdapError::ConnectError)
+    }
+
+    fn map_to_user(&self, name: &str, search_entry: SearchEntry) -> User {
+        let mut attributes = HashMap::default();
+        attributes.insert("dn".to_string(), search_entry.dn.into());
+        attributes.extend(
+            search_entry
+                .attrs
+                .into_iter()
+                .filter(|(key, _)| !["name", "password", "allowed_scopes"].contains(&key.as_str()))
+                .map(|(k, v)| (k, v.into())),
+        );
+        attributes.extend(
+            search_entry
+                .bin_attrs
+                .into_iter()
+                .map(|(k, v)| (k, v.into())),
+        );
+
+        User {
+            name: name.to_string(),
+            password: Password::Ldap {
+                name: self.name.to_string(),
+            },
+            allowed_scopes: Default::default(),
+            attributes,
+        }
     }
 }
 
 #[async_trait]
-impl PasswordStore for LdapPasswordStore {
+impl UserStore for LdapStore {
+    async fn get(&self, key: &str) -> Result<User, UserError> {
+        if let Some((_, cached_user)) = self.user_cache.get(key).await {
+            return Ok(cached_user);
+        }
+
+        let mut ldap = self.connect().await.map_err(wrap_err)?;
+        let search_entry = self.authenticator.get_user(&mut ldap, key).await?;
+        let dn = search_entry.dn.to_string();
+        let user = self.map_to_user(key, search_entry);
+        self.user_cache
+            .insert(key.to_string(), (dn, user.clone()))
+            .await;
+        Ok(user)
+    }
+}
+
+#[async_trait]
+impl PasswordStore for LdapStore {
     async fn verify(
         &self,
         username: &str,
@@ -80,7 +144,7 @@ impl PasswordStore for LdapPasswordStore {
             }
         }
 
-        let mut ldap = self.connect().await?;
+        let mut ldap = self.connect().await.map_err(wrap_err)?;
         self.authenticator
             .authenticate(&mut ldap, username, password_to_check)
             .await
@@ -102,6 +166,8 @@ trait Authenticator {
         username: &str,
         password: &str,
     ) -> Result<bool, Error>;
+
+    async fn get_user(&self, ldap: &mut Ldap, username: &str) -> Result<SearchEntry, UserError>;
 }
 
 struct SimpleBind {
@@ -117,12 +183,19 @@ impl Authenticator for SimpleBind {
         password: &str,
     ) -> Result<bool, Error> {
         for bind_template in &self.bind_dn_format {
-            let bind_dn = format_username(bind_template, username)?;
-            if simple_bind(ldap, &bind_dn, password).await? {
+            let bind_dn = format_username(bind_template, username).map_err(wrap_err)?;
+            if simple_bind(ldap, &bind_dn, password)
+                .await
+                .map_err(wrap_err)?
+            {
                 return Ok(true);
             }
         }
         Ok(false)
+    }
+
+    async fn get_user(&self, _: &mut Ldap, _: &str) -> Result<SearchEntry, UserError> {
+        Err(UserError::NotFound)
     }
 }
 
@@ -145,45 +218,53 @@ impl Authenticator for SearchBind {
         username: &str,
         password: &str,
     ) -> Result<bool, Error> {
-        if !simple_bind(ldap, &self.bind_dn, &self.bind_dn_password).await? {
+        let search_entry = self.get_user(ldap, username).await.map_err(wrap_err)?;
+        Ok(simple_bind(ldap, &search_entry.dn, password)
+            .await
+            .map_err(wrap_err)?)
+    }
+
+    async fn get_user(&self, ldap: &mut Ldap, username: &str) -> Result<SearchEntry, UserError> {
+        if !simple_bind(ldap, &self.bind_dn, &self.bind_dn_password)
+            .await
+            .map_err(wrap_err)?
+        {
             warn!(
                 "wrong username or password for search bind mode. Username '{}'",
                 self.bind_dn
             );
-            return Err(Error::BackendError);
+            return Err(UserError::BackendError);
         };
 
         for search in &self.searches {
-            let filter = format_username(&search.search_filter, username)?;
+            let filter = format_username(&search.search_filter, username).map_err(wrap_err)?;
             debug!("searching in {} for {}", &search.base_dn, &filter);
             let result = match ldap
-                .search(&search.base_dn, Scope::Subtree, &filter, &["dn"])
+                .search(&search.base_dn, Scope::Subtree, &filter, &["*", "+"])
                 .await
             {
                 Ok(v) => v,
                 Err(e) => {
                     warn!("searching for user '{}' failed. {}", username, e);
-                    return Err(Error::BackendErrorWithContext(Arc::new(e)));
+                    return Err(UserError::BackendErrorWithContext(Arc::new(e)));
                 }
             };
 
-            for entry in result.0 {
+            if let Some(entry) = result.0.into_iter().next() {
                 let entry = SearchEntry::construct(entry);
-                if simple_bind(ldap, &entry.dn, password).await? {
-                    return Ok(true);
-                }
+                return Ok(entry);
             }
         }
-        Ok(false)
+        Err(UserError::NotFound)
     }
 }
 
-async fn simple_bind(ldap: &mut Ldap, bind_dn: &str, password: &str) -> Result<bool, Error> {
+async fn simple_bind(ldap: &mut Ldap, bind_dn: &str, password: &str) -> Result<bool, LdapError> {
     debug!("binding to LDAP as '{}'", bind_dn);
     let result = ldap
         .simple_bind(bind_dn, password)
         .await
-        .map_err(|v| Arc::new(v) as Arc<dyn StdError + Send + Sync>)?;
+        .map_err(LdapError::BindErrorWithContext)?;
     match result.rc {
         0 => Ok(true),
         49 => {
@@ -195,26 +276,29 @@ async fn simple_bind(ldap: &mut Ldap, bind_dn: &str, password: &str) -> Result<b
                 "Unexpected LDAP result code while binding: {}. {}",
                 v, result.text
             );
-            Err(Error::BackendError)
+            Err(LdapError::BindError)
         }
     }
 }
 
-fn format_username(format: &str, username: &str) -> Result<String, Error> {
+fn format_username(format: &str, username: &str) -> Result<String, LdapError> {
     let mut tera = Tera::default();
     let mut context = Context::new();
     context.insert("user", username);
     tera.render_str(format, &context).map_err(|e| {
         warn!("failed to construct bind dn: {}", e);
-        Error::BackendErrorWithContext(Arc::new(e))
+        LdapError::FormatError(e)
     })
 }
 
 pub mod inject {
-    use crate::{LdapPasswordStore, LdapSearch, SearchBind, SimpleBind};
+    use crate::{LdapSearch, LdapStore, SearchBind, SimpleBind};
+    use moka::future::Cache;
+    use moka::policy::EvictionPolicy;
     use std::sync::Arc;
     use std::time::Duration;
     use tiny_auth_business::store::PasswordStore;
+    use tiny_auth_business::user::User;
     use url::Url;
 
     pub fn simple_bind_store(
@@ -224,7 +308,7 @@ pub mod inject {
         connect_timeout: Duration,
         starttls: bool,
     ) -> Arc<dyn PasswordStore> {
-        Arc::new(LdapPasswordStore {
+        Arc::new(LdapStore {
             name: name.to_string(),
             urls: urls.iter().map(Clone::clone).collect(),
             authenticator: SimpleBind {
@@ -233,7 +317,16 @@ pub mod inject {
             .into(),
             connect_timeout,
             starttls,
+            user_cache: cache(name),
         })
+    }
+
+    fn cache(name: &str) -> Cache<String, (String, User)> {
+        Cache::builder()
+            .name(format!("tiny-auth ldap store {name}").as_str())
+            .eviction_policy(EvictionPolicy::tiny_lfu())
+            .time_to_idle(Duration::from_secs(10))
+            .build()
     }
 
     pub fn search_bind_store(
@@ -245,7 +338,27 @@ pub mod inject {
         connect_timeout: Duration,
         starttls: bool,
     ) -> Arc<dyn PasswordStore> {
-        Arc::new(LdapPasswordStore {
+        search_bind_store_impl(
+            name,
+            urls,
+            bind_dn,
+            bind_dn_password,
+            searches,
+            connect_timeout,
+            starttls,
+        )
+    }
+
+    pub(super) fn search_bind_store_impl(
+        name: &str,
+        urls: &[Url],
+        bind_dn: &str,
+        bind_dn_password: &str,
+        searches: Vec<LdapSearch>,
+        connect_timeout: Duration,
+        starttls: bool,
+    ) -> Arc<LdapStore> {
+        Arc::new(LdapStore {
             name: name.to_string(),
             urls: urls.iter().map(Clone::clone).collect(),
             authenticator: SearchBind {
@@ -256,6 +369,7 @@ pub mod inject {
             .into(),
             connect_timeout,
             starttls,
+            user_cache: cache(name),
         })
     }
 }
@@ -266,6 +380,7 @@ pub mod tests {
     use pretty_assertions::assert_eq;
     use rstest::fixture;
     use rstest::rstest;
+    use serde_json::Value;
     use std::time::Duration;
     use test_log::test;
     use testcontainers::clients::Cli;
@@ -373,12 +488,40 @@ pub mod tests {
 
     #[rstest]
     #[test(tokio::test)]
+    pub async fn getting_user_works(image: GenericImage, name: String) {
+        let cli = Cli::default();
+        let container = cli.run(image);
+        let uut = search_bind_uut(name, container.get_host_port_ipv4(1389));
+        let input = "user01";
+
+        let actual = uut.get(input).await;
+
+        let actual = actual.unwrap();
+        assert_eq!(
+            input,
+            actual.attributes.get("uid").unwrap().as_array().unwrap()[0]
+        );
+        assert_eq!(
+            "Bar1",
+            actual.attributes.get("sn").unwrap().as_array().unwrap()[0]
+        );
+        assert_eq!(
+            Value::from(vec!["inetOrgPerson", "posixAccount", "shadowAccount"]),
+            *actual.attributes.get("objectClass").unwrap()
+        );
+    }
+
+    #[rstest]
+    #[test(tokio::test)]
     pub async fn invalid_connection_is_reported(name: String, password: Password) {
         let uut = simple_bind_uut(name, 1390);
 
         let actual = uut.verify("user01", &password, "wrong").await;
 
-        assert!(matches!(actual.unwrap_err(), Error::BackendError));
+        assert!(matches!(
+            actual.unwrap_err(),
+            Error::BackendErrorWithContext(_)
+        ));
     }
 
     #[fixture]
@@ -391,71 +534,62 @@ pub mod tests {
         image
     }
 
-    fn simple_bind_uut(name: String, port: u16) -> LdapPasswordStore {
+    fn simple_bind_uut(name: String, port: u16) -> Arc<dyn PasswordStore> {
         let url = Url::parse(&format!("ldap://localhost:{}", port)).unwrap();
 
-        LdapPasswordStore {
-            name,
-            urls: vec![url],
-            authenticator: SimpleBind {
-                bind_dn_format: vec!["cn={{ user }},ou=users,dc=example,dc=org".to_string()],
-            }
-            .into(),
-            connect_timeout: Duration::from_millis(50),
-            starttls: false,
-        }
+        inject::simple_bind_store(
+            name.as_str(),
+            &[url],
+            &["cn={{ user }},ou=users,dc=example,dc=org".to_string()],
+            Duration::from_millis(50),
+            false,
+        )
     }
 
-    fn search_bind_uut(name: String, port: u16) -> LdapPasswordStore {
+    fn search_bind_uut(name: String, port: u16) -> Arc<LdapStore> {
         let url = Url::parse(&format!("ldap://localhost:{}", port)).unwrap();
 
-        LdapPasswordStore {
-            name,
-            urls: vec![url],
-            authenticator: SearchBind {
-                bind_dn: "cn=user01,ou=users,dc=example,dc=org".to_string(),
-                bind_dn_password: "bitnami1".to_string(),
-                searches: vec![
-                    LdapSearch {
-                        base_dn: "ou=users,dc=nonexistent".to_string(),
-                        search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
-                    },
-                    LdapSearch {
-                        base_dn: "ou=users,dc=example,dc=org".to_string(),
-                        search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
-                    },
-                ],
-            }
-            .into(),
-            connect_timeout: Duration::from_millis(50),
-            starttls: false,
-        }
+        inject::search_bind_store_impl(
+            name.as_str(),
+            &[url],
+            "cn=user01,ou=users,dc=example,dc=org",
+            "bitnami1",
+            vec![
+                LdapSearch {
+                    base_dn: "ou=users,dc=nonexistent".to_string(),
+                    search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
+                },
+                LdapSearch {
+                    base_dn: "ou=users,dc=example,dc=org".to_string(),
+                    search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
+                },
+            ],
+            Duration::from_millis(50),
+            false,
+        )
     }
 
-    fn search_bind_anonymous_uut(name: String, port: u16) -> LdapPasswordStore {
+    fn search_bind_anonymous_uut(name: String, port: u16) -> Arc<LdapStore> {
         let url = Url::parse(&format!("ldap://localhost:{}", port)).unwrap();
 
-        LdapPasswordStore {
-            name,
-            urls: vec![url],
-            authenticator: SearchBind {
-                bind_dn: "".to_string(),
-                bind_dn_password: "".to_string(),
-                searches: vec![
-                    LdapSearch {
-                        base_dn: "ou=users,dc=nonexistent".to_string(),
-                        search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
-                    },
-                    LdapSearch {
-                        base_dn: "ou=users,dc=example,dc=org".to_string(),
-                        search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
-                    },
-                ],
-            }
-            .into(),
-            connect_timeout: Duration::from_millis(50),
-            starttls: false,
-        }
+        inject::search_bind_store_impl(
+            name.as_str(),
+            &[url],
+            "",
+            "",
+            vec![
+                LdapSearch {
+                    base_dn: "ou=users,dc=nonexistent".to_string(),
+                    search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
+                },
+                LdapSearch {
+                    base_dn: "ou=users,dc=example,dc=org".to_string(),
+                    search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
+                },
+            ],
+            Duration::from_millis(50),
+            false,
+        )
     }
 
     #[fixture]

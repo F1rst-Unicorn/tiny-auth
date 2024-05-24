@@ -231,10 +231,18 @@ impl Handler {
             verify_pkce(challenge, request.pkce_verifier)?;
         }
 
-        let user = self.user_store.get(&record.username).await.ok_or_else(|| {
-            debug!("user {} not found", record.username);
-            Error::WrongUsernameOrPassword(format!("{}", WrongCredentials))
-        })?;
+        let user = self
+            .user_store
+            .get(&record.username)
+            .await
+            .map_err(|e| match e {
+                crate::user::Error::NotFound => {
+                    debug!("user {} not found", record.username);
+                    Error::WrongUsernameOrPassword(format!("{}", WrongCredentials))
+                }
+                crate::user::Error::BackendError
+                | crate::user::Error::BackendErrorWithContext(_) => Error::AuthenticationFailed,
+            })?;
 
         let scopes = self.scope_store.get_all(&parse_scope_names(&record.scopes));
 

@@ -28,7 +28,7 @@ use tiny_auth_business::scope::Scope;
 use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::ScopeStore;
 use tiny_auth_business::store::UserStore;
-use tiny_auth_business::user::User;
+use tiny_auth_business::user::{Error, User};
 
 #[derive(Default)]
 pub struct FileUserStore {
@@ -37,8 +37,8 @@ pub struct FileUserStore {
 
 #[async_trait]
 impl UserStore for FileUserStore {
-    async fn get(&self, key: &str) -> Option<User> {
-        self.users.get(key).cloned()
+    async fn get(&self, key: &str) -> Result<User, Error> {
+        self.users.get(key).cloned().ok_or(Error::NotFound)
     }
 }
 

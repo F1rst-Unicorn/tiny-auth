@@ -41,7 +41,9 @@ pub enum Error {
     #[error("username or password wrong")]
     WrongCredentials,
     #[error("{0}")]
-    StoreError(#[from] crate::password::Error),
+    PasswordStoreError(#[from] crate::password::Error),
+    #[error("{0}")]
+    UserStoreError(#[from] crate::user::Error),
 }
 
 impl Authenticator {
@@ -55,11 +57,11 @@ impl Authenticator {
 
     pub async fn authenticate_user(&self, username: &str, password: &str) -> Result<User, Error> {
         let user = match self.user_store.get(username).await {
-            None => {
-                debug!("user '{}' not found", username);
+            Err(e) => {
+                debug!("user '{}' not found ({}).", username, e);
                 return Err(Error::WrongCredentials);
             }
-            Some(u) => u,
+            Ok(u) => u,
         };
 
         let now = Local::now();

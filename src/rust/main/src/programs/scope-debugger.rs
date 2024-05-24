@@ -64,11 +64,11 @@ async fn main() {
         )
         .await
     {
-        None => {
-            error!("user not found");
+        Err(e) => {
+            error!("user not found ({})", e);
             return;
         }
-        Some(v) => v,
+        Ok(v) => v,
     };
 
     let store = di.get_client_store();
