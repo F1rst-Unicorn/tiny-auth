@@ -75,11 +75,11 @@ impl Handler {
         requested_scopes: &[String],
     ) -> Result<bool, UserNotFound> {
         let user = match self.user_store.get(authenticated_username).await {
-            None => {
-                debug!("authenticated user not found");
+            Err(e) => {
+                debug!("authenticated user not found. {e}");
                 return Err(UserNotFound);
             }
-            Some(v) => v,
+            Ok(v) => v,
         };
 
         let allowed_scopes = user.get_allowed_scopes(client_id);
@@ -117,11 +117,11 @@ impl Handler {
                 .contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token))
         {
             let user = match self.user_store.get(request.authenticated_username).await {
-                None => {
-                    debug!("user {} not found", request.authenticated_username);
+                Err(e) => {
+                    debug!("user {} not found ({e})", request.authenticated_username);
                     return Err(Error::UserNotFound);
                 }
-                Some(user) => user,
+                Ok(user) => user,
             };
 
             let client = match self.client_store.get(request.client_id) {

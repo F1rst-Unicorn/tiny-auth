@@ -19,6 +19,7 @@ use crate::client::Client;
 use crate::oauth2::ClientType;
 use crate::password::Password;
 use log::debug;
+use serde::de::StdError;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -26,6 +27,18 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::sync::Arc;
+use thiserror::Error;
+
+#[derive(Error, Debug, Clone)]
+pub enum Error {
+    #[error("not found")]
+    NotFound,
+    #[error("backend error")]
+    BackendError,
+    #[error("backend error: {0}")]
+    BackendErrorWithContext(#[from] Arc<dyn StdError + Send + Sync>),
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct User {

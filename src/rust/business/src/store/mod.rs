@@ -18,10 +18,10 @@
 pub mod memory;
 
 use crate::client::Client;
-use crate::password::{Error, Password};
+use crate::password::{Error as PasswordError, Password};
 use crate::pkce::CodeChallenge;
 use crate::scope::Scope;
-use crate::user::User;
+use crate::user::{Error as UserError, User};
 use async_trait::async_trait;
 use chrono::DateTime;
 use chrono::Duration;
@@ -32,7 +32,7 @@ use std::sync::Arc;
 
 #[async_trait]
 pub trait UserStore: Send + Sync {
-    async fn get(&self, key: &str) -> Option<User>;
+    async fn get(&self, key: &str) -> Result<User, UserError>;
 }
 
 pub struct MergingUserStore {
@@ -41,12 +41,26 @@ pub struct MergingUserStore {
 
 #[async_trait]
 impl UserStore for MergingUserStore {
-    async fn get(&self, key: &str) -> Option<User> {
-        join_all(self.stores.iter().map(|v| v.get(key)))
+    async fn get(&self, key: &str) -> Result<User, UserError> {
+        let results: Vec<_> = join_all(self.stores.iter().map(|v| v.get(key)))
             .await
             .into_iter()
-            .flatten()
+            .collect();
+
+        if let Some(Err(error)) = results.iter().find(|v| {
+            matches!(
+                v,
+                Err(UserError::BackendError | UserError::BackendErrorWithContext(_))
+            )
+        }) {
+            return Err(error.clone());
+        }
+
+        results
+            .into_iter()
+            .filter_map(Result::ok)
             .reduce(User::merge)
+            .ok_or(UserError::NotFound)
     }
 }
 
@@ -61,7 +75,7 @@ pub trait PasswordStore: Send + Sync {
         username: &str,
         stored_password: &Password,
         password_to_check: &str,
-    ) -> Result<bool, Error>;
+    ) -> Result<bool, PasswordError>;
 }
 
 pub trait ScopeStore: Send + Sync {
@@ -158,15 +172,15 @@ pub mod test_fixtures {
 
     #[async_trait]
     impl UserStore for TestUserStore {
-        async fn get(&self, key: &str) -> Option<User> {
+        async fn get(&self, key: &str) -> Result<User, UserError> {
             match key {
-                "user1" | "user2" | "user3" => Some(User {
+                "user1" | "user2" | "user3" => Ok(User {
                     name: key.to_string(),
                     password: Password::Plain(key.to_string()),
                     allowed_scopes: Default::default(),
                     attributes: HashMap::new(),
                 }),
-                _ => None,
+                _ => Err(UserError::NotFound),
             }
         }
     }

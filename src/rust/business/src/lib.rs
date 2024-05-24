@@ -35,6 +35,7 @@ pub mod store;
 pub mod token;
 pub mod token_endpoint;
 pub mod user;
+pub mod util;
 
 pub mod test_fixtures {
     use crate::issuer_configuration::IssuerConfiguration;
