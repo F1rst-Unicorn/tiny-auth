@@ -1,16 +1,16 @@
 # Store
 
-Any state used by tiny-auth is held in a store. At the moment the only
-supported store type is using configuration files. See here to determine
-which store type serves you best.
+Any state used by tiny-auth is held in a store. See here to determine which
+store type serves you best.
 
-|                    | OIDC | Persistence | Multiple Instances |
-|--------------------|:----:|:-----------:|:------------------:|
-| Configuration File |  Y   |    N (1)    |         N          |
+|                    | Users | Passwords | Clients | Scopes | Persistence | Multiple Instances |
+|--------------------|-------|-----------|---------|--------|:-----------:|:------------------:|
+| Configuration File | Y     | Y (2)     | Y       | Y      |    N (1)    |       N (1)        |
+| LDAP               | Y (4) | Y (3)     | N       | N      |    N (1)    |       N (1)        |
 
 Feature glossary:
 
-* OIDC: Support for the entire OpenID Connect Standard
+* Passwords: Authenticate and update user and client passwords
 * Persistence: All state is preserved across server restarts
 * Multiple Instances: Allow multiple instances of tiny-auth to collaboratively
   offer the service
@@ -18,12 +18,17 @@ Feature glossary:
 Notes:
 
 1. Authorization codes issued for the authorization code flow and the
-   authentication rate limit enforcer are invalidated on restart.
+   authentication rate limit enforcer are invalidated on restart and not shared
+   by different instances.
+2. To change it, the passwords can be hashed via the Web UI. The hashed password
+   must be sent to an administrator off-band. Configuration files are not
+   written by tiny-auth.
+3. Passwords are not updated in LDAP.
+4. Only search bind mode.
 
 ## LDAP
 
-Authentication can be delegated to LDAP to verify user passwords. There are two
-modes: simple bind and search-bind.
+There are two modes: simple bind and search-bind.
 
 ### General Settings
 
@@ -124,6 +129,7 @@ To activate, use the following basic configuration:
 ---
 store:
   configuration file:
+    name: some name
     base: /etc/tiny-auth/store
 ```
 
