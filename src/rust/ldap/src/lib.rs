@@ -32,13 +32,16 @@ use tiny_auth_business::user::User;
 use tiny_auth_business::util::wrap_err;
 use url::Url;
 
+type DistinguishedName = String;
+type CacheEntry = (DistinguishedName, User);
+
 pub struct LdapStore {
     name: String,
     urls: Vec<Url>,
     connect_timeout: Duration,
     authenticator: AuthenticatorDispatcher,
     starttls: bool,
-    user_cache: Cache<String, (String, User)>,
+    user_cache: Cache<String, CacheEntry>,
 }
 
 #[derive(Error, Debug)]
@@ -145,8 +148,15 @@ impl PasswordStore for LdapStore {
         }
 
         let mut ldap = self.connect().await.map_err(wrap_err)?;
+
+        let user = if let Some(entry) = self.user_cache.get(username).await {
+            UserRepresentation::CachedUser(entry)
+        } else {
+            UserRepresentation::Name(username)
+        };
+
         self.authenticator
-            .authenticate(&mut ldap, username, password_to_check)
+            .authenticate(&mut ldap, user, password_to_check)
             .await
     }
 }
@@ -163,11 +173,16 @@ trait Authenticator {
     async fn authenticate(
         &self,
         ldap: &mut Ldap,
-        username: &str,
+        user: UserRepresentation<'_>,
         password: &str,
     ) -> Result<bool, Error>;
 
     async fn get_user(&self, ldap: &mut Ldap, username: &str) -> Result<SearchEntry, UserError>;
+}
+
+enum UserRepresentation<'a> {
+    Name(&'a str),
+    CachedUser(CacheEntry),
 }
 
 struct SimpleBind {
@@ -179,19 +194,26 @@ impl Authenticator for SimpleBind {
     async fn authenticate(
         &self,
         ldap: &mut Ldap,
-        username: &str,
+        user: UserRepresentation<'_>,
         password: &str,
     ) -> Result<bool, Error> {
-        for bind_template in &self.bind_dn_format {
-            let bind_dn = format_username(bind_template, username).map_err(wrap_err)?;
-            if simple_bind(ldap, &bind_dn, password)
-                .await
-                .map_err(wrap_err)?
-            {
-                return Ok(true);
+        match user {
+            UserRepresentation::Name(username) => {
+                for bind_template in &self.bind_dn_format {
+                    let bind_dn = format_username(bind_template, username).map_err(wrap_err)?;
+                    if simple_bind(ldap, &bind_dn, password)
+                        .await
+                        .map_err(wrap_err)?
+                    {
+                        return Ok(true);
+                    }
+                }
+                Ok(false)
+            }
+            UserRepresentation::CachedUser((dn, _)) => {
+                Ok(simple_bind(ldap, &dn, password).await.map_err(wrap_err)?)
             }
         }
-        Ok(false)
     }
 
     async fn get_user(&self, _: &mut Ldap, _: &str) -> Result<SearchEntry, UserError> {
@@ -215,13 +237,17 @@ impl Authenticator for SearchBind {
     async fn authenticate(
         &self,
         ldap: &mut Ldap,
-        username: &str,
+        user: UserRepresentation<'_>,
         password: &str,
     ) -> Result<bool, Error> {
-        let search_entry = self.get_user(ldap, username).await.map_err(wrap_err)?;
-        Ok(simple_bind(ldap, &search_entry.dn, password)
-            .await
-            .map_err(wrap_err)?)
+        let dn = match user {
+            UserRepresentation::Name(username) => {
+                let search_entry = self.get_user(ldap, username).await.map_err(wrap_err)?;
+                search_entry.dn
+            }
+            UserRepresentation::CachedUser((dn, _)) => dn,
+        };
+        Ok(simple_bind(ldap, &dn, password).await.map_err(wrap_err)?)
     }
 
     async fn get_user(&self, ldap: &mut Ldap, username: &str) -> Result<SearchEntry, UserError> {
