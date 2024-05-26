@@ -76,4 +76,5 @@ package() {
 
     mkdir -p $pkgdir/usr/share/doc/${pkgname}
     cp -r doc/* $pkgdir/usr/share/doc/${pkgname}
+    cp -r pkg/examples $pkgdir/usr/share/doc/${pkgname}
 }
