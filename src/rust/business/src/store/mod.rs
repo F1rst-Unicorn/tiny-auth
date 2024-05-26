@@ -39,6 +39,12 @@ pub struct MergingUserStore {
     stores: Vec<Arc<dyn UserStore>>,
 }
 
+impl From<Vec<Arc<dyn UserStore>>> for MergingUserStore {
+    fn from(value: Vec<Arc<dyn UserStore>>) -> Self {
+        Self { stores: value }
+    }
+}
+
 #[async_trait]
 impl UserStore for MergingUserStore {
     async fn get(&self, key: &str) -> Result<User, UserError> {

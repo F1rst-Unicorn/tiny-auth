@@ -32,7 +32,7 @@ use tiny_auth_business::user::User;
 use tiny_auth_business::util::wrap_err;
 use url::Url;
 
-struct LdapStore {
+pub struct LdapStore {
     name: String,
     urls: Vec<Url>,
     connect_timeout: Duration,
@@ -337,26 +337,6 @@ pub mod inject {
         searches: Vec<LdapSearch>,
         connect_timeout: Duration,
         starttls: bool,
-    ) -> Arc<dyn PasswordStore> {
-        search_bind_store_impl(
-            name,
-            urls,
-            bind_dn,
-            bind_dn_password,
-            searches,
-            connect_timeout,
-            starttls,
-        )
-    }
-
-    pub(super) fn search_bind_store_impl(
-        name: &str,
-        urls: &[Url],
-        bind_dn: &str,
-        bind_dn_password: &str,
-        searches: Vec<LdapSearch>,
-        connect_timeout: Duration,
-        starttls: bool,
     ) -> Arc<LdapStore> {
         Arc::new(LdapStore {
             name: name.to_string(),
@@ -549,7 +529,7 @@ pub mod tests {
     fn search_bind_uut(name: String, port: u16) -> Arc<LdapStore> {
         let url = Url::parse(&format!("ldap://localhost:{}", port)).unwrap();
 
-        inject::search_bind_store_impl(
+        inject::search_bind_store(
             name.as_str(),
             &[url],
             "cn=user01,ou=users,dc=example,dc=org",
@@ -572,7 +552,7 @@ pub mod tests {
     fn search_bind_anonymous_uut(name: String, port: u16) -> Arc<LdapStore> {
         let url = Url::parse(&format!("ldap://localhost:{}", port)).unwrap();
 
-        inject::search_bind_store_impl(
+        inject::search_bind_store(
             name.as_str(),
             &[url],
             "",

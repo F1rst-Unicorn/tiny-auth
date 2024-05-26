@@ -101,10 +101,7 @@ pub struct Constructor<'a> {
 
 impl<'a> Constructor<'a> {
     pub fn new(config: &'a Config) -> Result<Self, Error> {
-        let user_store = Self::build_user_store(config)?;
-        let password_store = Self::build_password_store(config);
-        let client_store = Self::build_client_store(config)?;
-        let scope_store = Self::build_scope_store(config)?;
+        let (user_store, password_store, client_store, scope_store) = Self::build_stores(config)?;
         let tera = Some(Self::build_template_engine(config)?);
         let issuer_url = Self::build_issuer_url(config);
         let (public_keys, private_key) = Self::read_token_keypairs(config)?;
@@ -188,105 +185,110 @@ impl<'a> Constructor<'a> {
         Arc::new(authenticator(user_store, rate_limiter, password_store))
     }
 
-    fn build_user_store(config: &'a Config) -> Result<Arc<dyn UserStore>, Error> {
-        let mut result = FileUserStore::default();
-        for store in &config.store {
-            if let Store::Config { name: _, base } = store {
-                if !result.read_users(base) {
-                    return Err(LoggedBeforeError);
+    #[allow(clippy::type_complexity)]
+    fn build_stores(
+        config: &Config,
+    ) -> Result<
+        (
+            Arc<dyn UserStore>,
+            Arc<DispatchingPasswordStore>,
+            Arc<dyn ClientStore>,
+            Arc<dyn ScopeStore>,
+        ),
+        Error,
+    > {
+        let mut client_store = FileClientStore::default();
+        let mut user_store = FileUserStore::default();
+        let mut user_stores: Vec<Arc<dyn UserStore>> = vec![];
+        let mut password_stores = BTreeMap::default();
+        let mut scope_store = FileScopeStore::default();
+
+        for store_config in &config.store {
+            match store_config {
+                Store::Config { name: _, base } => {
+                    if !client_store.read_clients(base) {
+                        return Err(LoggedBeforeError);
+                    }
+                    if !user_store.read_users(base) {
+                        return Err(LoggedBeforeError);
+                    }
+                    if !scope_store.read_scopes(base) {
+                        return Err(LoggedBeforeError);
+                    }
                 }
-            }
-        }
-        Ok(Arc::new(result))
-    }
-
-    fn build_password_store(config: &'a Config) -> Arc<DispatchingPasswordStore> {
-        Arc::new(dispatching_password_store(
-            Self::build_delegated_stores(&config.store),
-            Arc::new(in_place_password_store(&config.crypto.pepper)),
-        ))
-    }
-
-    fn build_delegated_stores(stores: &[Store]) -> BTreeMap<String, Arc<dyn PasswordStore>> {
-        let mut result = BTreeMap::default();
-        for store in stores {
-            if let Store::Ldap {
-                name,
-                urls,
-                mode,
-                connect_timeout_in_seconds,
-                starttls,
-            } = store
-            {
-                let password_store = match mode {
-                    LdapMode::SimpleBind { bind_dn_format } => {
+                Store::Ldap {
+                    name,
+                    urls,
+                    mode: LdapMode::SimpleBind { bind_dn_format },
+                    connect_timeout_in_seconds,
+                    starttls,
+                } => {
+                    password_stores.insert(
+                        name.clone(),
                         tiny_auth_ldap::inject::simple_bind_store(
                             name.as_str(),
                             urls.as_slice(),
                             bind_dn_format.as_slice(),
                             std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
                             *starttls,
-                        )
-                    }
-                    LdapMode::SearchBind {
-                        bind_dn,
-                        bind_dn_password,
-                        searches,
-                    } => {
-                        let searches = searches
-                            .iter()
-                            .map(|v| tiny_auth_ldap::LdapSearch {
-                                base_dn: v.base_dn.clone(),
-                                search_filter: v.search_filter.clone(),
-                            })
-                            .collect();
-                        tiny_auth_ldap::inject::search_bind_store(
-                            name.as_str(),
-                            urls.as_slice(),
+                        ),
+                    );
+                }
+                Store::Ldap {
+                    name,
+                    urls,
+                    mode:
+                        LdapMode::SearchBind {
                             bind_dn,
                             bind_dn_password,
                             searches,
-                            std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
-                            *starttls,
-                        )
-                    }
-                };
-                result.insert(name.clone(), password_store);
+                        },
+                    connect_timeout_in_seconds,
+                    starttls,
+                } => {
+                    let searches = searches
+                        .iter()
+                        .map(|v| tiny_auth_ldap::LdapSearch {
+                            base_dn: v.base_dn.clone(),
+                            search_filter: v.search_filter.clone(),
+                        })
+                        .collect();
+
+                    let ldap_store = tiny_auth_ldap::inject::search_bind_store(
+                        name.as_str(),
+                        urls.as_slice(),
+                        bind_dn,
+                        bind_dn_password,
+                        searches,
+                        std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
+                        *starttls,
+                    );
+                    user_stores.push(ldap_store.clone());
+                    password_stores.insert(name.clone(), ldap_store);
+                }
             }
         }
-        result
+
+        let password_store = dispatching_password_store(
+            password_stores,
+            Arc::new(in_place_password_store(&config.crypto.pepper)),
+        );
+        user_stores.push(Arc::new(user_store));
+
+        Ok((
+            Arc::new(MergingUserStore::from(user_stores)),
+            Arc::new(password_store),
+            Arc::new(client_store),
+            Arc::new(scope_store),
+        ))
     }
 
     pub fn get_client_store(&self) -> Arc<dyn ClientStore> {
         self.client_store.clone()
     }
 
-    fn build_client_store(config: &'a Config) -> Result<Arc<dyn ClientStore>, Error> {
-        let mut result = FileClientStore::default();
-        for store in &config.store {
-            if let Store::Config { name: _, base } = store {
-                if !result.read_clients(base) {
-                    return Err(LoggedBeforeError);
-                }
-            }
-        }
-        Ok(Arc::new(result))
-    }
-
     pub fn get_scope_store(&self) -> Arc<dyn ScopeStore> {
         self.scope_store.clone()
-    }
-
-    fn build_scope_store(config: &'a Config) -> Result<Arc<dyn ScopeStore>, Error> {
-        let mut result = FileScopeStore::default();
-        for store in &config.store {
-            if let Store::Config { name: _, base } = store {
-                if !result.read_scopes(base) {
-                    return Err(LoggedBeforeError);
-                }
-            }
-        }
-        Ok(Arc::new(result))
     }
 
     pub fn build_auth_code_store() -> Arc<dyn AuthorizationCodeStore> {
