@@ -34,6 +34,9 @@ store:
             - base dn: ou=users,dc=example,dc=org
               search filter: "(|(uid={{ user }})(mail={{ user }}))"
 
+rate limit:
+  events: 3
+  period in seconds: 30
 crypto:
   keys:
     - key: test/src/test/resources/keys/key.pem
@@ -42,9 +45,6 @@ crypto:
       public key: test/src/test/resources/keys/public_key_2.pem
   pepper: x5ePiX0TmUF2HzuraKuab9exzumu2sO54bnlVhgCS5AAXxqyhSSuHbCiUmx0FxmjZH9Gb2obp0ff2imMS6z40Qcc
 
-rate limit:
-  events: 3
-  period in seconds: 30
 
 web:
   bind: localhost:34344
