@@ -36,6 +36,8 @@ web:
     domain: localhost
     port: 8088
   static files: /usr/share/tiny-auth/static
+  cors:
+    - http://localhost:8088
   session timeout in seconds: 300
   token timeout in seconds: 60
   refresh token timeout in seconds: 180
@@ -44,3 +46,6 @@ web:
 
 api:
   endpoint: localhost:8089
+  public host:
+    domain: localhost
+    port: 8089
