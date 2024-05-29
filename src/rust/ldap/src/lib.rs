@@ -312,7 +312,7 @@ fn format_username(format: &str, username: &str) -> Result<String, LdapError> {
 
 pub mod inject {
     use crate::user_lookup::{UserAllowedScopesMapping, UserLookup};
-    use crate::{Connector, LdapSearch, LdapStore, SearchBind, SimpleBind};
+    use crate::{AttributeMapping, Connector, LdapSearch, LdapStore, SearchBind, SimpleBind};
     use moka::future::Cache;
     use moka::policy::EvictionPolicy;
     use std::sync::Arc;
@@ -345,12 +345,8 @@ pub mod inject {
         })
     }
 
-    fn cache(name: &str) -> Cache<String, (String, User)> {
-        Cache::builder()
-            .name(format!("tiny-auth ldap store {name}").as_str())
-            .eviction_policy(EvictionPolicy::tiny_lfu())
-            .time_to_idle(Duration::from_secs(10))
-            .build()
+    pub struct UserConfig {
+        pub allowed_scopes_attribute: Option<String>,
     }
 
     pub fn search_bind_store(
@@ -359,7 +355,7 @@ pub mod inject {
         bind_dn: &str,
         bind_dn_password: &str,
         searches: Vec<LdapSearch>,
-        user_allowed_scopes_attribute: Option<String>,
+        user_config: Option<UserConfig>,
     ) -> Arc<LdapStore> {
         Arc::new(LdapStore {
             name: name.to_string(),
@@ -370,19 +366,35 @@ pub mod inject {
                 searches,
             }
             .into(),
-            user_lookup: user_allowed_scopes_attribute.map(|attribute| UserLookup {
+            user_lookup: user_config.map(|user_config| UserLookup {
                 ldap_name: name.to_string(),
                 cache: cache(name),
-                mappings: vec![Arc::new(UserAllowedScopesMapping { attribute })],
+                mappings: user_config
+                    .allowed_scopes_attribute
+                    .map(|allowed_scopes_attribute| {
+                        Arc::new(UserAllowedScopesMapping {
+                            attribute: allowed_scopes_attribute,
+                        }) as Arc<dyn AttributeMapping<User>>
+                    })
+                    .into_iter()
+                    .collect(),
             }),
         })
+    }
+
+    fn cache(name: &str) -> Cache<String, (String, User)> {
+        Cache::builder()
+            .name(format!("tiny-auth ldap store {name}").as_str())
+            .eviction_policy(EvictionPolicy::tiny_lfu())
+            .time_to_idle(Duration::from_secs(10))
+            .build()
     }
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::inject::connector;
+    use crate::inject::{connector, UserConfig};
     use pretty_assertions::assert_eq;
     use rstest::fixture;
     use rstest::rstest;
@@ -580,7 +592,10 @@ pub mod tests {
                     search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
                 },
             ],
-            Some("description".to_string()),
+            UserConfig {
+                allowed_scopes_attribute: "description".to_string().into(),
+            }
+            .into(),
         )
     }
 
@@ -602,7 +617,10 @@ pub mod tests {
                     search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
                 },
             ],
-            Some("description".to_string()),
+            UserConfig {
+                allowed_scopes_attribute: "description".to_string().into(),
+            }
+            .into(),
         )
     }
 
