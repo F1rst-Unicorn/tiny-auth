@@ -3,14 +3,14 @@
 Any state used by tiny-auth is held in a store. See here to determine which
 store type serves you best.
 
-|                    | Users | Passwords | Clients | Scopes | Persistence | Multiple Instances |
-|--------------------|-------|-----------|---------|--------|:-----------:|:------------------:|
-| Configuration File | Y     | Y (2)     | Y       | Y      |    N (1)    |       N (1)        |
-| LDAP               | Y (4) | Y (3)     | N       | N      |    N (1)    |       N (1)        |
+|                    | Users | Passwords | Clients | Scopes | Auth Codes | Persistence | Multiple Instances |
+|--------------------|-------|-----------|---------|--------|------------|:-----------:|:------------------:|
+| Configuration File | Y     | Y (2)     | Y       | Y      | N          |    N (1)    |       N (1)        |
+| LDAP simple bind   | N     | Y         | N       | N      | N          |    N (1)    |       N (1)        |
+| LDAP search bind   | Y     | Y         | N       | N      | N          |    N (1)    |       N (1)        |
 
 Feature glossary:
 
-* Passwords: Authenticate and update user and client passwords
 * Persistence: All state is preserved across server restarts
 * Multiple Instances: Allow multiple instances of tiny-auth to collaboratively
   offer the service
@@ -21,10 +21,8 @@ Notes:
    authentication rate limit enforcer are invalidated on restart and not shared
    by different instances.
 2. To change it, the passwords can be hashed via the Web UI. The hashed password
-   must be sent to an administrator off-band. Configuration files are not
+   must be sent to an administrator off-band. Configuration files are never
    written by tiny-auth.
-3. Passwords are not updated in LDAP.
-4. Only search bind mode.
 
 ## LDAP
 
@@ -48,8 +46,8 @@ store:
 
 ### name
 
-An arbitrary name to be used to reference this LDAP configuration. See user /
-client password for details.
+An arbitrary name to reference this LDAP configuration. See user / client
+password for details.
 
 ### urls
 
@@ -82,12 +80,12 @@ store:
 ### bind dn format
 
 A list of templates to describe how to transform the name of a user into a
-distinguished name. Entries are tried in order. The only available variable is
-`user` and is the string the user passes as its username.
+distinguished name. Entries are tried in order until one is found. The only
+available variable is `user` and is the string the user passes as its username.
 
 ## Search-Bind Mode
 
-Tiny-auth searches for the user by trying the search queries in order. On
+tiny-auth searches for the user by trying the search queries in order. On
 matching of an entry, it binds as this user, supplying the password for
 verification.
 
@@ -206,7 +204,7 @@ allowed_scopes:
 
 The file must be named the same as the `name` field, appended by `.yml`.
 
-In addition arbitrary properties may be added.
+In addition, arbitrary properties may be added.
 
 #### name
 
@@ -254,7 +252,7 @@ allowed_scopes:
 
 The file must be named the same as the `client_id` field, appended by `.yml`.
 
-In addition arbitrary properties may be added.
+In addition, arbitrary properties may be added.
 
 #### client_id
 

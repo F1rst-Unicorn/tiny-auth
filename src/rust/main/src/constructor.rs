@@ -15,9 +15,9 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::config::Store;
-use crate::config::TlsVersion;
 use crate::config::{Config, LdapMode};
+use crate::config::{LdapUsageUsers, Store};
+use crate::config::{TlsVersion, UserAttributes};
 use crate::runtime::Error;
 use crate::runtime::Error::LoggedBeforeError;
 use crate::store::file::*;
@@ -59,6 +59,7 @@ use tiny_auth_business::store::memory::*;
 use tiny_auth_business::store::*;
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
+use tiny_auth_ldap::inject::UserConfig;
 use tiny_auth_web::cors::CorsChecker;
 use tiny_auth_web::endpoints::cert::TokenCertificate;
 use tiny_auth_web::endpoints::discovery::Handler as DiscoveryHandler;
@@ -257,12 +258,19 @@ impl<'a> Constructor<'a> {
                         })
                         .collect();
 
-                    let user_allowed_scopes_attribute = use_for
-                        .users
-                        .as_ref()
-                        .and_then(|v| v.attributes.as_ref())
-                        .and_then(|v| v.allowed_scopes.as_ref())
-                        .cloned();
+                    let user_config = match &use_for.users {
+                        None => None,
+                        Some(LdapUsageUsers { attributes: None }) => UserConfig {
+                            allowed_scopes_attribute: None,
+                        }
+                        .into(),
+                        Some(LdapUsageUsers {
+                            attributes: Some(UserAttributes { allowed_scopes }),
+                        }) => UserConfig {
+                            allowed_scopes_attribute: allowed_scopes.clone(),
+                        }
+                        .into(),
+                    };
 
                     let ldap_store = tiny_auth_ldap::inject::search_bind_store(
                         name.as_str(),
@@ -274,7 +282,7 @@ impl<'a> Constructor<'a> {
                         bind_dn,
                         bind_dn_password,
                         searches,
-                        user_allowed_scopes_attribute,
+                        user_config,
                     );
                     user_stores.push(ldap_store.clone());
                     password_stores.insert(name.clone(), ldap_store);
