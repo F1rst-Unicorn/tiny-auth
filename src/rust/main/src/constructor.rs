@@ -227,10 +227,12 @@ impl<'a> Constructor<'a> {
                         name.clone(),
                         tiny_auth_ldap::inject::simple_bind_store(
                             name.as_str(),
-                            urls.as_slice(),
                             bind_dn_format.as_slice(),
-                            std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
-                            *starttls,
+                            tiny_auth_ldap::inject::connector(
+                                urls.as_slice(),
+                                std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
+                                *starttls,
+                            ),
                         ),
                     );
                 }
@@ -242,6 +244,7 @@ impl<'a> Constructor<'a> {
                             bind_dn,
                             bind_dn_password,
                             searches,
+                            use_for,
                         },
                     connect_timeout_in_seconds,
                     starttls,
@@ -254,14 +257,24 @@ impl<'a> Constructor<'a> {
                         })
                         .collect();
 
+                    let user_allowed_scopes_attribute = use_for
+                        .users
+                        .as_ref()
+                        .and_then(|v| v.attributes.as_ref())
+                        .and_then(|v| v.allowed_scopes.as_ref())
+                        .cloned();
+
                     let ldap_store = tiny_auth_ldap::inject::search_bind_store(
                         name.as_str(),
-                        urls.as_slice(),
+                        tiny_auth_ldap::inject::connector(
+                            urls.as_slice(),
+                            std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
+                            *starttls,
+                        ),
                         bind_dn,
                         bind_dn_password,
                         searches,
-                        std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
-                        *starttls,
+                        user_allowed_scopes_attribute,
                     );
                     user_stores.push(ldap_store.clone());
                     password_stores.insert(name.clone(), ldap_store);

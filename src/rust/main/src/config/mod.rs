@@ -39,6 +39,7 @@ pub struct Config {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum Store {
     #[serde(rename = "configuration file")]
     Config { name: String, base: String },
@@ -77,6 +78,10 @@ pub enum LdapMode {
         #[serde(rename = "bind dn password")]
         bind_dn_password: String,
         searches: Vec<LdapSearch>,
+
+        #[serde(default)]
+        #[serde(rename = "use for")]
+        use_for: LdapUsage,
     },
 }
 
@@ -86,6 +91,49 @@ pub struct LdapSearch {
     pub base_dn: String,
     #[serde(rename = "search filter")]
     pub search_filter: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Ord, PartialOrd, Eq, PartialEq, Default)]
+pub struct LdapUsage {
+    #[serde(default)]
+    pub users: Option<LdapUsageUsers>,
+    #[serde(default)]
+    pub clients: Option<LdapUsageClients>,
+}
+
+#[derive(Clone, Debug, Deserialize, Ord, PartialOrd, Eq, PartialEq)]
+pub struct LdapUsageUsers {
+    #[serde(default)]
+    pub attributes: Option<UserAttributes>,
+}
+
+#[derive(Clone, Debug, Deserialize, Ord, PartialOrd, Eq, PartialEq)]
+pub struct LdapUsageClients {
+    #[serde(default)]
+    pub attributes: Option<ClientAttributes>,
+}
+
+#[derive(Clone, Debug, Deserialize, Ord, PartialOrd, Eq, PartialEq)]
+pub struct UserAttributes {
+    #[serde(default)]
+    #[serde(rename = "allowed scopes")]
+    pub allowed_scopes: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Ord, PartialOrd, Eq, PartialEq)]
+pub struct ClientAttributes {
+    #[serde(default)]
+    #[serde(rename = "redirect uri")]
+    pub redirect_uri: Option<String>,
+    #[serde(default)]
+    #[serde(rename = "password")]
+    pub password: Option<String>,
+    #[serde(default)]
+    #[serde(rename = "public key")]
+    pub public_key: Option<String>,
+    #[serde(default)]
+    #[serde(rename = "allowed scopes")]
+    pub allowed_scopes: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]

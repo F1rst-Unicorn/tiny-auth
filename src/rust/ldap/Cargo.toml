@@ -22,6 +22,7 @@ async-trait.workspace = true
 enum_dispatch.workspace = true
 moka.workspace = true
 serde_json.workspace = true
+futures.workspace = true
 
 [dev-dependencies]
 testcontainers.workspace = true

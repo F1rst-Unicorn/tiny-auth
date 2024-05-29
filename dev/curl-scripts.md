@@ -24,6 +24,18 @@ curl --request POST \
         'https://localhost:34344/token'
 ```
 
+### Client credentials
+
+```bash
+curl --request POST \
+        --key test/src/test/resources/keys/client-key.pem \
+        --cert test/src/test/resources/keys/client-cert.pem \
+        --cacert test/src/test/resources/keys/ca.pem \
+        -H 'content-type: application/x-www-form-urlencoded' \
+        --data 'grant_type=client_credentials&client_id=confidential&client_secret=password' \
+        'https://localhost:34344/token'
+```
+
 # GRPC
 
 ## Reflection
@@ -56,6 +68,6 @@ grpcurl \
 # LDAP
 
 ```bash
-docker run --rm --tty --interactive -p 1389:1389 docker.io/bitnami/openldap
+docker run --rm --tty --interactive -p 1389:1389 --mount type=bind,src=dev/ldif,target=/ldifs docker.io/bitnami/openldap
 ldapsearch -D cn=user01,ou=users,dc=example,dc=org -w bitnami1 -x -b dc=example,dc=org -H ldap://localhost:1389
 ```

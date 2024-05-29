@@ -28,11 +28,21 @@ store:
       starttls: false
       mode:
         search bind:
-          bind dn: "cn=user02,ou=users,dc=example,dc=org"
+          bind dn: "cn=tiny-auth-service-account,ou=users,dc=example,dc=org"
           bind dn password: "bitnami2"
           searches:
             - base dn: ou=users,dc=example,dc=org
               search filter: "(|(uid={{ user }})(mail={{ user }}))"
+          use for:
+            users:
+              attributes:
+                allowed scopes: description
+            clients:
+              attributes:
+                redirect uri: ???
+                password: ???
+                public key: ???
+                allowed scopes: description
 
 rate limit:
   events: 3

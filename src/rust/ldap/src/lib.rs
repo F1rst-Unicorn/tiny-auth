@@ -15,12 +15,14 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+mod user_lookup;
+
+use crate::user_lookup::UserLookup;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
-use ldap3::{drive, Ldap, LdapConnAsync, LdapConnSettings, Scope, SearchEntry};
+use futures::future::OptionFuture;
+use ldap3::{drive, ldap_escape, Ldap, LdapConnAsync, LdapConnSettings, Scope, SearchEntry};
 use log::{debug, error, warn};
-use moka::future::Cache;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tera::{Context, Tera};
@@ -37,11 +39,9 @@ type CacheEntry = (DistinguishedName, User);
 
 pub struct LdapStore {
     name: String,
-    urls: Vec<Url>,
-    connect_timeout: Duration,
+    connector: Connector,
     authenticator: AuthenticatorDispatcher,
-    starttls: bool,
-    user_cache: Cache<String, CacheEntry>,
+    user_lookup: Option<UserLookup>,
 }
 
 #[derive(Error, Debug)]
@@ -56,7 +56,13 @@ enum LdapError {
     BindErrorWithContext(ldap3::LdapError),
 }
 
-impl LdapStore {
+pub struct Connector {
+    urls: Vec<Url>,
+    connect_timeout: Duration,
+    starttls: bool,
+}
+
+impl Connector {
     async fn connect(&self) -> Result<Ldap, LdapError> {
         for url in &self.urls {
             let settings = LdapConnSettings::new()
@@ -74,52 +80,27 @@ impl LdapStore {
                 }
             }
         }
-        warn!("failed to connect to any backend of LDAP {}", self.name);
+        warn!("failed to connect to any backend");
         Err(LdapError::ConnectError)
-    }
-
-    fn map_to_user(&self, name: &str, search_entry: SearchEntry) -> User {
-        let mut attributes = HashMap::default();
-        attributes.insert("dn".to_string(), search_entry.dn.into());
-        attributes.extend(
-            search_entry
-                .attrs
-                .into_iter()
-                .filter(|(key, _)| !["name", "password", "allowed_scopes"].contains(&key.as_str()))
-                .map(|(k, v)| (k, v.into())),
-        );
-        attributes.extend(
-            search_entry
-                .bin_attrs
-                .into_iter()
-                .map(|(k, v)| (k, v.into())),
-        );
-
-        User {
-            name: name.to_string(),
-            password: Password::Ldap {
-                name: self.name.to_string(),
-            },
-            allowed_scopes: Default::default(),
-            attributes,
-        }
     }
 }
 
 #[async_trait]
 impl UserStore for LdapStore {
-    async fn get(&self, key: &str) -> Result<User, UserError> {
-        if let Some((_, cached_user)) = self.user_cache.get(key).await {
-            return Ok(cached_user);
+    async fn get(&self, username: &str) -> Result<User, UserError> {
+        let username = ldap_escape(username).into_owned();
+        let user_lookup = self.user_lookup.as_ref().ok_or(UserError::NotFound)?;
+        if let UserRepresentation::CachedUser(cached_user) = user_lookup.get_cached(&username).await
+        {
+            return Ok(cached_user.1);
         }
 
-        let mut ldap = self.connect().await.map_err(wrap_err)?;
-        let search_entry = self.authenticator.get_user(&mut ldap, key).await?;
-        let dn = search_entry.dn.to_string();
-        let user = self.map_to_user(key, search_entry);
-        self.user_cache
-            .insert(key.to_string(), (dn, user.clone()))
-            .await;
+        let mut ldap = self.connector.connect().await.map_err(wrap_err)?;
+        let search_entry = self
+            .authenticator
+            .get_ldap_record(&mut ldap, &username)
+            .await?;
+        let user = user_lookup.map_to_user(&username, search_entry).await;
         Ok(user)
     }
 }
@@ -132,6 +113,7 @@ impl PasswordStore for LdapStore {
         stored_password: &Password,
         password_to_check: &str,
     ) -> Result<bool, Error> {
+        let username = ldap_escape(username).into_owned();
         match stored_password {
             Password::Ldap { name } => {
                 if name != &self.name {
@@ -147,14 +129,10 @@ impl PasswordStore for LdapStore {
             }
         }
 
-        let mut ldap = self.connect().await.map_err(wrap_err)?;
-
-        let user = if let Some(entry) = self.user_cache.get(username).await {
-            UserRepresentation::CachedUser(entry)
-        } else {
-            UserRepresentation::Name(username)
-        };
-
+        let mut ldap = self.connector.connect().await.map_err(wrap_err)?;
+        let user = OptionFuture::from(self.user_lookup.as_ref().map(|v| v.get_cached(&username)))
+            .await
+            .unwrap_or(UserRepresentation::Name(&username));
         self.authenticator
             .authenticate(&mut ldap, user, password_to_check)
             .await
@@ -177,10 +155,14 @@ trait Authenticator {
         password: &str,
     ) -> Result<bool, Error>;
 
-    async fn get_user(&self, ldap: &mut Ldap, username: &str) -> Result<SearchEntry, UserError>;
+    async fn get_ldap_record(
+        &self,
+        ldap: &mut Ldap,
+        username: &str,
+    ) -> Result<SearchEntry, UserError>;
 }
 
-enum UserRepresentation<'a> {
+pub(crate) enum UserRepresentation<'a> {
     Name(&'a str),
     CachedUser(CacheEntry),
 }
@@ -216,7 +198,7 @@ impl Authenticator for SimpleBind {
         }
     }
 
-    async fn get_user(&self, _: &mut Ldap, _: &str) -> Result<SearchEntry, UserError> {
+    async fn get_ldap_record(&self, _: &mut Ldap, _: &str) -> Result<SearchEntry, UserError> {
         Err(UserError::NotFound)
     }
 }
@@ -232,6 +214,10 @@ pub struct LdapSearch {
     pub search_filter: String,
 }
 
+trait AttributeMapping<T>: Sync + Send {
+    fn map(&self, entity: T, search_entry: &SearchEntry) -> T;
+}
+
 #[async_trait]
 impl Authenticator for SearchBind {
     async fn authenticate(
@@ -242,7 +228,10 @@ impl Authenticator for SearchBind {
     ) -> Result<bool, Error> {
         let dn = match user {
             UserRepresentation::Name(username) => {
-                let search_entry = self.get_user(ldap, username).await.map_err(wrap_err)?;
+                let search_entry = self
+                    .get_ldap_record(ldap, username)
+                    .await
+                    .map_err(wrap_err)?;
                 search_entry.dn
             }
             UserRepresentation::CachedUser((dn, _)) => dn,
@@ -250,7 +239,11 @@ impl Authenticator for SearchBind {
         Ok(simple_bind(ldap, &dn, password).await.map_err(wrap_err)?)
     }
 
-    async fn get_user(&self, ldap: &mut Ldap, username: &str) -> Result<SearchEntry, UserError> {
+    async fn get_ldap_record(
+        &self,
+        ldap: &mut Ldap,
+        username: &str,
+    ) -> Result<SearchEntry, UserError> {
         if !simple_bind(ldap, &self.bind_dn, &self.bind_dn_password)
             .await
             .map_err(wrap_err)?
@@ -318,7 +311,8 @@ fn format_username(format: &str, username: &str) -> Result<String, LdapError> {
 }
 
 pub mod inject {
-    use crate::{LdapSearch, LdapStore, SearchBind, SimpleBind};
+    use crate::user_lookup::{UserAllowedScopesMapping, UserLookup};
+    use crate::{Connector, LdapSearch, LdapStore, SearchBind, SimpleBind};
     use moka::future::Cache;
     use moka::policy::EvictionPolicy;
     use std::sync::Arc;
@@ -327,23 +321,27 @@ pub mod inject {
     use tiny_auth_business::user::User;
     use url::Url;
 
+    pub fn connector(urls: &[Url], connect_timeout: Duration, starttls: bool) -> Connector {
+        Connector {
+            urls: urls.iter().map(Clone::clone).collect(),
+            connect_timeout,
+            starttls,
+        }
+    }
+
     pub fn simple_bind_store(
         name: &str,
-        urls: &[Url],
         bind_dn_format: &[String],
-        connect_timeout: Duration,
-        starttls: bool,
+        connector: Connector,
     ) -> Arc<dyn PasswordStore> {
         Arc::new(LdapStore {
             name: name.to_string(),
-            urls: urls.iter().map(Clone::clone).collect(),
+            connector,
             authenticator: SimpleBind {
                 bind_dn_format: bind_dn_format.to_vec(),
             }
             .into(),
-            connect_timeout,
-            starttls,
-            user_cache: cache(name),
+            user_lookup: None,
         })
     }
 
@@ -357,25 +355,26 @@ pub mod inject {
 
     pub fn search_bind_store(
         name: &str,
-        urls: &[Url],
+        connector: Connector,
         bind_dn: &str,
         bind_dn_password: &str,
         searches: Vec<LdapSearch>,
-        connect_timeout: Duration,
-        starttls: bool,
+        user_allowed_scopes_attribute: Option<String>,
     ) -> Arc<LdapStore> {
         Arc::new(LdapStore {
             name: name.to_string(),
-            urls: urls.iter().map(Clone::clone).collect(),
+            connector,
             authenticator: SearchBind {
                 bind_dn: bind_dn.to_string(),
                 bind_dn_password: bind_dn_password.to_string(),
                 searches,
             }
             .into(),
-            connect_timeout,
-            starttls,
-            user_cache: cache(name),
+            user_lookup: user_allowed_scopes_attribute.map(|attribute| UserLookup {
+                ldap_name: name.to_string(),
+                cache: cache(name),
+                mappings: vec![Arc::new(UserAllowedScopesMapping { attribute })],
+            }),
         })
     }
 }
@@ -383,10 +382,12 @@ pub mod inject {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::inject::connector;
     use pretty_assertions::assert_eq;
     use rstest::fixture;
     use rstest::rstest;
     use serde_json::Value;
+    use std::collections::BTreeSet;
     use std::time::Duration;
     use test_log::test;
     use testcontainers::clients::Cli;
@@ -407,7 +408,7 @@ pub mod tests {
         let container = cli.run(image);
         let uut = simple_bind_uut(name, container.get_host_port_ipv4(1389));
 
-        let actual = uut.verify("user01", &password, "bitnami1").await;
+        let actual = uut.verify("user01", &password, "password").await;
 
         assert_eq!(true, actual.unwrap());
     }
@@ -439,7 +440,7 @@ pub mod tests {
         let container = cli.run(image);
         let uut = search_bind_uut(name, container.get_host_port_ipv4(1389));
 
-        let actual = uut.verify("user02", &password, "bitnami2").await;
+        let actual = uut.verify("user01", &password, "password").await;
 
         assert_eq!(true, actual.unwrap());
     }
@@ -455,7 +456,7 @@ pub mod tests {
         let container = cli.run(image);
         let uut = search_bind_uut(name, container.get_host_port_ipv4(1389));
 
-        let actual = uut.verify("user02", &password, "wrong").await;
+        let actual = uut.verify("user01", &password, "wrong").await;
 
         assert_eq!(false, actual.unwrap());
     }
@@ -471,7 +472,7 @@ pub mod tests {
         let container = cli.run(image);
         let uut = search_bind_anonymous_uut(name, container.get_host_port_ipv4(1389));
 
-        let actual = uut.verify("user02", &password, "bitnami2").await;
+        let actual = uut.verify("user01", &password, "password").await;
 
         assert_eq!(true, actual.unwrap());
     }
@@ -487,7 +488,7 @@ pub mod tests {
         let container = cli.run(image);
         let uut = search_bind_anonymous_uut(name, container.get_host_port_ipv4(1389));
 
-        let actual = uut.verify("user02", &password, "wrong").await;
+        let actual = uut.verify("user01", &password, "wrong").await;
 
         assert_eq!(false, actual.unwrap());
     }
@@ -503,6 +504,13 @@ pub mod tests {
         let actual = uut.get(input).await;
 
         let actual = actual.unwrap();
+        assert_eq!(
+            vec!["profile", "openid"]
+                .into_iter()
+                .map(str::to_string)
+                .collect::<BTreeSet<_>>(),
+            *actual.allowed_scopes.get("tiny-auth-frontend").unwrap()
+        );
         assert_eq!(
             input,
             actual.attributes.get("uid").unwrap().as_array().unwrap()[0]
@@ -534,6 +542,10 @@ pub mod tests {
     fn image() -> GenericImage {
         let image = GenericImage::new("docker.io/bitnami/openldap", "latest")
             .with_exposed_port(1389)
+            .with_volume(
+                env!("CARGO_MANIFEST_DIR").to_string() + "/../../../dev/ldif",
+                "/ldifs",
+            )
             .with_wait_for(WaitFor::StdErrMessage {
                 message: "slapd starting".to_string(),
             });
@@ -545,10 +557,8 @@ pub mod tests {
 
         inject::simple_bind_store(
             name.as_str(),
-            &[url],
             &["cn={{ user }},ou=users,dc=example,dc=org".to_string()],
-            Duration::from_millis(50),
-            false,
+            connector(&[url], Duration::from_millis(50), false),
         )
     }
 
@@ -557,9 +567,9 @@ pub mod tests {
 
         inject::search_bind_store(
             name.as_str(),
-            &[url],
-            "cn=user01,ou=users,dc=example,dc=org",
-            "bitnami1",
+            connector(&[url], Duration::from_millis(50), false),
+            "cn=tiny-auth-service-account,ou=users,dc=example,dc=org",
+            "bitnami2",
             vec![
                 LdapSearch {
                     base_dn: "ou=users,dc=nonexistent".to_string(),
@@ -570,8 +580,7 @@ pub mod tests {
                     search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
                 },
             ],
-            Duration::from_millis(50),
-            false,
+            Some("description".to_string()),
         )
     }
 
@@ -580,7 +589,7 @@ pub mod tests {
 
         inject::search_bind_store(
             name.as_str(),
-            &[url],
+            connector(&[url], Duration::from_millis(50), false),
             "",
             "",
             vec![
@@ -593,8 +602,7 @@ pub mod tests {
                     search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
                 },
             ],
-            Duration::from_millis(50),
-            false,
+            Some("description".to_string()),
         )
     }
 
