@@ -103,6 +103,16 @@ store:
         searches:
           - base dn: ou=users,dc=example,dc=org
             search filter: "(|(uid={{ user }})(mail={{ user }}))"
+        use for:
+          users:
+            attributes:
+              allowed scopes: allowed_scope
+          clients:
+            attributes:
+              redirect uri: redirect_uri
+              password: password
+              public key: pk
+              allowed scopes: asc
 ```
 
 ### bind dn
@@ -119,7 +129,49 @@ The password used for binding for the search query. Omit for anonymous binding.
 A list of search queries to run against the directory. The first match of the
 first query is used to bind as. `base dn` is the base dn to run the query and
 `search filter` is an LPAD search filter to match users. The only available
-variable is `user` and is the string the user passes as its username.
+variable is `user` and is the string the user passes as its username or the
+client id.
+
+### use for
+
+Define if this LDAP configuration is for users, clients, or both. For each of
+them it is possible to define, how attributes with a meaning to tiny-auth
+itself can be mapped from an LDAP.
+
+#### User Attributes
+
+This section is optional. If missing, the LDAP is not used for users.
+
+##### allowed scopes
+
+List a scope as allowed by default for a client, so if an OIDC flow only
+contains allowed scopes, the consent screen is skipped. The attribute value
+must be of the form `<client_id> <scope>`, e.g. `tiny-auth-frontend email`.
+
+#### Client Attributes
+
+This section is optional. If missing, the LDAP is not used for clients.
+
+##### redirect uri
+
+A redirect URI allowed to be used by this client. This field is effectively
+mandatory, as a client with no valid redirect URI is of limited use.
+
+##### password
+
+A plain-text password used for the `client_secret_jwt` client authentication
+method, [see the file store](store.md#client_type). If missing, clients are
+authenticated by binding to the LDAP.
+
+##### public key
+
+A PEM-encoded public key for `private_key_jwt` client authentication, see [the
+file store](store.md#client_type). This field is optional.
+
+##### allowed scopes
+
+A scope name. See [the file store](store.md#allowed_scopes-1) for semantics.
+This field is optional.
 
 ## Configuration File Store
 
@@ -159,7 +211,7 @@ In addition arbitrary properties may be added.
 #### name
 
 This is the primary login name used for authentication. It must be unique
-between all users.
+between all users and clients.
 
 #### password
 
@@ -207,7 +259,7 @@ In addition arbitrary properties may be added.
 #### client_id
 
 This is the name under which tiny-auth knows the client when performing
-requests. It must be unique between all clients.
+requests. It must be unique between all clients and users.
 
 #### client_type
 

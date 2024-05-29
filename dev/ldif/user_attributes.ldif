@@ -1,0 +1,41 @@
+dn: dc=example,dc=org
+objectClass: dcObject
+objectClass: organization
+dc: example
+o: example
+
+dn: ou=users,dc=example,dc=org
+objectClass: organizationalUnit
+ou: users
+
+dn: cn=user01,ou=users,dc=example,dc=org
+cn: User1
+cn: user01
+sn: Bar1
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+userPassword: password
+uid: user01
+uidNumber: 1000
+gidNumber: 1000
+homeDirectory: /home/user01
+description: tiny-auth-frontend openid
+description: tiny-auth-frontend profile
+
+dn: cn=tiny-auth-service-account,ou=users,dc=example,dc=org
+cn: tiny-auth-service-account
+sn: tiny-auth-service-account
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+userPassword: bitnami2
+uid: tiny-auth-service-account
+uidNumber: 1001
+gidNumber: 1001
+homeDirectory: /home/tiny-auth-service-account
+
+dn: cn=readers,ou=users,dc=example,dc=org
+cn: readers
+objectClass: groupOfNames
+member: cn=user01,ou=users,dc=example,dc=org
