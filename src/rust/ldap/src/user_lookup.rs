@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{AttributeMapping, CacheEntry, UserRepresentation};
+use crate::{AttributeMapping, UserCacheEntry, UserRepresentation};
 use ldap3::SearchEntry;
 use moka::future::Cache;
 use std::collections::HashMap;
@@ -25,7 +25,7 @@ use tiny_auth_business::user::User;
 
 pub(crate) struct UserLookup {
     pub(crate) ldap_name: String,
-    pub(crate) cache: Cache<String, CacheEntry>,
+    pub(crate) cache: Cache<String, UserCacheEntry>,
     pub(crate) mappings: Vec<Arc<dyn AttributeMapping<User>>>,
 }
 

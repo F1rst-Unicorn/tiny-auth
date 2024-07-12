@@ -18,6 +18,7 @@
 pub mod memory;
 
 use crate::client::Client;
+use crate::client::Error as ClientError;
 use crate::password::{Error as PasswordError, Password};
 use crate::pkce::CodeChallenge;
 use crate::scope::Scope;
@@ -70,8 +71,44 @@ impl UserStore for MergingUserStore {
     }
 }
 
+#[async_trait]
 pub trait ClientStore: Send + Sync {
-    fn get(&self, key: &str) -> Option<Client>;
+    async fn get(&self, key: &str) -> Result<Client, ClientError>;
+}
+
+pub struct MergingClientStore {
+    stores: Vec<Arc<dyn ClientStore>>,
+}
+
+impl From<Vec<Arc<dyn ClientStore>>> for MergingClientStore {
+    fn from(value: Vec<Arc<dyn ClientStore>>) -> Self {
+        Self { stores: value }
+    }
+}
+
+#[async_trait]
+impl ClientStore for MergingClientStore {
+    async fn get(&self, key: &str) -> Result<Client, ClientError> {
+        let results: Vec<_> = join_all(self.stores.iter().map(|v| v.get(key)))
+            .await
+            .into_iter()
+            .collect();
+
+        if let Some(Err(error)) = results.iter().find(|v| {
+            matches!(
+                v,
+                Err(ClientError::BackendError | ClientError::BackendErrorWithContext(_))
+            )
+        }) {
+            return Err(error.clone());
+        }
+
+        results
+            .into_iter()
+            .filter_map(Result::ok)
+            .reduce(Client::merge)
+            .ok_or(ClientError::NotFound)
+    }
 }
 
 #[async_trait]
@@ -166,7 +203,7 @@ pub mod test_fixtures {
     use std::iter::FromIterator;
     use std::sync::Arc;
 
-    use crate::client::Client;
+    use crate::client::{Client, Error};
     use crate::oauth2::ClientType;
     use crate::password::Password;
     use crate::user::User;
@@ -201,10 +238,11 @@ pub mod test_fixtures {
 
     struct TestClientStore {}
 
+    #[async_trait]
     impl ClientStore for TestClientStore {
-        fn get(&self, key: &str) -> Option<Client> {
+        async fn get(&self, key: &str) -> Result<Client, Error> {
             match key {
-                "client1" => Some(Client {
+                "client1" => Ok(Client {
                     client_id: key.to_string(),
                     client_type: ClientType::Confidential {
                         password: Password::Plain("client1".to_string()),
@@ -214,14 +252,14 @@ pub mod test_fixtures {
                     allowed_scopes: BTreeSet::from_iter(vec!["email".to_string()]),
                     attributes: HashMap::new(),
                 }),
-                "client2" => Some(Client {
+                "client2" => Ok(Client {
                     client_id: key.to_string(),
                     client_type: ClientType::Public,
                     redirect_uris: vec!["http://localhost/client2".to_string()],
                     allowed_scopes: BTreeSet::from_iter(vec!["email".to_string()]),
                     attributes: HashMap::new(),
                 }),
-                _ => None,
+                _ => Err(Error::NotFound),
             }
         }
     }

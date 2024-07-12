@@ -72,16 +72,19 @@ async fn main() {
     };
 
     let store = di.get_client_store();
-    let client = match store.get(
-        args.get_one::<String>(FLAG_CLIENT)
-            .map(String::as_str)
-            .unwrap(),
-    ) {
-        None => {
-            error!("client not found");
+    let client = match store
+        .get(
+            args.get_one::<String>(FLAG_CLIENT)
+                .map(String::as_str)
+                .unwrap(),
+        )
+        .await
+    {
+        Err(e) => {
+            error!("client not found ({e})");
             return;
         }
-        Some(v) => v,
+        Ok(v) => v,
     };
 
     let store = di.get_scope_store();

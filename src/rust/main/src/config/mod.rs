@@ -123,6 +123,9 @@ pub struct UserAttributes {
 #[derive(Clone, Debug, Deserialize, Ord, PartialOrd, Eq, PartialEq)]
 pub struct ClientAttributes {
     #[serde(default)]
+    #[serde(rename = "type")]
+    pub client_type: Option<String>,
+    #[serde(default)]
     #[serde(rename = "redirect uri")]
     pub redirect_uri: Option<String>,
     #[serde(default)]

@@ -23,6 +23,7 @@ use regex::Regex;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use tiny_auth_business::client;
 use tiny_auth_business::client::Client;
 use tiny_auth_business::scope::Scope;
 use tiny_auth_business::store::ClientStore;
@@ -77,9 +78,13 @@ pub struct FileClientStore {
     clients: BTreeMap<String, Client>,
 }
 
+#[async_trait]
 impl ClientStore for FileClientStore {
-    fn get(&self, key: &str) -> Option<Client> {
-        self.clients.get(key).cloned()
+    async fn get(&self, key: &str) -> Result<Client, client::Error> {
+        self.clients
+            .get(key)
+            .cloned()
+            .ok_or(client::Error::NotFound)
     }
 }
 

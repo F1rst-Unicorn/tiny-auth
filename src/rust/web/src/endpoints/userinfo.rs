@@ -186,7 +186,7 @@ mod tests {
     pub async fn valid_token_is_returned() {
         let creator = build_test_token_creator();
         let user = build_test_user_store().get(USER).await.unwrap();
-        let client = build_test_client_store().get(PUBLIC_CLIENT).unwrap();
+        let client = build_test_client_store().get(PUBLIC_CLIENT).await.unwrap();
         let token = creator.build_token(&user, &client, &Vec::new(), 0);
         let request = test::TestRequest::post()
             .insert_header((

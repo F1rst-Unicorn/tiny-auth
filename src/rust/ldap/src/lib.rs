@@ -15,8 +15,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+mod client_lookup;
 mod user_lookup;
 
+use crate::client_lookup::ClientLookup;
 use crate::user_lookup::UserLookup;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
@@ -27,21 +29,25 @@ use std::sync::Arc;
 use std::time::Duration;
 use tera::{Context, Tera};
 use thiserror::Error;
+use tiny_auth_business::client::Client;
+use tiny_auth_business::client::Error as ClientError;
 use tiny_auth_business::password::{Error, Password};
-use tiny_auth_business::store::{PasswordStore, UserStore};
+use tiny_auth_business::store::{ClientStore, PasswordStore, UserStore};
 use tiny_auth_business::user::Error as UserError;
 use tiny_auth_business::user::User;
 use tiny_auth_business::util::wrap_err;
 use url::Url;
 
 type DistinguishedName = String;
-type CacheEntry = (DistinguishedName, User);
+type UserCacheEntry = (DistinguishedName, User);
+type ClientCacheEntry = (DistinguishedName, Client);
 
 pub struct LdapStore {
     name: String,
     connector: Connector,
     authenticator: AuthenticatorDispatcher,
     user_lookup: Option<UserLookup>,
+    client_lookup: Option<ClientLookup>,
 }
 
 #[derive(Error, Debug)]
@@ -139,6 +145,28 @@ impl PasswordStore for LdapStore {
     }
 }
 
+#[async_trait]
+impl ClientStore for LdapStore {
+    async fn get(&self, key: &str) -> Result<Client, ClientError> {
+        let client_id = ldap_escape(key).into_owned();
+        let client_lookup = self.client_lookup.as_ref().ok_or(ClientError::NotFound)?;
+        if let ClientRepresentation::CachedClient(cached_client) =
+            client_lookup.get_cached(&client_id).await
+        {
+            return Ok(cached_client.1);
+        }
+
+        let mut ldap = self.connector.connect().await.map_err(wrap_err)?;
+        let search_entry = self
+            .authenticator
+            .get_ldap_record(&mut ldap, &client_id)
+            .await
+            .map_err(wrap_err)?;
+        let user = client_lookup.map_to_client(&client_id, search_entry).await;
+        Ok(user)
+    }
+}
+
 #[enum_dispatch(Authenticator)]
 enum AuthenticatorDispatcher {
     SimpleBind,
@@ -164,7 +192,12 @@ trait Authenticator {
 
 pub(crate) enum UserRepresentation<'a> {
     Name(&'a str),
-    CachedUser(CacheEntry),
+    CachedUser(UserCacheEntry),
+}
+
+pub(crate) enum ClientRepresentation {
+    Name,
+    CachedClient(ClientCacheEntry),
 }
 
 struct SimpleBind {
@@ -311,12 +344,20 @@ fn format_username(format: &str, username: &str) -> Result<String, LdapError> {
 }
 
 pub mod inject {
+    use crate::client_lookup::{
+        ClientAllowedScopesMapping, ClientLookup, ClientPasswordMapping, ClientPublicKeyMapping,
+        ClientRedirectUriMapping, ClientTypeMapping,
+    };
     use crate::user_lookup::{UserAllowedScopesMapping, UserLookup};
-    use crate::{AttributeMapping, Connector, LdapSearch, LdapStore, SearchBind, SimpleBind};
+    use crate::{
+        AttributeMapping, ClientCacheEntry, Connector, LdapSearch, LdapStore, SearchBind,
+        SimpleBind, UserCacheEntry,
+    };
     use moka::future::Cache;
     use moka::policy::EvictionPolicy;
     use std::sync::Arc;
     use std::time::Duration;
+    use tiny_auth_business::client::Client;
     use tiny_auth_business::store::PasswordStore;
     use tiny_auth_business::user::User;
     use url::Url;
@@ -342,11 +383,20 @@ pub mod inject {
             }
             .into(),
             user_lookup: None,
+            client_lookup: None,
         })
     }
 
     pub struct UserConfig {
         pub allowed_scopes_attribute: Option<String>,
+    }
+
+    pub struct ClientConfig {
+        pub client_type_attribute: Option<String>,
+        pub allowed_scopes_attribute: Option<String>,
+        pub password_attribute: Option<String>,
+        pub public_key_attribute: Option<String>,
+        pub redirect_uri_attribute: Option<String>,
     }
 
     pub fn search_bind_store(
@@ -356,6 +406,7 @@ pub mod inject {
         bind_dn_password: &str,
         searches: Vec<LdapSearch>,
         user_config: Option<UserConfig>,
+        client_config: Option<ClientConfig>,
     ) -> Arc<LdapStore> {
         Arc::new(LdapStore {
             name: name.to_string(),
@@ -368,7 +419,7 @@ pub mod inject {
             .into(),
             user_lookup: user_config.map(|user_config| UserLookup {
                 ldap_name: name.to_string(),
-                cache: cache(name),
+                cache: user_cache(name),
                 mappings: user_config
                     .allowed_scopes_attribute
                     .map(|allowed_scopes_attribute| {
@@ -379,10 +430,45 @@ pub mod inject {
                     .into_iter()
                     .collect(),
             }),
+            client_lookup: client_config.map(|client_config| ClientLookup {
+                ldap_name: name.to_string(),
+                cache: client_cache(name),
+                mappings: None
+                    .into_iter()
+                    .chain(client_config.client_type_attribute.map(|v| {
+                        Arc::new(ClientTypeMapping { attribute: v })
+                            as Arc<dyn AttributeMapping<Client>>
+                    }))
+                    .chain(client_config.allowed_scopes_attribute.map(|v| {
+                        Arc::new(ClientAllowedScopesMapping { attribute: v })
+                            as Arc<dyn AttributeMapping<Client>>
+                    }))
+                    .chain(client_config.password_attribute.map(|v| {
+                        Arc::new(ClientPasswordMapping { attribute: v })
+                            as Arc<dyn AttributeMapping<Client>>
+                    }))
+                    .chain(client_config.public_key_attribute.map(|v| {
+                        Arc::new(ClientPublicKeyMapping { attribute: v })
+                            as Arc<dyn AttributeMapping<Client>>
+                    }))
+                    .chain(client_config.redirect_uri_attribute.map(|v| {
+                        Arc::new(ClientRedirectUriMapping { attribute: v })
+                            as Arc<dyn AttributeMapping<Client>>
+                    }))
+                    .collect(),
+            }),
         })
     }
 
-    fn cache(name: &str) -> Cache<String, (String, User)> {
+    fn user_cache(name: &str) -> Cache<String, UserCacheEntry> {
+        Cache::builder()
+            .name(format!("tiny-auth ldap store {name}").as_str())
+            .eviction_policy(EvictionPolicy::tiny_lfu())
+            .time_to_idle(Duration::from_secs(10))
+            .build()
+    }
+
+    fn client_cache(name: &str) -> Cache<String, ClientCacheEntry> {
         Cache::builder()
             .name(format!("tiny-auth ldap store {name}").as_str())
             .eviction_policy(EvictionPolicy::tiny_lfu())
@@ -394,7 +480,7 @@ pub mod inject {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::inject::{connector, UserConfig};
+    use crate::inject::{connector, ClientConfig, UserConfig};
     use pretty_assertions::assert_eq;
     use rstest::fixture;
     use rstest::rstest;
@@ -405,6 +491,7 @@ pub mod tests {
     use testcontainers::clients::Cli;
     use testcontainers::core::WaitFor;
     use testcontainers::GenericImage;
+    use tiny_auth_business::oauth2::ClientType;
     use tiny_auth_business::password::{Error, Password};
     use tiny_auth_business::store::PasswordStore;
     use url::Url;
@@ -513,7 +600,7 @@ pub mod tests {
         let uut = search_bind_uut(name, container.get_host_port_ipv4(1389));
         let input = "user01";
 
-        let actual = uut.get(input).await;
+        let actual = UserStore::get(uut.as_ref(), input).await;
 
         let actual = actual.unwrap();
         assert_eq!(
@@ -529,6 +616,67 @@ pub mod tests {
         );
         assert_eq!(
             "Bar1",
+            actual.attributes.get("sn").unwrap().as_array().unwrap()[0]
+        );
+        assert_eq!(
+            Value::from(vec!["inetOrgPerson", "posixAccount", "shadowAccount"]),
+            *actual.attributes.get("objectClass").unwrap()
+        );
+    }
+
+    #[rstest]
+    #[test(tokio::test)]
+    pub async fn getting_client_works(image: GenericImage, name: String) {
+        let cli = Cli::default();
+        let container = cli.run(image);
+        let uut = search_bind_uut(name, container.get_host_port_ipv4(1389));
+        let input = "unit-test-client";
+
+        let actual = ClientStore::get(uut.as_ref(), input).await;
+
+        let actual = actual.unwrap();
+        assert_eq!(
+            vec!["profile", "openid"]
+                .into_iter()
+                .map(str::to_string)
+                .collect::<BTreeSet<_>>(),
+            actual.allowed_scopes
+        );
+        assert_eq!(
+            vec![
+                "http://localhost:5173/oidc-login-redirect",
+                "http://localhost:5173/oidc-login-redirect-silent",
+                "http://localhost:34344/oidc/oidc-login-redirect",
+                "http://localhost:34344/oidc/oidc-login-redirect-silent",
+                "https://localhost:34344/oidc/oidc-login-redirect",
+                "https://localhost:34344/oidc/oidc-login-redirect-silent"
+            ],
+            actual.redirect_uris
+        );
+        match actual.client_type {
+            ClientType::Confidential {
+                password: Password::Plain(password),
+                public_key: Some(public_key),
+            } => {
+                assert_eq!("password", &password);
+                assert_eq!(
+                    "-----BEGIN PUBLIC KEY-----
+MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEXwRakTosT7bK5YEORlQjLzpHehkuLDEu
+/0pF2axbHyAGatD2QCf0KfmuylBldoyapSj8mCY11Envp0oZ4S1kYmbhfgIEwX16
+uDkKrMsaTeI/ttvgR01xzMfPXyjA4Ifs
+-----END PUBLIC KEY-----
+",
+                    &public_key
+                );
+            }
+            _ => assert!(false),
+        }
+        assert_eq!(
+            input,
+            actual.attributes.get("uid").unwrap().as_array().unwrap()[0]
+        );
+        assert_eq!(
+            input,
             actual.attributes.get("sn").unwrap().as_array().unwrap()[0]
         );
         assert_eq!(
@@ -596,6 +744,14 @@ pub mod tests {
                 allowed_scopes_attribute: "description".to_string().into(),
             }
             .into(),
+            ClientConfig {
+                client_type_attribute: "employeeType".to_string().into(),
+                allowed_scopes_attribute: "description".to_string().into(),
+                password_attribute: "userPassword".to_string().into(),
+                public_key_attribute: "displayName".to_string().into(),
+                redirect_uri_attribute: "givenName".to_string().into(),
+            }
+            .into(),
         )
     }
 
@@ -617,10 +773,8 @@ pub mod tests {
                     search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
                 },
             ],
-            UserConfig {
-                allowed_scopes_attribute: "description".to_string().into(),
-            }
-            .into(),
+            None,
+            None,
         )
     }
 

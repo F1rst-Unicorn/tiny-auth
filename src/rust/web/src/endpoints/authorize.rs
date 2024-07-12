@@ -152,6 +152,7 @@ pub async fn handle(
             },
             AuthorizeSession::from(session),
         )
+        .await
         .map_err(|e| match e {
             Error::InvalidRedirectUri => render_invalid_redirect_uri_error(&tera),
             Error::InvalidClientId => render_invalid_client_id_error(&tera),
@@ -312,8 +313,12 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let client_store = build_test_client_store();
-        let redirect_uri =
-            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let redirect_uri = client_store
+            .get(CONFIDENTIAL_CLIENT)
+            .await
+            .unwrap()
+            .redirect_uris[0]
+            .to_string();
         let client_state = "somestate".to_string();
         let query = Query(Request {
             response_type: Some("code".to_string()),
@@ -354,8 +359,12 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let client_store = build_test_client_store();
-        let redirect_uri =
-            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let redirect_uri = client_store
+            .get(CONFIDENTIAL_CLIENT)
+            .await
+            .unwrap()
+            .redirect_uris[0]
+            .to_string();
         let client_state = "somestate".to_string();
         let query = Query(Request {
             scope: Some("email".to_string()),
@@ -398,8 +407,12 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let session = req.get_session();
         let client_store = build_test_client_store();
-        let redirect_uri =
-            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let redirect_uri = client_store
+            .get(CONFIDENTIAL_CLIENT)
+            .await
+            .unwrap()
+            .redirect_uris[0]
+            .to_string();
         let client_state = "somestate".to_string();
         let query = Query(Request {
             scope: Some("email".to_string()),
@@ -440,8 +453,12 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let client_store = build_test_client_store();
         let session = req.get_session();
-        let redirect_uri =
-            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let redirect_uri = client_store
+            .get(CONFIDENTIAL_CLIENT)
+            .await
+            .unwrap()
+            .redirect_uris[0]
+            .to_string();
         let client_state = "somestate".to_string();
         let request = Request {
             scope: Some("email profile".to_string()),
@@ -470,8 +487,12 @@ mod tests {
         let req = test::TestRequest::post().to_http_request();
         let client_store = build_test_client_store();
         let session = req.get_session();
-        let redirect_uri =
-            client_store.get(CONFIDENTIAL_CLIENT).unwrap().redirect_uris[0].to_string();
+        let redirect_uri = client_store
+            .get(CONFIDENTIAL_CLIENT)
+            .await
+            .unwrap()
+            .redirect_uris[0]
+            .to_string();
         let client_state = "somestate".to_string();
         let request = Request {
             scope: Some("email".to_string()),

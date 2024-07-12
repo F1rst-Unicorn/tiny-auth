@@ -187,8 +187,8 @@ impl Handler {
         let client = match self.authenticate_client(&request).await {
             Err(_) => {
                 let client_id = &request.client_id.as_ref().ok_or(Error::MissingClientId)?;
-                let client = self.client_store.get(client_id).ok_or_else(|| {
-                    debug!("client '{}' not found", client_id);
+                let client = self.client_store.get(client_id).await.map_err(|e| {
+                    debug!("client '{}' not found ({e})", client_id);
                     Error::WrongClientIdOrPassword
                 })?;
 
@@ -357,6 +357,7 @@ impl Handler {
             (&request.client_assertion, &request.client_assertion_type)
         {
             self.authenticate_client_by_jwt(assertion_type.clone(), assertion.clone())
+                .await
         } else {
             self.authenticate_client_by_password(request).await
         }
@@ -369,12 +370,12 @@ impl Handler {
             request.client_secret.as_ref(),
         )?;
 
-        let client = match self.client_store.get(&client_id) {
-            None => {
-                debug!("client '{}' not found", client_id);
+        let client = match self.client_store.get(&client_id).await {
+            Err(e) => {
+                debug!("client '{}' not found ({e})", client_id);
                 return Err(Error::WrongClientIdOrPassword);
             }
-            Some(c) => c,
+            Ok(c) => c,
         };
 
         match &client.client_type {
@@ -418,7 +419,7 @@ impl Handler {
         }
     }
 
-    fn authenticate_client_by_jwt(
+    async fn authenticate_client_by_jwt(
         &self,
         assertion_type: String,
         assertion: String,
@@ -436,14 +437,21 @@ impl Handler {
             Ok(token) => token,
         };
 
-        let client = match self.client_store.get(&unsafe_assertion.claims.subject) {
-            None => {
-                debug!("client '{}' not found", unsafe_assertion.claims.subject);
+        let client = match self
+            .client_store
+            .get(&unsafe_assertion.claims.subject)
+            .await
+        {
+            Err(e) => {
+                debug!(
+                    "client '{}' not found ({e})",
+                    unsafe_assertion.claims.subject
+                );
                 return Err(Error::InvalidAuthenticationToken(
                     oauth2::ProtocolError::InvalidClient,
                 ));
             }
-            Some(v) => v,
+            Ok(v) => v,
         };
 
         let key = match client.get_decoding_key(unsafe_assertion.header.alg) {
@@ -1039,7 +1047,7 @@ mod tests {
         let token_creator = build_test_token_creator();
         let token = token_creator.build_token(
             &build_test_user_store().get(USER).await.unwrap(),
-            &build_test_client_store().get(client_id).unwrap(),
+            &build_test_client_store().get(client_id).await.unwrap(),
             &Vec::new(),
             0,
         );

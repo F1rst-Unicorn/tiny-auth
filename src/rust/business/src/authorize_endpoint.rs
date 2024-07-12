@@ -114,10 +114,10 @@ pub trait Session {
 }
 
 impl Handler {
-    pub fn handle(&self, request: Request, session: impl Session) -> Result<(), Error> {
+    pub async fn handle(&self, request: Request, session: impl Session) -> Result<(), Error> {
         let redirect_uri = Self::extract_redirect_uri(request.redirect_uri)?;
         let client_id = Self::extract_client_id(request.client_id)?;
-        let client = self.load_client(&client_id)?;
+        let client = self.load_client(&client_id).await?;
         Self::ensure_client_supports_redirect_uri(&client, &redirect_uri)?;
         let scopes =
             Self::match_requested_scopes_with_client(&client, request.scope).map_err(|_| {
@@ -177,13 +177,13 @@ impl Handler {
         }
     }
 
-    fn load_client(&self, client_id: &str) -> Result<Client, Error> {
-        match self.client_store.get(client_id) {
-            None => {
-                info!("client '{}' not found", client_id);
+    async fn load_client(&self, client_id: &str) -> Result<Client, Error> {
+        match self.client_store.get(client_id).await {
+            Err(e) => {
+                info!("client '{}' not found ({e})", client_id);
                 Err(Error::InvalidClientId)
             }
-            Some(client) => Ok(client),
+            Ok(client) => Ok(client),
         }
     }
 

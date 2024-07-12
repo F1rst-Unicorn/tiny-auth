@@ -20,6 +20,7 @@ use crate::password::Password;
 
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use url::Url;
 
@@ -31,8 +32,20 @@ use serde_json::Value;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 
-use log::error;
 use log::warn;
+use log::{debug, error};
+use serde::de::StdError;
+use thiserror::Error;
+
+#[derive(Error, Debug, Clone)]
+pub enum Error {
+    #[error("not found")]
+    NotFound,
+    #[error("backend error")]
+    BackendError,
+    #[error("backend error: {0}")]
+    BackendErrorWithContext(#[from] Arc<dyn StdError + Send + Sync>),
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Client {
@@ -66,6 +79,41 @@ impl Client {
 
     pub fn is_redirect_uri_valid(&self, uri: &str) -> bool {
         self.redirect_uris.contains(&uri.to_string())
+    }
+
+    pub fn merge(mut self, mut other: Self) -> Self {
+        self.client_type = match (self.client_type, other.client_type) {
+            (ClientType::Public, other) => other,
+            (own, ClientType::Public) => own,
+            (
+                ClientType::Confidential {
+                    password: own_password,
+                    public_key: own_key,
+                },
+                ClientType::Confidential {
+                    password: other_password,
+                    public_key: other_key,
+                },
+            ) => ClientType::Confidential {
+                password: pick_password_by_priority(own_password, other_password),
+                public_key: own_key.or(other_key),
+            },
+        };
+
+        self.allowed_scopes.append(&mut other.allowed_scopes);
+        self.redirect_uris.append(&mut other.redirect_uris);
+
+        for (name, value) in other.attributes {
+            match self.attributes.get_mut(&name) {
+                None => {
+                    self.attributes.insert(name, value);
+                }
+                _ => {
+                    debug!("Ignoring duplicate attribute {name}");
+                }
+            }
+        }
+        self
     }
 
     pub fn get_decoding_key(&self, algorithm: Algorithm) -> Option<DecodingKey> {
@@ -152,6 +200,18 @@ impl Client {
                 None
             }
         }
+    }
+}
+
+fn pick_password_by_priority(first: Password, second: Password) -> Password {
+    match (first, second) {
+        (first @ Password::Pbkdf2HmacSha256 { .. }, Password::Pbkdf2HmacSha256 { .. }) => first,
+        (Password::Pbkdf2HmacSha256 { .. }, second) => second,
+        (first, Password::Pbkdf2HmacSha256 { .. }) => first,
+        (first @ Password::Ldap { .. }, Password::Ldap { .. }) => first,
+        (Password::Ldap { .. }, second) => second,
+        (first, Password::Ldap { .. }) => first,
+        (first, _) => first,
     }
 }
 

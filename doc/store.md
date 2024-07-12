@@ -107,6 +107,7 @@ store:
               allowed scopes: allowed_scope
           clients:
             attributes:
+              type: client_type
               redirect uri: redirect_uri
               password: password
               public key: pk
@@ -149,6 +150,13 @@ must be of the form `<client_id> <scope>`, e.g. `tiny-auth-frontend email`.
 #### Client Attributes
 
 This section is optional. If missing, the LDAP is not used for clients.
+
+##### type
+
+Either `public` or `confidential`, [see the file store](store.md#client_type).
+Confidential clients are authenticated by either the `password` or the `public
+key` field below. If none is specified, clients are authenticated by binding to
+the LDAP.
 
 ##### redirect uri
 

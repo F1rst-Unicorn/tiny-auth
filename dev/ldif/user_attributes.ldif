@@ -35,6 +35,51 @@ uidNumber: 1001
 gidNumber: 1001
 homeDirectory: /home/tiny-auth-service-account
 
+dn: cn=tiny-auth-frontend,ou=users,dc=example,dc=org
+cn: tiny-auth-frontend
+sn: tiny-auth-frontend
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+uid: tiny-auth-frontend
+uidNumber: 1001
+gidNumber: 1001
+homeDirectory: /home/tiny-auth-frontend
+employeeType: public
+description: openid
+description: profile
+givenName: http://localhost:5173/oidc-login-redirect
+givenName: http://localhost:5173/oidc-login-redirect-silent
+givenName: http://localhost:34344/oidc/oidc-login-redirect
+givenName: http://localhost:34344/oidc/oidc-login-redirect-silent
+givenName: https://localhost:34344/oidc/oidc-login-redirect
+givenName: https://localhost:34344/oidc/oidc-login-redirect-silent
+
+dn: cn=unit-test-client,ou=users,dc=example,dc=org
+cn: unit-test-client
+sn: unit-test-client
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: shadowAccount
+userPassword: password
+uid: unit-test-client
+uidNumber: 1002
+gidNumber: 1002
+homeDirectory: /home/unit-test-client
+employeeType: confidential
+description: openid
+description: profile
+displayName::LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUhZd0VBWUhLb1pJemowQ0FRWUZLNEVFQUNJRFln
+ QUVYd1Jha1Rvc1Q3Yks1WUVPUmxRakx6cEhlaGt1TERFdQovMHBGMmF4Ykh5QUdhdEQyUUNmMEtm
+ bXV5bEJsZG95YXBTajhtQ1kxMUVudnAwb1o0UzFrWW1iaGZnSUV3WDE2CnVEa0tyTXNhVGVJL3R0
+ dmdSMDF4ek1mUFh5akE0SWZzCi0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLQo=
+givenName: http://localhost:5173/oidc-login-redirect
+givenName: http://localhost:5173/oidc-login-redirect-silent
+givenName: http://localhost:34344/oidc/oidc-login-redirect
+givenName: http://localhost:34344/oidc/oidc-login-redirect-silent
+givenName: https://localhost:34344/oidc/oidc-login-redirect
+givenName: https://localhost:34344/oidc/oidc-login-redirect-silent
+
 dn: cn=readers,ou=users,dc=example,dc=org
 cn: readers
 objectClass: groupOfNames

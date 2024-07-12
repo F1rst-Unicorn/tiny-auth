@@ -39,9 +39,10 @@ store:
                 allowed scopes: description
             clients:
               attributes:
-                redirect uri: ???
-                password: ???
-                public key: ???
+                type: employeeType
+                redirect uri: givenName
+                password: userPassword
+                public key: displayName
                 allowed scopes: description
 
 rate limit:

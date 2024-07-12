@@ -124,12 +124,12 @@ impl Handler {
                 Ok(user) => user,
             };
 
-            let client = match self.client_store.get(request.client_id) {
-                None => {
-                    debug!("client {} not found", request.client_id);
+            let client = match self.client_store.get(request.client_id).await {
+                Err(e) => {
+                    debug!("client {} not found ({e})", request.client_id);
                     return Err(Error::ClientNotFound);
                 }
-                Some(client) => client,
+                Ok(client) => client,
             };
 
             let all_scopes = self.scope_store.get_all(&scopes);

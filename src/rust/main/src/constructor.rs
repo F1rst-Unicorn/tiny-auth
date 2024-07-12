@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::config::{Config, LdapMode};
+use crate::config::{ClientAttributes, Config, LdapMode, LdapUsageClients};
 use crate::config::{LdapUsageUsers, Store};
 use crate::config::{TlsVersion, UserAttributes};
 use crate::runtime::Error;
@@ -59,7 +59,7 @@ use tiny_auth_business::store::memory::*;
 use tiny_auth_business::store::*;
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
-use tiny_auth_ldap::inject::UserConfig;
+use tiny_auth_ldap::inject::{ClientConfig, UserConfig};
 use tiny_auth_web::cors::CorsChecker;
 use tiny_auth_web::endpoints::cert::TokenCertificate;
 use tiny_auth_web::endpoints::discovery::Handler as DiscoveryHandler;
@@ -199,6 +199,7 @@ impl<'a> Constructor<'a> {
         Error,
     > {
         let mut client_store = FileClientStore::default();
+        let mut client_stores: Vec<Arc<dyn ClientStore>> = vec![];
         let mut user_store = FileUserStore::default();
         let mut user_stores: Vec<Arc<dyn UserStore>> = vec![];
         let mut password_stores = BTreeMap::default();
@@ -272,6 +273,35 @@ impl<'a> Constructor<'a> {
                         .into(),
                     };
 
+                    let client_config = match &use_for.clients {
+                        None => None,
+                        Some(LdapUsageClients { attributes: None }) => ClientConfig {
+                            client_type_attribute: None,
+                            allowed_scopes_attribute: None,
+                            password_attribute: None,
+                            public_key_attribute: None,
+                            redirect_uri_attribute: None,
+                        }
+                        .into(),
+                        Some(LdapUsageClients {
+                            attributes:
+                                Some(ClientAttributes {
+                                    client_type,
+                                    redirect_uri,
+                                    password,
+                                    public_key,
+                                    allowed_scopes,
+                                }),
+                        }) => ClientConfig {
+                            client_type_attribute: client_type.clone(),
+                            allowed_scopes_attribute: allowed_scopes.clone(),
+                            password_attribute: password.clone(),
+                            public_key_attribute: public_key.clone(),
+                            redirect_uri_attribute: redirect_uri.clone(),
+                        }
+                        .into(),
+                    };
+
                     let ldap_store = tiny_auth_ldap::inject::search_bind_store(
                         name.as_str(),
                         tiny_auth_ldap::inject::connector(
@@ -283,8 +313,10 @@ impl<'a> Constructor<'a> {
                         bind_dn_password,
                         searches,
                         user_config,
+                        client_config,
                     );
                     user_stores.push(ldap_store.clone());
+                    client_stores.push(ldap_store.clone());
                     password_stores.insert(name.clone(), ldap_store);
                 }
             }
@@ -295,11 +327,12 @@ impl<'a> Constructor<'a> {
             Arc::new(in_place_password_store(&config.crypto.pepper)),
         );
         user_stores.push(Arc::new(user_store));
+        client_stores.push(Arc::new(client_store));
 
         Ok((
             Arc::new(MergingUserStore::from(user_stores)),
             Arc::new(password_store),
-            Arc::new(client_store),
+            Arc::new(MergingClientStore::from(client_stores)),
             Arc::new(scope_store),
         ))
     }
