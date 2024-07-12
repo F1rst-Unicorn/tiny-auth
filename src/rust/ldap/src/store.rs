@@ -15,12 +15,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::authenticate::{
-    Authenticator, AuthenticatorDispatcher, ClientRepresentation, UserRepresentation,
-};
-use crate::client_lookup::ClientLookup;
+use crate::authenticate::{Authenticator, AuthenticatorDispatcher};
 use crate::connect::Connector;
-use crate::user_lookup::UserLookup;
+use crate::lookup::client_lookup::{ClientLookup, ClientRepresentation};
+use crate::lookup::user_lookup::{UserLookup, UserRepresentation};
 use async_trait::async_trait;
 use futures::future::OptionFuture;
 use ldap3::ldap_escape;

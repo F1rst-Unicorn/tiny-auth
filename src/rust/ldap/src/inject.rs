@@ -15,16 +15,14 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::authenticate::{
-    AttributeMapping, ClientCacheEntry, LdapSearch, SearchBind, SimpleBind, UserCacheEntry,
-};
-use crate::client_lookup::{
-    ClientAllowedScopesMapping, ClientLookup, ClientPasswordMapping, ClientPublicKeyMapping,
-    ClientRedirectUriMapping, ClientTypeMapping,
-};
+use crate::authenticate::{AttributeMapping, LdapSearch, SearchBind, SimpleBind};
 use crate::connect::Connector;
+use crate::lookup::client_lookup::{
+    ClientAllowedScopesMapping, ClientCacheEntry, ClientLookup, ClientPasswordMapping,
+    ClientPublicKeyMapping, ClientRedirectUriMapping, ClientTypeMapping,
+};
+use crate::lookup::user_lookup::{UserAllowedScopesMapping, UserCacheEntry, UserLookup};
 use crate::store::LdapStore;
-use crate::user_lookup::{UserAllowedScopesMapping, UserLookup};
 use moka::future::Cache;
 use moka::policy::EvictionPolicy;
 use std::sync::Arc;

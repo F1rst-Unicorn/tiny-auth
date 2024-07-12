@@ -16,21 +16,16 @@
  */
 
 use crate::error::LdapError;
+use crate::lookup::user_lookup::UserRepresentation;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use ldap3::{Ldap, Scope, SearchEntry};
 use log::{debug, warn};
 use std::sync::Arc;
 use tera::{Context, Tera};
-use tiny_auth_business::client::Client;
 use tiny_auth_business::password::Error;
 use tiny_auth_business::user::Error as UserError;
-use tiny_auth_business::user::User;
 use tiny_auth_business::util::wrap_err;
-
-pub(crate) type DistinguishedName = String;
-pub(crate) type UserCacheEntry = (DistinguishedName, User);
-pub(crate) type ClientCacheEntry = (DistinguishedName, Client);
 
 #[enum_dispatch(Authenticator)]
 pub(crate) enum AuthenticatorDispatcher {
@@ -53,16 +48,6 @@ pub(crate) trait Authenticator {
         ldap: &mut Ldap,
         username: &str,
     ) -> Result<SearchEntry, UserError>;
-}
-
-pub(crate) enum UserRepresentation<'a> {
-    Name(&'a str),
-    CachedUser(UserCacheEntry),
-}
-
-pub(crate) enum ClientRepresentation {
-    Name,
-    CachedClient(ClientCacheEntry),
 }
 
 pub(crate) struct SimpleBind {

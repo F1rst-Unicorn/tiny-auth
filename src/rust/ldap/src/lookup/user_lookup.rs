@@ -15,13 +15,20 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::authenticate::{AttributeMapping, UserCacheEntry, UserRepresentation};
+use crate::authenticate::AttributeMapping;
+use crate::lookup::types::DistinguishedName;
 use ldap3::SearchEntry;
 use moka::future::Cache;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tiny_auth_business::password::Password;
 use tiny_auth_business::user::User;
+
+pub(crate) type UserCacheEntry = (DistinguishedName, User);
+pub(crate) enum UserRepresentation<'a> {
+    Name(&'a str),
+    CachedUser(UserCacheEntry),
+}
 
 pub(crate) struct UserLookup {
     pub(crate) ldap_name: String,

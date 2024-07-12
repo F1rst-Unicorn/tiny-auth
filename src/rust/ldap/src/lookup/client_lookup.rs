@@ -15,7 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::authenticate::{AttributeMapping, ClientCacheEntry, ClientRepresentation};
+use crate::authenticate::AttributeMapping;
+use crate::lookup::types::DistinguishedName;
 use ldap3::SearchEntry;
 use log::error;
 use moka::future::Cache;
@@ -24,6 +25,12 @@ use tiny_auth_business::client::Client;
 use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::Password;
 use url::Url;
+
+pub(crate) type ClientCacheEntry = (DistinguishedName, Client);
+pub(crate) enum ClientRepresentation {
+    Name,
+    CachedClient(ClientCacheEntry),
+}
 
 pub(crate) struct ClientLookup {
     pub(crate) ldap_name: String,

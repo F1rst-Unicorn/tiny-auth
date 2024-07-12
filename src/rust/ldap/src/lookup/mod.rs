@@ -15,14 +15,6 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-mod authenticate;
-mod connect;
-mod error;
-pub mod inject;
-mod store;
-
-mod lookup;
-#[cfg(test)]
-pub mod test;
-
-pub use authenticate::LdapSearch;
+pub mod client_lookup;
+mod types;
+pub mod user_lookup;
