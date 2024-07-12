@@ -7,7 +7,7 @@ store type serves you best.
 |--------------------|--------------------|------------------|------------------|
 | Users              | Y                  | N                | Y                |
 | Passwords          | Y (2)              | Y                | Y                |
-| Clients            | Y                  | N                | N                |
+| Clients            | Y                  | N                | Y                |
 | Scopes             | Y                  | N                | N                |
 | Auth Codes         | N                  | N                | N                |
 | Persistence        | N (1)              | N (1)            | N (1)            |
