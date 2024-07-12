@@ -110,7 +110,7 @@ impl ClientStore for LdapStore {
             .get_ldap_record(&mut ldap, &client_id)
             .await
             .map_err(wrap_err)?;
-        let user = client_lookup.map_to_client(&client_id, search_entry).await;
-        Ok(user)
+        let client = client_lookup.map_to_client(&client_id, search_entry).await;
+        Ok(client)
     }
 }

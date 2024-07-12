@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::authenticate::AttributeMapping;
+use crate::lookup::types::AttributeMapping;
 use crate::lookup::types::DistinguishedName;
 use ldap3::SearchEntry;
 use log::error;
@@ -27,7 +27,8 @@ use tiny_auth_business::password::Password;
 use url::Url;
 
 pub(crate) type ClientCacheEntry = (DistinguishedName, Client);
-pub(crate) enum ClientRepresentation {
+
+pub enum ClientRepresentation {
     Name,
     CachedClient(ClientCacheEntry),
 }

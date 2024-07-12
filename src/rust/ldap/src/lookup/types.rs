@@ -14,5 +14,10 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use ldap3::SearchEntry;
 
 pub(super) type DistinguishedName = String;
+
+pub(crate) trait AttributeMapping<T>: Sync + Send {
+    fn map(&self, entity: T, search_entry: &SearchEntry) -> T;
+}

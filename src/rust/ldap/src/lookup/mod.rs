@@ -15,6 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod client_lookup;
+pub(crate) mod client_lookup;
 mod types;
-pub mod user_lookup;
+pub(crate) mod user_lookup;
+
+pub(crate) use types::AttributeMapping;

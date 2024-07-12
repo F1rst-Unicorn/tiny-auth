@@ -19,9 +19,9 @@ mod authenticate;
 mod connect;
 mod error;
 pub mod inject;
+mod lookup;
 mod store;
 
-mod lookup;
 #[cfg(test)]
 pub mod test;
 

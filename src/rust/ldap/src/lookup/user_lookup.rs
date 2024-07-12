@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::authenticate::AttributeMapping;
+use crate::lookup::types::AttributeMapping;
 use crate::lookup::types::DistinguishedName;
 use ldap3::SearchEntry;
 use moka::future::Cache;
@@ -25,7 +25,8 @@ use tiny_auth_business::password::Password;
 use tiny_auth_business::user::User;
 
 pub(crate) type UserCacheEntry = (DistinguishedName, User);
-pub(crate) enum UserRepresentation<'a> {
+
+pub enum UserRepresentation<'a> {
     Name(&'a str),
     CachedUser(UserCacheEntry),
 }

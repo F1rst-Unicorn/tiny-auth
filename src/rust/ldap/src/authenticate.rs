@@ -97,10 +97,6 @@ pub struct LdapSearch {
     pub search_filter: String,
 }
 
-pub(crate) trait AttributeMapping<T>: Sync + Send {
-    fn map(&self, entity: T, search_entry: &SearchEntry) -> T;
-}
-
 #[async_trait]
 impl Authenticator for SearchBind {
     async fn authenticate(
