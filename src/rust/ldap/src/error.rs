@@ -15,15 +15,16 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-mod authenticate;
-mod client_lookup;
-mod connect;
-pub(crate) mod error;
-pub mod inject;
-mod store;
-mod user_lookup;
+use thiserror::Error;
 
-#[cfg(test)]
-pub mod test;
-
-pub use authenticate::LdapSearch;
+#[derive(Error, Debug)]
+pub(crate) enum LdapError {
+    #[error("LDAP connecting failed")]
+    ConnectError,
+    #[error("search formatting failed: {0}")]
+    FormatError(tera::Error),
+    #[error("LDAP binding failed")]
+    BindError,
+    #[error("LDAP binding failed: {0}")]
+    BindErrorWithContext(ldap3::LdapError),
+}

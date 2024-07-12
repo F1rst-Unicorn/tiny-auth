@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{AttributeMapping, UserCacheEntry, UserRepresentation};
+use crate::authenticate::{AttributeMapping, UserCacheEntry, UserRepresentation};
 use ldap3::SearchEntry;
 use moka::future::Cache;
 use std::collections::HashMap;

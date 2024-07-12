@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{AttributeMapping, ClientCacheEntry, ClientRepresentation};
+use crate::authenticate::{AttributeMapping, ClientCacheEntry, ClientRepresentation};
 use ldap3::SearchEntry;
 use log::error;
 use moka::future::Cache;
