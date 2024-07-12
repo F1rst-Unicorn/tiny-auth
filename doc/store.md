@@ -3,11 +3,15 @@
 Any state used by tiny-auth is held in a store. See here to determine which
 store type serves you best.
 
-|                    | Users | Passwords | Clients | Scopes | Auth Codes | Persistence | Multiple Instances |
-|--------------------|-------|-----------|---------|--------|------------|:-----------:|:------------------:|
-| Configuration File | Y     | Y (2)     | Y       | Y      | N          |    N (1)    |       N (1)        |
-| LDAP simple bind   | N     | Y         | N       | N      | N          |    N (1)    |       N (1)        |
-| LDAP search bind   | Y     | Y         | N       | N      | N          |    N (1)    |       N (1)        |
+|                    | Configuration File | LDAP simple bind | LDAP search bind |
+|--------------------|--------------------|------------------|------------------|
+| Users              | Y                  | N                | Y                |
+| Passwords          | Y (2)              | Y                | Y                |
+| Clients            | Y                  | N                | N                |
+| Scopes             | Y                  | N                | N                |
+| Auth Codes         | N                  | N                | N                |
+| Persistence        | N (1)              | N (1)            | N (1)            |
+| Multiple Instances | N (1)              | N (1)            | N (1)            |
 
 Feature glossary:
 
