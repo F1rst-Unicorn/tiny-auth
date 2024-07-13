@@ -25,8 +25,8 @@ use std::cmp::Ord;
 use std::error::Error as ErrorTrait;
 use tera::Context;
 use tera::Tera;
-use tracing::debug;
 use tracing::error;
+use tracing::{debug, warn};
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct Scope {
@@ -156,9 +156,9 @@ impl Mapping {
                         }
                         Ok(value.unwrap_or_else(|| Value::Object(Map::new())))
                     } else {
-                        error!("failed to template claims:");
+                        warn!("failed to template claims:");
                         for e in errors {
-                            error!("{}", render_tera_error(&e));
+                            warn!("{}", render_tera_error(&e));
                         }
                         Err(Error::TemplateError)
                     }

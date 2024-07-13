@@ -58,6 +58,7 @@ impl UserLookup {
     }
 
     pub(crate) async fn record_missing(&self, name: &str) {
+        trace!("caching user miss");
         self.cache.insert(name.to_string(), None).await;
     }
 

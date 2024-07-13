@@ -14,11 +14,22 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use tracing::error;
+use tracing_log::LogTracer;
 
 pub fn initialise_from_config_file(_file_path: &str) {
     tracing_subscriber::fmt::init();
+    init_log();
 }
 
 pub fn initialise_from_verbosity(_verbosity_level: u8) {
     tracing_subscriber::fmt::init();
+    init_log();
+}
+
+fn init_log() {
+    if let Err(e) = LogTracer::init() {
+        error!(%e, "failed to initialise log crate bridge");
+        std::process::exit(1);
+    }
 }

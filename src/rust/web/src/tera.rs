@@ -23,7 +23,7 @@ use tera::Result;
 use tera::Tera;
 use tera::Value;
 
-use tracing::{debug, error, instrument, span, Level};
+use tracing::{error, instrument, span, trace, Level};
 
 pub fn load_template_engine(static_files_root: &str, http_path: &str) -> Result<Tera> {
     let template_path = static_files_root.to_string() + "/templates/";
@@ -34,7 +34,7 @@ pub fn load_template_engine(static_files_root: &str, http_path: &str) -> Result<
     Ok(tera)
 }
 
-#[instrument(level = Level::DEBUG, ret)]
+#[instrument(level = Level::TRACE, ret)]
 fn url_mapper(args: &HashMap<String, Value>) -> Result<Value> {
     match args.get("name") {
         Some(val) => Ok(val.clone()),
@@ -45,7 +45,7 @@ fn url_mapper(args: &HashMap<String, Value>) -> Result<Value> {
     }
 }
 
-#[instrument(level = Level::DEBUG, ret)]
+#[instrument(level = Level::TRACE, ret)]
 fn translator(args: &HashMap<String, Value>) -> Result<Value> {
     match args.get("term") {
         Some(val) => Ok(val.clone()),
@@ -75,7 +75,7 @@ fn make_static_mapper(
                 Err("oops".into())
             }
         };
-        debug!(?result);
+        trace!(?result);
         result
     })
 }

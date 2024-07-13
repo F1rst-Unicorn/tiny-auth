@@ -59,6 +59,7 @@ impl ClientLookup {
     }
 
     pub(crate) async fn record_missing(&self, name: &str) {
+        trace!("caching client miss");
         self.cache.insert(name.to_string(), None).await;
     }
 

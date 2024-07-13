@@ -3229,6 +3229,7 @@ dependencies = [
  "tiny_auth_web",
  "tokio",
  "tracing",
+ "tracing-log",
  "tracing-subscriber",
  "url",
  "vergen",
