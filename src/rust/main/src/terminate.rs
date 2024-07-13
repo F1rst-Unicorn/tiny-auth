@@ -35,18 +35,18 @@ pub async fn terminator(
     let mut sigterm = signal(SignalKind::terminate())?;
     let mut sigquit = signal(SignalKind::quit())?;
 
-    debug!("Signal handler ready");
+    debug!("signal handler ready");
     tokio::select! {
         _ = sigint.recv() => {}
         _ = sigterm.recv() => {}
         _ = sigquit.recv() => {}
     }
 
-    info!("Exitting, waiting 30s for connections to terminate");
+    info!("exitting, waiting 30s for connections to terminate");
     tokio::spawn(notify_about_termination());
     match api_join_handle.0.send(()) {
         Err(_) => {
-            error!("Error terminating GRPC API");
+            error!("error terminating GRPC API");
         }
         Ok(v) => v,
     }
@@ -77,15 +77,15 @@ pub async fn terminator(
             false
         }
         _ = sigint.recv() => {
-            info!("Still waiting for shutdown...");
+            info!("still waiting for shutdown...");
             true
         }
         _ = sigterm.recv() => {
-            info!("Still waiting for shutdown...");
+            info!("still waiting for shutdown...");
             true
         }
         _ = sigquit.recv() => {
-            info!("Still waiting for shutdown...");
+            info!("still waiting for shutdown...");
             true
         }
     } {}

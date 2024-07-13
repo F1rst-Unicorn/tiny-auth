@@ -21,26 +21,27 @@ use crate::util::read_file as read;
 use std::fs;
 use std::process::exit;
 
-use tracing::{debug, error, trace, warn};
+use tracing::{error, instrument, trace, warn};
 
 const EXIT_CODE: i32 = 1;
 
+#[instrument]
 pub fn parse_config(path: &str) -> Config {
     let raw_config = match read_config(path).into_iter().next() {
         None => {
-            error!("config file {} not found", path);
+            error!("not found");
             exit(EXIT_CODE);
         }
         Some(v) => v,
     };
-    debug!("Complete configuration:\n{}", raw_config);
+    trace!(%raw_config, "complete configuration");
     parse_raw_config(&raw_config)
 }
 
 fn read_config(path: &str) -> Vec<String> {
     match fs::metadata(path) {
         Err(e) => {
-            error!("Failed to read metadata of {}: {}", path, e);
+            error!(%e, "failed to read metadata");
             exit(EXIT_CODE);
         }
         Ok(metadata) => {
@@ -49,7 +50,7 @@ fn read_config(path: &str) -> Vec<String> {
             } else if metadata.file_type().is_file() {
                 read_file(path)
             } else {
-                warn!("Ignoring file {}", path);
+                warn!("ignoring file");
                 Vec::new()
             }
         }
@@ -58,8 +59,8 @@ fn read_config(path: &str) -> Vec<String> {
 
 fn read_file(path: &str) -> Vec<String> {
     match read(path) {
-        Err(error) => {
-            error!("Failed to read file {}: {}", path, error);
+        Err(e) => {
+            error!(%e, "failed to read file");
             exit(EXIT_CODE)
         }
         Ok(content) => vec![content],
@@ -68,16 +69,16 @@ fn read_file(path: &str) -> Vec<String> {
 
 fn traverse_directory(path: &str) -> Vec<String> {
     let content = fs::read_dir(path);
-    if let Err(err) = content {
-        error!("Failed to get directory content of {}: {}", path, err);
+    if let Err(e) = content {
+        error!(%e, "failed to get directory content");
         exit(EXIT_CODE);
     }
 
     let mut result = Vec::new();
 
     for entry in content.unwrap() {
-        if let Err(err) = entry {
-            error!("Failed to read {}: {}", path, err);
+        if let Err(e) = entry {
+            error!(%e, "failed to read file");
             exit(EXIT_CODE);
         }
         let entry_path = entry.unwrap().path();
@@ -100,7 +101,7 @@ fn parse_raw_config(raw_config: &str) -> Config {
     }
 }
 
-fn log_config_error(parse_error: serde_yaml::Error) {
-    error!("Could not parse config: {:#?}", parse_error);
-    trace!("Error in configuration file");
+fn log_config_error(e: serde_yaml::Error) {
+    error!(%e, "could not parse config");
+    trace!("error in configuration file");
 }

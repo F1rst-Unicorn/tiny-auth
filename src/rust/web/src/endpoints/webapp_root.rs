@@ -23,27 +23,29 @@ use actix_web::{HttpRequest, HttpResponse};
 use tera::Context;
 use tera::Tera;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
-use tracing::instrument;
+use tracing::{instrument, trace};
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "webapp_redirect")]
 pub async fn redirect(request: HttpRequest, web_base_path: Data<WebBasePath>) -> HttpResponse {
     let location = if request.query_string() != "" {
         web_base_path.0.to_string() + "/?" + request.query_string()
     } else {
         web_base_path.0.to_string() + "/"
     };
+    trace!(%location, "redirecting");
     HttpResponse::TemporaryRedirect()
         .append_header(("Location", location))
         .finish()
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "webapp")]
 pub async fn get(
     tera: Data<Tera>,
     issuer_config: Data<IssuerConfiguration>,
     api_url: Data<ApiUrl>,
     web_base_path: Data<WebBasePath>,
 ) -> HttpResponse {
+    trace!("rendering webapp");
     let mut context = Context::new();
     context.insert("tiny_auth_provider_url", &issuer_config.issuer_url);
     context.insert("tiny_auth_api_url", &api_url.0);

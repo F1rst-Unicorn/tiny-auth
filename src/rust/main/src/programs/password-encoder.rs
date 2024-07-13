@@ -35,15 +35,15 @@ fn main() {
     let args = parse_arguments();
     initialise_from_verbosity(args.get_count(FLAG_VERBOSE));
 
-    debug!("Starting up");
+    debug!("starting up");
 
     let config_path = args
         .get_one::<String>(FLAG_CONFIG)
         .map(String::as_str)
         .unwrap_or(tiny_auth_main::cli_parser::FLAG_CONFIG_DEFAULT);
-    debug!("Config is at {}", config_path);
+    debug!(%config_path);
 
-    debug!("Parsing config");
+    debug!("parsing config");
     let config = parse_config(config_path);
 
     let password = PasswordWrapper {
@@ -60,7 +60,7 @@ fn main() {
 
     match serde_yaml::to_string(&password) {
         Err(e) => {
-            error!("Could not dump password: {}", e);
+            error!(%e, "could not dump password");
         }
         Ok(password) => {
             println!("{}", password);

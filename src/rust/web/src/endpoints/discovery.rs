@@ -137,7 +137,7 @@ pub struct Handler {
     scope_store: Arc<dyn ScopeStore>,
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "discovery")]
 pub async fn get(request: HttpRequest, handler: Data<Handler>) -> HttpResponse {
     handler.handle(request)
 }
@@ -234,7 +234,7 @@ pub mod inject {
     }
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all)]
 pub async fn jwks(
     jwks: Data<Jwks>,
     cors_lister: Data<Arc<dyn CorsLister>>,

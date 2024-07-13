@@ -9,7 +9,11 @@ This excludes
 
 CID is logged at DEBUG at most. Passwords or password attempts are never logged.
 
-business layer entry point logs client and user name
+business layer entry point logs client and username
 
 To easily keep the log clean of CID, all CID fields have to be contained in
 spans named `cid`.
+
+log messages are all-lowercase
+
+errors are logged with the `e` key

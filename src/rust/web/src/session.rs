@@ -32,7 +32,7 @@ impl tiny_auth_business::authorize_endpoint::Session for AuthorizeSession {
     fn store(&self, state: AuthorizeRequestState) -> Result<(), Error> {
         match self.0.insert(authorize::SESSION_KEY, state) {
             Err(e) => {
-                error!("Failed to store authorize request: {e}");
+                error!(%e, "failed to store authorize request");
                 Err(Error::ServerError)
             }
             Ok(_) => Ok(()),

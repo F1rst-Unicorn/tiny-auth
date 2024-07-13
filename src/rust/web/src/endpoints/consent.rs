@@ -46,7 +46,7 @@ use tracing::warn;
 use tracing::{debug, instrument};
 use url::Url;
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "consent_get")]
 pub async fn get(
     tera: web::Data<Tera>,
     session: Session,
@@ -79,15 +79,9 @@ pub async fn get(
 
     if can_skip_consent_screen {
         if first_request.prompts.contains(&oidc::Prompt::Consent) {
-            debug!(
-                "user '{}' gave consent to all scopes but client requires explicit consent",
-                username
-            );
+            debug!("user gave consent to all scopes but client requires explicit consent");
         } else {
-            debug!(
-                "user '{}' gave consent to all scopes, skipping consent screen",
-                username
-            );
+            debug!("user gave consent to all scopes, skipping consent screen",);
             return process_skipping_csrf(
                 first_request.scopes.iter().map(Clone::clone).collect(),
                 session,
@@ -125,7 +119,7 @@ pub struct Request {
     scopes: BTreeMap<String, String>,
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "consent_post")]
 pub async fn post(
     query: web::Form<Request>,
     session: Session,
@@ -242,7 +236,7 @@ async fn process_skipping_csrf(
         .finish()
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "consent_cancel")]
 pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {

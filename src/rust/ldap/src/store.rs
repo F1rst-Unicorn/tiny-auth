@@ -75,7 +75,7 @@ impl UserStore for LdapStore {
 
 #[async_trait]
 impl PasswordStore for LdapStore {
-    #[instrument(name = "verify_password", skip(self, stored_password))]
+    #[instrument(name = "verify_password", skip_all)]
     async fn verify(
         &self,
         username: &str,
@@ -87,14 +87,15 @@ impl PasswordStore for LdapStore {
             Password::Ldap { name } => {
                 if name != &self.name {
                     error!(
-                        "Password store dispatch bug. Password names {} but this is {}",
-                        name, self.name
+                        my_name = self.name,
+                        password_name = name,
+                        "password store dispatch bug"
                     );
                     return Err(PasswordError::BackendError);
                 }
             }
             _ => {
-                error!("Password store dispatch bug");
+                error!("password store dispatch bug");
             }
         }
 
@@ -121,7 +122,7 @@ impl PasswordStore for LdapStore {
                 }
                 Some(UserRepresentation::CachedUser(v)) => UserRepresentation::CachedUser(v),
                 Some(UserRepresentation::Missing) => {
-                    warn!("Tried to verify password of unknown user to this store");
+                    warn!("tried to verify password of unknown user to this store");
                     return Err(PasswordError::BackendError);
                 }
             };

@@ -36,20 +36,20 @@ async fn main() {
     let args = parse_arguments();
     initialise_from_verbosity(args.get_count(FLAG_VERBOSE));
 
-    debug!("Starting up");
+    debug!("starting up");
 
     let config_path = args
         .get_one::<String>(FLAG_CONFIG)
         .map(String::as_str)
         .unwrap_or(tiny_auth_main::cli_parser::FLAG_CONFIG_DEFAULT);
-    debug!("Config is at {}", config_path);
+    debug!(%config_path);
 
-    debug!("Parsing config");
+    debug!("parsing config");
     let config = parse_config(config_path);
 
     let di = match Constructor::new(&config) {
         Err(e) => {
-            error!("Failed to read config: {}", e);
+            error!(%e, "failed to read config");
             return;
         }
         Ok(v) => v,
@@ -65,7 +65,7 @@ async fn main() {
         .await
     {
         Err(e) => {
-            error!("user not found ({})", e);
+            error!(%e, "user not found");
             return;
         }
         Ok(v) => v,
@@ -81,7 +81,7 @@ async fn main() {
         .await
     {
         Err(e) => {
-            error!("client not found ({e})");
+            error!(%e, "client not found");
             return;
         }
         Ok(v) => v,
@@ -105,7 +105,7 @@ async fn main() {
         .build_token(&user, &client, &[scope], 0);
 
     match serde_json::to_string_pretty(&token) {
-        Err(_) => error!("Failed to serialize data"),
+        Err(_) => error!("failed to serialize data"),
         Ok(v) => println!("{}", v),
     };
 }

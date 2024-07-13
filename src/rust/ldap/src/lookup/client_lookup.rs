@@ -23,7 +23,7 @@ use std::sync::Arc;
 use tiny_auth_business::client::Client;
 use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::Password;
-use tracing::{debug, error, trace};
+use tracing::{error, trace};
 use url::Url;
 
 pub(crate) type ClientCacheEntry = (DistinguishedName, Client);
@@ -44,15 +44,15 @@ impl ClientLookup {
     pub(crate) async fn get_cached(&self, key: &str) -> ClientRepresentation {
         match self.cache.get(key).await {
             Some(Some(entry)) => {
-                debug!("cache hit");
+                trace!("cache hit");
                 ClientRepresentation::CachedClient(entry)
             }
             Some(None) => {
-                debug!("cache hit for absent client");
+                trace!("cache hit for absent client");
                 ClientRepresentation::Missing
             }
             None => {
-                debug!("cache miss");
+                trace!("cache miss");
                 ClientRepresentation::Name
             }
         }
@@ -105,7 +105,7 @@ impl ClientLookup {
                 .map(|(k, v)| (k, v.into())),
         );
 
-        trace!("caching client {}", name);
+        trace!("caching client");
         self.cache
             .insert(name.to_string(), Some((search_entry.dn, result.clone())))
             .await;
@@ -122,8 +122,8 @@ impl AttributeMapping<Client> for ClientTypeMapping {
         if let Some(attributes) = search_entry.attrs.get(&self.attribute) {
             if attributes.len() > 1 {
                 error!(
-                    "not mapping multiple client type attributes {} for client {}",
-                    self.attribute, entity.client_id
+                    attribute = self.attribute,
+                    "not mapping multiple client type attributes",
                 );
                 return entity;
             }
@@ -132,8 +132,8 @@ impl AttributeMapping<Client> for ClientTypeMapping {
                 entity.client_type = ClientType::Public;
             } else if client_type != "confidential" {
                 error!(
-                    "invalid client type attribute value {} for client {}",
-                    self.attribute, entity.client_id
+                    attribute = self.attribute,
+                    "invalid client type attribute value"
                 );
             }
         }
@@ -166,8 +166,8 @@ impl AttributeMapping<Client> for ClientRedirectUriMapping {
             for url in attributes {
                 if let Err(e) = Url::parse(url) {
                     error!(
-                        "Client '{}' has invalid redirect_uri {} which will be ignored: {}",
-                        entity.client_id, url, e
+                        redirect_uri = %url, %e,
+                        "invalid redirect_uri which will be ignored",
                     );
                     continue;
                 }
@@ -188,8 +188,8 @@ impl AttributeMapping<Client> for ClientPasswordMapping {
         if let Some(attributes) = search_entry.attrs.get(&self.attribute) {
             if attributes.len() > 1 {
                 error!(
-                    "Not mapping multiple password attributes {} for client {}",
-                    self.attribute, entity.client_id
+                    attribute = self.attribute,
+                    "not mapping multiple password attributes"
                 );
             } else if let ClientType::Confidential {
                 ref mut password, ..
@@ -198,8 +198,8 @@ impl AttributeMapping<Client> for ClientPasswordMapping {
                 *password = Password::Plain(attributes.first().cloned().unwrap());
             } else {
                 error!(
-                    "Ignoring public key attribute {} for public client {}",
-                    self.attribute, entity.client_id
+                    attribute = self.attribute,
+                    "ignoring public key attribute for public client"
                 );
             }
         }
@@ -216,8 +216,8 @@ impl AttributeMapping<Client> for ClientPublicKeyMapping {
         if let Some(attributes) = search_entry.attrs.get(&self.attribute) {
             if attributes.len() > 1 {
                 error!(
-                    "Not mapping multiple public key attributes {} for client {}",
-                    self.attribute, entity.client_id
+                    attribute = self.attribute,
+                    "not mapping multiple public key attributes"
                 );
             } else if let ClientType::Confidential {
                 ref mut public_key, ..
@@ -226,8 +226,8 @@ impl AttributeMapping<Client> for ClientPublicKeyMapping {
                 *public_key = Some(attributes.first().cloned().unwrap());
             } else {
                 error!(
-                    "Ignoring public key attribute {} for public client {}",
-                    self.attribute, entity.client_id
+                    attribute = self.attribute,
+                    "ignoring public key attribute for public client",
                 );
             }
         }

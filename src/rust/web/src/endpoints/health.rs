@@ -29,7 +29,7 @@ struct Health {
     ok: bool,
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "health")]
 pub async fn get(request: HttpRequest, cors_lister: Data<Arc<dyn CorsLister>>) -> HttpResponse {
     let health = Health { ok: true };
     render_cors_result(cors_lister.get_ref().clone(), &request, health)

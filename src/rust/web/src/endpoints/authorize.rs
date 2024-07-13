@@ -128,7 +128,7 @@ impl Request {
     }
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "authorize")]
 pub async fn handle(
     query: web::Query<Request>,
     tera: Data<Tera>,

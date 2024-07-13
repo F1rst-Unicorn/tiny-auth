@@ -32,18 +32,18 @@ fn main() {
             .unwrap_or(cli_parser::FLAG_LOG_DEFAULT),
     );
 
-    info!("Starting up");
+    info!("starting up");
 
     let config_path = arguments
         .get_one(cli_parser::FLAG_CONFIG)
         .map(String::as_str)
         .unwrap_or(cli_parser::FLAG_CONFIG_DEFAULT);
-    info!("Config is at {}", config_path);
+    info!(%config_path);
 
-    info!("Parsing config");
+    info!("parsing config");
     let config = parse_config(config_path);
 
     if let Err(e) = runtime::run(config) {
-        error!("{e}");
+        error!(%e);
     }
 }

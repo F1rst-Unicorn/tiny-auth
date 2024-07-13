@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tiny_auth_business::password::Password;
 use tiny_auth_business::user::User;
-use tracing::debug;
+use tracing::trace;
 
 pub(crate) type UserCacheEntry = (DistinguishedName, User);
 
@@ -43,15 +43,15 @@ impl UserLookup {
     pub(crate) async fn get_cached<'a>(&self, key: &'a str) -> UserRepresentation<'a> {
         match self.cache.get(key).await {
             Some(Some(entry)) => {
-                debug!("Cache hit");
+                trace!("cache hit");
                 UserRepresentation::CachedUser(entry)
             }
             Some(None) => {
-                debug!("Cache hit for absent user");
+                trace!("cache hit for absent user");
                 UserRepresentation::Missing
             }
             None => {
-                debug!("Cache miss");
+                trace!("cache miss");
                 UserRepresentation::Name(key)
             }
         }
@@ -92,7 +92,7 @@ impl UserLookup {
                 .map(|(k, v)| (k, v.into())),
         );
 
-        debug!("caching user");
+        trace!("caching user");
         self.cache
             .insert(name.to_string(), Some((search_entry.dn, result.clone())))
             .await;

@@ -40,7 +40,7 @@ pub async fn notify_about_start() {
     .await;
 
     if let Err(e) = result {
-        warn!("watchdog failed to notify about startup: {}", e);
+        warn!(%e, "watchdog failed to notify about startup");
     }
 }
 
@@ -51,7 +51,7 @@ pub async fn notify_about_termination() {
     .await;
 
     if let Err(e) = result {
-        warn!("watchdog failed to notify about termination: {}", e);
+        warn!(%e, "watchdog failed to notify about termination");
     }
 }
 
@@ -60,7 +60,10 @@ pub async fn notify_about_termination() {
 pub async fn watchdog() {
     let watchdog_interval = compute_watchdog_interval();
     let mut clock = time::interval(Duration::from_micros(watchdog_interval));
-    debug!("watchdog will run every {} us", watchdog_interval);
+    debug!(
+        interval_in_us = watchdog_interval,
+        "watchdog will run periodically"
+    );
 
     loop {
         clock.tick().await;
@@ -70,7 +73,7 @@ pub async fn watchdog() {
         .await;
 
         if let Err(e) = result {
-            warn!("watchdog failed to notify: {}", e);
+            warn!(%e, "watchdog failed to notify");
         }
     }
 }

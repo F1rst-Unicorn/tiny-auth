@@ -83,7 +83,7 @@ struct ErrorResponse {
     error_uri: Option<String>,
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all)]
 pub async fn method_not_allowed() -> HttpResponse {
     HttpResponse::MethodNotAllowed().body("method not allowed")
 }
@@ -211,7 +211,7 @@ fn is_csrf_valid(input_token: &Option<String>, session: &Session) -> bool {
                 token == &reference
             }
             e => {
-                debug!("token not found in session: {:#?}", e);
+                debug!(?e, "token not found in session");
                 false
             }
         },
@@ -222,7 +222,7 @@ pub fn parse_basic_authorization(value: &HeaderValue) -> Option<(String, String)
     let credentials = parse_authorization(value, "Basic")?;
     let credentials = match STANDARD.decode(credentials) {
         Err(e) => {
-            debug!("base64 decoding of authorization header failed. {}", e);
+            debug!(%e, "base64 decoding of authorization header failed");
             return None;
         }
         Ok(cred) => cred,
@@ -230,7 +230,7 @@ pub fn parse_basic_authorization(value: &HeaderValue) -> Option<(String, String)
 
     let credentials = match String::from_utf8(credentials) {
         Err(e) => {
-            debug!("utf-8 decoding of authorization header failed. {}", e);
+            debug!(%e, "utf-8 decoding of authorization header failed");
             return None;
         }
         Ok(cred) => cred,
@@ -252,14 +252,14 @@ fn parse_authorization(value: &HeaderValue, auth_type: &str) -> Option<String> {
     let auth_type = auth_type.to_string() + " ";
     let value = match value.to_str() {
         Err(e) => {
-            debug!("decoding of authorization header failed. {}", e);
+            debug!(%e, "decoding of authorization header failed");
             return None;
         }
         Ok(value) => value,
     };
 
     if !value.starts_with(&auth_type) {
-        debug!("Malformed HTTP basic authorization header '{}'", value);
+        debug!(content = %value, "Malformed HTTP basic authorization header");
         return None;
     }
     Some(value.replacen(&auth_type, "", 1))

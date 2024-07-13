@@ -102,7 +102,7 @@ pub struct Response {
     id_token: Option<String>,
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "token_post")]
 pub async fn post(
     headers: HttpRequest,
     request: Form<Request>,

@@ -37,12 +37,12 @@ pub struct Request {
     access_token: Option<String>,
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "userinfo_get")]
 pub async fn get(request: HttpRequest, handler: Data<Handler>) -> HttpResponse {
     post(Form(Request { access_token: None }), request, handler).await
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "userinfo_post")]
 pub async fn post(
     query: Form<Request>,
     request: HttpRequest,
@@ -97,7 +97,7 @@ impl Handler {
 
         match self.validator.validate::<Token>(&token) {
             None => {
-                debug!("Invalid token");
+                debug!("invalid token");
                 Err(Error::InvalidToken)
             }
             Some(token) => Ok(token),
@@ -112,12 +112,12 @@ impl Handler {
                 Some(header) => match parse_bearer_authorization(header) {
                     Some(token) => Ok(token),
                     None => {
-                        debug!("Invalid authorization header");
+                        debug!("invalid authorization header");
                         Err(Error::InvalidAuthorizationHeader)
                     }
                 },
                 None => {
-                    debug!("Missing authorization header");
+                    debug!("missing authorization header");
                     Err(Error::MissingAuthorizationHeader)
                 }
             }

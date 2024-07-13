@@ -37,7 +37,7 @@ pub struct Index {
 #[derive(Clone)]
 pub struct TokenCertificate(pub String);
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "cert")]
 pub async fn get(
     request: HttpRequest,
     cors_lister: Data<Arc<dyn CorsLister>>,

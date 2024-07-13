@@ -24,7 +24,7 @@ pub fn notify_systemd(message: &[(&str, &str)]) {
     let result = notify(false, message.iter());
     match result {
         Ok(false) => trace!("running outside systemd"),
-        Err(e) => error!("error notifying systemd: {}", e),
+        Err(e) => error!(%e, "error notifying systemd"),
         _ => (),
     }
 }

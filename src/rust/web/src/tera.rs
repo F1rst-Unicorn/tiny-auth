@@ -23,7 +23,7 @@ use tera::Result;
 use tera::Tera;
 use tera::Value;
 
-use tracing::error;
+use tracing::{debug, error, instrument, span, Level};
 
 pub fn load_template_engine(static_files_root: &str, http_path: &str) -> Result<Tera> {
     let template_path = static_files_root.to_string() + "/templates/";
@@ -34,6 +34,7 @@ pub fn load_template_engine(static_files_root: &str, http_path: &str) -> Result<
     Ok(tera)
 }
 
+#[instrument(level = Level::DEBUG, ret)]
 fn url_mapper(args: &HashMap<String, Value>) -> Result<Value> {
     match args.get("name") {
         Some(val) => Ok(val.clone()),
@@ -44,6 +45,7 @@ fn url_mapper(args: &HashMap<String, Value>) -> Result<Value> {
     }
 }
 
+#[instrument(level = Level::DEBUG, ret)]
 fn translator(args: &HashMap<String, Value>) -> Result<Value> {
     match args.get("term") {
         Some(val) => Ok(val.clone()),
@@ -59,11 +61,12 @@ fn make_static_mapper(
     http_path: String,
 ) -> Box<dyn Fn(&HashMap<String, Value>) -> Result<Value> + Sync + Send> {
     Box::new(move |args| -> Result<Value> {
-        match args.get("name") {
+        let _guard = span!(Level::DEBUG, "static_mapper", ?args).entered();
+        let result = match args.get("name") {
             Some(val) => match from_value::<String>(val.clone()) {
                 Ok(v) => to_value(http_path.to_string() + &v).map_err(Into::into),
                 Err(e) => {
-                    error!("could not convert to string: {}", e);
+                    error!(%e, "could not convert to string");
                     Err("oops".into())
                 }
             },
@@ -71,6 +74,8 @@ fn make_static_mapper(
                 error!("no name given");
                 Err("oops".into())
             }
-        }
+        };
+        debug!(?result);
+        result
     })
 }

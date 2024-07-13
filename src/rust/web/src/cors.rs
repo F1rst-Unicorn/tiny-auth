@@ -29,7 +29,7 @@ use tiny_auth_business::cors::CorsLister;
 
 use tracing::{debug, instrument};
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all)]
 pub async fn cors_options_preflight(
     request: HttpRequest,
     cors_lister: web::Data<Arc<dyn CorsLister>>,
@@ -72,7 +72,7 @@ impl CorsChecker {
                 if self.lister.is_cors_allowed(origin) {
                     CorsCheckResult::ApprovedOrigin(origin)
                 } else {
-                    debug!("CORS check for unapproved domain '{}'", origin);
+                    debug!(%origin, "CORS check for unapproved domain");
                     CorsCheckResult::IllegalOrigin
                 }
             }

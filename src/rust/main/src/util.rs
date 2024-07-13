@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::fs;
 use std::fs::File;
 use std::io::Error;
@@ -31,22 +31,22 @@ pub fn read_file(file_path: impl AsRef<Path>) -> Result<String, Error> {
     Ok(content)
 }
 
-pub fn iterate_directory<T: AsRef<Path> + Debug>(path: T) -> Option<fs::ReadDir> {
+pub fn iterate_directory<T: AsRef<Path> + Debug + Display>(path: T) -> Option<fs::ReadDir> {
     match fs::metadata(&path) {
         Err(e) => {
-            error!("Could not read store {:?}: {}", path, e);
+            error!(%path, %e, "could not read store");
             return None;
         }
         Ok(metadata) => {
             if !metadata.is_dir() {
-                error!("{:?} is no directory", path);
+                error!(%path, "not a directory");
                 return None;
             }
         }
     }
     match fs::read_dir(path) {
         Err(e) => {
-            error!("Could not list files in directory: {}", e);
+            error!(%e, "could not list files in directory");
             None
         }
         Ok(files) => Some(files),

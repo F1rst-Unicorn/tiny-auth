@@ -29,7 +29,7 @@ use chrono::Duration;
 use chrono::Local;
 use futures_util::future::join_all;
 use std::sync::Arc;
-use tracing::{info, instrument};
+use tracing::{debug, info, instrument};
 
 #[async_trait]
 pub trait UserStore: Send + Sync {
@@ -68,6 +68,7 @@ impl UserStore for MergingUserStore {
             .into_iter()
             .filter_map(Result::ok)
             .reduce(User::merge)
+            .inspect(|_| debug!("found"))
             .ok_or(UserError::NotFound)
     }
 }
@@ -109,6 +110,7 @@ impl ClientStore for MergingClientStore {
             .into_iter()
             .filter_map(Result::ok)
             .reduce(Client::merge)
+            .inspect(|_| debug!("found"))
             .ok_or(ClientError::NotFound)
     }
 }

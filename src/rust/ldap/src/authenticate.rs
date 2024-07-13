@@ -189,7 +189,7 @@ async fn simple_bind(ldap: &mut Ldap, bind_dn: &str, password: &str) -> Result<b
         }
         v => {
             warn!(
-                "Unexpected LDAP result code while binding: {}. {}",
+                "unexpected LDAP result code while binding: {}. {}",
                 v, result.text
             );
             Err(LdapError::BindError)

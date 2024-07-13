@@ -33,7 +33,7 @@ pub(crate) struct TinyAuthApiImpl {
 
 #[async_trait]
 impl TinyAuthApi for TinyAuthApiImpl {
-    #[instrument(skip_all, fields(transport = "grpc"))]
+    #[instrument(skip_all)]
     async fn change_password(
         &self,
         request: Request<PasswordChangeRequest>,

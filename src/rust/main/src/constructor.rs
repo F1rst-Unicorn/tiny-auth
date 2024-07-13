@@ -402,7 +402,7 @@ impl<'a> Constructor<'a> {
 
     fn read_token_keypairs(config: &'a Config) -> Result<(Vec<String>, String), Error> {
         if config.crypto.keys.is_empty() {
-            error!("At least one crypto.keys entry must be given");
+            error!("at least one crypto.keys entry must be given");
             return Err(LoggedBeforeError);
         }
         let public_keys = config
@@ -429,7 +429,7 @@ impl<'a> Constructor<'a> {
         match EncodingKey::from_rsa_pem(bytes) {
             Err(_) => match EncodingKey::from_ec_pem(bytes) {
                 Err(e) => {
-                    error!("failed to read private token key: {}", e);
+                    error!(%e, "failed to read private token key");
                     Err(e.into())
                 }
                 Ok(key) => Ok((key, Algorithm::ES384)),
@@ -501,7 +501,7 @@ impl<'a> Constructor<'a> {
             let crv = match key.group().curve_name() {
                 Some(openssl::nid::Nid::SECP384R1) => "P-384".to_string(),
                 Some(_) | None => {
-                    error!("Unsupported curve in token key");
+                    error!("unsupported curve in token key");
                     return Err(LoggedBeforeError);
                 }
             };
@@ -523,7 +523,7 @@ impl<'a> Constructor<'a> {
             let id = STANDARD.encode(hasher.finish()?);
             Jwk::new_ecdsa(id, url, crv, x, y)
         } else {
-            error!("Token key has unknown type, tried RSA and ECDSA");
+            error!("token key has unknown type, tried RSA and ECDSA");
             return Err(LoggedBeforeError);
         };
 

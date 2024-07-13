@@ -46,8 +46,8 @@ use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
-use tracing::warn;
 use tracing::{debug, instrument, Level};
+use tracing::{span, warn};
 
 const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -166,6 +166,7 @@ impl Handler {
                 let generate_refresh_token =
                     matches!(client.client_type, ClientType::Confidential { .. });
 
+                let _guard = span!(Level::DEBUG, "cid", user = user.name).entered();
                 let mut token = self
                     .token_creator
                     .build_token(&user, &client, &scopes, auth_time);

@@ -34,9 +34,9 @@ use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
 use tiny_auth_business::oidc::Prompt;
 use tiny_auth_business::serde::deserialise_empty_as_none;
-use tracing::error;
 use tracing::warn;
 use tracing::{debug, instrument};
+use tracing::{error, span, Level};
 
 pub const SESSION_KEY: &str = "b";
 pub const AUTH_TIME_SESSION_KEY: &str = "t";
@@ -61,7 +61,7 @@ pub struct Request {
     csrftoken: Option<String>,
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "authenticate_get")]
 pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
@@ -71,10 +71,11 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     };
 
     if let Ok(Some(username)) = session.get::<String>(SESSION_KEY) {
+        let _guard = span!(Level::DEBUG, "cid", user = username).entered();
         if first_request.prompts.contains(&Prompt::Login)
             || first_request.prompts.contains(&Prompt::SelectAccount)
         {
-            debug!("Recognised user '{}' but client demands login", username);
+            debug!("recognised user but client demands login");
             render_login_form(session, tera)
         } else if let Some(max_age) = first_request.max_age {
             let auth_time = match session.get::<i64>(AUTH_TIME_SESSION_KEY) {
@@ -86,29 +87,23 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
             };
             let now = Local::now();
             if now.timestamp() - auth_time <= max_age {
-                debug!(
-                    "Recognised authenticated user '{}' and max_age is still ok",
-                    username
-                );
+                debug!("recognised authenticated user and max_age is still ok",);
                 redirect_successfully()
             } else {
-                debug!(
-                    "Recognised authenticated user '{}' but client demands more recent login",
-                    username
-                );
+                debug!("recognised authenticated user but client demands more recent login",);
                 render_login_form(session, tera)
             }
         } else {
-            debug!("Recognised authenticated user '{}'", username);
+            debug!("recognised authenticated user",);
             redirect_successfully()
         }
     } else if first_request.prompts.contains(&Prompt::None) {
-        debug!("No user recognised but client demands no interaction");
+        debug!("no user recognised but client demands no interaction");
         render_redirect_error(
             session,
             &tera,
             oidc::ProtocolError::Oidc(oidc::OidcProtocolError::LoginRequired),
-            "No username found",
+            "no username found",
             first_request.encode_redirect_to_fragment,
         )
     } else {
@@ -125,7 +120,7 @@ fn render_login_form(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     }
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "authenticate_post")]
 pub async fn post(
     query: web::Form<Request>,
     session: Session,
@@ -177,18 +172,18 @@ pub async fn post(
         session.remove(TRIES_LEFT_SESSION_KEY);
         session.remove(ERROR_CODE_SESSION_KEY);
         if let Err(e) = session.insert(SESSION_KEY, &username) {
-            error!("Failed to serialise session: {}", e);
+            error!(%e, "failed to serialise session");
             return server_error(&tera);
         }
         if let Err(e) = session.insert(AUTH_TIME_SESSION_KEY, Local::now().timestamp()) {
-            error!("Failed to serialise auth_time: {}", e);
+            error!(%e, "failed to serialise auth_time");
             return server_error(&tera);
         }
         redirect_successfully()
     } else if let Err(Error::RateLimited) = auth_result {
         render_invalid_login_attempt_error(4, &tera, &session, None)
     } else if tries_left > 0 {
-        debug!("{} tries left", tries_left);
+        debug!(tries_left);
         render_invalid_login_attempt_error(3, &tera, &session, Some(tries_left))
     } else {
         debug!("no tries left");
@@ -204,7 +199,7 @@ pub async fn post(
     }
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "authenticate_cancel")]
 pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
@@ -222,7 +217,7 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     )
 }
 
-#[instrument(skip_all, fields(transport = "http"))]
+#[instrument(skip_all, name = "authenticate_select_account")]
 pub async fn select_account(session: Session) -> HttpResponse {
     session.remove(SESSION_KEY);
     session.remove(AUTH_TIME_SESSION_KEY);
@@ -274,7 +269,7 @@ fn build_context(session: &Session) -> Option<Context> {
     context.insert(super::CSRF_CONTEXT, &csrftoken);
 
     if let Err(e) = session.insert(super::CSRF_SESSION_KEY, csrftoken) {
-        warn!("Failed to construct context: {}", e);
+        warn!(%e, "failed to construct context");
         return None;
     }
     Some(context)
@@ -293,13 +288,13 @@ fn render_invalid_login_attempt_error(
     tries_left: Option<i32>,
 ) -> HttpResponse {
     if let Err(e) = session.insert(ERROR_CODE_SESSION_KEY, error) {
-        error!("Failed to serialise session: {}", e);
+        error!(%e, "failed to serialise session");
         return server_error(tera);
     }
 
     if let Some(tries_left) = tries_left {
         if let Err(e) = session.insert(TRIES_LEFT_SESSION_KEY, tries_left) {
-            error!("Failed to serialise session: {}", e);
+            error!(%e, "failed to serialise session");
             return server_error(tera);
         }
     }

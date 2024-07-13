@@ -32,14 +32,13 @@ impl Connector {
             let settings = LdapConnSettings::new()
                 .set_conn_timeout(self.connect_timeout)
                 .set_starttls(self.starttls);
-            debug!("connecting to {}", &url);
+            debug!(%url, "connecting");
             match LdapConnAsync::from_url_with_settings(settings, url).await {
                 Err(e) => {
-                    warn!("ldap connection to '{}' failed: {}", url, e);
+                    warn!(%url, %e, "ldap connection failed");
                 }
                 Ok((conn, ldap)) => {
                     drive!(conn);
-                    debug!("connected to {}", &url);
                     return Ok(ldap);
                 }
             }

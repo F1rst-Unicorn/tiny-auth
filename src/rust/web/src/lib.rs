@@ -262,7 +262,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     };
 
     if let Err(e) = server {
-        warn!("Failed to create server: {}", e);
+        warn!(%e, "failed to create server");
         return Err(e.into());
     }
     let mut server = server.unwrap();
@@ -293,12 +293,12 @@ fn configure_tls<'a>(constructor: &impl Constructor<'a>) -> Result<ServerConfig,
         }
         Ok(keys) => match keys.len() {
             0 => {
-                error!("No tls key found");
+                error!("no tls key found");
                 return Err(LoggedBeforeError);
             }
             1 => PrivateKey(keys[0].clone()),
             _ => {
-                error!("Put only one tls key into the tls key file");
+                error!("put only one tls key into the tls key file");
                 return Err(LoggedBeforeError);
             }
         },
@@ -312,7 +312,7 @@ fn configure_tls<'a>(constructor: &impl Constructor<'a>) -> Result<ServerConfig,
         .with_client_cert_verifier(client_cert_verifier)
         .with_single_cert(server_certificate_chain, key)
         .map_err(|e| {
-            error!("tls key is invalid: {}", e);
+            error!(%e, "tls key is invalid");
             LoggedBeforeError
         })
 }
@@ -329,14 +329,13 @@ fn build_client_verifier<'a>(
             .enumerate()
             .filter(|(_, result)| result.is_err())
             .for_each(|(index, error)| {
-                error!(
-                    "ignoring client ca certificate at index {}: {}",
+                error!(e = %error.unwrap_err(),
                     index,
-                    error.unwrap_err()
+                    "ignoring client ca certificate",
                 )
             });
         if ca_store.is_empty() {
-            error!("No usable client ca certificates were found");
+            error!("no usable client ca certificates were found");
             return Err(LoggedBeforeError);
         }
         AllowAnyAuthenticatedClient::new(ca_store)

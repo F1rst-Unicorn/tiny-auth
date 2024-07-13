@@ -59,7 +59,7 @@ pub fn run(config: Config) -> Result<(), Error> {
             .thread_name(env!("CARGO_PKG_NAME"))
             .build()
             .map_err(|e| {
-                error!("failed to start tokio runtime: {}", e);
+                error!(%e, "failed to start tokio runtime");
                 e
             })
             .unwrap()
@@ -70,7 +70,7 @@ pub fn run(config: Config) -> Result<(), Error> {
         let (pass_server, receive_server) = oneshot::channel();
         let api_join_handle = match tiny_auth_api::start(&constructor).await {
             Err(e) => {
-                error!("GRPC API startup failed: {}", e);
+                error!(%e, "GRPC API startup failed");
                 return Ok::<(), Error>(());
             }
             Ok(v) => v,
@@ -79,18 +79,18 @@ pub fn run(config: Config) -> Result<(), Error> {
 
         let srv = match tiny_auth_web::build(&constructor) {
             Err(e) => {
-                error!("Startup failed: {}", e);
+                error!(%e, "startup failed");
                 return Ok(());
             }
             Ok(srv) => srv,
         };
         drop(constructor);
         if pass_server.send(srv.handle()).is_err() {
-            error!("Failed to create server");
+            error!("failed to create server");
             return Ok(());
         }
         if let Err(e) = srv.await {
-            error!("HTTP server failed: {}", e);
+            error!(%e, "HTTP server failed");
         }
 
         Ok(())
@@ -104,7 +104,7 @@ async fn runtime_primitives(
 ) {
     let server = match receive_server.await {
         Err(e) => {
-            error!("failed to receive server: {}", e);
+            error!(%e, "failed to receive server");
             return;
         }
         Ok(server) => server,
