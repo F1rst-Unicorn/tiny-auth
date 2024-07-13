@@ -1,0 +1,36 @@
+@startuml
+
+class Resource
+class Action
+class AtomicAction
+class CompositeAction
+
+class Permission
+class AuthorizationConstraint
+
+class Role
+class Subject
+class Group
+class User
+
+class Client???
+
+User --|> Subject
+Group --|> Subject
+Subject --o Group: User Hierarchy
+
+Role --o Role: Role Hierarchy
+
+Subject -- Role
+Role "1.." -- Permission: grants
+
+Permission -- "1.." Action: to perform
+Permission -- "0..1"  AuthorizationConstraint
+
+AtomicAction --|> Action
+CompositeAction --|> Action
+Action --o CompositeAction: Action Hierarchy
+
+Action --* "1" Resource: on
+
+@enduml
