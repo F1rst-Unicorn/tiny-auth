@@ -16,11 +16,12 @@
  */
 
 use tonic::metadata::MetadataMap;
-use tracing::debug;
+use tracing::{debug, instrument, Level};
 
 pub const AUTHORIZATION_HEADER_KEY: &str = "x-authorization";
 const AUTHORIZATION_HEADER_BEARER_VALUE: &str = "Bearer ";
 
+#[instrument(level = Level::DEBUG)]
 pub(crate) async fn extract_token(metadata: &MetadataMap) -> Option<&str> {
     let value = match metadata.get(AUTHORIZATION_HEADER_KEY) {
         None => {
@@ -32,7 +33,7 @@ pub(crate) async fn extract_token(metadata: &MetadataMap) -> Option<&str> {
 
     let value = match value.to_str() {
         Err(e) => {
-            debug!("value contains unprintable characters: {}", e);
+            debug!(%e, "value contains unprintable characters");
             return None;
         }
         Ok(v) => v,

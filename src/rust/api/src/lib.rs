@@ -41,9 +41,9 @@ use tonic::transport::ServerTlsConfig;
 use tower::{Layer, Service};
 use tower_http::cors::AllowOrigin;
 use tower_http::cors::CorsLayer;
-use tracing::error;
 use tracing::info;
 use tracing::warn;
+use tracing::{error, instrument, trace};
 
 pub(crate) mod tiny_auth_proto {
     // https://github.com/hyperium/tonic/issues/1056
@@ -82,6 +82,7 @@ const DEFAULT_ALLOW_HEADERS: [&str; 5] = [
     AUTHORIZATION_HEADER_KEY,
 ];
 
+#[instrument(name = "grpc_start", skip_all)]
 pub async fn start(
     constructor: &impl Constructor<'_>,
 ) -> Result<(Sender<()>, JoinHandle<()>), Error> {
@@ -101,6 +102,7 @@ pub async fn start(
     let mut server = Server::builder();
     if let Some(tls_config) = get_server_tls_config(identity, client_ca) {
         server = server.tls_config(tls_config)?;
+        trace!("tls enabled")
     }
 
     let path_prefix = constructor.path().to_string();
@@ -138,16 +140,16 @@ pub async fn start(
             .add_service(tonic_web::enable(TinyAuthApiServer::new(api)))
             .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async move {
                 match rx.await {
-                    Err(e) => warn!("terminating grpc api due to error: {}", e),
+                    Err(e) => warn!(%e, "terminating due to error"),
                     Ok(v) => {
-                        info!("grpc api shutting down");
+                        info!("shutting down");
                         v
                     }
                 }
             })
             .await;
         if let Err(e) = server {
-            warn!("grpc api could not start: {}", e);
+            warn!(%e, "could not start");
         }
     });
 

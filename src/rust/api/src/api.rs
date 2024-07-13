@@ -24,8 +24,8 @@ use async_trait::async_trait;
 use tiny_auth_business::password::Password;
 use tonic::Request;
 use tonic::Response;
-use tracing::error;
 use tracing::{debug, instrument};
+use tracing::{error, trace};
 
 pub(crate) struct TinyAuthApiImpl {
     pub(crate) change_password: tiny_auth_business::change_password::Handler,
@@ -45,6 +45,7 @@ impl TinyAuthApi for TinyAuthApiImpl {
             Some(v) => v,
         };
 
+        trace!(%token);
         match self
             .change_password
             .handle(
@@ -55,7 +56,7 @@ impl TinyAuthApi for TinyAuthApiImpl {
             .await
         {
             Err(e) => {
-                debug!("changing password failed: {}", e);
+                debug!(%e, "failed");
                 Err(tonic::Status::permission_denied("permission denied"))
             }
             Ok(Password::Pbkdf2HmacSha256 {
