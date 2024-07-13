@@ -94,6 +94,8 @@ pub struct Request {
     pub pkce_verifier: Option<String>,
 }
 
+type AuthorizationCodeResult = (User, Client, Vec<Scope>, i64, Option<String>);
+
 #[derive(Clone)]
 pub struct Handler {
     client_store: Arc<dyn ClientStore>,
@@ -180,7 +182,7 @@ impl Handler {
     async fn grant_with_authorization_code(
         &self,
         request: Request,
-    ) -> Result<(User, Client, Vec<Scope>, i64, Option<String>), Error> {
+    ) -> Result<AuthorizationCodeResult, Error> {
         request
             .redirect_uri
             .as_ref()
@@ -229,7 +231,7 @@ impl Handler {
         request: Request,
         client: Client,
         record: AuthorizationCodeResponse,
-    ) -> Result<(User, Client, Vec<Scope>, i64, Option<String>), Error> {
+    ) -> Result<AuthorizationCodeResult, Error> {
         let redirect_uri_from_request = request
             .redirect_uri
             .as_ref()
@@ -316,7 +318,7 @@ impl Handler {
         username: &String,
     ) -> Result<(User, Client, Vec<Scope>, i64), Error> {
         let password = &request.password.as_ref().ok_or(Error::MissingPassword)?;
-        let client = self.authenticate_client(&request).await?;
+        let client = self.authenticate_client(request).await?;
         let user = self
             .authenticator
             .authenticate_user(username, password)

@@ -78,7 +78,7 @@ impl Authenticator for SimpleBind {
             UserRepresentation::CachedUser((dn, _)) => {
                 Ok(simple_bind(ldap, &dn, password).await.map_err(wrap_err)?)
             }
-            UserRepresentation::Missing => Err(UserError::NotFound).map_err(wrap_err)?,
+            UserRepresentation::Missing => Err(wrap_err(UserError::NotFound))?,
         }
     }
 
@@ -115,7 +115,7 @@ impl Authenticator for SearchBind {
                 search_entry.dn
             }
             UserRepresentation::CachedUser((dn, _)) => dn,
-            UserRepresentation::Missing => Err(UserError::NotFound).map_err(wrap_err)?,
+            UserRepresentation::Missing => Err(wrap_err(UserError::NotFound))?,
         };
         Ok(simple_bind(ldap, &dn, password).await.map_err(wrap_err)?)
     }
@@ -156,7 +156,7 @@ impl SearchBind {
     ) -> Option<Result<SearchEntry, UserError>> {
         debug!(base_dn = &search.base_dn, "searching");
         let result = match ldap
-            .search(&search.base_dn, Scope::Subtree, &filter, &["*", "+"])
+            .search(&search.base_dn, Scope::Subtree, filter, &["*", "+"])
             .await
         {
             Ok(v) => v,
