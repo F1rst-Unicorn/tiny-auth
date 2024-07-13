@@ -23,32 +23,46 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tiny_auth_business::password::Password;
 use tiny_auth_business::user::User;
-use tracing::trace;
+use tracing::debug;
 
 pub(crate) type UserCacheEntry = (DistinguishedName, User);
 
 pub enum UserRepresentation<'a> {
+    Missing,
     Name(&'a str),
     CachedUser(UserCacheEntry),
 }
 
 pub(crate) struct UserLookup {
     pub(crate) ldap_name: String,
-    pub(crate) cache: Cache<String, UserCacheEntry>,
+    pub(crate) cache: Cache<String, Option<UserCacheEntry>>,
     pub(crate) mappings: Vec<Arc<dyn AttributeMapping<User>>>,
 }
 
 impl UserLookup {
     pub(crate) async fn get_cached<'a>(&self, key: &'a str) -> UserRepresentation<'a> {
-        if let Some(entry) = self.cache.get(key).await {
-            UserRepresentation::CachedUser(entry)
-        } else {
-            trace!("Cache miss for user {}", key);
-            UserRepresentation::Name(key)
+        match self.cache.get(key).await {
+            Some(Some(entry)) => {
+                debug!("Cache hit");
+                UserRepresentation::CachedUser(entry)
+            }
+            Some(None) => {
+                debug!("Cache hit for absent user");
+                UserRepresentation::Missing
+            }
+            None => {
+                debug!("Cache miss");
+                UserRepresentation::Name(key)
+            }
         }
     }
 
+    pub(crate) async fn record_missing(&self, name: &str) {
+        self.cache.insert(name.to_string(), None).await;
+    }
+
     pub(crate) async fn map_to_user(&self, name: &str, search_entry: SearchEntry) -> User {
+        debug!("Mapping user {}", name);
         let mut result = User {
             name: name.to_string(),
             password: Password::Ldap {
@@ -79,9 +93,9 @@ impl UserLookup {
                 .map(|(k, v)| (k, v.into())),
         );
 
-        trace!("Caching user {}", name);
+        debug!("Caching user {}", name);
         self.cache
-            .insert(name.to_string(), (search_entry.dn, result.clone()))
+            .insert(name.to_string(), Some((search_entry.dn, result.clone())))
             .await;
         result
     }

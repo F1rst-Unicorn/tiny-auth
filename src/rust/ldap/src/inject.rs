@@ -131,7 +131,7 @@ pub fn search_bind_store(
     })
 }
 
-fn user_cache(name: &str) -> Cache<String, UserCacheEntry> {
+fn user_cache(name: &str) -> Cache<String, Option<UserCacheEntry>> {
     Cache::builder()
         .name(format!("tiny-auth ldap store {name}").as_str())
         .eviction_policy(EvictionPolicy::tiny_lfu())
@@ -139,7 +139,7 @@ fn user_cache(name: &str) -> Cache<String, UserCacheEntry> {
         .build()
 }
 
-fn client_cache(name: &str) -> Cache<String, ClientCacheEntry> {
+fn client_cache(name: &str) -> Cache<String, Option<ClientCacheEntry>> {
     Cache::builder()
         .name(format!("tiny-auth ldap store {name}").as_str())
         .eviction_policy(EvictionPolicy::tiny_lfu())

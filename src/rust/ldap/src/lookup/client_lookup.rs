@@ -23,30 +23,43 @@ use std::sync::Arc;
 use tiny_auth_business::client::Client;
 use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::Password;
-use tracing::{error, trace};
+use tracing::{debug, error, trace};
 use url::Url;
 
 pub(crate) type ClientCacheEntry = (DistinguishedName, Client);
 
 pub enum ClientRepresentation {
     Name,
+    Missing,
     CachedClient(ClientCacheEntry),
 }
 
 pub(crate) struct ClientLookup {
     pub(crate) ldap_name: String,
-    pub(crate) cache: Cache<String, ClientCacheEntry>,
+    pub(crate) cache: Cache<String, Option<ClientCacheEntry>>,
     pub(crate) mappings: Vec<Arc<dyn AttributeMapping<Client>>>,
 }
 
 impl ClientLookup {
     pub(crate) async fn get_cached(&self, key: &str) -> ClientRepresentation {
-        if let Some(entry) = self.cache.get(key).await {
-            ClientRepresentation::CachedClient(entry)
-        } else {
-            trace!("Cache miss for client {}", key);
-            ClientRepresentation::Name
+        match self.cache.get(key).await {
+            Some(Some(entry)) => {
+                debug!("Cache hit");
+                ClientRepresentation::CachedClient(entry)
+            }
+            Some(None) => {
+                debug!("Cache hit for absent client");
+                ClientRepresentation::Missing
+            }
+            None => {
+                debug!("Cache miss");
+                ClientRepresentation::Name
+            }
         }
+    }
+
+    pub(crate) async fn record_missing(&self, name: &str) {
+        self.cache.insert(name.to_string(), None).await;
     }
 
     pub(crate) async fn map_to_client(&self, name: &str, search_entry: SearchEntry) -> Client {
@@ -94,7 +107,7 @@ impl ClientLookup {
 
         trace!("Caching client {}", name);
         self.cache
-            .insert(name.to_string(), (search_entry.dn, result.clone()))
+            .insert(name.to_string(), Some((search_entry.dn, result.clone())))
             .await;
         result
     }

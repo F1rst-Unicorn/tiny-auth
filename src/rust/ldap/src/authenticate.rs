@@ -78,6 +78,7 @@ impl Authenticator for SimpleBind {
             UserRepresentation::CachedUser((dn, _)) => {
                 Ok(simple_bind(ldap, &dn, password).await.map_err(wrap_err)?)
             }
+            UserRepresentation::Missing => Err(UserError::NotFound).map_err(wrap_err)?,
         }
     }
 
@@ -114,6 +115,7 @@ impl Authenticator for SearchBind {
                 search_entry.dn
             }
             UserRepresentation::CachedUser((dn, _)) => dn,
+            UserRepresentation::Missing => Err(UserError::NotFound).map_err(wrap_err)?,
         };
         Ok(simple_bind(ldap, &dn, password).await.map_err(wrap_err)?)
     }

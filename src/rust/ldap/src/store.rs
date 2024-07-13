@@ -22,15 +22,15 @@ use crate::lookup::user_lookup::{UserLookup, UserRepresentation};
 use async_trait::async_trait;
 use futures::future::OptionFuture;
 use ldap3::ldap_escape;
-use log::error;
 use tiny_auth_business::client::Client;
 use tiny_auth_business::client::Error as ClientError;
-use tiny_auth_business::password::{Error, Password};
+use tiny_auth_business::password::Error as PasswordError;
+use tiny_auth_business::password::Password;
 use tiny_auth_business::store::{ClientStore, PasswordStore, UserStore};
 use tiny_auth_business::user::Error as UserError;
 use tiny_auth_business::user::User;
 use tiny_auth_business::util::wrap_err;
-use tracing::{error, warn};
+use tracing::{error, instrument, warn};
 
 pub struct LdapStore {
     pub(crate) name: String,
@@ -45,16 +45,29 @@ impl UserStore for LdapStore {
     async fn get(&self, username: &str) -> Result<User, UserError> {
         let username = ldap_escape(username).into_owned();
         let user_lookup = self.user_lookup.as_ref().ok_or(UserError::NotFound)?;
-        if let UserRepresentation::CachedUser(cached_user) = user_lookup.get_cached(&username).await
-        {
-            return Ok(cached_user.1);
-        }
+        match user_lookup.get_cached(&username).await {
+            UserRepresentation::CachedUser(cached_user) => {
+                return Ok(cached_user.1);
+            }
+            UserRepresentation::Missing => {
+                return Err(UserError::NotFound);
+            }
+            _ => {}
+        };
 
         let mut ldap = self.connector.connect().await.map_err(wrap_err)?;
-        let search_entry = self
+        let search_entry = match self
             .authenticator
             .get_ldap_record(&mut ldap, &username)
-            .await?;
+            .await
+        {
+            Ok(v) => v,
+            Err(UserError::NotFound) => {
+                user_lookup.record_missing(&username).await;
+                return Err(UserError::NotFound);
+            }
+            e => e.map_err(wrap_err)?,
+        };
         let user = user_lookup.map_to_user(&username, search_entry).await;
         Ok(user)
     }
@@ -62,12 +75,13 @@ impl UserStore for LdapStore {
 
 #[async_trait]
 impl PasswordStore for LdapStore {
+    #[instrument(name = "verify_password", skip(self, stored_password))]
     async fn verify(
         &self,
         username: &str,
         stored_password: &Password,
         password_to_check: &str,
-    ) -> Result<bool, Error> {
+    ) -> Result<bool, PasswordError> {
         let username = ldap_escape(username).into_owned();
         match stored_password {
             Password::Ldap { name } => {
@@ -76,7 +90,7 @@ impl PasswordStore for LdapStore {
                         "Password store dispatch bug. Password names {} but this is {}",
                         name, self.name
                     );
-                    return Err(Error::BackendError);
+                    return Err(PasswordError::BackendError);
                 }
             }
             _ => {
@@ -85,9 +99,33 @@ impl PasswordStore for LdapStore {
         }
 
         let mut ldap = self.connector.connect().await.map_err(wrap_err)?;
-        let user = OptionFuture::from(self.user_lookup.as_ref().map(|v| v.get_cached(&username)))
-            .await
-            .unwrap_or(UserRepresentation::Name(&username));
+        let user =
+            match OptionFuture::from(self.user_lookup.as_ref().map(|v| v.get_cached(&username)))
+                .await
+            {
+                None | Some(UserRepresentation::Name(_)) => {
+                    let user_lookup = self
+                        .user_lookup
+                        .as_ref()
+                        .ok_or(UserError::NotFound)
+                        .map_err(wrap_err)?;
+                    let search_entry = self
+                        .authenticator
+                        .get_ldap_record(&mut ldap, &username)
+                        .await
+                        .map_err(wrap_err)?;
+                    UserRepresentation::CachedUser((
+                        search_entry.dn.clone(),
+                        user_lookup.map_to_user(&username, search_entry).await,
+                    ))
+                }
+                Some(UserRepresentation::CachedUser(v)) => UserRepresentation::CachedUser(v),
+                Some(UserRepresentation::Missing) => {
+                    warn!("Tried to verify password of unknown user to this store");
+                    return Err(PasswordError::BackendError);
+                }
+            };
+
         self.authenticator
             .authenticate(&mut ldap, user, password_to_check)
             .await
@@ -99,18 +137,29 @@ impl ClientStore for LdapStore {
     async fn get(&self, key: &str) -> Result<Client, ClientError> {
         let client_id = ldap_escape(key).into_owned();
         let client_lookup = self.client_lookup.as_ref().ok_or(ClientError::NotFound)?;
-        if let ClientRepresentation::CachedClient(cached_client) =
-            client_lookup.get_cached(&client_id).await
-        {
-            return Ok(cached_client.1);
-        }
+        match client_lookup.get_cached(&client_id).await {
+            ClientRepresentation::CachedClient(cached_client) => {
+                return Ok(cached_client.1);
+            }
+            ClientRepresentation::Missing => {
+                return Err(ClientError::NotFound);
+            }
+            _ => {}
+        };
 
         let mut ldap = self.connector.connect().await.map_err(wrap_err)?;
-        let search_entry = self
+        let search_entry = match self
             .authenticator
             .get_ldap_record(&mut ldap, &client_id)
             .await
-            .map_err(wrap_err)?;
+        {
+            Ok(v) => v,
+            Err(UserError::NotFound) => {
+                client_lookup.record_missing(key).await;
+                return Err(ClientError::NotFound);
+            }
+            e => e.map_err(wrap_err)?,
+        };
         let client = client_lookup.map_to_client(&client_id, search_entry).await;
         Ok(client)
     }
