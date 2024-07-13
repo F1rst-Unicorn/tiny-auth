@@ -14,6 +14,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use tracing::debug;
 
 pub trait CorsLister: Send + Sync {
     fn is_cors_allowed(&self, domain: &str) -> bool;
@@ -25,6 +26,7 @@ struct CorsListerImpl {
 
 impl CorsLister for CorsListerImpl {
     fn is_cors_allowed(&self, domain: &str) -> bool {
+        debug!(domain, "cors check");
         self.approved_domains.iter().any(|v| v == domain)
     }
 }

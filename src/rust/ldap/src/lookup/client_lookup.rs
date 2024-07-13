@@ -44,15 +44,15 @@ impl ClientLookup {
     pub(crate) async fn get_cached(&self, key: &str) -> ClientRepresentation {
         match self.cache.get(key).await {
             Some(Some(entry)) => {
-                debug!("Cache hit");
+                debug!("cache hit");
                 ClientRepresentation::CachedClient(entry)
             }
             Some(None) => {
-                debug!("Cache hit for absent client");
+                debug!("cache hit for absent client");
                 ClientRepresentation::Missing
             }
             None => {
-                debug!("Cache miss");
+                debug!("cache miss");
                 ClientRepresentation::Name
             }
         }
@@ -105,7 +105,7 @@ impl ClientLookup {
                 .map(|(k, v)| (k, v.into())),
         );
 
-        trace!("Caching client {}", name);
+        trace!("caching client {}", name);
         self.cache
             .insert(name.to_string(), Some((search_entry.dn, result.clone())))
             .await;
@@ -122,7 +122,7 @@ impl AttributeMapping<Client> for ClientTypeMapping {
         if let Some(attributes) = search_entry.attrs.get(&self.attribute) {
             if attributes.len() > 1 {
                 error!(
-                    "Not mapping multiple client type attributes {} for client {}",
+                    "not mapping multiple client type attributes {} for client {}",
                     self.attribute, entity.client_id
                 );
                 return entity;
@@ -132,7 +132,7 @@ impl AttributeMapping<Client> for ClientTypeMapping {
                 entity.client_type = ClientType::Public;
             } else if client_type != "confidential" {
                 error!(
-                    "Invalid client type attribute value {} for client {}",
+                    "invalid client type attribute value {} for client {}",
                     self.attribute, entity.client_id
                 );
             }

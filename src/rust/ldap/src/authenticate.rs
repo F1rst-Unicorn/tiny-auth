@@ -22,10 +22,10 @@ use enum_dispatch::enum_dispatch;
 use ldap3::{Ldap, Scope, SearchEntry};
 use std::sync::Arc;
 use tera::{Context, Tera};
-use tiny_auth_business::password::Error;
+use tiny_auth_business::password::Error as PasswordError;
 use tiny_auth_business::user::Error as UserError;
 use tiny_auth_business::util::wrap_err;
-use tracing::{debug, warn};
+use tracing::{debug, instrument, warn, Level};
 
 #[enum_dispatch(Authenticator)]
 pub(crate) enum AuthenticatorDispatcher {
@@ -41,7 +41,7 @@ pub(crate) trait Authenticator {
         ldap: &mut Ldap,
         user: UserRepresentation<'_>,
         password: &str,
-    ) -> Result<bool, Error>;
+    ) -> Result<bool, PasswordError>;
 
     async fn get_ldap_record(
         &self,
@@ -61,7 +61,7 @@ impl Authenticator for SimpleBind {
         ldap: &mut Ldap,
         user: UserRepresentation<'_>,
         password: &str,
-    ) -> Result<bool, Error> {
+    ) -> Result<bool, PasswordError> {
         match user {
             UserRepresentation::Name(username) => {
                 for bind_template in &self.bind_dn_format {
@@ -105,7 +105,7 @@ impl Authenticator for SearchBind {
         ldap: &mut Ldap,
         user: UserRepresentation<'_>,
         password: &str,
-    ) -> Result<bool, Error> {
+    ) -> Result<bool, PasswordError> {
         let dn = match user {
             UserRepresentation::Name(username) => {
                 let search_entry = self
@@ -130,37 +130,53 @@ impl Authenticator for SearchBind {
             .map_err(wrap_err)?
         {
             warn!(
-                "wrong username or password for search bind mode. Username '{}'",
-                self.bind_dn
+                bind_dn = self.bind_dn,
+                "wrong username or password for search bind mode",
             );
             return Err(UserError::BackendError);
         };
 
         for search in &self.searches {
             let filter = format_username(&search.search_filter, username).map_err(wrap_err)?;
-            debug!("searching in {} for {}", &search.base_dn, &filter);
-            let result = match ldap
-                .search(&search.base_dn, Scope::Subtree, &filter, &["*", "+"])
-                .await
-            {
-                Ok(v) => v,
-                Err(e) => {
-                    warn!("searching for user '{}' failed. {}", username, e);
-                    return Err(UserError::BackendErrorWithContext(Arc::new(e)));
-                }
-            };
-
-            if let Some(entry) = result.0.into_iter().next() {
-                let entry = SearchEntry::construct(entry);
-                return Ok(entry);
+            if let Some(value) = Self::search(ldap, username, &search, &filter).await {
+                return value;
             }
         }
         Err(UserError::NotFound)
     }
 }
 
+impl SearchBind {
+    #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(filter = filter))]
+    async fn search(
+        ldap: &mut Ldap,
+        _username: &str,
+        search: &&LdapSearch,
+        filter: &String,
+    ) -> Option<Result<SearchEntry, UserError>> {
+        debug!(base_dn = &search.base_dn, "searching");
+        let result = match ldap
+            .search(&search.base_dn, Scope::Subtree, &filter, &["*", "+"])
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                warn!(%e, "searching failed");
+                return Some(Err(UserError::BackendErrorWithContext(Arc::new(e))));
+            }
+        };
+
+        if let Some(entry) = result.0.into_iter().next() {
+            let entry = SearchEntry::construct(entry);
+            return Some(Ok(entry));
+        }
+        None
+    }
+}
+
+#[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(bind_dn = bind_dn))]
 async fn simple_bind(ldap: &mut Ldap, bind_dn: &str, password: &str) -> Result<bool, LdapError> {
-    debug!("binding to LDAP as '{}'", bind_dn);
+    debug!("binding to LDAP");
     let result = ldap
         .simple_bind(bind_dn, password)
         .await
@@ -186,7 +202,7 @@ fn format_username(format: &str, username: &str) -> Result<String, LdapError> {
     let mut context = Context::new();
     context.insert("user", username);
     tera.render_str(format, &context).map_err(|e| {
-        warn!("failed to construct bind dn: {}", e);
+        warn!(%e, "failed to construct bind dn");
         LdapError::FormatError(e)
     })
 }

@@ -15,25 +15,20 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::pkce::CodeChallenge;
 use crate::store::AuthorizationCodeRequest;
 use crate::store::AuthorizationCodeResponse;
 use crate::store::AuthorizationCodeStore;
 use crate::store::ValidationRequest;
-
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use async_trait::async_trait;
-
-use tokio::sync::RwLock;
-use tokio::time;
-
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Local;
-
-use crate::pkce::CodeChallenge;
-use tracing::trace;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tokio::time;
+use tracing::{debug, instrument, trace, Level};
 
 #[derive(PartialEq, Eq, Hash)]
 struct AuthCodeKey {
@@ -91,7 +86,9 @@ pub async fn auth_code_clean_job(store: Arc<MemoryAuthorizationCodeStore>) {
 
 #[async_trait]
 impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
+    #[instrument(skip_all, ret(level = Level::DEBUG))]
     async fn get_authorization_code<'a>(&self, request: AuthorizationCodeRequest<'a>) -> String {
+        debug!("issuing authorization code");
         let mut store = self.store.write().await;
         let mut key = AuthCodeKey {
             client_id: request.client_id.to_string(),

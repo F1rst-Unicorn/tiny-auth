@@ -24,8 +24,8 @@ use crate::store::ClientStore;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use tracing::Level;
 use tracing::{debug, enabled, info};
+use tracing::{instrument, Level};
 
 #[derive(Default)]
 pub struct Request {
@@ -114,6 +114,10 @@ pub trait Session {
 }
 
 impl Handler {
+    #[instrument(level = Level::DEBUG, skip_all, fields(
+        client = request.client_id,
+        pkce = request.code_challenge.is_some(),
+        response_types = request.response_type))]
     pub async fn handle(&self, request: Request, session: impl Session) -> Result<(), Error> {
         let redirect_uri = Self::extract_redirect_uri(request.redirect_uri)?;
         let client_id = Self::extract_client_id(request.client_id)?;
@@ -180,7 +184,7 @@ impl Handler {
     async fn load_client(&self, client_id: &str) -> Result<Client, Error> {
         match self.client_store.get(client_id).await {
             Err(e) => {
-                info!("client '{}' not found ({e})", client_id);
+                info!(%e, "client not found");
                 Err(Error::InvalidClientId)
             }
             Ok(client) => Ok(client),
@@ -193,8 +197,8 @@ impl Handler {
     ) -> Result<(), Error> {
         if !client.is_redirect_uri_valid(redirect_uri) {
             info!(
-                "invalid redirect_uri '{}' for client '{}'",
-                redirect_uri, client.client_id
+                %redirect_uri,
+                "invalid"
             );
             Err(Error::InvalidRedirectUri)
         } else {
@@ -208,7 +212,7 @@ impl Handler {
     ) -> Result<Vec<String>, ()> {
         let scopes = match scopes {
             None => {
-                debug!("Missing scope");
+                debug!("missing scope");
                 return Err(());
             }
             Some(scopes) => scopes,
@@ -234,8 +238,8 @@ impl Handler {
             .join(" ");
         if !forbidden_scopes.is_empty() {
             debug!(
-                "Client '{}' requested forbidden scopes '{}'. These are dropped silently",
-                client.client_id, forbidden_scopes
+                %forbidden_scopes,
+                "requested forbidden scopes. These are dropped silently",
             );
         }
     }
@@ -247,7 +251,7 @@ impl Handler {
             || prompts.contains(&Prompt::SelectAccount))
             && prompts.contains(&Prompt::None)
         {
-            debug!("Contradicting prompt requirements");
+            debug!("contradicting prompt requirements");
             Err(())
         } else {
             Ok(prompts)
@@ -270,20 +274,20 @@ impl Handler {
             (None, None) => Ok(None),
             (Some(challenge), Some(method)) => match CodeChallengeMethod::try_from(method) {
                 Err(_) => {
-                    debug!("unknown code_challenge_method '{method}'");
+                    debug!(%method, "unknown code_challenge_method");
                     Err(Error::CodeChallengeMethodInvalid {
                         redirect_uri: redirect_uri.to_string(),
                     })
                 }
                 Ok(CodeChallengeMethod::Plain) => {
-                    debug!("code_challenge_method {method} is insecure and not supported");
+                    debug!(%method, "code_challenge_method is insecure and not supported");
                     Err(Error::CodeChallengeMethodInvalid {
                         redirect_uri: redirect_uri.to_string(),
                     })
                 }
                 Ok(_) => match CodeChallenge::try_from(challenge) {
                     Err(e) => {
-                        debug!("invalid code_challenge '{challenge}': {e}");
+                        debug!(%e, %challenge, "invalid code_challenge");
                         Err(Error::CodeChallengeInvalid {
                             redirect_uri: redirect_uri.to_string(),
                         })
@@ -307,7 +311,7 @@ impl Handler {
     ) -> Result<Vec<ResponseType>, Error> {
         let response_types = match response_type.as_deref().map(Self::parse_response_type) {
             None | Some(None) => {
-                debug!("Missing or invalid response_type");
+                debug!("missing or invalid response_type");
                 return Err(Error::MissingResponseType {
                     redirect_uri: redirect_uri.to_string(),
                 });
@@ -319,7 +323,7 @@ impl Handler {
         if response_types.contains(&ResponseType::Oidc(OidcResponseType::IdToken))
             && nonce.is_none()
         {
-            debug!("Missing required parameter nonce for implicit flow");
+            debug!("missing required parameter nonce for implicit flow");
             Err(Error::MissingNonceForImplicitFlow {
                 redirect_uri: redirect_uri.to_string(),
             })
@@ -334,7 +338,7 @@ impl Handler {
             let parsed_word = ResponseType::try_from(word);
             match parsed_word {
                 Err(e) => {
-                    debug!("{e}");
+                    debug!(%e);
                     return None;
                 }
                 Ok(response_type) => result.push(response_type),

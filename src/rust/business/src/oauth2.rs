@@ -48,7 +48,7 @@ pub enum ClientType {
     },
 }
 
-#[derive(Deserialize, PartialEq, Eq, Clone, Copy)]
+#[derive(Deserialize, PartialEq, Eq, Clone, Copy, Debug)]
 pub enum GrantType {
     #[serde(rename = "authorization_code")]
     AuthorizationCode,

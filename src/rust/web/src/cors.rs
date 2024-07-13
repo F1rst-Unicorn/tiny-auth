@@ -36,7 +36,7 @@ pub async fn cors_options_preflight(
 ) -> HttpResponse {
     match CorsChecker::new(cors_lister.get_ref().clone()).check(&request) {
         CorsCheckResult::NoOrigin => {
-            debug!("Rejecting CORS OPTIONS request without origin");
+            debug!("rejecting CORS OPTIONS request without origin");
             render_invalid_request()
         }
         CorsCheckResult::IllegalOrigin => render_invalid_request(),

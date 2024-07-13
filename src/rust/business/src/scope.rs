@@ -221,7 +221,7 @@ fn copy_values(value: Value, selector: Value, path: &mut Vec<String>) -> Result<
             let current_value = match value.remove(&k) {
                 None => {
                     path.push(k);
-                    error!("attribute '{}' not found", path.join(" -> "));
+                    error!(attribute = path.join(" -> "), "not found");
                     path.pop();
                     return Err(Error::AttributeSelectionError);
                 }

@@ -15,10 +15,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub fn initialise_from_config_file(file_path: &str) {
+pub fn initialise_from_config_file(_file_path: &str) {
     tracing_subscriber::fmt::init();
 }
 
-pub fn initialise_from_verbosity(verbosity_level: u8) {
+pub fn initialise_from_verbosity(_verbosity_level: u8) {
     tracing_subscriber::fmt::init();
 }

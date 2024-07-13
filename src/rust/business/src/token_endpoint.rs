@@ -25,10 +25,10 @@ use crate::oauth2::GrantType;
 use crate::pkce::{CodeChallenge, CodeVerifier};
 use crate::scope::parse_scope_names;
 use crate::scope::Scope;
-use crate::store::ClientStore;
 use crate::store::ScopeStore;
 use crate::store::UserStore;
 use crate::store::AUTH_CODE_LIFE_TIME;
+use crate::store::{AuthorizationCodeResponse, ClientStore};
 use crate::store::{AuthorizationCodeStore, ValidationRequest};
 use crate::token::RefreshToken;
 use crate::token::Token;
@@ -46,8 +46,8 @@ use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
-use tracing::debug;
 use tracing::warn;
+use tracing::{debug, instrument, Level};
 
 const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -107,6 +107,10 @@ pub struct Handler {
 }
 
 impl Handler {
+    #[instrument(level = Level::DEBUG, skip_all, fields(
+        client = request.client_id,
+        pkce = request.pkce_verifier.is_some(),
+        grant_type = ?request.grant_type))]
     pub async fn grant_tokens(
         &self,
         request: Request,
@@ -115,7 +119,7 @@ impl Handler {
 
         let encoded_token = match self.token_creator.finalize(token.clone()) {
             Err(e) => {
-                debug!("failed to encode token: {}", e);
+                debug!(%e, "failed to encode token");
                 return Err(Error::TokenEncodingFailed);
             }
             Ok(token) => token,
@@ -126,7 +130,7 @@ impl Handler {
                 .finalize_refresh_token(self.token_creator.build_refresh_token(token, &scopes))
             {
                 Err(e) => {
-                    debug!("failed to encode refresh token: {}", e);
+                    debug!(%e, "failed to encode refresh token");
                     return Err(Error::RefreshTokenEncodingFailed);
                 }
                 token => token.ok(),
@@ -176,7 +180,7 @@ impl Handler {
         &self,
         request: Request,
     ) -> Result<(User, Client, Vec<Scope>, i64, Option<String>), Error> {
-        let redirect_uri_from_request = request
+        request
             .redirect_uri
             .as_ref()
             .ok_or(Error::MissingRedirectUri)?;
@@ -188,7 +192,7 @@ impl Handler {
             Err(_) => {
                 let client_id = &request.client_id.as_ref().ok_or(Error::MissingClientId)?;
                 let client = self.client_store.get(client_id).await.map_err(|e| {
-                    debug!("client '{}' not found ({e})", client_id);
+                    debug!(%e, "client not found");
                     Error::WrongClientIdOrPassword
                 })?;
 
@@ -210,15 +214,31 @@ impl Handler {
             })
             .await
             .ok_or_else(|| {
-                debug!(
-                    "No authorization code found for client '{}' with code '{}'",
-                    &client.client_id, code
-                );
+                debug!(%code, "No authorization code found");
                 Error::InvalidAuthorizationCode
             })?;
 
+        self.grant_from_authorization_code_record(request, client, record)
+            .await
+    }
+
+    #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user = record.username))]
+    async fn grant_from_authorization_code_record(
+        &self,
+        request: Request,
+        client: Client,
+        record: AuthorizationCodeResponse,
+    ) -> Result<(User, Client, Vec<Scope>, i64, Option<String>), Error> {
+        let redirect_uri_from_request = request
+            .redirect_uri
+            .as_ref()
+            .ok_or(Error::MissingRedirectUri)?;
         if &record.redirect_uri != redirect_uri_from_request {
-            debug!("redirect_uri is wrong");
+            debug!(
+                expected = record.redirect_uri,
+                actual = request.redirect_uri,
+                "redirect_uri is wrong"
+            );
             return Err(Error::InvalidAuthorizationCode);
         }
 
@@ -237,7 +257,7 @@ impl Handler {
             .await
             .map_err(|e| match e {
                 crate::user::Error::NotFound => {
-                    debug!("user {} not found", record.username);
+                    debug!("user not found");
                     Error::WrongUsernameOrPassword(format!("{}", WrongCredentials))
                 }
                 crate::user::Error::BackendError
@@ -285,6 +305,15 @@ impl Handler {
         request: Request,
     ) -> Result<(User, Client, Vec<Scope>, i64), Error> {
         let username = &request.username.as_ref().ok_or(Error::MissingUsername)?;
+        self.grant_with_password_for_user(&request, username).await
+    }
+
+    #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user = username))]
+    async fn grant_with_password_for_user(
+        &self,
+        request: &Request,
+        username: &String,
+    ) -> Result<(User, Client, Vec<Scope>, i64), Error> {
         let password = &request.password.as_ref().ok_or(Error::MissingPassword)?;
         let client = self.authenticate_client(&request).await?;
         let user = self
@@ -326,8 +355,8 @@ impl Handler {
 
         if client.client_id != refresh_token.access_token.authorized_party {
             warn!(
-                "client '{}' tried to use refresh_token issued to client '{}'",
-                client.client_id, refresh_token.access_token.authorized_party
+                different_client = refresh_token.access_token.authorized_party,
+                "client tried to use refresh_token issued to different client"
             );
             return Err(Error::InvalidRefreshToken);
         }
@@ -372,7 +401,7 @@ impl Handler {
 
         let client = match self.client_store.get(&client_id).await {
             Err(e) => {
-                debug!("client '{}' not found ({e})", client_id);
+                debug!(%e, "client not found");
                 return Err(Error::WrongClientIdOrPassword);
             }
             Ok(c) => c,
@@ -395,7 +424,7 @@ impl Handler {
                 {
                     Ok(client)
                 } else {
-                    debug!("password for client '{}' was wrong", client_id);
+                    debug!("password for client was wrong");
                     Err(Error::WrongClientIdOrPassword)
                 }
             }
@@ -444,8 +473,8 @@ impl Handler {
         {
             Err(e) => {
                 debug!(
-                    "client '{}' not found ({e})",
-                    unsafe_assertion.claims.subject
+                    %e,
+                    "client not found",
                 );
                 return Err(Error::InvalidAuthenticationToken(
                     oauth2::ProtocolError::InvalidClient,
@@ -472,7 +501,7 @@ impl Handler {
         validation.set_audience(&[self.issuer_configuration.token()]);
         match jsonwebtoken::decode::<ClientAssertion>(&assertion, &key, &validation) {
             Err(e) => {
-                debug!("failed to decode authentication token: {}", e);
+                debug!(%e, "failed to decode authentication token");
                 Err(Error::InvalidAuthenticationToken(
                     oauth2::ProtocolError::InvalidRequest,
                 ))
@@ -516,7 +545,7 @@ impl Handler {
             }
         }
         if let Some(e) = error {
-            debug!("token invalid: {}", e);
+            debug!(%e, "token invalid");
         }
         Err(())
     }
@@ -549,7 +578,7 @@ fn verify_pkce(challenge: CodeChallenge, verifier: Option<String>) -> Result<(),
     if let Some(verifier) = verifier {
         let verifier = match CodeVerifier::try_from(verifier.as_str()) {
             Err(e) => {
-                debug!("PKCE verifier '{verifier}' invalid: {e}");
+                debug!(%verifier, %e, "PKCE verifier invalid");
                 return Err(Error::InvalidAuthorizationCode);
             }
             Ok(v) => v,

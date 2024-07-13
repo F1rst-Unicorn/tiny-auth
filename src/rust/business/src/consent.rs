@@ -28,7 +28,7 @@ use crate::token::TokenCreator;
 use chrono::{DateTime, Duration, Local};
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use tracing::debug;
+use tracing::{debug, instrument, Level};
 
 pub struct Request<'a> {
     pub client_id: &'a str,
@@ -68,6 +68,9 @@ pub struct Handler {
 }
 
 impl Handler {
+    #[instrument(level = Level::DEBUG, skip_all, fields(
+        client = client_id))]
+    #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user = authenticated_username))]
     pub async fn can_skip_consent_screen(
         &self,
         authenticated_username: &str,
@@ -76,7 +79,7 @@ impl Handler {
     ) -> Result<bool, UserNotFound> {
         let user = match self.user_store.get(authenticated_username).await {
             Err(e) => {
-                debug!("authenticated user not found. {e}");
+                debug!(%e, "authenticated user not found");
                 return Err(UserNotFound);
             }
             Ok(v) => v,
@@ -91,6 +94,15 @@ impl Handler {
         self.scope_store.get(key)
     }
 
+    #[instrument(level = Level::DEBUG, skip_all, fields(
+        client = request.client_id,
+        requested_scopes = ?request.requested_scopes,
+        user_confirmed_scopes = request.user_confirmed_scopes
+            .iter()
+            .fold(String::new(), |a, b| a + " " + b),
+        response_types = ?request.response_types,
+        pkce = request.code_challenge.is_some()))]
+    #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user = request.authenticated_username))]
     pub async fn issue_token<'a>(&self, request: Request<'a>) -> Result<Response, Error> {
         let requested_scopes = BTreeSet::from_iter(request.requested_scopes);
         let scopes = request
@@ -118,7 +130,7 @@ impl Handler {
         {
             let user = match self.user_store.get(request.authenticated_username).await {
                 Err(e) => {
-                    debug!("user {} not found ({e})", request.authenticated_username);
+                    debug!(%e, "user not found");
                     return Err(Error::UserNotFound);
                 }
                 Ok(user) => user,
@@ -126,7 +138,7 @@ impl Handler {
 
             let client = match self.client_store.get(request.client_id).await {
                 Err(e) => {
-                    debug!("client {} not found ({e})", request.client_id);
+                    debug!(%e, "client not found");
                     return Err(Error::ClientNotFound);
                 }
                 Ok(client) => client,
@@ -144,7 +156,7 @@ impl Handler {
 
             let encoded_token = match self.token_creator.finalize(token.clone()) {
                 Err(e) => {
-                    debug!("failed to encode token: {}", e);
+                    debug!(%e, "failed to encode token");
                     return Err(Error::TokenEncodingError);
                 }
                 Ok(token) => token,
@@ -166,7 +178,7 @@ impl Handler {
                     self.token_creator.build_refresh_token(token, &all_scopes),
                 ) {
                     Err(e) => {
-                        debug!("failed to encode refresh token: {}", e);
+                        debug!(%e, "failed to encode refresh token");
                         return Err(Error::TokenEncodingError);
                     }
                     Ok(token) => token,

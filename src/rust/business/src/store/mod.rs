@@ -29,7 +29,7 @@ use chrono::Duration;
 use chrono::Local;
 use futures_util::future::join_all;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{info, instrument};
 
 #[async_trait]
 pub trait UserStore: Send + Sync {
@@ -48,6 +48,7 @@ impl From<Vec<Arc<dyn UserStore>>> for MergingUserStore {
 
 #[async_trait]
 impl UserStore for MergingUserStore {
+    #[instrument(name = "get_user", skip_all)]
     async fn get(&self, key: &str) -> Result<User, UserError> {
         let results: Vec<_> = join_all(self.stores.iter().map(|v| v.get(key)))
             .await
@@ -88,6 +89,7 @@ impl From<Vec<Arc<dyn ClientStore>>> for MergingClientStore {
 
 #[async_trait]
 impl ClientStore for MergingClientStore {
+    #[instrument(name = "get_client", skip_all)]
     async fn get(&self, key: &str) -> Result<Client, ClientError> {
         let results: Vec<_> = join_all(self.stores.iter().map(|v| v.get(key)))
             .await

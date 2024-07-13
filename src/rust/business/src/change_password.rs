@@ -19,6 +19,7 @@ use crate::authenticator::Authenticator;
 use crate::password::Password;
 use crate::token::{Token, TokenValidator};
 use std::sync::Arc;
+use tracing::{span, Instrument, Level};
 
 pub struct Handler {
     pub(crate) authenticator: Arc<Authenticator>,
@@ -51,10 +52,13 @@ impl Handler {
             .token_validator
             .validate::<Token>(token)
             .ok_or(Error::TokenAuthentication)?;
+        let cid_span = span!(Level::DEBUG, "cid", user = token.subject);
         let user = self
             .authenticator
             .authenticate_user(&token.subject, current_password)
+            .instrument(cid_span.clone())
             .await?;
+        let _guard = cid_span.enter();
         Ok(self.authenticator.construct_password(user, new_password))
     }
 }

@@ -36,8 +36,8 @@ use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Value;
 use std::sync::Arc;
-use tracing::debug;
 use tracing::error;
+use tracing::{debug, instrument};
 
 /// https://openid.net/specs/openid-connect-core-1_0.html#IDToken
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -151,6 +151,7 @@ impl TokenCreator {
         }
     }
 
+    #[instrument(skip_all)]
     pub fn build_token(
         &self,
         user: &User,
@@ -173,11 +174,15 @@ impl TokenCreator {
             scope_attributes: Value::Null,
         };
 
+        debug!("issuing token");
         let mut claim_collector = Value::Object(Default::default());
         for scope in scopes {
             let claims = match scope.generate_claims(user, client) {
                 Err(_) => {
-                    error!("Failed to generate claims for scope '{}' on user '{}' and client '{}'. Skipping scope", scope.name, user.name, client.client_id);
+                    error!(
+                        "Failed to generate claims for scope '{}'. Skipping scope",
+                        scope.name
+                    );
                     continue;
                 }
                 Ok(c) => c,
@@ -185,7 +190,10 @@ impl TokenCreator {
 
             claim_collector = match merge(claim_collector.clone(), claims) {
                 Err(_) => {
-                    error!("Failed to merge claims for scope '{}' on user '{}' and client '{}'. Skipping scope", scope.name, user.name, client.client_id);
+                    error!(
+                        "Failed to merge claims for scope '{}'. Skipping scope",
+                        scope.name
+                    );
                     continue;
                 }
                 Ok(c) => c,
@@ -201,12 +209,14 @@ impl TokenCreator {
     }
 
     pub fn renew(&self, token: &mut Token) {
+        debug!("renewing token");
         let now = self.clock.now();
         token.issuance_time = now.clone().timestamp();
         token.expiration = (now + self.token_expiration).timestamp();
     }
 
     pub fn build_refresh_token(&self, mut token: Token, scopes: &[Scope]) -> RefreshToken {
+        debug!("issuing refresh token");
         token.issuer = self.issuer.issuer_url.to_string();
         RefreshToken {
             issuer: token.issuer.clone(),
@@ -249,10 +259,11 @@ impl TokenValidator {
     }
 
     pub fn validate<T: DeserializeOwned>(&self, token: &str) -> Option<T> {
+        debug!("validating token");
         decode::<T>(token, &self.key, &self.validation)
             .map(|v| v.claims)
             .map_err(|e| {
-                debug!("Token validation failed: {}", e);
+                debug!(%e, "token validation failed");
                 e
             })
             .ok()

@@ -109,7 +109,7 @@ impl Client {
                     self.attributes.insert(name, value);
                 }
                 _ => {
-                    debug!("Ignoring duplicate attribute {name}");
+                    debug!(attribute = name, "ignoring duplicate");
                 }
             }
         }
@@ -196,7 +196,10 @@ impl Client {
                 },
             ) => DecodingKey::from_rsa_pem(key.as_bytes()).ok(),
             _ => {
-                warn!("client '{}' tried to authenticate with algorithm '{:?}' for which it is not configured", self.client_id, algorithm);
+                warn!(
+                    "tried to authenticate with algorithm '{:?}' for which it is not configured",
+                    algorithm
+                );
                 None
             }
         }

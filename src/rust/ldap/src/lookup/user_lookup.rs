@@ -62,7 +62,6 @@ impl UserLookup {
     }
 
     pub(crate) async fn map_to_user(&self, name: &str, search_entry: SearchEntry) -> User {
-        debug!("Mapping user {}", name);
         let mut result = User {
             name: name.to_string(),
             password: Password::Ldap {
@@ -93,7 +92,7 @@ impl UserLookup {
                 .map(|(k, v)| (k, v.into())),
         );
 
-        debug!("Caching user {}", name);
+        debug!("caching user");
         self.cache
             .insert(name.to_string(), Some((search_entry.dn, result.clone())))
             .await;

@@ -22,6 +22,8 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::instrument;
+use tracing::Level;
 
 #[derive(Clone)]
 pub struct RateLimiter {
@@ -41,6 +43,7 @@ impl RateLimiter {
         }
     }
 
+    #[instrument(level = Level::DEBUG, skip(self, rate_name))]
     pub async fn record_event(&self, rate_name: &str, event_time: DateTime<Local>) {
         let mut rates = self.rates.write().await;
         match rates.get_mut(rate_name) {
@@ -55,6 +58,7 @@ impl RateLimiter {
         }
     }
 
+    #[instrument(level = Level::DEBUG, skip(self, rate_name))]
     pub async fn remove_event(&self, rate_name: &str, event_time: DateTime<Local>) {
         let mut rates = self.rates.write().await;
         if let Some(events) = rates.get_mut(rate_name) {

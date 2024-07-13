@@ -30,7 +30,7 @@ use std::error::Error as StdError;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::error;
+use tracing::{debug, error};
 
 const HASH_ITERATIONS: u32 = 100_000;
 
@@ -91,6 +91,7 @@ pub struct DispatchingPasswordStore {
 
 impl DispatchingPasswordStore {
     pub fn construct_password(&self, user: User, password: &str) -> Password {
+        debug!("constructing password");
         match user.password {
             ldap @ Password::Ldap { .. } => ldap,
             Password::Plain(_) | Password::Pbkdf2HmacSha256 { .. } => {
@@ -141,7 +142,7 @@ impl InPlacePasswordStore {
 impl PasswordStore for InPlacePasswordStore {
     async fn verify(
         &self,
-        username: &str,
+        _username: &str,
         stored_password: &Password,
         password_to_check: &str,
     ) -> Result<bool, Error> {
@@ -154,7 +155,7 @@ impl PasswordStore for InPlacePasswordStore {
             } => {
                 let credential = match STANDARD.decode(credential) {
                     Err(e) => {
-                        error!("Failed to decode credential of user '{}': {}", username, e);
+                        error!(%e, "failed to decode credential");
                         return Err(Error::BackendError);
                     }
                     Ok(v) => v,
@@ -162,7 +163,7 @@ impl PasswordStore for InPlacePasswordStore {
 
                 let salt = match STANDARD.decode(salt) {
                     Err(e) => {
-                        error!("Failed to decode salt of user '{}': {}", username, e);
+                        error!(%e, "failed to decode salt");
                         return Err(Error::BackendError);
                     }
                     Ok(v) => v,

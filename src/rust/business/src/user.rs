@@ -84,7 +84,7 @@ impl User {
                     self.attributes.insert(name, value);
                 }
                 _ => {
-                    debug!("Ignoring duplicate attribute {name}");
+                    debug!(attribute = %name, "Ignoring duplicate");
                 }
             }
         }
@@ -96,7 +96,10 @@ impl TryFrom<Client> for User {
     type Error = String;
     fn try_from(client: Client) -> Result<Self, Self::Error> {
         match client.client_type {
-            ClientType::Public => Err("invalid client type".to_string()),
+            ClientType::Public => {
+                debug!("tried to convert public client to user");
+                Err("invalid client type".to_string())
+            }
             ClientType::Confidential { password, .. } => Ok(Self {
                 name: client.client_id,
                 password,

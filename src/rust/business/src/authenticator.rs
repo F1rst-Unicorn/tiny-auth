@@ -22,8 +22,8 @@ use crate::store::{PasswordStore, UserStore};
 use crate::user::User;
 use chrono::Local;
 use std::sync::Arc;
-use tracing::debug;
 use tracing::warn;
+use tracing::{debug, instrument, Level};
 
 #[derive(Clone)]
 pub struct Authenticator {
@@ -47,6 +47,7 @@ pub enum Error {
 }
 
 impl Authenticator {
+    #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user = username))]
     pub async fn authenticate_user_and_forget(
         &self,
         username: &str,
@@ -55,10 +56,11 @@ impl Authenticator {
         self.authenticate_user(username, password).await.map(|_| ())
     }
 
+    #[instrument(level = Level::DEBUG, skip_all)]
     pub async fn authenticate_user(&self, username: &str, password: &str) -> Result<User, Error> {
         let user = match self.user_store.get(username).await {
             Err(e) => {
-                debug!("user '{}' not found ({}).", username, e);
+                debug!(%e, "not found");
                 return Err(Error::WrongCredentials);
             }
             Ok(u) => u,
@@ -68,7 +70,7 @@ impl Authenticator {
         self.rate_limiter.record_event(username, now).await;
 
         if self.rate_limiter.is_rate_above_maximum(username, now).await {
-            warn!("User '{}' tried to authenticate too often", username);
+            warn!("tried to authenticate too often");
             self.rate_limiter.remove_event(username, now).await;
             return Err(Error::RateLimited);
         }
@@ -81,7 +83,7 @@ impl Authenticator {
             self.rate_limiter.remove_event(username, now).await;
             Ok(user)
         } else {
-            debug!("password of user '{}' wrong", username);
+            debug!("password wrong");
             Err(Error::WrongCredentials)
         }
     }
