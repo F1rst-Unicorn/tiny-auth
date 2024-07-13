@@ -26,9 +26,9 @@ use crate::store::ScopeStore;
 use crate::store::UserStore;
 use crate::token::TokenCreator;
 use chrono::{DateTime, Duration, Local};
-use log::debug;
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use tracing::debug;
 
 pub struct Request<'a> {
     pub client_id: &'a str,

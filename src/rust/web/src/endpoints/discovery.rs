@@ -25,6 +25,7 @@ use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::jwk::Jwks;
 use tiny_auth_business::store::ScopeStore;
+use tracing::instrument;
 
 #[derive(Serialize, Default)]
 struct Response {
@@ -136,6 +137,7 @@ pub struct Handler {
     scope_store: Arc<dyn ScopeStore>,
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn get(request: HttpRequest, handler: Data<Handler>) -> HttpResponse {
     handler.handle(request)
 }
@@ -232,6 +234,7 @@ pub mod inject {
     }
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn jwks(
     jwks: Data<Jwks>,
     cors_lister: Data<Arc<dyn CorsLister>>,

@@ -30,6 +30,7 @@ use tiny_auth_business::store::{ClientStore, PasswordStore, UserStore};
 use tiny_auth_business::user::Error as UserError;
 use tiny_auth_business::user::User;
 use tiny_auth_business::util::wrap_err;
+use tracing::{error, warn};
 
 pub struct LdapStore {
     pub(crate) name: String,

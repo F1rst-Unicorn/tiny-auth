@@ -18,12 +18,12 @@
 use crate::lookup::types::AttributeMapping;
 use crate::lookup::types::DistinguishedName;
 use ldap3::SearchEntry;
-use log::error;
 use moka::future::Cache;
 use std::sync::Arc;
 use tiny_auth_business::client::Client;
 use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::Password;
+use tracing::{error, trace};
 use url::Url;
 
 pub(crate) type ClientCacheEntry = (DistinguishedName, Client);
@@ -44,6 +44,7 @@ impl ClientLookup {
         if let Some(entry) = self.cache.get(key).await {
             ClientRepresentation::CachedClient(entry)
         } else {
+            trace!("Cache miss for client {}", key);
             ClientRepresentation::Name
         }
     }
@@ -91,6 +92,7 @@ impl ClientLookup {
                 .map(|(k, v)| (k, v.into())),
         );
 
+        trace!("Caching client {}", name);
         self.cache
             .insert(name.to_string(), (search_entry.dn, result.clone()))
             .await;

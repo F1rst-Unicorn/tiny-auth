@@ -33,7 +33,7 @@ use chrono::Duration;
 use chrono::Local;
 
 use crate::pkce::CodeChallenge;
-use log::trace;
+use tracing::trace;
 
 #[derive(PartialEq, Eq, Hash)]
 struct AuthCodeKey {

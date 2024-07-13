@@ -17,14 +17,14 @@
 
 use crate::systemd::notify_about_termination;
 use actix_web::dev::ServerHandle;
-use log::debug;
-use log::error;
-use log::info;
 use tokio::io::Error;
 use tokio::signal::unix::signal;
 use tokio::signal::unix::SignalKind;
 use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
 
 #[allow(clippy::cognitive_complexity)] // not really complex to read
 pub async fn terminator(

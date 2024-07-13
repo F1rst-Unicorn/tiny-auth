@@ -17,8 +17,6 @@
 
 use crate::client::Client;
 use crate::user::User;
-use log::debug;
-use log::error;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Map;
@@ -27,6 +25,8 @@ use std::cmp::Ord;
 use std::error::Error as ErrorTrait;
 use tera::Context;
 use tera::Tera;
+use tracing::debug;
+use tracing::error;
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct Scope {

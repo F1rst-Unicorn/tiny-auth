@@ -22,12 +22,14 @@ use actix_web::HttpResponse;
 use serde::Serialize;
 use std::sync::Arc;
 use tiny_auth_business::cors::CorsLister;
+use tracing::instrument;
 
 #[derive(Serialize)]
 struct Health {
     ok: bool,
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn get(request: HttpRequest, cors_lister: Data<Arc<dyn CorsLister>>) -> HttpResponse {
     let health = Health { ok: true };
     render_cors_result(cors_lister.get_ref().clone(), &request, health)

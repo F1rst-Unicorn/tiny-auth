@@ -17,8 +17,8 @@
 
 use crate::endpoints::authorize;
 use actix_session::Session;
-use log::error;
 use tiny_auth_business::authorize_endpoint::{AuthorizeRequestState, Error};
+use tracing::error;
 
 pub struct AuthorizeSession(Session);
 

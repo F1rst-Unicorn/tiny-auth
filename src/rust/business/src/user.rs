@@ -18,7 +18,6 @@
 use crate::client::Client;
 use crate::oauth2::ClientType;
 use crate::password::Password;
-use log::debug;
 use serde::de::StdError;
 use serde::Deserialize;
 use serde::Serialize;
@@ -29,6 +28,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use thiserror::Error;
+use tracing::debug;
 
 #[derive(Error, Debug, Clone)]
 pub enum Error {

@@ -32,6 +32,7 @@ use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::scope::Scope;
 use tiny_auth_business::serde::deserialise_empty_as_none;
 use tiny_auth_business::token_endpoint::Error;
+use tracing::instrument;
 
 #[derive(Deserialize, Default)]
 pub struct Request {
@@ -101,6 +102,7 @@ pub struct Response {
     id_token: Option<String>,
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn post(
     headers: HttpRequest,
     request: Form<Request>,

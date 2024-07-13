@@ -24,9 +24,6 @@ use actix_web::http::StatusCode;
 use actix_web::web;
 use actix_web::HttpResponse;
 use chrono::Local;
-use log::debug;
-use log::error;
-use log::warn;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use tera::Context;
@@ -37,6 +34,9 @@ use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
 use tiny_auth_business::oidc::Prompt;
 use tiny_auth_business::serde::deserialise_empty_as_none;
+use tracing::error;
+use tracing::warn;
+use tracing::{debug, instrument};
 
 pub const SESSION_KEY: &str = "b";
 pub const AUTH_TIME_SESSION_KEY: &str = "t";
@@ -61,6 +61,7 @@ pub struct Request {
     csrftoken: Option<String>,
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
@@ -124,6 +125,7 @@ fn render_login_form(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     }
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn post(
     query: web::Form<Request>,
     session: Session,
@@ -202,6 +204,7 @@ pub async fn post(
     }
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
@@ -219,6 +222,7 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     )
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn select_account(session: Session) -> HttpResponse {
     session.remove(SESSION_KEY);
     session.remove(AUTH_TIME_SESSION_KEY);

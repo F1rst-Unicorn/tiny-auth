@@ -31,13 +31,13 @@ use jsonwebtoken::DecodingKey;
 use jsonwebtoken::EncodingKey;
 use jsonwebtoken::Header;
 use jsonwebtoken::Validation;
-use log::debug;
-use log::error;
 use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Value;
 use std::sync::Arc;
+use tracing::debug;
+use tracing::error;
 
 /// https://openid.net/specs/openid-connect-core-1_0.html#IDToken
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]

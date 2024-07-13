@@ -17,8 +17,8 @@
 
 use systemd::daemon::notify;
 
-use log::error;
-use log::trace;
+use tracing::error;
+use tracing::trace;
 
 pub fn notify_systemd(message: &[(&str, &str)]) {
     let result = notify(false, message.iter());

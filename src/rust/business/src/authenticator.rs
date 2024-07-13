@@ -21,9 +21,9 @@ use crate::rate_limiter::RateLimiter;
 use crate::store::{PasswordStore, UserStore};
 use crate::user::User;
 use chrono::Local;
-use log::debug;
-use log::warn;
 use std::sync::Arc;
+use tracing::debug;
+use tracing::warn;
 
 #[derive(Clone)]
 pub struct Authenticator {

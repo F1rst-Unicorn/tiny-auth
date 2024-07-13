@@ -32,10 +32,10 @@ use serde_json::Value;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 
-use log::warn;
-use log::{debug, error};
 use serde::de::StdError;
 use thiserror::Error;
+use tracing::warn;
+use tracing::{debug, error};
 
 #[derive(Error, Debug, Clone)]
 pub enum Error {

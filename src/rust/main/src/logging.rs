@@ -15,37 +15,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::LevelFilter;
-use log4rs::config::Appender;
-use log4rs::config::Root;
-use log4rs::encode::pattern::PatternEncoder;
-use log4rs::Config;
-
 pub fn initialise_from_config_file(file_path: &str) {
-    if let Err(e) = log4rs::init_file(file_path, Default::default()) {
-        eprintln!("Could not configure logging: {}", e);
-        std::process::exit(1);
-    }
+    tracing_subscriber::fmt::init();
 }
 
 pub fn initialise_from_verbosity(verbosity_level: u8) {
-    let stdout = log4rs::append::console::ConsoleAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{level} {m}{n}")))
-        .build();
-
-    let level = match verbosity_level {
-        0 => LevelFilter::Info,
-        1 => LevelFilter::Debug,
-        _ => LevelFilter::Trace,
-    };
-
-    let config = Config::builder().appender(Appender::builder().build("stdout", Box::new(stdout)));
-
-    if let Err(e) = config
-        .build(Root::builder().appender("stdout").build(level))
-        .map(log4rs::init_config)
-    {
-        eprintln!("could not configure logging: {}", e);
-        std::process::exit(1);
-    }
+    tracing_subscriber::fmt::init();
 }

@@ -19,11 +19,11 @@ use clap::Arg;
 use clap::ArgAction::Count;
 use clap::ArgMatches;
 use clap::Command;
-use log::debug;
-use log::error;
 use tiny_auth_main::config::parser::parse_config;
 use tiny_auth_main::constructor::Constructor;
 use tiny_auth_main::logging::initialise_from_verbosity;
+use tracing::debug;
+use tracing::error;
 
 pub const FLAG_VERBOSE: &str = "verbose";
 pub const FLAG_CONFIG: &str = "config";

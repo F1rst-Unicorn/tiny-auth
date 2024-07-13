@@ -20,12 +20,12 @@ use crate::systemd::notify_about_start;
 use crate::systemd::watchdog;
 use crate::terminate::terminator;
 use actix_web::dev::ServerHandle;
-use log::error;
 use openssl::error::ErrorStack;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Receiver;
 use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
+use tracing::error;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {

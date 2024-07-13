@@ -21,7 +21,7 @@ use crate::util::read_file as read;
 use std::fs;
 use std::process::exit;
 
-use log::{debug, error, trace, warn};
+use tracing::{debug, error, trace, warn};
 
 const EXIT_CODE: i32 = 1;
 

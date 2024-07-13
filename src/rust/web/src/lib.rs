@@ -45,8 +45,6 @@ use actix_web::App;
 use actix_web::HttpServer;
 use endpoints::token::Handler as TokenHandler;
 use endpoints::userinfo::Handler as UserInfoHandler;
-use log::error;
-use log::warn;
 use rustls::server::AllowAnyAuthenticatedClient;
 use rustls::server::ClientCertVerifier;
 use rustls::server::NoClientAuth;
@@ -64,6 +62,9 @@ use tiny_auth_business::consent::Handler as ConsentHandler;
 use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::jwk::Jwks;
+use tracing::error;
+use tracing::warn;
+use tracing_actix_web::TracingLogger;
 use Error::LoggedBeforeError;
 
 pub trait Constructor<'a> {
@@ -167,6 +168,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             )
             .wrap(DefaultHeaders::new().add(("Cache-Control", "no-store")))
             .wrap(DefaultHeaders::new().add(("Pragma", "no-cache")))
+            .wrap(TracingLogger::default())
             .service(actix_files::Files::new(
                 &(web_path.clone() + "/static/css"),
                 static_files.clone() + "/css",

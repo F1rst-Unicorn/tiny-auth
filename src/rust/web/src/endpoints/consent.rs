@@ -28,8 +28,6 @@ use actix_web::web;
 use actix_web::HttpResponse;
 use chrono::offset::Local;
 use chrono::TimeZone;
-use log::debug;
-use log::warn;
 use serde_derive::Deserialize;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -44,8 +42,11 @@ use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
 use tiny_auth_business::scope::ScopeDescription;
 use tiny_auth_business::serde::deserialise_empty_as_none;
+use tracing::warn;
+use tracing::{debug, instrument};
 use url::Url;
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn get(
     tera: web::Data<Tera>,
     session: Session,
@@ -124,6 +125,7 @@ pub struct Request {
     scopes: BTreeMap<String, String>,
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn post(
     query: web::Form<Request>,
     session: Session,
@@ -240,6 +242,7 @@ async fn process_skipping_csrf(
         .finish()
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {

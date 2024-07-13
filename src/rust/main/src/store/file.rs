@@ -18,7 +18,6 @@
 use crate::util::iterate_directory;
 use crate::util::read_file;
 use async_trait::async_trait;
-use log::error;
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -30,6 +29,7 @@ use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::ScopeStore;
 use tiny_auth_business::store::UserStore;
 use tiny_auth_business::user::{Error, User};
+use tracing::error;
 
 #[derive(Default)]
 pub struct FileUserStore {

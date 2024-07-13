@@ -15,8 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::debug;
 use tonic::metadata::MetadataMap;
+use tracing::debug;
 
 pub const AUTHORIZATION_HEADER_KEY: &str = "x-authorization";
 const AUTHORIZATION_HEADER_BEARER_VALUE: &str = "Bearer ";

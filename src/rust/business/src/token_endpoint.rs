@@ -40,14 +40,14 @@ use chrono::Duration;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::TokenData;
-use log::debug;
-use log::warn;
 use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
 use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
+use tracing::debug;
+use tracing::warn;
 
 const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 

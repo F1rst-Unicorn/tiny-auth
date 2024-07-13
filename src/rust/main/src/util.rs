@@ -22,7 +22,7 @@ use std::io::Error;
 use std::io::Read;
 use std::path::Path;
 
-use log::error;
+use tracing::error;
 
 pub fn read_file(file_path: impl AsRef<Path>) -> Result<String, Error> {
     let mut file = File::open(file_path)?;

@@ -31,6 +31,7 @@ use tiny_auth_business::oidc::OidcResponseType;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::oidc::ResponseType;
 use tiny_auth_business::serde::deserialise_empty_as_none;
+use tracing::instrument;
 use web::Data;
 
 pub const SESSION_KEY: &str = "a";
@@ -127,6 +128,7 @@ impl Request {
     }
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn handle(
     query: web::Query<Request>,
     tera: Data<Tera>,

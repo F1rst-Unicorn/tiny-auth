@@ -23,7 +23,9 @@ use actix_web::{HttpRequest, HttpResponse};
 use tera::Context;
 use tera::Tera;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
+use tracing::instrument;
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn redirect(request: HttpRequest, web_base_path: Data<WebBasePath>) -> HttpResponse {
     let location = if request.query_string() != "" {
         web_base_path.0.to_string() + "/?" + request.query_string()
@@ -35,6 +37,7 @@ pub async fn redirect(request: HttpRequest, web_base_path: Data<WebBasePath>) ->
         .finish()
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn get(
     tera: Data<Tera>,
     issuer_config: Data<IssuerConfiguration>,

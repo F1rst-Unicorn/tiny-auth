@@ -19,12 +19,12 @@ use clap::Arg;
 use clap::ArgAction::Count;
 use clap::ArgMatches;
 use clap::Command;
-use log::debug;
-use log::error;
 use serde::Serialize;
 use tiny_auth_business::password::Password;
 use tiny_auth_main::config::parser::parse_config;
 use tiny_auth_main::logging::initialise_from_verbosity;
+use tracing::debug;
+use tracing::error;
 
 pub const FLAG_VERBOSE: &str = "verbose";
 pub const FLAG_USERNAME: &str = "username";

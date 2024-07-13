@@ -23,7 +23,7 @@ use tera::Result;
 use tera::Tera;
 use tera::Value;
 
-use log::error;
+use tracing::error;
 
 pub fn load_template_engine(static_files_root: &str, http_path: &str) -> Result<Tera> {
     let template_path = static_files_root.to_string() + "/templates/";

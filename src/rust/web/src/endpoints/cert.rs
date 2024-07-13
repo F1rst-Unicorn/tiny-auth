@@ -25,6 +25,7 @@ use actix_web::HttpResponse;
 use serde_derive::Deserialize;
 use std::sync::Arc;
 use tiny_auth_business::cors::CorsLister;
+use tracing::instrument;
 
 use super::not_found;
 
@@ -36,6 +37,7 @@ pub struct Index {
 #[derive(Clone)]
 pub struct TokenCertificate(pub String);
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn get(
     request: HttpRequest,
     cors_lister: Data<Arc<dyn CorsLister>>,

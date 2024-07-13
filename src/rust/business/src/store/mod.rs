@@ -28,8 +28,8 @@ use chrono::DateTime;
 use chrono::Duration;
 use chrono::Local;
 use futures_util::future::join_all;
-use log::info;
 use std::sync::Arc;
+use tracing::info;
 
 #[async_trait]
 pub trait UserStore: Send + Sync {

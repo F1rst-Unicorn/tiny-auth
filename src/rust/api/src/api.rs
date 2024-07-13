@@ -21,11 +21,11 @@ use crate::tiny_auth_proto::tiny_auth_api_server::TinyAuthApi;
 use crate::tiny_auth_proto::{HashedPasswordPbkdf2HmacSha256, PasswordChangeRequest};
 use crate::tiny_auth_proto::{Managed, PasswordChangeResponse};
 use async_trait::async_trait;
-use log::debug;
-use log::error;
 use tiny_auth_business::password::Password;
 use tonic::Request;
 use tonic::Response;
+use tracing::error;
+use tracing::{debug, instrument};
 
 pub(crate) struct TinyAuthApiImpl {
     pub(crate) change_password: tiny_auth_business::change_password::Handler,
@@ -33,6 +33,7 @@ pub(crate) struct TinyAuthApiImpl {
 
 #[async_trait]
 impl TinyAuthApi for TinyAuthApiImpl {
+    #[instrument(skip_all, fields(transport = "grpc"))]
     async fn change_password(
         &self,
         request: Request<PasswordChangeRequest>,

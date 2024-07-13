@@ -20,12 +20,12 @@ use crate::lookup::user_lookup::UserRepresentation;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use ldap3::{Ldap, Scope, SearchEntry};
-use log::{debug, warn};
 use std::sync::Arc;
 use tera::{Context, Tera};
 use tiny_auth_business::password::Error;
 use tiny_auth_business::user::Error as UserError;
 use tiny_auth_business::util::wrap_err;
+use tracing::{debug, warn};
 
 #[enum_dispatch(Authenticator)]
 pub(crate) enum AuthenticatorDispatcher {

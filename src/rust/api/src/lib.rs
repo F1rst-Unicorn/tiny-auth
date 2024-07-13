@@ -23,9 +23,6 @@ use crate::auth::AUTHORIZATION_HEADER_KEY;
 use crate::tiny_auth_proto::tiny_auth_api_server::TinyAuthApiServer;
 use http::uri::PathAndQuery;
 use http::{HeaderName, Request, Response, Uri};
-use log::error;
-use log::info;
-use log::warn;
 use pin_project_lite::pin_project;
 use std::future::Future;
 use std::pin::Pin;
@@ -44,6 +41,9 @@ use tonic::transport::ServerTlsConfig;
 use tower::{Layer, Service};
 use tower_http::cors::AllowOrigin;
 use tower_http::cors::CorsLayer;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 pub(crate) mod tiny_auth_proto {
     // https://github.com/hyperium/tonic/issues/1056

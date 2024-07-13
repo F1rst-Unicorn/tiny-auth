@@ -30,7 +30,6 @@ use chrono::Duration;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::EncodingKey;
-use log::error;
 use openssl::bn::BigNum;
 use openssl::bn::BigNumContext;
 use openssl::bn::BigNumRef;
@@ -67,6 +66,7 @@ use tiny_auth_web::endpoints::token::Handler as TokenHandler;
 use tiny_auth_web::endpoints::userinfo::Handler as UserInfoHandler;
 use tiny_auth_web::tera::load_template_engine;
 use tiny_auth_web::ApiUrl;
+use tracing::error;
 
 pub struct Constructor<'a> {
     config: &'a Config,

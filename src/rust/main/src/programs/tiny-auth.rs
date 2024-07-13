@@ -20,8 +20,8 @@ use tiny_auth_main::config::parser::parse_config;
 use tiny_auth_main::logging;
 use tiny_auth_main::runtime;
 
-use log::error;
-use log::info;
+use tracing::error;
+use tracing::info;
 
 fn main() {
     let arguments = cli_parser::parse_arguments();

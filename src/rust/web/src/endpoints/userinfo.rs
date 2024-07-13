@@ -23,12 +23,12 @@ use actix_web::web::Data;
 use actix_web::web::Form;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
-use log::debug;
 use serde_derive::Deserialize;
 use std::sync::Arc;
 use tiny_auth_business::serde::deserialise_empty_as_none;
 use tiny_auth_business::token::Token;
 use tiny_auth_business::token::TokenValidator;
+use tracing::{debug, instrument};
 
 #[derive(Deserialize)]
 pub struct Request {
@@ -37,10 +37,12 @@ pub struct Request {
     access_token: Option<String>,
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn get(request: HttpRequest, handler: Data<Handler>) -> HttpResponse {
     post(Form(Request { access_token: None }), request, handler).await
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn post(
     query: Form<Request>,
     request: HttpRequest,

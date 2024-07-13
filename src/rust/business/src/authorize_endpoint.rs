@@ -21,11 +21,11 @@ use crate::pkce::{CodeChallenge, CodeChallengeMethod};
 use crate::scope::parse_scope_names;
 use crate::serde::deserialise_empty_as_none;
 use crate::store::ClientStore;
-use log::Level::Debug;
-use log::{debug, info, log_enabled};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use tracing::Level;
+use tracing::{debug, enabled, info};
 
 #[derive(Default)]
 pub struct Request {
@@ -216,7 +216,7 @@ impl Handler {
 
         let scopes: BTreeSet<String> = parse_scope_names(&scopes).into_iter().collect();
 
-        if log_enabled!(Debug) {
+        if enabled!(Level::DEBUG) {
             Self::log_removed_scopes(&client, &scopes);
         }
 

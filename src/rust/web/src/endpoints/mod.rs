@@ -35,7 +35,6 @@ use actix_web::HttpResponseBuilder;
 use actix_web::{HttpRequest, HttpResponse};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use log::debug;
 use serde::Serialize as BaseSerialize;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
@@ -49,6 +48,8 @@ use tiny_auth_business::oauth2::ProtocolError as OAuthError;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::scope::render_tera_error;
 use tiny_auth_business::store::memory::generate_random_string;
+use tracing::warn;
+use tracing::{debug, instrument};
 use url::Url;
 
 const CSRF_SESSION_KEY: &str = "c";
@@ -82,6 +83,7 @@ struct ErrorResponse {
     error_uri: Option<String>,
 }
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn method_not_allowed() -> HttpResponse {
     HttpResponse::MethodNotAllowed().body("method not allowed")
 }
@@ -190,7 +192,7 @@ fn render_template_with_context(
             .insert_header(("Content-Type", "text/html"))
             .body(body),
         Err(e) => {
-            log::warn!("{}", render_tera_error(&e));
+            warn!("{}", render_tera_error(&e));
             server_error(tera)
         }
     }

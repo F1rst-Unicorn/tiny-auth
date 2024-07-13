@@ -16,8 +16,8 @@
  */
 use crate::error::LdapError;
 use ldap3::{drive, Ldap, LdapConnAsync, LdapConnSettings};
-use log::{debug, warn};
 use std::time::Duration;
+use tracing::{debug, warn};
 use url::Url;
 
 pub struct Connector {

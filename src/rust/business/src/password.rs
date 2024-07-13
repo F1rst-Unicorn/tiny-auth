@@ -20,7 +20,6 @@ use crate::user::User;
 use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
-use log::error;
 use rand::random;
 use ring::digest;
 use ring::pbkdf2;
@@ -31,6 +30,7 @@ use std::error::Error as StdError;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 use thiserror::Error;
+use tracing::error;
 
 const HASH_ITERATIONS: u32 = 100_000;
 

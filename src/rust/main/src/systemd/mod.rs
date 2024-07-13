@@ -27,8 +27,8 @@ use other::notify_systemd;
 use std::str::FromStr;
 use std::time::Duration;
 
-use log::debug;
-use log::warn;
+use tracing::debug;
+use tracing::warn;
 
 use tokio::task::spawn_blocking;
 use tokio::time;

@@ -27,8 +27,9 @@ use actix_web::HttpResponseBuilder;
 use std::sync::Arc;
 use tiny_auth_business::cors::CorsLister;
 
-use log::debug;
+use tracing::{debug, instrument};
 
+#[instrument(skip_all, fields(transport = "http"))]
 pub async fn cors_options_preflight(
     request: HttpRequest,
     cors_lister: web::Data<Arc<dyn CorsLister>>,
