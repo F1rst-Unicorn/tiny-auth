@@ -21,9 +21,10 @@ use crate::util::read_file as read;
 use std::fs;
 use std::process::exit;
 
-use tracing::{error, instrument, trace, warn};
+use tracing::trace;
+use tracing::{error, instrument, warn};
 
-const EXIT_CODE: i32 = 1;
+const EXIT_CODE: i32 = 2;
 
 #[instrument]
 pub fn parse_config(path: &str) -> Config {
@@ -103,5 +104,4 @@ fn parse_raw_config(raw_config: &str) -> Config {
 
 fn log_config_error(e: serde_yaml::Error) {
     error!(%e, "could not parse config");
-    trace!("error in configuration file");
 }

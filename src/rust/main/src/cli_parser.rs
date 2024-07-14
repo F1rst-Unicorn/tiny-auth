@@ -16,14 +16,14 @@
  */
 
 use clap::Arg;
+use clap::ArgAction::Count;
 use clap::ArgMatches;
 use clap::Command;
 
 pub const FLAG_CONFIG: &str = "config";
 pub const FLAG_CONFIG_DEFAULT: &str = "/etc/tiny-auth/config.yml";
 
-pub const FLAG_LOG_CONFIG: &str = "log";
-pub const FLAG_LOG_DEFAULT: &str = "/etc/tiny-auth/log4rs.yml";
+pub const FLAG_VERBOSE: &str = "verbose";
 
 pub fn parse_arguments() -> ArgMatches {
     let app = Command::new(env!("CARGO_PKG_NAME"))
@@ -45,13 +45,11 @@ pub fn parse_arguments() -> ArgMatches {
                 .default_value(FLAG_CONFIG_DEFAULT),
         )
         .arg(
-            Arg::new("log")
-                .short('l')
-                .long(FLAG_LOG_CONFIG)
-                .value_name("PATH")
-                .help("The log4rs logging configuration")
-                .num_args(1)
-                .default_value(FLAG_LOG_DEFAULT),
+            Arg::new(FLAG_VERBOSE)
+                .short('v')
+                .long(FLAG_VERBOSE)
+                .help("Verbosity before logging is initialised")
+                .action(Count),
         );
     app.get_matches()
 }

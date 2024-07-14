@@ -20,17 +20,15 @@ use tiny_auth_main::config::parser::parse_config;
 use tiny_auth_main::logging;
 use tiny_auth_main::runtime;
 
+use tiny_auth_main::cli_parser::FLAG_VERBOSE;
+use tiny_auth_main::logging::initialise_from_verbosity;
 use tracing::error;
 use tracing::info;
 
 fn main() {
     let arguments = cli_parser::parse_arguments();
-    logging::initialise_from_config_file(
-        arguments
-            .get_one::<String>(cli_parser::FLAG_LOG_CONFIG)
-            .map(String::as_str)
-            .unwrap_or(cli_parser::FLAG_LOG_DEFAULT),
-    );
+    let verbosity_level = arguments.get_count(FLAG_VERBOSE);
+    let handles = initialise_from_verbosity(verbosity_level);
 
     info!("starting up");
 
@@ -42,6 +40,7 @@ fn main() {
 
     info!("parsing config");
     let config = parse_config(config_path);
+    logging::reload_with_config(&config.log, handles);
 
     if let Err(e) = runtime::run(config) {
         error!(%e);

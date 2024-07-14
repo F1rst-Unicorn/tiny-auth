@@ -36,6 +36,8 @@ pub struct Config {
     pub api: Api,
 
     pub crypto: Crypto,
+
+    pub log: Log,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -319,4 +321,51 @@ pub struct Crypto {
     pub keys: Vec<CryptoKey>,
 
     pub pepper: String,
+}
+
+#[derive(Default, Clone, Debug, Deserialize)]
+pub struct Log {
+    pub format: Format,
+    pub fields: Fields,
+    pub filter: Vec<String>,
+}
+
+#[derive(Default, Clone, Debug, Deserialize)]
+pub struct Fields {
+    pub ansi: bool,
+    pub file: bool,
+    pub level: bool,
+    #[serde(rename = "line number")]
+    pub line_number: bool,
+    #[serde(rename = "source location")]
+    pub source_location: bool,
+    pub target: bool,
+    #[serde(rename = "thread id")]
+    pub thread_id: bool,
+    #[serde(rename = "thread name")]
+    pub thread_name: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub enum Format {
+    #[serde(rename = "compact")]
+    Compact,
+    #[serde(rename = "pretty")]
+    Pretty,
+    #[serde(rename = "full")]
+    Full,
+    #[serde(rename = "json")]
+    Json {
+        flatten: bool,
+        #[serde(rename = "current span")]
+        current_span: bool,
+        #[serde(rename = "span list")]
+        span_list: bool,
+    },
+}
+
+impl Default for Format {
+    fn default() -> Self {
+        Self::Full
+    }
 }

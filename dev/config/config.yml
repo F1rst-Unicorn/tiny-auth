@@ -87,3 +87,27 @@ api:
   public host:
     domain: localhost
     port: 8089
+
+log:
+  format: compact
+  fields:
+    ansi: true
+    file: true
+    level: true
+    line number: true
+    source location: true
+    target: true
+    thread id: true
+    thread name: true
+  filter:
+    - warn
+    - tiny_auth_main=trace
+    - tiny_auth_web=trace
+    - tiny_auth_business=trace
+    - tiny_auth_api=trace
+    - tiny_auth_ldap=trace
+    - tiny_auth=trace
+    - "[cid]=trace"
+    - tiny_auth_main::config::parser=debug
+    - tiny_auth_main::systemd::linux=debug
+    - tiny_auth_business::store::memory=debug
