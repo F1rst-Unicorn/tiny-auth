@@ -21,7 +21,9 @@ export default function Login(props: {
         <Box height={250} component="img" src={favicon} alt="tiny-auth Logo" />
       </Grid>
       <Grid item>
-        <Button variant="contained" onClick={() => void auth.signinRedirect()}>
+        <Button variant="contained" onClick={() => void auth.signinRedirect({
+          nonce: getNonce()
+        })}>
           Log in to tiny-auth
         </Button>
       </Grid>
@@ -34,3 +36,19 @@ export default function Login(props: {
     </Grid>
   );
 }
+
+function getNonce() {
+  return getRandomValue()
+    + getRandomValue()
+    + getRandomValue()
+    + getRandomValue()
+    + getRandomValue()
+    + getRandomValue()
+    + getRandomValue()
+    + getRandomValue();
+}
+
+function getRandomValue() {
+  return Math.floor(Math.random() * 999).toString();
+}
+

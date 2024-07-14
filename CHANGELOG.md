@@ -30,6 +30,10 @@ store:
       base: /etc/tiny-auth/store
 ```
 
+### Fixed
+
+* tiny-auth-frontend now uses `nonce` values in OIDC flow.
+
 ## [1.0.1]
 
 ### Fixed
