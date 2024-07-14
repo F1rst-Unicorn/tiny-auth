@@ -32,6 +32,7 @@ use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::oidc::ResponseType;
 use tiny_auth_business::serde::deserialise_empty_as_none;
 use tracing::instrument;
+use tracing::Level;
 use web::Data;
 
 pub const SESSION_KEY: &str = "a";
@@ -129,6 +130,9 @@ impl Request {
 }
 
 #[instrument(skip_all, name = "authorize")]
+#[instrument(level = Level::DEBUG, skip_all, name = "flow", fields(
+    state = query.state,
+    nonce = query.nonce))]
 pub async fn handle(
     query: web::Query<Request>,
     tera: Data<Tera>,

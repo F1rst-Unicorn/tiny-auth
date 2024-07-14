@@ -25,10 +25,10 @@ use crate::oauth2::GrantType;
 use crate::pkce::{CodeChallenge, CodeVerifier};
 use crate::scope::parse_scope_names;
 use crate::scope::Scope;
+use crate::store::ClientStore;
 use crate::store::ScopeStore;
 use crate::store::UserStore;
 use crate::store::AUTH_CODE_LIFE_TIME;
-use crate::store::{AuthorizationCodeResponse, ClientStore};
 use crate::store::{AuthorizationCodeStore, ValidationRequest};
 use crate::token::RefreshToken;
 use crate::token::Token;
@@ -46,8 +46,8 @@ use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
-use tracing::{debug, instrument, Level};
-use tracing::{span, warn};
+use tracing::warn;
+use tracing::{debug, instrument, Level, Span};
 
 const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -112,12 +112,15 @@ impl Handler {
     #[instrument(level = Level::DEBUG, skip_all, fields(
         client = request.client_id,
         pkce = request.pkce_verifier.is_some(),
+        nonce,
+        code = request.code,
         grant_type = ?request.grant_type))]
     pub async fn grant_tokens(
         &self,
         request: Request,
     ) -> Result<(String, Option<String>, Vec<Scope>), Error> {
-        let (token, scopes, generate_refresh_token) = self.grant_token(request).await?;
+        let span = Span::current();
+        let (token, scopes, generate_refresh_token) = self.grant_token(request, span).await?;
 
         let encoded_token = match self.token_creator.finalize(token.clone()) {
             Err(e) => {
@@ -144,20 +147,27 @@ impl Handler {
         Ok((encoded_token, refresh_token, scopes))
     }
 
-    async fn grant_token(&self, request: Request) -> Result<(Token, Vec<Scope>, bool), Error> {
+    #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user))]
+    async fn grant_token(
+        &self,
+        request: Request,
+        span: Span,
+    ) -> Result<(Token, Vec<Scope>, bool), Error> {
+        let cid_span = Span::current();
         match request.grant_type {
-            GrantType::RefreshToken => self.grant_with_refresh_token(request).await,
+            GrantType::RefreshToken => self.grant_with_refresh_token(request, span, cid_span).await,
             _ => {
                 let (user, client, scopes, auth_time, nonce) = match request.grant_type {
                     GrantType::AuthorizationCode => {
-                        self.grant_with_authorization_code(request).await?
+                        self.grant_with_authorization_code(request, span, cid_span)
+                            .await?
                     }
                     GrantType::ClientCredentials => self
-                        .grant_with_client_credentials(request)
+                        .grant_with_client_credentials(request, cid_span)
                         .await
                         .map(|(a, b, c, d)| (a, b, c, d, None))?,
                     GrantType::Password => self
-                        .grant_with_password(request)
+                        .grant_with_password(request, cid_span)
                         .await
                         .map(|(a, b, c, d)| (a, b, c, d, None))?,
                     _ => {
@@ -168,7 +178,6 @@ impl Handler {
                 let generate_refresh_token =
                     matches!(client.client_type, ClientType::Confidential { .. });
 
-                let _guard = span!(Level::DEBUG, "cid", user = user.name).entered();
                 let mut token = self
                     .token_creator
                     .build_token(&user, &client, &scopes, auth_time);
@@ -182,6 +191,8 @@ impl Handler {
     async fn grant_with_authorization_code(
         &self,
         request: Request,
+        span: Span,
+        cid_span: Span,
     ) -> Result<AuthorizationCodeResult, Error> {
         request
             .redirect_uri
@@ -220,18 +231,9 @@ impl Handler {
                 debug!(%code, "No authorization code found");
                 Error::InvalidAuthorizationCode
             })?;
+        cid_span.record("user", &record.username);
+        span.record("nonce", &record.nonce);
 
-        self.grant_from_authorization_code_record(request, client, record)
-            .await
-    }
-
-    #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user = record.username))]
-    async fn grant_from_authorization_code_record(
-        &self,
-        request: Request,
-        client: Client,
-        record: AuthorizationCodeResponse,
-    ) -> Result<AuthorizationCodeResult, Error> {
         let redirect_uri_from_request = request
             .redirect_uri
             .as_ref()
@@ -281,8 +283,10 @@ impl Handler {
     async fn grant_with_client_credentials(
         &self,
         request: Request,
+        cid_span: Span,
     ) -> Result<(User, Client, Vec<Scope>, i64), Error> {
         let client = self.authenticate_client(&request).await?;
+        cid_span.record("user", &client.client_id);
         let allowed_scopes = BTreeSet::from_iter(client.allowed_scopes.clone());
         let requested_scopes = match &request.scope {
             None => Default::default(),
@@ -306,19 +310,12 @@ impl Handler {
     async fn grant_with_password(
         &self,
         request: Request,
+        cid_span: Span,
     ) -> Result<(User, Client, Vec<Scope>, i64), Error> {
         let username = &request.username.as_ref().ok_or(Error::MissingUsername)?;
-        self.grant_with_password_for_user(&request, username).await
-    }
-
-    #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user = username))]
-    async fn grant_with_password_for_user(
-        &self,
-        request: &Request,
-        username: &String,
-    ) -> Result<(User, Client, Vec<Scope>, i64), Error> {
+        cid_span.record("user", username);
         let password = &request.password.as_ref().ok_or(Error::MissingPassword)?;
-        let client = self.authenticate_client(request).await?;
+        let client = self.authenticate_client(&request).await?;
         let user = self
             .authenticator
             .authenticate_user(username, password)
@@ -343,6 +340,8 @@ impl Handler {
     async fn grant_with_refresh_token(
         &self,
         request: Request,
+        span: Span,
+        cid_span: Span,
     ) -> Result<(Token, Vec<Scope>, bool), Error> {
         let raw_token = &request
             .refresh_token
@@ -353,7 +352,8 @@ impl Handler {
             .token_validator
             .validate::<RefreshToken>(raw_token)
             .ok_or(Error::InvalidRefreshToken)?;
-
+        cid_span.record("user", &refresh_token.access_token.subject);
+        span.record("nonce", &refresh_token.access_token.nonce);
         let client = self.authenticate_client(&request).await?;
 
         if client.client_id != refresh_token.access_token.authorized_party {

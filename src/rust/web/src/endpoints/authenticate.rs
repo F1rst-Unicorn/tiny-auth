@@ -34,9 +34,9 @@ use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
 use tiny_auth_business::oidc::Prompt;
 use tiny_auth_business::serde::deserialise_empty_as_none;
-use tracing::warn;
 use tracing::{debug, instrument};
 use tracing::{error, span, Level};
+use tracing::{warn, Instrument};
 
 pub const SESSION_KEY: &str = "b";
 pub const AUTH_TIME_SESSION_KEY: &str = "t";
@@ -69,9 +69,16 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
         }
         Some(req) => req,
     };
+    let _flow_guard = span!(
+        Level::DEBUG,
+        "flow",
+        state = first_request.state,
+        nonce = first_request.nonce
+    )
+    .entered();
 
     if let Ok(Some(username)) = session.get::<String>(SESSION_KEY) {
-        let _guard = span!(Level::DEBUG, "cid", user = username).entered();
+        let _cid_guard = span!(Level::DEBUG, "cid", user = username).entered();
         if first_request.prompts.contains(&Prompt::Login)
             || first_request.prompts.contains(&Prompt::SelectAccount)
         {
@@ -141,6 +148,14 @@ pub async fn post(
         Some(req) => req,
     };
 
+    let flow = span!(
+        Level::DEBUG,
+        "flow",
+        state = first_request.state,
+        nonce = first_request.nonce
+    );
+    let flow_1 = flow.clone();
+    let flow_guard = flow_1.enter();
     let tries_left = match session.get::<i32>(TRIES_LEFT_SESSION_KEY) {
         Err(_) => {
             debug!("unsolicited authentication request");
@@ -164,10 +179,13 @@ pub async fn post(
         query.password.clone().unwrap()
     };
 
+    drop(flow_guard);
     let auth_result = authenticator
         .authenticate_user_and_forget(&username, &password)
+        .instrument(flow.clone())
         .await;
 
+    let _flow_guard = flow.enter();
     if auth_result.is_ok() {
         session.remove(TRIES_LEFT_SESSION_KEY);
         session.remove(ERROR_CODE_SESSION_KEY);
@@ -208,6 +226,14 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
         Some(req) => req,
     };
 
+    let _flow_guard = span!(
+        Level::DEBUG,
+        "flow",
+        state = first_request.state,
+        nonce = first_request.nonce
+    )
+    .entered();
+    debug!("cancelling flow");
     render_redirect_error(
         session,
         &tera,
@@ -219,6 +245,7 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
 
 #[instrument(skip_all, name = "authenticate_select_account")]
 pub async fn select_account(session: Session) -> HttpResponse {
+    debug!("selecting account");
     session.remove(SESSION_KEY);
     session.remove(AUTH_TIME_SESSION_KEY);
 

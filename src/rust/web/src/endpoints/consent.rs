@@ -42,8 +42,8 @@ use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
 use tiny_auth_business::scope::ScopeDescription;
 use tiny_auth_business::serde::deserialise_empty_as_none;
-use tracing::warn;
 use tracing::{debug, instrument};
+use tracing::{span, warn, Instrument, Level};
 use url::Url;
 
 #[instrument(skip_all, name = "consent_get")]
@@ -58,55 +58,64 @@ pub async fn get(
         }
         Some(v) => v,
     };
+    let flow = span!(
+        Level::DEBUG,
+        "flow",
+        state = first_request.state,
+        nonce = first_request.nonce
+    );
+    async move {
+        let username = match session.get::<String>(authenticate::SESSION_KEY) {
+            Err(_) | Ok(None) => {
+                debug!("unsolicited consent request, missing authentication session key");
+                return render_invalid_consent_request(&tera);
+            }
+            Ok(Some(v)) => v,
+        };
 
-    let username = match session.get::<String>(authenticate::SESSION_KEY) {
-        Err(_) | Ok(None) => {
-            debug!("unsolicited consent request, missing authentication session key");
-            return render_invalid_consent_request(&tera);
-        }
-        Ok(Some(v)) => v,
-    };
+        let can_skip_consent_screen = match handler
+            .can_skip_consent_screen(&username, &first_request.client_id, &first_request.scopes)
+            .await
+        {
+            Err(_) => {
+                return render_invalid_consent_request(&tera);
+            }
+            Ok(v) => v,
+        };
 
-    let can_skip_consent_screen = match handler
-        .can_skip_consent_screen(&username, &first_request.client_id, &first_request.scopes)
-        .await
-    {
-        Err(_) => {
-            return render_invalid_consent_request(&tera);
+        if can_skip_consent_screen {
+            if first_request.prompts.contains(&oidc::Prompt::Consent) {
+                debug!("user gave consent to all scopes but client requires explicit consent");
+            } else {
+                debug!("user gave consent to all scopes, skipping consent screen",);
+                return process_skipping_csrf(
+                    first_request.scopes.iter().map(Clone::clone).collect(),
+                    session,
+                    tera,
+                    handler,
+                    &first_request,
+                )
+                .await;
+            }
+        } else if first_request.prompts.contains(&oidc::Prompt::None) {
+            return render_redirect_error(
+                &first_request.redirect_uri,
+                oidc::ProtocolError::Oidc(oidc::OidcProtocolError::ConsentRequired),
+                "User didn't give consent to all scopes",
+                &first_request.state,
+                first_request.encode_redirect_to_fragment,
+            );
         }
-        Ok(v) => v,
-    };
 
-    if can_skip_consent_screen {
-        if first_request.prompts.contains(&oidc::Prompt::Consent) {
-            debug!("user gave consent to all scopes but client requires explicit consent");
-        } else {
-            debug!("user gave consent to all scopes, skipping consent screen",);
-            return process_skipping_csrf(
-                first_request.scopes.iter().map(Clone::clone).collect(),
-                session,
-                tera,
-                handler,
-                &first_request,
-            )
-            .await;
+        match build_context(&session, handler) {
+            Some(context) => {
+                render_template_with_context("consent.html.j2", StatusCode::OK, &tera, &context)
+            }
+            None => server_error(&tera),
         }
-    } else if first_request.prompts.contains(&oidc::Prompt::None) {
-        return render_redirect_error(
-            &first_request.redirect_uri,
-            oidc::ProtocolError::Oidc(oidc::OidcProtocolError::ConsentRequired),
-            "User didn't give consent to all scopes",
-            &first_request.state,
-            first_request.encode_redirect_to_fragment,
-        );
     }
-
-    match build_context(&session, handler) {
-        Some(context) => {
-            render_template_with_context("consent.html.j2", StatusCode::OK, &tera, &context)
-        }
-        None => server_error(&tera),
-    }
+    .instrument(flow)
+    .await
 }
 
 #[derive(Deserialize)]
@@ -136,6 +145,12 @@ pub async fn post(
         }
         Some(v) => v,
     };
+    let flow = span!(
+        Level::DEBUG,
+        "flow",
+        state = first_request.state,
+        nonce = first_request.nonce
+    );
     process_skipping_csrf(
         query.0.scopes.into_keys().collect(),
         session,
@@ -143,6 +158,7 @@ pub async fn post(
         handler,
         &first_request,
     )
+    .instrument(flow)
     .await
 }
 
@@ -244,7 +260,14 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
         }
         Some(req) => req,
     };
-
+    let _guard = span!(
+        Level::DEBUG,
+        "flow",
+        state = first_request.state,
+        nonce = first_request.nonce
+    )
+    .entered();
+    debug!("cancelling flow");
     session.remove(authorize::SESSION_KEY);
 
     render_redirect_error(

@@ -36,8 +36,8 @@ use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Value;
 use std::sync::Arc;
-use tracing::{error, warn};
 use tracing::{debug, instrument};
+use tracing::{error, warn};
 
 /// https://openid.net/specs/openid-connect-core-1_0.html#IDToken
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]

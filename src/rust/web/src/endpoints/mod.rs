@@ -49,7 +49,7 @@ use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::scope::render_tera_error;
 use tiny_auth_business::store::memory::generate_random_string;
 use tracing::warn;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, Level};
 use url::Url;
 
 const CSRF_SESSION_KEY: &str = "c";
@@ -180,6 +180,7 @@ fn render_template(name: &str, code: StatusCode, tera: &Tera) -> HttpResponse {
     render_template_with_context(name, code, tera, &Context::new())
 }
 
+#[instrument(level = Level::TRACE, skip(tera))]
 fn render_template_with_context(
     name: &str,
     code: StatusCode,
