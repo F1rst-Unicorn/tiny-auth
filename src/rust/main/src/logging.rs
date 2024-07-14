@@ -15,16 +15,20 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 use crate::config::{Fields, Format, Log};
+use std::env;
 use std::str::FromStr;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, Subscriber};
 use tracing_log::LogTracer;
 use tracing_subscriber::fmt::format;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::reload::{Handle, Layer};
+use tracing_subscriber::fmt::format::{FmtSpan, JsonFields};
+use tracing_subscriber::layer::{Layered, SubscriberExt};
+use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::reload::Handle;
+use tracing_subscriber::reload::Layer as ReloadLayer;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{fmt, EnvFilter, Registry};
+use tracing_subscriber::{fmt, EnvFilter, Layer, Registry};
 
-pub fn initialise_from_verbosity(verbosity_level: u8) -> (Handle<EnvFilter, Registry>, ()) {
+pub fn initialise_from_verbosity(verbosity_level: u8) -> (FilterHandle, FormatHandle) {
     let filter = match verbosity_level {
         0 => "info",
         1 => "debug",
@@ -35,20 +39,48 @@ pub fn initialise_from_verbosity(verbosity_level: u8) -> (Handle<EnvFilter, Regi
     initialise_with_config(&Log {
         format: Format::Full,
         fields: Fields {
-            ansi: false,
+            ansi: env::var("NO_COLOR").map_or(true, |v| v.is_empty()),
             file: false,
             level: true,
             line_number: false,
-            source_location: false,
             target: true,
             thread_id: false,
             thread_name: false,
+            span_events: verbosity_level >= 2,
         },
         filter: vec![filter],
     })
 }
 
-fn initialise_with_config(config: &Log) -> (Handle<EnvFilter, Registry>, ()) {
+type FormatHandle = Handle<
+    Box<dyn Layer<Layered<ReloadLayer<EnvFilter, Registry>, Registry>> + Send + Sync>,
+    Layered<ReloadLayer<EnvFilter, Registry>, Registry>,
+>;
+
+type FilterHandle = Handle<EnvFilter, Registry>;
+
+fn initialise_with_config(config: &Log) -> (FilterHandle, FormatHandle) {
+    let filter_layer = match EnvFilter::from_str(&config.filter.join(",")) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("invalid log filters: {}", e);
+            std::process::exit(1);
+        }
+    };
+    let (filter_layer, reload_handle) = ReloadLayer::new(filter_layer);
+    let (layer, format_handle) = ReloadLayer::new(build_format_layer(config));
+
+    let subscriber = tracing_subscriber::registry().with(filter_layer);
+    subscriber.with(layer).init();
+    init_log();
+
+    (reload_handle, format_handle)
+}
+
+fn build_format_layer<S>(config: &Log) -> Box<dyn Layer<S> + Send + Sync + 'static>
+where
+    for<'a> S: Subscriber + LookupSpan<'a>,
+{
     let format = format()
         .with_target(config.fields.target)
         .with_ansi(config.fields.ansi)
@@ -57,33 +89,25 @@ fn initialise_with_config(config: &Log) -> (Handle<EnvFilter, Registry>, ()) {
         .with_line_number(config.fields.line_number)
         .with_thread_ids(config.fields.thread_id)
         .with_thread_names(config.fields.thread_name);
-
-    let filter_layer = match EnvFilter::from_str(&config.filter.join(",")) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("invalid log filters: {}", e);
-            std::process::exit(1);
-        }
-    };
-
-    let (filter_layer, reload_handle) = Layer::new(filter_layer);
-
-    let subscriber = tracing_subscriber::registry().with(filter_layer);
     match config.format {
         Format::Compact => {
             let format = format.compact();
-            let layer = fmt::layer().event_format(format);
-            subscriber.with(layer).init();
+            fmt::layer()
+                .event_format(format)
+                .with_span_events(span_events(config))
+                .boxed()
         }
         Format::Pretty => {
             let format = format.pretty();
-            let layer = fmt::layer().event_format(format);
-            subscriber.with(layer).init();
+            fmt::layer()
+                .event_format(format)
+                .with_span_events(span_events(config))
+                .boxed()
         }
-        Format::Full => {
-            let layer = fmt::layer().event_format(format);
-            subscriber.with(layer).init();
-        }
+        Format::Full => fmt::layer()
+            .event_format(format)
+            .with_span_events(span_events(config))
+            .boxed(),
         Format::Json {
             flatten,
             current_span,
@@ -94,20 +118,28 @@ fn initialise_with_config(config: &Log) -> (Handle<EnvFilter, Registry>, ()) {
                 .flatten_event(flatten)
                 .with_current_span(current_span)
                 .with_span_list(span_list);
-            let layer = fmt::layer().event_format(format);
-            subscriber.with(layer).init();
+            fmt::layer()
+                .event_format(format)
+                .fmt_fields(JsonFields::new())
+                .with_span_events(span_events(config))
+                .boxed()
         }
     }
-    init_log();
+}
 
-    (reload_handle, ())
+fn span_events(config: &Log) -> FmtSpan {
+    if config.fields.span_events {
+        FmtSpan::NEW | FmtSpan::CLOSE
+    } else {
+        FmtSpan::NONE
+    }
 }
 
 pub fn reload_with_config(
     config: &Log,
-    (filter_handle, format_handle): (Handle<EnvFilter, Registry>, ()),
+    (filter_handle, format_handle): &(FilterHandle, FormatHandle),
 ) {
-    debug!(?config.filter, "swapping log filter");
+    debug!("swapping log filter");
     let mut new_filter = match EnvFilter::from_str(&config.filter.join(",")) {
         Ok(v) => v,
         Err(e) => {
@@ -119,9 +151,14 @@ pub fn reload_with_config(
         std::mem::swap(&mut new_filter, filter);
     }) {
         error!(%e, "failed to update log filter");
-    } else {
-        info!("log filter updated");
     }
+
+    debug!("swapping log format");
+    let format_layer = build_format_layer(&config);
+    if let Err(e) = format_handle.reload(format_layer) {
+        error!(%e, "failed to update log format");
+    }
+    info!("log filter updated");
 }
 
 fn init_log() {

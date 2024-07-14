@@ -49,3 +49,25 @@ api:
   public host:
     domain: localhost
     port: 8089
+
+log:
+  format: full
+  fields:
+    span events: true
+    ansi: true
+    file: false
+    level: true
+    line number: false
+    target: true
+    thread id: false
+    thread name: false
+  filter:
+    - warn
+    - tiny_auth_main=info
+    - tiny_auth_web=info
+    - tiny_auth_business=info
+    - tiny_auth_api=info
+    - tiny_auth_ldap=info
+    - tiny_auth=info
+    - "[cid]=off"
+    - "[HTTP request]=off"

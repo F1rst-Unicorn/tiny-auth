@@ -337,13 +337,13 @@ pub struct Fields {
     pub level: bool,
     #[serde(rename = "line number")]
     pub line_number: bool,
-    #[serde(rename = "source location")]
-    pub source_location: bool,
     pub target: bool,
     #[serde(rename = "thread id")]
     pub thread_id: bool,
     #[serde(rename = "thread name")]
     pub thread_name: bool,
+    #[serde(rename = "span events")]
+    pub span_events: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]

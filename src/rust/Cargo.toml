@@ -93,7 +93,7 @@ features = ["derive"]
 [workspace.dependencies.tracing-subscriber]
 version = "0.3.18"
 default-features = false
-features = ["std", "env-filter", "fmt", "ansi", "registry", "json", "local-time"]
+features = ["std", "env-filter", "fmt", "ansi", "registry", "json", "local-time", "parking_lot"]
 
 [workspace.dependencies.tracing]
 version = "0.1.40"

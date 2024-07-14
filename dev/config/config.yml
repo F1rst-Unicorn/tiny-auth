@@ -89,16 +89,16 @@ api:
     port: 8089
 
 log:
-  format: compact
+  format: full
   fields:
+    span events: false
     ansi: true
-    file: true
+    file: false
     level: true
-    line number: true
-    source location: true
+    line number: false
     target: true
-    thread id: true
-    thread name: true
+    thread id: false
+    thread name: false
   filter:
     - warn
     - tiny_auth_main=trace
@@ -107,7 +107,8 @@ log:
     - tiny_auth_api=trace
     - tiny_auth_ldap=trace
     - tiny_auth=trace
-    - "[cid]=trace"
+    - "[cid]=info"
+    - "[HTTP request]=off"
     - tiny_auth_main::config::parser=debug
     - tiny_auth_main::systemd::linux=debug
     - tiny_auth_business::store::memory=debug
