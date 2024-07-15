@@ -14,13 +14,14 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::config::{Fields, Format, Log};
+use crate::config::{Fields, Format, Log, Time};
 use std::env;
 use std::str::FromStr;
 use tracing::{debug, error, info, Subscriber};
 use tracing_log::LogTracer;
 use tracing_subscriber::fmt::format;
 use tracing_subscriber::fmt::format::{FmtSpan, JsonFields};
+use tracing_subscriber::fmt::time::{ChronoLocal, ChronoUtc, SystemTime, Uptime};
 use tracing_subscriber::layer::{Layered, SubscriberExt};
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::reload::Handle;
@@ -47,6 +48,11 @@ pub fn initialise_from_verbosity(verbosity_level: u8) -> (FilterHandle, FormatHa
             thread_id: false,
             thread_name: false,
             span_events: verbosity_level >= 2,
+            time: if verbosity_level >= 1 {
+                Time::SystemTime
+            } else {
+                Time::None
+            },
         },
         filter: vec![filter],
     })
@@ -89,25 +95,137 @@ where
         .with_line_number(config.fields.line_number)
         .with_thread_ids(config.fields.thread_id)
         .with_thread_names(config.fields.thread_name);
+
     match config.format {
         Format::Compact => {
             let format = format.compact();
-            fmt::layer()
-                .event_format(format)
-                .with_span_events(span_events(config))
-                .boxed()
+            match &config.fields.time {
+                Time::None => {
+                    let format = format.without_time();
+                    fmt::layer()
+                        .event_format(format)
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+                Time::Uptime => {
+                    let format = format.with_timer(Uptime::default());
+                    fmt::layer()
+                        .event_format(format)
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+                Time::SystemTime => {
+                    let format = format.with_timer(SystemTime::default());
+                    fmt::layer()
+                        .event_format(format)
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+                Time::Utc {
+                    format: time_format,
+                } => {
+                    let format = format.with_timer(ChronoUtc::new(time_format.clone()));
+                    fmt::layer()
+                        .event_format(format)
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+                Time::Local {
+                    format: time_format,
+                } => {
+                    let format = format.with_timer(ChronoLocal::new(time_format.clone()));
+                    fmt::layer()
+                        .event_format(format)
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+            }
         }
         Format::Pretty => {
             let format = format.pretty();
-            fmt::layer()
-                .event_format(format)
-                .with_span_events(span_events(config))
-                .boxed()
+            match &config.fields.time {
+                Time::None => {
+                    let format = format.without_time();
+                    fmt::layer()
+                        .event_format(format)
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+                Time::Uptime => {
+                    let format = format.with_timer(Uptime::default());
+                    fmt::layer()
+                        .event_format(format)
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+                Time::SystemTime => {
+                    let format = format.with_timer(SystemTime::default());
+                    fmt::layer()
+                        .event_format(format)
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+                Time::Utc {
+                    format: time_format,
+                } => {
+                    let format = format.with_timer(ChronoUtc::new(time_format.clone()));
+                    fmt::layer()
+                        .event_format(format)
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+                Time::Local {
+                    format: time_format,
+                } => {
+                    let format = format.with_timer(ChronoLocal::new(time_format.clone()));
+                    fmt::layer()
+                        .event_format(format)
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+            }
         }
-        Format::Full => fmt::layer()
-            .event_format(format)
-            .with_span_events(span_events(config))
-            .boxed(),
+        Format::Full => match &config.fields.time {
+            Time::None => {
+                let format = format.without_time();
+                fmt::layer()
+                    .event_format(format)
+                    .with_span_events(span_events(config))
+                    .boxed()
+            }
+            Time::Uptime => {
+                let format = format.with_timer(Uptime::default());
+                fmt::layer()
+                    .event_format(format)
+                    .with_span_events(span_events(config))
+                    .boxed()
+            }
+            Time::SystemTime => {
+                let format = format.with_timer(SystemTime::default());
+                fmt::layer()
+                    .event_format(format)
+                    .with_span_events(span_events(config))
+                    .boxed()
+            }
+            Time::Utc {
+                format: time_format,
+            } => {
+                let format = format.with_timer(ChronoUtc::new(time_format.clone()));
+                fmt::layer()
+                    .event_format(format)
+                    .with_span_events(span_events(config))
+                    .boxed()
+            }
+            Time::Local {
+                format: time_format,
+            } => {
+                let format = format.with_timer(ChronoLocal::new(time_format.clone()));
+                fmt::layer()
+                    .event_format(format)
+                    .with_span_events(span_events(config))
+                    .boxed()
+            }
+        },
         Format::Json {
             flatten,
             current_span,
@@ -118,11 +236,52 @@ where
                 .flatten_event(flatten)
                 .with_current_span(current_span)
                 .with_span_list(span_list);
-            fmt::layer()
-                .event_format(format)
-                .fmt_fields(JsonFields::new())
-                .with_span_events(span_events(config))
-                .boxed()
+            match &config.fields.time {
+                Time::None => {
+                    let format = format.without_time();
+                    fmt::layer()
+                        .event_format(format)
+                        .fmt_fields(JsonFields::new())
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+                Time::Uptime => {
+                    let format = format.with_timer(Uptime::default());
+                    fmt::layer()
+                        .event_format(format)
+                        .fmt_fields(JsonFields::new())
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+                Time::SystemTime => {
+                    let format = format.with_timer(SystemTime::default());
+                    fmt::layer()
+                        .event_format(format)
+                        .fmt_fields(JsonFields::new())
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+                Time::Utc {
+                    format: time_format,
+                } => {
+                    let format = format.with_timer(ChronoUtc::new(time_format.clone()));
+                    fmt::layer()
+                        .event_format(format)
+                        .fmt_fields(JsonFields::new())
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+                Time::Local {
+                    format: time_format,
+                } => {
+                    let format = format.with_timer(ChronoLocal::new(time_format.clone()));
+                    fmt::layer()
+                        .event_format(format)
+                        .fmt_fields(JsonFields::new())
+                        .with_span_events(span_events(config))
+                        .boxed()
+                }
+            }
         }
     }
 }

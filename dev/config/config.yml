@@ -99,6 +99,10 @@ log:
     target: true
     thread id: false
     thread name: false
+    time:
+      local:
+        # https://docs.rs/chrono/latest/chrono/format/strftime/index.html
+        format: "%T"
   filter:
     - warn
     - tiny_auth_main=trace

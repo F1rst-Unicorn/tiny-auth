@@ -12,6 +12,7 @@ Restart=on-failure
 RestartSec=5
 WatchdogSec=5
 WatchdogSignal=SIGTERM
+Environment=NO_COLOR=1
 
 # tiny-auth waits 30s for existing connections to terminate
 TimeoutStopSec=30s

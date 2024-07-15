@@ -344,6 +344,7 @@ pub struct Fields {
     pub thread_name: bool,
     #[serde(rename = "span events")]
     pub span_events: bool,
+    pub time: Time,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -368,4 +369,35 @@ impl Default for Format {
     fn default() -> Self {
         Self::Full
     }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub enum Time {
+    #[serde(rename = "none")]
+    None,
+    #[serde(rename = "uptime")]
+    Uptime,
+    #[serde(rename = "system")]
+    SystemTime,
+    #[serde(rename = "utc")]
+    Utc {
+        #[serde(default = "default_time_format")]
+        format: String,
+    },
+    #[serde(rename = "local")]
+    Local {
+        #[serde(default = "default_time_format")]
+        format: String,
+    },
+}
+
+impl Default for Time {
+    fn default() -> Self {
+        Self::SystemTime
+    }
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn default_time_format() -> String {
+    "%F %T".to_string()
 }
