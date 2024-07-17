@@ -93,10 +93,10 @@ log:
   fields:
     span events: false
     ansi: true
-    file: false
+    file: true
     level: true
-    line number: false
-    target: true
+    line number: true
+    target: false
     thread id: false
     thread name: false
     time: none
@@ -108,9 +108,9 @@ log:
     - tiny_auth_api=trace
     - tiny_auth_ldap=trace
     - tiny_auth=trace
-    - "[cid]=info"
+    - "[cid]=debug"
     - tiny_auth_main::config::parser=debug
-    - tiny_auth_main::systemd::linux=debug
+    - tiny_auth_main::systemd=debug
     - tiny_auth_business::store::memory=debug
     - tiny_auth_web::tera=debug
 

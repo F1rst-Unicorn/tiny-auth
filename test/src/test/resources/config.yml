@@ -55,3 +55,29 @@ api:
   public host:
     domain: localhost
     port: 8089
+
+log:
+  format: full
+  fields:
+    span events: false
+    ansi: false
+    file: true
+    level: true
+    line number: true
+    target: false
+    thread id: false
+    thread name: false
+    time: none
+  filter:
+    - warn
+    - tiny_auth_main=trace
+    - tiny_auth_web=trace
+    - tiny_auth_business=trace
+    - tiny_auth_api=trace
+    - tiny_auth_ldap=trace
+    - tiny_auth=trace
+    - "[cid]=debug"
+    - "[flow]=debug"
+    - tiny_auth_main::config::parser=info
+    - tiny_auth_main::systemd=debug
+    - tiny_auth_business::store::memory=debug

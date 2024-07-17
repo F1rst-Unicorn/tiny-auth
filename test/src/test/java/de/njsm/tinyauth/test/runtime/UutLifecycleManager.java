@@ -60,9 +60,7 @@ public class UutLifecycleManager extends TypeBasedParameterResolver<Endpoint> im
                 .withCommand(
                         "src/rust/target/debug/tiny-auth",
                         "-c",
-                        "/app/test/src/test/resources/config.yml",
-                        "-l",
-                        "/app/test/src/test/resources/log4rs.yml")
+                        "/app/test/src/test/resources/config.yml")
                 .withExposedPorts(port)
                 .waitingFor(Wait.forListeningPorts(port))
                 .withLogConsumer(v -> LOG.info(v.getUtf8StringWithoutLineEnding()));
