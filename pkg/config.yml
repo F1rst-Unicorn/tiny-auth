@@ -53,14 +53,15 @@ api:
 log:
   format: full
   fields:
-    span events: true
+    span events: false
     ansi: true
-    file: false
+    file: true
     level: true
-    line number: false
-    target: true
+    line number: true
+    target: false
     thread id: false
     thread name: false
+    time: none
   filter:
     - warn
     - tiny_auth_main=info
@@ -69,5 +70,5 @@ log:
     - tiny_auth_api=info
     - tiny_auth_ldap=info
     - tiny_auth=info
-    - "[cid]=off"
-    - "[HTTP request]=off"
+
+hot reload: true
