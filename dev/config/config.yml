@@ -99,10 +99,7 @@ log:
     target: true
     thread id: false
     thread name: false
-    time:
-      local:
-        # https://docs.rs/chrono/latest/chrono/format/strftime/index.html
-        format: "%T"
+    time: none
   filter:
     - warn
     - tiny_auth_main=trace
@@ -112,7 +109,9 @@ log:
     - tiny_auth_ldap=trace
     - tiny_auth=trace
     - "[cid]=info"
-    - "[HTTP request]=off"
     - tiny_auth_main::config::parser=debug
     - tiny_auth_main::systemd::linux=debug
     - tiny_auth_business::store::memory=debug
+    - tiny_auth_web::tera=debug
+
+hot reload: true

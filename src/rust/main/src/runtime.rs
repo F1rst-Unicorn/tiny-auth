@@ -16,16 +16,21 @@
  */
 
 use crate::config::Config;
+use crate::logging::{FilterHandle, FormatHandle};
 use crate::systemd::notify_about_start;
 use crate::systemd::watchdog;
 use crate::terminate::terminator;
+use crate::{config, logging};
 use actix_web::dev::ServerHandle;
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use openssl::error::ErrorStack;
+use tokio::sync::mpsc::channel;
+use tokio::sync::mpsc::Receiver as MpscReceiver;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::Receiver;
 use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
-use tracing::error;
+use tracing::{debug, error, trace, warn};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -51,7 +56,11 @@ pub enum Error {
     WebError(#[from] tiny_auth_web::Error),
 }
 
-pub fn run(config: Config) -> Result<(), Error> {
+pub fn run(
+    config_path: &str,
+    config: Config,
+    handles: (FilterHandle, FormatHandle),
+) -> Result<(), Error> {
     let actor_system = actix_rt::System::with_tokio_rt(|| {
         tokio::runtime::Builder::new_multi_thread()
             .worker_threads(4)
@@ -85,6 +94,7 @@ pub fn run(config: Config) -> Result<(), Error> {
             Ok(srv) => srv,
         };
         drop(constructor);
+        tokio::spawn(config_refresher(config_path.to_string(), config, handles));
         if pass_server.send(srv.handle()).is_err() {
             error!("failed to create server");
             return Ok(());
@@ -98,6 +108,68 @@ pub fn run(config: Config) -> Result<(), Error> {
     Ok(())
 }
 
+async fn config_refresher(
+    config_path: String,
+    mut config: Config,
+    handles: (FilterHandle, FormatHandle),
+) {
+    if !config.hot_reload {
+        trace!(%config.hot_reload);
+        return;
+    }
+
+    let (mut watcher, mut rx) = match async_watcher() {
+        Err(e) => {
+            warn!(%e, "watching config file failed");
+            return;
+        }
+        Ok(v) => v,
+    };
+
+    if let Err(e) = watcher.watch(config_path.as_ref(), RecursiveMode::NonRecursive) {
+        warn!(%e, "watching config file failed");
+        return;
+    }
+
+    debug!("watching config file for changes");
+    while let Some(res) = rx.recv().await {
+        match res {
+            Err(e) => warn!(%e, "failed to get new config file info"),
+            Ok(event) => {
+                if matches!(
+                    event.kind,
+                    EventKind::Any | EventKind::Modify(_) | EventKind::Other
+                ) {
+                    let new_config = match config::parser::parse_config_fallibly(&config_path) {
+                        None => {
+                            continue;
+                        }
+                        Some(v) => v,
+                    };
+                    if new_config.log != config.log {
+                        logging::reload_with_config(&new_config.log, &handles);
+                    }
+                    config = new_config;
+                }
+            }
+        }
+    }
+}
+
+fn async_watcher() -> notify::Result<(RecommendedWatcher, MpscReceiver<notify::Result<Event>>)> {
+    let (tx, rx) = channel(1);
+
+    let watcher = RecommendedWatcher::new(
+        move |event| {
+            if let Err(e) = tx.blocking_send(event) {
+                warn!(%e, "failed to notify about config file change")
+            }
+        },
+        notify::Config::default(),
+    )?;
+
+    Ok((watcher, rx))
+}
 async fn runtime_primitives(
     receive_server: Receiver<ServerHandle>,
     api_join_handle: (Sender<()>, JoinHandle<()>),

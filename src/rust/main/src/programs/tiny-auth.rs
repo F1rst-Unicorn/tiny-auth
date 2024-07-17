@@ -42,7 +42,7 @@ fn main() {
     let config = parse_config(config_path);
     logging::reload_with_config(&config.log, &handles);
 
-    if let Err(e) = runtime::run(config) {
+    if let Err(e) = runtime::run(config_path, config, handles) {
         error!(%e);
     }
 }

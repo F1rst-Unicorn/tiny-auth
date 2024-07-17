@@ -58,12 +58,12 @@ pub fn initialise_from_verbosity(verbosity_level: u8) -> (FilterHandle, FormatHa
     })
 }
 
-type FormatHandle = Handle<
+pub type FormatHandle = Handle<
     Box<dyn Layer<Layered<ReloadLayer<EnvFilter, Registry>, Registry>> + Send + Sync>,
     Layered<ReloadLayer<EnvFilter, Registry>, Registry>,
 >;
 
-type FilterHandle = Handle<EnvFilter, Registry>;
+pub type FilterHandle = Handle<EnvFilter, Registry>;
 
 fn initialise_with_config(config: &Log) -> (FilterHandle, FormatHandle) {
     let filter_layer = match EnvFilter::from_str(&config.filter.join(",")) {
@@ -317,7 +317,7 @@ pub fn reload_with_config(
     if let Err(e) = format_handle.reload(format_layer) {
         error!(%e, "failed to update log format");
     }
-    info!("log filter updated");
+    info!("log config updated");
 }
 
 fn init_log() {

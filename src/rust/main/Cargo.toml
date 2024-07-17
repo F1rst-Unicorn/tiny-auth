@@ -49,6 +49,8 @@ test-log.workspace = true
 env_logger.workspace = true
 url.workspace = true
 async-trait.workspace = true
+notify.workspace = true
+futures.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 systemd.workspace = true

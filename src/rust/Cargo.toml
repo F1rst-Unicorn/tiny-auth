@@ -103,3 +103,8 @@ features = ["attributes", "std"]
 [workspace.dependencies.vergen]
 version = "8"
 features = ["build", "git", "git2"]
+
+[workspace.dependencies.notify]
+version = "6"
+default-features = false
+features = ["macos_kqueue"]

@@ -23,7 +23,7 @@ use serde_derive::Deserialize;
 use std::convert::From;
 use url::Url;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct Config {
     pub store: Vec<Store>,
 
@@ -38,9 +38,13 @@ pub struct Config {
     pub crypto: Crypto,
 
     pub log: Log,
+
+    #[serde(default)]
+    #[serde(alias = "hot reload")]
+    pub hot_reload: bool,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Store {
     #[serde(rename = "configuration file")]
@@ -63,7 +67,7 @@ pub enum Store {
     },
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub enum LdapMode {
     #[serde(rename = "simple bind")]
     SimpleBind {
@@ -87,7 +91,7 @@ pub enum LdapMode {
     },
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct LdapSearch {
     #[serde(rename = "base dn")]
     pub base_dn: String,
@@ -141,7 +145,7 @@ pub struct ClientAttributes {
     pub allowed_scopes: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct RateLimit {
     pub events: usize,
 
@@ -158,7 +162,7 @@ impl Default for RateLimit {
     }
 }
 
-#[derive(Default, Clone, Debug, Deserialize)]
+#[derive(Default, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct Web {
     pub bind: String,
 
@@ -224,7 +228,7 @@ fn default_session_same_site_policy() -> SameSitePolicy {
     SameSitePolicy::Lax
 }
 
-#[derive(Deserialize, Clone, Copy, Debug)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SameSitePolicy {
     #[serde(rename = "strict")]
     Strict,
@@ -250,14 +254,14 @@ impl From<SameSitePolicy> for SameSite {
     }
 }
 
-#[derive(Default, Clone, Debug, Deserialize)]
+#[derive(Default, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct Host {
     pub domain: String,
 
     pub port: Option<String>,
 }
 
-#[derive(Default, Clone, Debug, Deserialize)]
+#[derive(Default, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct Api {
     #[serde(alias = "endpoint")]
     pub bind: String,
@@ -273,7 +277,7 @@ pub struct Api {
     pub path: Option<String>,
 }
 
-#[derive(Default, Clone, Debug, Deserialize)]
+#[derive(Default, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct Tls {
     pub key: String,
 
@@ -290,7 +294,7 @@ fn default_versions() -> Vec<TlsVersion> {
     vec![TlsVersion::Tls1_3]
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum TlsVersion {
     #[serde(rename = "1.3")]
     Tls1_3,
@@ -308,7 +312,7 @@ impl From<TlsVersion> for &'static rustls::SupportedProtocolVersion {
     }
 }
 
-#[derive(Default, Clone, Debug, Deserialize)]
+#[derive(Default, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct CryptoKey {
     pub key: String,
 
@@ -316,21 +320,21 @@ pub struct CryptoKey {
     pub public_key: String,
 }
 
-#[derive(Default, Clone, Debug, Deserialize)]
+#[derive(Default, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct Crypto {
     pub keys: Vec<CryptoKey>,
 
     pub pepper: String,
 }
 
-#[derive(Default, Clone, Debug, Deserialize)]
+#[derive(Default, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct Log {
     pub format: Format,
     pub fields: Fields,
     pub filter: Vec<String>,
 }
 
-#[derive(Default, Clone, Debug, Deserialize)]
+#[derive(Default, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct Fields {
     pub ansi: bool,
     pub file: bool,
@@ -347,7 +351,7 @@ pub struct Fields {
     pub time: Time,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub enum Format {
     #[serde(rename = "compact")]
     Compact,
@@ -371,7 +375,7 @@ impl Default for Format {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub enum Time {
     #[serde(rename = "none")]
     None,

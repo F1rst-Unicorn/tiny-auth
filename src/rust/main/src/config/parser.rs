@@ -28,13 +28,17 @@ const EXIT_CODE: i32 = 2;
 
 #[instrument]
 pub fn parse_config(path: &str) -> Config {
-    let raw_config = match read_config(path).into_iter().next() {
+    match parse_config_fallibly(path) {
         None => {
             error!("not found");
             exit(EXIT_CODE);
         }
         Some(v) => v,
-    };
+    }
+}
+
+pub fn parse_config_fallibly(path: &str) -> Option<Config> {
+    let raw_config = read_config(path).into_iter().next()?;
     trace!(%raw_config, "complete configuration");
     parse_raw_config(&raw_config)
 }
@@ -91,14 +95,14 @@ fn traverse_directory(path: &str) -> Vec<String> {
     result
 }
 
-fn parse_raw_config(raw_config: &str) -> Config {
+fn parse_raw_config(raw_config: &str) -> Option<Config> {
     let deserializer = serde_yaml::Deserializer::from_str(raw_config);
     match serde_yaml::with::singleton_map_recursive::deserialize(deserializer) {
         Err(e) => {
             log_config_error(e);
-            exit(EXIT_CODE);
+            None
         }
-        Ok(v) => v,
+        Ok(v) => Some(v),
     }
 }
 
