@@ -115,7 +115,7 @@ where
                         .boxed()
                 }
                 Time::SystemTime => {
-                    let format = format.with_timer(SystemTime::default());
+                    let format = format.with_timer(SystemTime);
                     fmt::layer()
                         .event_format(format)
                         .with_span_events(span_events(config))
@@ -159,7 +159,7 @@ where
                         .boxed()
                 }
                 Time::SystemTime => {
-                    let format = format.with_timer(SystemTime::default());
+                    let format = format.with_timer(SystemTime);
                     fmt::layer()
                         .event_format(format)
                         .with_span_events(span_events(config))
@@ -201,7 +201,7 @@ where
                     .boxed()
             }
             Time::SystemTime => {
-                let format = format.with_timer(SystemTime::default());
+                let format = format.with_timer(SystemTime);
                 fmt::layer()
                     .event_format(format)
                     .with_span_events(span_events(config))
@@ -254,7 +254,7 @@ where
                         .boxed()
                 }
                 Time::SystemTime => {
-                    let format = format.with_timer(SystemTime::default());
+                    let format = format.with_timer(SystemTime);
                     fmt::layer()
                         .event_format(format)
                         .fmt_fields(JsonFields::new())
@@ -313,7 +313,7 @@ pub fn reload_with_config(
     }
 
     debug!("swapping log format");
-    let format_layer = build_format_layer(&config);
+    let format_layer = build_format_layer(config);
     if let Err(e) = format_handle.reload(format_layer) {
         error!(%e, "failed to update log format");
     }
