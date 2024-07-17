@@ -110,7 +110,7 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
             session,
             &tera,
             oidc::ProtocolError::Oidc(oidc::OidcProtocolError::LoginRequired),
-            "no username found",
+            "No username found",
             first_request.encode_redirect_to_fragment,
         )
     } else {
