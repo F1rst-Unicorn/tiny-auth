@@ -48,8 +48,9 @@ pub enum ClientType {
     },
 }
 
-#[derive(Deserialize, PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(Deserialize, PartialEq, Eq, Clone, Copy, Debug, Default)]
 pub enum GrantType {
+    #[default]
     #[serde(rename = "authorization_code")]
     AuthorizationCode,
 
@@ -61,12 +62,6 @@ pub enum GrantType {
 
     #[serde(rename = "refresh_token")]
     RefreshToken,
-}
-
-impl Default for GrantType {
-    fn default() -> Self {
-        Self::AuthorizationCode
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]

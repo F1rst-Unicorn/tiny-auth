@@ -228,20 +228,15 @@ fn default_session_same_site_policy() -> SameSitePolicy {
     SameSitePolicy::Lax
 }
 
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum SameSitePolicy {
     #[serde(rename = "strict")]
     Strict,
+    #[default]
     #[serde(rename = "lax")]
     Lax,
     #[serde(rename = "none")]
     None,
-}
-
-impl Default for SameSitePolicy {
-    fn default() -> Self {
-        Self::Lax
-    }
 }
 
 impl From<SameSitePolicy> for SameSite {
@@ -351,12 +346,13 @@ pub struct Fields {
     pub time: Time,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Default)]
 pub enum Format {
     #[serde(rename = "compact")]
     Compact,
     #[serde(rename = "pretty")]
     Pretty,
+    #[default]
     #[serde(rename = "full")]
     Full,
     #[serde(rename = "json")]
@@ -369,18 +365,13 @@ pub enum Format {
     },
 }
 
-impl Default for Format {
-    fn default() -> Self {
-        Self::Full
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Default)]
 pub enum Time {
     #[serde(rename = "none")]
     None,
     #[serde(rename = "uptime")]
     Uptime,
+    #[default]
     #[serde(rename = "system")]
     SystemTime,
     #[serde(rename = "utc")]
@@ -393,12 +384,6 @@ pub enum Time {
         #[serde(default = "default_time_format")]
         format: String,
     },
-}
-
-impl Default for Time {
-    fn default() -> Self {
-        Self::SystemTime
-    }
 }
 
 #[allow(clippy::unnecessary_wraps)]
