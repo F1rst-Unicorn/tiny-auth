@@ -86,6 +86,7 @@ pub trait Constructor<'a> {
     fn tls_versions(&self) -> Vec<&'static rustls::SupportedProtocolVersion>;
     fn bind(&self) -> String;
     fn workers(&self) -> Option<usize>;
+    fn shutdown_timeout(&self) -> u64;
     fn tls_enabled(&self) -> bool;
     fn web_path(&self) -> String;
     fn static_files(&self) -> String;
@@ -252,7 +253,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     })
     .disable_signals()
     .keep_alive(KeepAlive::Timeout(core::time::Duration::from_secs(60)))
-    .shutdown_timeout(30);
+    .shutdown_timeout(constructor.shutdown_timeout());
 
     let server = if tls_enabled {
         let tls_config = configure_tls(constructor)?;

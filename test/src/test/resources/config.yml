@@ -36,6 +36,7 @@ web:
     domain: tiny-auth
     port: 34344
   static files: src/static
+  shutdown timeout in seconds: 0
   cors:
     - http://correct.example
   session timeout in seconds: 60000

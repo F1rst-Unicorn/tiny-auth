@@ -17,14 +17,16 @@
 
 use crate::systemd::notify_about_termination;
 use actix_web::dev::ServerHandle;
+use futures_util::future::FutureExt;
+use std::pin::pin;
 use tokio::io::Error;
 use tokio::signal::unix::signal;
 use tokio::signal::unix::SignalKind;
 use tokio::sync::oneshot::Sender;
 use tokio::task::JoinHandle;
-use tracing::debug;
 use tracing::error;
 use tracing::info;
+use tracing::{debug, trace};
 
 #[allow(clippy::cognitive_complexity)] // not really complex to read
 pub async fn terminator(
@@ -42,13 +44,10 @@ pub async fn terminator(
         _ = sigquit.recv() => {}
     }
 
-    info!("exitting, waiting 30s for connections to terminate");
+    info!("exitting, waiting for connections to terminate gracefully");
     tokio::spawn(notify_about_termination());
-    match api_join_handle.0.send(()) {
-        Err(_) => {
-            error!("error terminating GRPC API");
-        }
-        Ok(v) => v,
+    if api_join_handle.0.send(()).is_err() {
+        error!("failed to terminate GRPC API");
     }
     let http_join_handle = tokio::spawn(server.stop(true));
 
@@ -71,24 +70,25 @@ pub async fn terminator(
         _ = sigquit.recv() => {}
     }
 
+    let mut stop_server_immediately_future = pin!(tokio::spawn(server.stop(false)).fuse());
+    trace!("waiting for immediate HTTP server shutdown");
     while tokio::select! {
-        _ = server.stop(false) => {
+        _ = &mut stop_server_immediately_future => {
             debug!("HTTP server stopped");
             false
         }
         _ = sigint.recv() => {
-            info!("still waiting for shutdown...");
             true
         }
         _ = sigterm.recv() => {
-            info!("still waiting for shutdown...");
             true
         }
         _ = sigquit.recv() => {
-            info!("still waiting for shutdown...");
             true
         }
-    } {}
+    } {
+        info!("still waiting for shutdown...");
+    }
 
     Ok(())
 }

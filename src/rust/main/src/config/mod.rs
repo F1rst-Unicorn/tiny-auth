@@ -179,6 +179,10 @@ pub struct Web {
 
     pub workers: Option<usize>,
 
+    #[serde(default = "default_shutdown_timeout")]
+    #[serde(rename = "shutdown timeout in seconds")]
+    pub shutdown_timeout: u64,
+
     #[serde(alias = "static files")]
     pub static_files: String,
 
@@ -226,6 +230,10 @@ fn default_refresh_token_timeout_in_seconds() -> Option<i64> {
 #[allow(clippy::unnecessary_wraps)]
 fn default_session_same_site_policy() -> SameSitePolicy {
     SameSitePolicy::Lax
+}
+
+fn default_shutdown_timeout() -> u64 {
+    30
 }
 
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]

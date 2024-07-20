@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+Configuration option to configure shutdown timeout in `web.shutdown timeout in
+seconds` ([#99](https://j.njsm.de/git/veenj/tiny-auth/issues/99)).
+
 Support a new store via LDAP. See [doc](doc/store.md) for
 configuration. It allows to store users, clients and their passwords inside
 LDAP instead of tiny-auth

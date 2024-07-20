@@ -84,6 +84,11 @@ Used to protect the session cookie.
 
 Optional. Number of HTTP workers dispatching incoming requests.
 
+#### `shutdown timeout in seconds`
+
+Optional. Number of seconds the server waits for running connections to
+terminate gracefully. Default 30.
+
 #### `tls`
 
 See [`tls.md`](tls.md) for details.

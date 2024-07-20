@@ -624,6 +624,10 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
         self.config.web.workers
     }
 
+    fn shutdown_timeout(&self) -> u64 {
+        self.config.web.shutdown_timeout
+    }
+
     fn tls_enabled(&self) -> bool {
         self.config.web.tls.is_some()
     }
