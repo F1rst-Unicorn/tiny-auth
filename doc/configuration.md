@@ -165,3 +165,75 @@ recommendations for a more up-to-date size.
 openssl genrsa 4096 -out key.pem
 openssl rsa -in key.pem -pubout -out public-key.pem
 ```
+
+### `log`
+
+Configure the log format.
+
+#### `format`
+
+The general look of log lines. Options are `compact`, `full`, `pretty` (which
+spans several lines) and `json`
+
+##### `json`
+
+This format has three suboptions. Specify them like this:
+
+```yaml
+  format:
+    json:
+      flatten: true
+      current span: true
+      span list: true
+```
+
+`flatten`: Flatten all JSON keys into a single object.
+
+`current span`: Include the current span in the events.
+
+`span list`: Include a list of all current spans in all events.
+
+#### `fields`
+
+`ansi`: Use colours.
+
+`file`: Include the source file name.
+
+`level`: Include the log level.
+
+`line number`: Include the source file's line number
+
+`target`: Include the log target, mostly the rust module.
+
+`thread id`: Include the thread ID.
+
+`thread name`: Include the thread name.
+
+`span events`: Log, when spans are entered or closed.
+
+`time`: What kind of time to include. Values are `none`, `uptime`, `system`,
+`utc`, or `local`. The latter two take an optional time format. The available
+placeholders can be
+found [here](https://docs.rs/chrono/latest/chrono/format/strftime/index.html).
+
+#### `filter`
+
+Limit log level and scopes of logged messages. Each entry in the list must be a
+valid [tracing EnvFilter Directive](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives).
+
+In addition to the default, the following span directives can be useful:
+
+`[cid]=debug`: Enable logging of customer-identifying data (CID). This includes
+usernames and tokens.
+
+`[flow]=debug`: Enable logging of OIDC flow correlation fields
+like [nonce](https://openid.net/specs/openid-connect-core-1_0.html#IDToken)
+and [state](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
+
+`[HTTP request]=debug`: Enable logging of HTTP request fields.
+
+### `hot reload`
+
+Turn on hot-reloading the config file. When the config is changed, tiny-auth
+will reconfigure itself according to the new config. Only the `log` format is
+affected.
