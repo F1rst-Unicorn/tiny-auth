@@ -288,7 +288,7 @@ where
 
 fn span_events(config: &Log) -> FmtSpan {
     if config.fields.span_events {
-        FmtSpan::NEW | FmtSpan::CLOSE
+        FmtSpan::ENTER | FmtSpan::EXIT
     } else {
         FmtSpan::NONE
     }
