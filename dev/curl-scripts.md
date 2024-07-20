@@ -7,7 +7,7 @@ curl -c dev/cookies -Lv \
         --key test/src/test/resources/keys/client-key.pem \
         --cert test/src/test/resources/keys/client-cert.pem \
         --cacert test/src/test/resources/keys/ca.pem \
-        'https://localhost:34344/authorize?client_id=tiny-auth-frontend&state=state&nonce=nonce&scope=openid%20profile&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A34344'
+        'https://localhost:34344/authorize?client_id=tiny-auth-frontend&state=state&nonce=nonce&scope=openid%20profile&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A34344%2Foidc%2Foidc-login-redirect'
 ```
 
 ## Token

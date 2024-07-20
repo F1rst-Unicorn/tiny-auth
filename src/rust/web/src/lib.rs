@@ -45,11 +45,10 @@ use actix_web::App;
 use actix_web::HttpServer;
 use endpoints::token::Handler as TokenHandler;
 use endpoints::userinfo::Handler as UserInfoHandler;
-use rustls::server::AllowAnyAuthenticatedClient;
-use rustls::server::ClientCertVerifier;
+use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
+use rustls::server::danger::ClientCertVerifier;
 use rustls::server::NoClientAuth;
-use rustls::Certificate;
-use rustls::PrivateKey;
+use rustls::server::WebPkiClientVerifier;
 use rustls::RootCertStore;
 use rustls::ServerConfig;
 use rustls_pemfile::certs;
@@ -257,7 +256,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
 
     let server = if tls_enabled {
         let tls_config = configure_tls(constructor)?;
-        server.bind_rustls(&bind, tls_config)
+        server.bind_rustls_0_23(&bind, tls_config)
     } else {
         server.bind(&bind)
     };
@@ -282,7 +281,7 @@ fn configure_tls<'a>(constructor: &impl Constructor<'a>) -> Result<ServerConfig,
         constructor.tls_cert().expect("checked before").as_bytes(),
     ))?
     .into_iter()
-    .map(Certificate)
+    .map(CertificateDer::from)
     .collect();
 
     let key = match pkcs8_private_keys(&mut BufReader::new(
@@ -297,7 +296,7 @@ fn configure_tls<'a>(constructor: &impl Constructor<'a>) -> Result<ServerConfig,
                 error!("no tls key found");
                 return Err(LoggedBeforeError);
             }
-            1 => PrivateKey(keys[0].clone()),
+            1 => PrivatePkcs8KeyDer::from(keys[0].clone()),
             _ => {
                 error!("put only one tls key into the tls key file");
                 return Err(LoggedBeforeError);
@@ -305,13 +304,9 @@ fn configure_tls<'a>(constructor: &impl Constructor<'a>) -> Result<ServerConfig,
         },
     };
 
-    ServerConfig::builder()
-        .with_safe_default_cipher_suites()
-        .with_safe_default_kx_groups()
-        .with_protocol_versions(constructor.tls_versions().as_slice())
-        .unwrap()
+    ServerConfig::builder_with_protocol_versions(constructor.tls_versions().as_slice())
         .with_client_cert_verifier(client_cert_verifier)
-        .with_single_cert(server_certificate_chain, key)
+        .with_single_cert(server_certificate_chain, key.into())
         .map_err(|e| {
             error!(%e, "tls key is invalid");
             LoggedBeforeError
@@ -325,8 +320,8 @@ fn build_client_verifier<'a>(
         let mut ca_store = RootCertStore::empty();
         certs(&mut BufReader::new(client_ca.as_bytes()))?
             .into_iter()
-            .map(Certificate)
-            .map(|cert| ca_store.add(&cert))
+            .map(CertificateDer::from)
+            .map(|cert| ca_store.add(cert))
             .enumerate()
             .filter(|(_, result)| result.is_err())
             .for_each(|(index, error)| {
@@ -339,9 +334,15 @@ fn build_client_verifier<'a>(
             error!("no usable client ca certificates were found");
             return Err(LoggedBeforeError);
         }
-        AllowAnyAuthenticatedClient::new(ca_store)
+        match WebPkiClientVerifier::builder(ca_store.into()).build() {
+            Err(e) => {
+                error!(%e);
+                return Err(LoggedBeforeError);
+            }
+            Ok(v) => v,
+        }
     } else {
-        NoClientAuth::new()
+        Arc::new(NoClientAuth) as Arc<dyn ClientCertVerifier>
     };
     Ok(client_cert_verifier)
 }

@@ -20,7 +20,10 @@ package de.njsm.tinyauth.test.runtime;
 import de.njsm.tinyauth.test.repository.Endpoint;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.junit.jupiter.api.extension.*;
+import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.ParameterContext;
+import org.junit.jupiter.api.extension.ParameterResolutionException;
 import org.junit.jupiter.api.extension.support.TypeBasedParameterResolver;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
@@ -53,6 +56,7 @@ public class UutLifecycleManager extends TypeBasedParameterResolver<Endpoint> im
         network = Network.newNetwork();
         int port = 34344;
         tinyAuthContainer = new GenericContainer<>(DockerImageName.parse("archlinux:latest"))
+                .withImagePullPolicy(v -> true)
                 .withNetwork(network)
                 .withNetworkAliases("tiny-auth")
                 .withFileSystemBind(Config.getRoot(), "/app")
