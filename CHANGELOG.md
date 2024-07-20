@@ -9,9 +9,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 Support a new store via LDAP. See [doc](doc/store.md) for
 configuration. It allows to store users, clients and their passwords inside
-LDAP instead of tiny-auth itself ([#48](https://j.njsm.de/git/veenj/tiny-auth/issues/48)).
+LDAP instead of tiny-auth
+itself ([#48](https://j.njsm.de/git/veenj/tiny-auth/issues/48)).
 
-**Breaking**: The store is now a list and each entry needs a 
+**Breaking**: The store is now a list and each entry needs a
 name. Pick any name that lets you easily distinguish your stores. It will be
 used in logs and user/client passwords. Change your store from
 
@@ -29,6 +30,16 @@ store:
       name: configuration file
       base: /etc/tiny-auth/store
 ```
+
+The log format is now embedded in the main configuration file, too. Consider
+the [relevant subsection](doc/configuration.md#log) as the new config is
+not fully compatible with the old one.
+
+### Changed
+
+Logging is now done with the `tracing` framework. This allows getting deeper
+insight into application
+execution ([#86](https://j.njsm.de/git/veenj/tiny-auth/issues/86)).
 
 ### Fixed
 
@@ -130,7 +141,8 @@ store:
 * Handle invalid refresh tokens with correct error code
   ([#56](https://j.njsm.de/git/veenj/tiny-auth/issues/56))
 
-* [Rate-limit](doc/configuration.md#rate-limit) the number of failed logins per user.
+* [Rate-limit](doc/configuration.md#rate-limit) the number of failed logins per
+  user.
   ([#35](https://j.njsm.de/git/veenj/tiny-auth/issues/35))
 
 ## [0.7.1]
