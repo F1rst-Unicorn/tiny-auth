@@ -21,7 +21,7 @@ use crate::lookup::client_lookup::{ClientLookup, ClientRepresentation};
 use crate::lookup::user_lookup::{UserLookup, UserRepresentation};
 use async_trait::async_trait;
 use futures::future::OptionFuture;
-use ldap3::ldap_escape;
+use ldap3::{ldap_escape, Ldap};
 use tiny_auth_business::client::Client;
 use tiny_auth_business::client::Error as ClientError;
 use tiny_auth_business::password::Error as PasswordError;
@@ -105,22 +105,9 @@ impl PasswordStore for LdapStore {
                 .await
             {
                 None | Some(UserRepresentation::Name(_)) => {
-                    let user_lookup = self
-                        .user_lookup
-                        .as_ref()
-                        .ok_or(UserError::NotFound)
-                        .map_err(wrap_err)?;
-                    let search_entry = self
-                        .authenticator
-                        .get_ldap_record(&mut ldap, &username)
-                        .await
-                        .map_err(wrap_err)?;
-                    UserRepresentation::CachedUser((
-                        search_entry.dn.clone(),
-                        user_lookup.map_to_user(&username, search_entry).await,
-                    ))
+                    self.try_to_cache_user(&mut ldap, &username).await
                 }
-                Some(UserRepresentation::CachedUser(v)) => UserRepresentation::CachedUser(v),
+                Some(v @ UserRepresentation::CachedUser(_)) => v,
                 Some(UserRepresentation::Missing) => {
                     warn!("tried to verify password of unknown user to this store");
                     return Err(PasswordError::BackendError);
@@ -130,6 +117,30 @@ impl PasswordStore for LdapStore {
         self.authenticator
             .authenticate(&mut ldap, user, password_to_check)
             .await
+    }
+}
+
+impl LdapStore {
+    async fn try_to_cache_user<'a>(
+        &self,
+        ldap: &mut Ldap,
+        username: &'a str,
+    ) -> UserRepresentation<'a> {
+        match self.authenticator.get_ldap_record(ldap, username).await {
+            Ok(search_result) => {
+                let user_lookup = match self.user_lookup.as_ref() {
+                    None => {
+                        return UserRepresentation::Name(username);
+                    }
+                    Some(v) => v,
+                };
+                UserRepresentation::CachedUser((
+                    search_result.dn.clone(),
+                    user_lookup.map_to_user(username, search_result).await,
+                ))
+            }
+            Err(_) => UserRepresentation::Name(username),
+        }
     }
 }
 
