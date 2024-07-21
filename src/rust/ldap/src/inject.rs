@@ -17,6 +17,7 @@
 
 use crate::authenticate::{LdapSearch, SearchBind, SimpleBind};
 use crate::connect::Connector;
+use crate::health::LdapHealth;
 use crate::lookup::client_lookup::{
     ClientAllowedScopesMapping, ClientCacheEntry, ClientLookup, ClientPasswordMapping,
     ClientPublicKeyMapping, ClientRedirectUriMapping, ClientTypeMapping,
@@ -29,6 +30,7 @@ use moka::policy::EvictionPolicy;
 use std::sync::Arc;
 use std::time::Duration;
 use tiny_auth_business::client::Client;
+use tiny_auth_business::health::HealthCheckCommand;
 use tiny_auth_business::store::PasswordStore;
 use tiny_auth_business::user::User;
 use url::Url;
@@ -129,6 +131,32 @@ pub fn search_bind_store(
                 .collect(),
         }),
     })
+}
+
+pub fn simple_bind_check(connector: Connector) -> impl HealthCheckCommand {
+    LdapHealth {
+        connector,
+        authenticator: SimpleBind {
+            bind_dn_format: Vec::default(),
+        }
+        .into(),
+    }
+}
+
+pub fn search_bind_check(
+    connector: Connector,
+    bind_dn: &str,
+    bind_dn_password: &str,
+) -> impl HealthCheckCommand {
+    LdapHealth {
+        connector,
+        authenticator: SearchBind {
+            bind_dn: bind_dn.to_string(),
+            bind_dn_password: bind_dn_password.to_string(),
+            searches: Default::default(),
+        }
+        .into(),
+    }
 }
 
 fn user_cache(name: &str) -> Cache<String, Option<UserCacheEntry>> {

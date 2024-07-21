@@ -48,6 +48,8 @@ pub(crate) trait Authenticator {
         ldap: &mut Ldap,
         username: &str,
     ) -> Result<SearchEntry, UserError>;
+
+    async fn check(&self, ldap: &mut Ldap) -> bool;
 }
 
 pub(crate) struct SimpleBind {
@@ -84,6 +86,10 @@ impl Authenticator for SimpleBind {
 
     async fn get_ldap_record(&self, _: &mut Ldap, _: &str) -> Result<SearchEntry, UserError> {
         Err(UserError::NotFound)
+    }
+
+    async fn check(&self, _: &mut Ldap) -> bool {
+        true
     }
 }
 
@@ -143,6 +149,12 @@ impl Authenticator for SearchBind {
             }
         }
         Err(UserError::NotFound)
+    }
+
+    async fn check(&self, ldap: &mut Ldap) -> bool {
+        simple_bind(ldap, &self.bind_dn, &self.bind_dn_password)
+            .await
+            .is_ok()
     }
 }
 

@@ -59,6 +59,7 @@ use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::authorize_endpoint::Handler as AuthorizeHandler;
 use tiny_auth_business::consent::Handler as ConsentHandler;
 use tiny_auth_business::cors::CorsLister;
+use tiny_auth_business::health::HealthChecker;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::jwk::Jwks;
 use tracing::error;
@@ -73,6 +74,7 @@ pub trait Constructor<'a> {
     fn token_handler(&self) -> Arc<TokenHandler>;
     fn user_info_handler(&self) -> Arc<UserInfoHandler>;
     fn discovery_handler(&self) -> Arc<DiscoveryHandler>;
+    fn health_checker(&self) -> Arc<HealthChecker>;
 
     fn get_template_engine(&self) -> Option<Tera>;
     fn get_public_keys(&self) -> Vec<TokenCertificate>;
@@ -123,6 +125,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     let token_handler = constructor.token_handler();
     let user_info_handler = constructor.user_info_handler();
     let discovery_handler = constructor.discovery_handler();
+    let health_checker = constructor.health_checker();
 
     let bind = constructor.bind();
     let workers = constructor.workers();
@@ -143,6 +146,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             .app_data(Data::new(jwks.clone()))
             .app_data(Data::new(cors_lister.clone()))
             .app_data(Data::new(token_certificates.clone()))
+            .app_data(Data::from(health_checker.clone()))
             .app_data(Data::from(authorize_handler.clone()))
             .app_data(Data::from(authenticate_handler.clone()))
             .app_data(Data::from(consent_handler.clone()))

@@ -15,6 +15,9 @@ configuration. It allows to store users, clients and their passwords inside
 LDAP instead of tiny-auth
 itself ([#48](https://j.njsm.de/git/veenj/tiny-auth/issues/48)).
 
+The health endpoint checks all LDAPs for
+connectivity ([#94](https://j.njsm.de/git/veenj/tiny-auth/issues/94)).
+
 **Breaking**: The store is now a list and each entry needs a
 name. Pick any name that lets you easily distinguish your stores. It will be
 used in logs and user/client passwords. Change your store from

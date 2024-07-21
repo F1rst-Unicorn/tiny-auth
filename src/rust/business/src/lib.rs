@@ -22,6 +22,7 @@ pub mod client;
 pub mod clock;
 pub mod consent;
 pub mod cors;
+pub mod health;
 pub mod issuer_configuration;
 pub mod jwk;
 pub mod oauth2;

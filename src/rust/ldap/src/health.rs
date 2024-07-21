@@ -15,15 +15,23 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-mod authenticate;
-mod connect;
-mod error;
-pub mod inject;
-mod lookup;
-mod store;
+use crate::authenticate::Authenticator;
+use crate::authenticate::AuthenticatorDispatcher;
+use crate::connect::Connector;
+use async_trait::async_trait;
+use tiny_auth_business::health::HealthCheckCommand;
 
-mod health;
-#[cfg(test)]
-pub mod test;
+pub struct LdapHealth {
+    pub(crate) connector: Connector,
+    pub(crate) authenticator: AuthenticatorDispatcher,
+}
 
-pub use authenticate::LdapSearch;
+#[async_trait]
+impl HealthCheckCommand for LdapHealth {
+    async fn check(&self) -> bool {
+        match self.connector.connect().await {
+            Err(_) => false,
+            Ok(mut ldap) => self.authenticator.check(&mut ldap).await,
+        }
+    }
+}

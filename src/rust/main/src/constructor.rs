@@ -48,6 +48,8 @@ use tiny_auth_business::change_password::Handler as ChangePasswordHandler;
 use tiny_auth_business::consent::Handler as ConsentHandler;
 use tiny_auth_business::cors::inject::cors_lister;
 use tiny_auth_business::cors::CorsLister;
+use tiny_auth_business::health::inject::health_check;
+use tiny_auth_business::health::{HealthCheckCommand, HealthChecker};
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::jwk::Jwk;
 use tiny_auth_business::jwk::Jwks;
@@ -58,7 +60,9 @@ use tiny_auth_business::store::memory::*;
 use tiny_auth_business::store::*;
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
-use tiny_auth_ldap::inject::{ClientConfig, UserConfig};
+use tiny_auth_ldap::inject::{
+    connector, search_bind_check, simple_bind_check, ClientConfig, UserConfig,
+};
 use tiny_auth_web::cors::CorsChecker;
 use tiny_auth_web::endpoints::cert::TokenCertificate;
 use tiny_auth_web::endpoints::discovery::Handler as DiscoveryHandler;
@@ -230,7 +234,7 @@ impl<'a> Constructor<'a> {
                         tiny_auth_ldap::inject::simple_bind_store(
                             name.as_str(),
                             bind_dn_format.as_slice(),
-                            tiny_auth_ldap::inject::connector(
+                            connector(
                                 urls.as_slice(),
                                 std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
                                 *starttls,
@@ -304,7 +308,7 @@ impl<'a> Constructor<'a> {
 
                     let ldap_store = tiny_auth_ldap::inject::search_bind_store(
                         name.as_str(),
-                        tiny_auth_ldap::inject::connector(
+                        connector(
                             urls.as_slice(),
                             std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
                             *starttls,
@@ -730,6 +734,39 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
                     .as_deref()
                     .expect("no default given"),
         )
+    }
+
+    fn health_checker(&self) -> Arc<HealthChecker> {
+        let mut checks = Vec::default();
+
+        for store in &self.config.store {
+            if let Store::Ldap {
+                name,
+                mode,
+                urls,
+                connect_timeout_in_seconds,
+                starttls,
+            } = store
+            {
+                let name = "ldap ".to_string() + name;
+                let connector = connector(
+                    urls,
+                    std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
+                    *starttls,
+                );
+                let check: Arc<dyn HealthCheckCommand> = match mode {
+                    LdapMode::SimpleBind { .. } => Arc::new(simple_bind_check(connector)),
+                    LdapMode::SearchBind {
+                        bind_dn,
+                        bind_dn_password,
+                        ..
+                    } => Arc::new(search_bind_check(connector, bind_dn, bind_dn_password)),
+                };
+                checks.push(health_check(&name, check));
+            }
+        }
+
+        Arc::new(HealthChecker(checks))
     }
 }
 
