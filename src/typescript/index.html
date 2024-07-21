@@ -1,39 +1,57 @@
+<!--
+   tiny-auth: Tiny OIDC Provider
+   Copyright (C) 2019 The tiny-auth developers
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>tiny-auth</title>
-    <link rel="icon" type="image/png" href="/src/assets/favicon.svg" />
-    <style>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>tiny-auth</title>
+  <link rel="icon" type="image/png" href="/src/assets/favicon.svg" />
+  <style>
       body {
-        height: 100vh;
-        min-height: 100vh;
-        margin: 0;
+          height: 100vh;
+          min-height: 100vh;
+          margin: 0;
       }
+
       #root {
-        height: 100vh;
-        min-height: 100vh;
+          height: 100vh;
+          min-height: 100vh;
       }
-    </style>
-  </head>
-  <body>
-    <div id="root"></div>
-    <a
-      id="tiny-auth-provider"
-      href="{{ tiny_auth_provider_url }}"
-      style="display: none"
-      >Provider</a
-    >
-    <a id="tiny-auth-api" href="{{ tiny_auth_api_url }}" style="display: none"
-      >Provider</a
-    >
-    <a
-      id="tiny-auth-web-base"
-      href="{{ tiny_auth_web_base }}"
-      style="display: none"
-      >Webapp base</a
-    >
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<a
+  id="tiny-auth-provider"
+  href="{{ tiny_auth_provider_url }}"
+  style="display: none"
+>Provider</a
+>
+<a id="tiny-auth-api" href="{{ tiny_auth_api_url }}" style="display: none"
+>Provider</a
+>
+<a
+  id="tiny-auth-web-base"
+  href="{{ tiny_auth_web_base }}"
+  style="display: none"
+>Webapp base</a
+>
+<script type="module" src="/src/main.tsx"></script>
+</body>
 </html>

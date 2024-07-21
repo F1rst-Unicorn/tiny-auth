@@ -1,3 +1,21 @@
+/*
+ * tiny-auth: Tiny OIDC Provider
+ * Copyright (C) 2019 The tiny-auth developers
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ *
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { createBrowserRouter } from "react-router-dom";
 import ErrorPage from "./errorPage.tsx";
 import Root from "./root.tsx";
@@ -18,6 +36,7 @@ function resolveWebBase(): string {
     return webBase;
   }
 }
+
 export const webBase = resolveWebBase();
 
 export const router = createBrowserRouter([
@@ -31,31 +50,31 @@ export const router = createBrowserRouter([
         children: [
           {
             index: true,
-            element: <Index />,
+            element: <Index />
           },
           {
             path: "profile",
-            element: <Profile />,
+            element: <Profile />
           },
           {
             path: "oidc-login-redirect",
-            element: <Index />,
+            element: <Index />
           },
           {
             path: "oidc-login-redirect-silent",
-            element: <AuthProvider {...oidcConfiguration} />,
+            element: <AuthProvider {...oidcConfiguration} />
           },
           {
             path: "api",
             children: [
               {
                 path: "changePassword",
-                action: changePasswordAction,
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  },
+                action: changePasswordAction
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
 ]);
