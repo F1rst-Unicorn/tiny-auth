@@ -1,0 +1,18 @@
+[package]
+name = "tiny_auth_template"
+authors.workspace = true
+description.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+version.workspace = true
+
+[lib]
+
+[dependencies]
+tiny_auth_business = { path = "../business" }
+tera.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+rstest.workspace = true

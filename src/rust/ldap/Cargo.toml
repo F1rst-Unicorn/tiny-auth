@@ -14,7 +14,6 @@ tiny_auth_business = { path = "../business" }
 url.workspace = true
 ldap3.workspace = true
 tracing.workspace = true
-tera.workspace = true
 thiserror.workspace = true
 test-log.workspace = true
 tokio.workspace = true
@@ -25,6 +24,7 @@ serde_json.workspace = true
 futures.workspace = true
 
 [dev-dependencies]
+tiny_auth_template = { path = "../template" }
 testcontainers.workspace = true
 pretty_assertions.workspace = true
 rstest.workspace = true

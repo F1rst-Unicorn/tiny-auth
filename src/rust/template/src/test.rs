@@ -15,14 +15,17 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use thiserror::Error;
+use crate::inject::bind_dn_templater;
+use tiny_auth_business::templater::{BindDnContext, InstantiatedTemplate};
 
-#[derive(Error, Debug)]
-pub(crate) enum LdapError {
-    #[error("LDAP connecting failed")]
-    ConnectError,
-    #[error("LDAP binding failed")]
-    BindError,
-    #[error("LDAP binding failed: {0}")]
-    BindErrorWithContext(ldap3::LdapError),
+#[test]
+pub fn bind_dn_is_formatted() {
+    let context = BindDnContext {
+        user: "john".to_string(),
+    };
+    let uut = bind_dn_templater("(uid={{ user }})");
+
+    let actual = uut.instantiate(context).render().unwrap();
+
+    assert_eq!(InstantiatedTemplate("(uid=john)".to_string()), actual);
 }

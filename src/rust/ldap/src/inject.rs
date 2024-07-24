@@ -32,6 +32,7 @@ use std::time::Duration;
 use tiny_auth_business::client::Client;
 use tiny_auth_business::health::HealthCheckCommand;
 use tiny_auth_business::store::PasswordStore;
+use tiny_auth_business::templater::BindDnTemplater;
 use tiny_auth_business::user::User;
 use url::Url;
 
@@ -45,14 +46,14 @@ pub fn connector(urls: &[Url], connect_timeout: Duration, starttls: bool) -> Con
 
 pub fn simple_bind_store(
     name: &str,
-    bind_dn_format: &[String],
+    bind_dn_templates: &[Arc<dyn BindDnTemplater>],
     connector: Connector,
 ) -> Arc<dyn PasswordStore> {
     Arc::new(LdapStore {
         name: name.to_string(),
         connector,
         authenticator: SimpleBind {
-            bind_dn_format: bind_dn_format.to_vec(),
+            bind_dn_templates: bind_dn_templates.to_vec(),
         }
         .into(),
         user_lookup: None,
@@ -137,7 +138,7 @@ pub fn simple_bind_check(connector: Connector) -> impl HealthCheckCommand {
     LdapHealth {
         connector,
         authenticator: SimpleBind {
-            bind_dn_format: Vec::default(),
+            bind_dn_templates: vec![],
         }
         .into(),
     }

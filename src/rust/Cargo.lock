@@ -3422,11 +3422,11 @@ dependencies = [
  "pretty_assertions",
  "rstest",
  "serde_json",
- "tera",
  "test-log",
  "testcontainers",
  "thiserror",
  "tiny_auth_business",
+ "tiny_auth_template",
  "tokio",
  "tracing",
  "url",
@@ -3461,6 +3461,7 @@ dependencies = [
  "tiny_auth_api",
  "tiny_auth_business",
  "tiny_auth_ldap",
+ "tiny_auth_template",
  "tiny_auth_web",
  "tokio",
  "tracing",
@@ -3468,6 +3469,16 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "vergen",
+]
+
+[[package]]
+name = "tiny_auth_template"
+version = "1.0.1"
+dependencies = [
+ "pretty_assertions",
+ "rstest",
+ "tera",
+ "tiny_auth_business",
 ]
 
 [[package]]

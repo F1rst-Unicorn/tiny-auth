@@ -33,6 +33,7 @@ pub mod rate_limiter;
 pub mod scope;
 pub mod serde;
 pub mod store;
+pub mod templater;
 pub mod token;
 pub mod token_endpoint;
 pub mod user;

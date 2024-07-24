@@ -21,8 +21,8 @@ use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use ldap3::{Ldap, Scope, SearchEntry};
 use std::sync::Arc;
-use tera::{Context, Tera};
 use tiny_auth_business::password::Error as PasswordError;
+use tiny_auth_business::templater::{BindDnContext, BindDnTemplater};
 use tiny_auth_business::user::Error as UserError;
 use tiny_auth_business::util::wrap_err;
 use tracing::{debug, instrument, warn, Level};
@@ -53,7 +53,7 @@ pub(crate) trait Authenticator {
 }
 
 pub(crate) struct SimpleBind {
-    pub(crate) bind_dn_format: Vec<String>,
+    pub(crate) bind_dn_templates: Vec<Arc<dyn BindDnTemplater>>,
 }
 
 #[async_trait]
@@ -66,9 +66,14 @@ impl Authenticator for SimpleBind {
     ) -> Result<bool, PasswordError> {
         match user {
             UserRepresentation::Name(username) => {
-                for bind_template in &self.bind_dn_format {
-                    let bind_dn = format_username(bind_template, username).map_err(wrap_err)?;
-                    if simple_bind(ldap, &bind_dn, password)
+                for bind_template in &self.bind_dn_templates {
+                    let bind_dn = bind_template
+                        .instantiate(BindDnContext {
+                            user: username.to_string(),
+                        })
+                        .render()
+                        .map_err(wrap_err)?;
+                    if simple_bind(ldap, &bind_dn.0, password)
                         .await
                         .map_err(wrap_err)?
                     {
@@ -101,7 +106,7 @@ pub(crate) struct SearchBind {
 
 pub struct LdapSearch {
     pub base_dn: String,
-    pub search_filter: String,
+    pub search_filter: Arc<dyn BindDnTemplater>,
 }
 
 #[async_trait]
@@ -143,8 +148,14 @@ impl Authenticator for SearchBind {
         };
 
         for search in &self.searches {
-            let filter = format_username(&search.search_filter, username).map_err(wrap_err)?;
-            if let Some(value) = Self::search(ldap, username, &search, &filter).await {
+            let filter = search
+                .search_filter
+                .instantiate(BindDnContext {
+                    user: username.to_string(),
+                })
+                .render()
+                .map_err(wrap_err)?;
+            if let Some(value) = Self::search(ldap, username, &search, &filter.0).await {
                 return value;
             }
         }
@@ -207,14 +218,4 @@ async fn simple_bind(ldap: &mut Ldap, bind_dn: &str, password: &str) -> Result<b
             Err(LdapError::BindError)
         }
     }
-}
-
-fn format_username(format: &str, username: &str) -> Result<String, LdapError> {
-    let mut tera = Tera::default();
-    let mut context = Context::new();
-    context.insert("user", username);
-    tera.render_str(format, &context).map_err(|e| {
-        warn!(%e, "failed to construct bind dn");
-        LdapError::FormatError(e)
-    })
 }

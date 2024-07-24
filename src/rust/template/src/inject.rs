@@ -15,14 +15,12 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use thiserror::Error;
+use crate::tera::BindDnTemplaterImpl;
+use std::sync::Arc;
+use tiny_auth_business::templater::{BindDnTemplate, BindDnTemplater, Template};
 
-#[derive(Error, Debug)]
-pub(crate) enum LdapError {
-    #[error("LDAP connecting failed")]
-    ConnectError,
-    #[error("LDAP binding failed")]
-    BindError,
-    #[error("LDAP binding failed: {0}")]
-    BindErrorWithContext(ldap3::LdapError),
+pub fn bind_dn_templater(template: &str) -> Arc<dyn BindDnTemplater> {
+    Arc::new(BindDnTemplaterImpl(BindDnTemplate(Template(
+        template.to_string(),
+    ))))
 }

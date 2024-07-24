@@ -63,6 +63,7 @@ use tiny_auth_business::token::TokenValidator;
 use tiny_auth_ldap::inject::{
     connector, search_bind_check, simple_bind_check, ClientConfig, UserConfig,
 };
+use tiny_auth_template::inject::bind_dn_templater;
 use tiny_auth_web::cors::CorsChecker;
 use tiny_auth_web::endpoints::cert::TokenCertificate;
 use tiny_auth_web::endpoints::discovery::Handler as DiscoveryHandler;
@@ -229,11 +230,15 @@ impl<'a> Constructor<'a> {
                     connect_timeout_in_seconds,
                     starttls,
                 } => {
+                    let templaters: Vec<_> = bind_dn_format
+                        .iter()
+                        .map(|v| bind_dn_templater(v))
+                        .collect();
                     password_stores.insert(
                         name.clone(),
                         tiny_auth_ldap::inject::simple_bind_store(
                             name.as_str(),
-                            bind_dn_format.as_slice(),
+                            templaters.as_slice(),
                             connector(
                                 urls.as_slice(),
                                 std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
@@ -259,7 +264,7 @@ impl<'a> Constructor<'a> {
                         .iter()
                         .map(|v| tiny_auth_ldap::LdapSearch {
                             base_dn: v.base_dn.clone(),
-                            search_filter: v.search_filter.clone(),
+                            search_filter: bind_dn_templater(&v.search_filter),
                         })
                         .collect();
 

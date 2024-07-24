@@ -34,6 +34,7 @@ use tiny_auth_business::password::{Error, Password};
 use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::PasswordStore;
 use tiny_auth_business::store::UserStore;
+use tiny_auth_template::inject::bind_dn_templater;
 use url::Url;
 
 #[rstest]
@@ -253,7 +254,9 @@ fn simple_bind_uut(name: String, port: u16) -> Arc<dyn PasswordStore> {
 
     inject::simple_bind_store(
         name.as_str(),
-        &["cn={{ user }},ou=users,dc=example,dc=org".to_string()],
+        &[bind_dn_templater(
+            "cn={{ user }},ou=users,dc=example,dc=org",
+        )],
         connector(&[url], Duration::from_millis(50), false),
     )
 }
@@ -269,11 +272,11 @@ fn search_bind_uut(name: String, port: u16) -> Arc<LdapStore> {
         vec![
             LdapSearch {
                 base_dn: "ou=users,dc=nonexistent".to_string(),
-                search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
+                search_filter: bind_dn_templater("(|(uid={{ user }})(mail={{ user }}))"),
             },
             LdapSearch {
                 base_dn: "ou=users,dc=example,dc=org".to_string(),
-                search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
+                search_filter: bind_dn_templater("(|(uid={{ user }})(mail={{ user }}))"),
             },
         ],
         UserConfig {
@@ -302,11 +305,11 @@ fn search_bind_anonymous_uut(name: String, port: u16) -> Arc<LdapStore> {
         vec![
             LdapSearch {
                 base_dn: "ou=users,dc=nonexistent".to_string(),
-                search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
+                search_filter: bind_dn_templater("(|(uid={{ user }})(mail={{ user }}))"),
             },
             LdapSearch {
                 base_dn: "ou=users,dc=example,dc=org".to_string(),
-                search_filter: "(|(uid={{ user }})(mail={{ user }}))".to_string(),
+                search_filter: bind_dn_templater("(|(uid={{ user }})(mail={{ user }}))"),
             },
         ],
         None,
