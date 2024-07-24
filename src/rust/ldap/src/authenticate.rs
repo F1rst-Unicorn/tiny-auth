@@ -22,7 +22,7 @@ use enum_dispatch::enum_dispatch;
 use ldap3::{Ldap, Scope, SearchEntry};
 use std::sync::Arc;
 use tiny_auth_business::password::Error as PasswordError;
-use tiny_auth_business::templater::{BindDnContext, BindDnTemplater};
+use tiny_auth_business::templater::{BindDnContext, Templater};
 use tiny_auth_business::user::Error as UserError;
 use tiny_auth_business::util::wrap_err;
 use tracing::{debug, instrument, warn, Level};
@@ -53,7 +53,7 @@ pub(crate) trait Authenticator {
 }
 
 pub(crate) struct SimpleBind {
-    pub(crate) bind_dn_templates: Vec<Arc<dyn BindDnTemplater>>,
+    pub(crate) bind_dn_templates: Vec<Arc<dyn Templater<Context = BindDnContext>>>,
 }
 
 #[async_trait]
@@ -106,7 +106,7 @@ pub(crate) struct SearchBind {
 
 pub struct LdapSearch {
     pub base_dn: String,
-    pub search_filter: Arc<dyn BindDnTemplater>,
+    pub search_filter: Arc<dyn Templater<Context = BindDnContext>>,
 }
 
 #[async_trait]

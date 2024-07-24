@@ -51,17 +51,9 @@ pub enum TemplateError {
     RenderError(#[from] Arc<dyn StdError + Send + Sync>),
 }
 
-pub trait BindDnTemplater: Send + Sync {
-    fn instantiate(&self, context: BindDnContext) -> Box<dyn FilledTemplate>;
-}
-
-#[derive(Debug, Clone)]
-pub struct BindDnTemplate(pub Template);
-
-impl From<BindDnTemplate> for String {
-    fn from(value: BindDnTemplate) -> Self {
-        value.0.into()
-    }
+pub trait Templater: Send + Sync {
+    type Context;
+    fn instantiate(&self, context: Self::Context) -> Box<dyn FilledTemplate>;
 }
 
 pub struct BindDnContext {

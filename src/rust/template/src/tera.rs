@@ -17,27 +17,28 @@
 
 use tera::{Context, Tera};
 use tiny_auth_business::templater::{
-    BindDnContext, BindDnTemplate, BindDnTemplater, FilledTemplate, InstantiatedTemplate,
-    TemplateError,
+    BindDnContext, FilledTemplate, InstantiatedTemplate, Template, TemplateError, Templater,
 };
 use tiny_auth_business::util::wrap_err;
 
-pub(crate) struct BindDnTemplaterImpl(pub(crate) BindDnTemplate);
+pub(crate) struct BindDnTemplater(pub(crate) Template);
 
-impl BindDnTemplater for BindDnTemplaterImpl {
+impl Templater for BindDnTemplater {
+    type Context = BindDnContext;
+
     fn instantiate(&self, context: BindDnContext) -> Box<dyn FilledTemplate> {
         Box::new(FilledBindDnTemplate(self.0.clone(), context))
     }
 }
 
-struct FilledBindDnTemplate(BindDnTemplate, BindDnContext);
+struct FilledBindDnTemplate(Template, BindDnContext);
 
 impl FilledTemplate for FilledBindDnTemplate {
     fn render(&self) -> Result<InstantiatedTemplate, TemplateError> {
         let mut context = Context::new();
         context.insert("user", &self.1.user);
         let result = Tera::one_off(
-            &<BindDnTemplate as Into<String>>::into(self.0.clone()),
+            &<Template as Into<String>>::into(self.0.clone()),
             &context,
             false,
         )

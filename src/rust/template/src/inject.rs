@@ -15,12 +15,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::tera::BindDnTemplaterImpl;
+use crate::tera::BindDnTemplater;
 use std::sync::Arc;
-use tiny_auth_business::templater::{BindDnTemplate, BindDnTemplater, Template};
+use tiny_auth_business::templater::{BindDnContext, Template, Templater};
 
-pub fn bind_dn_templater(template: &str) -> Arc<dyn BindDnTemplater> {
-    Arc::new(BindDnTemplaterImpl(BindDnTemplate(Template(
-        template.to_string(),
-    ))))
+pub fn bind_dn_templater(template: &str) -> Arc<dyn Templater<Context = BindDnContext>> {
+    Arc::new(BindDnTemplater(Template(template.to_string())))
 }
