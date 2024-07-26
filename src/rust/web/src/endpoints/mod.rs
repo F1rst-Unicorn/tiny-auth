@@ -182,6 +182,12 @@ fn server_error_new(body: InstantiatedTemplate) -> HttpResponse {
         .body::<String>(body.into())
 }
 
+fn server_error_new_code(body: InstantiatedTemplate, code: StatusCode) -> HttpResponse {
+    HttpResponse::build(code)
+        .insert_header(("Content-Type", "text/html"))
+        .body::<String>(body.into())
+}
+
 fn render_template(name: &str, code: StatusCode, tera: &Tera) -> HttpResponse {
     render_template_with_context(name, code, tera, &Context::new())
 }

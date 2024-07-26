@@ -384,7 +384,7 @@ mod tests {
     use crate::client::tests::get_test_client;
     use crate::user::tests::get_test_user;
 
-    use crate::template::test_fixtures::TestScopeTemplater;
+    use crate::template::test_fixtures::TestTemplater;
 
     use serde_json::json;
 
@@ -541,7 +541,7 @@ mod tests {
         let client = get_test_client();
         let value = json!({"key": "john"});
 
-        let (result, errors) = template(Arc::new(TestScopeTemplater), &value, &user, &client);
+        let (result, errors) = template(Arc::new(TestTemplater), &value, &user, &client);
 
         assert!(errors.is_empty());
         assert!(result.is_some());
@@ -555,7 +555,7 @@ mod tests {
         let client = get_test_client();
         let value = json!(["john"]);
 
-        let (result, errors) = template(Arc::new(TestScopeTemplater), &value, &user, &client);
+        let (result, errors) = template(Arc::new(TestTemplater), &value, &user, &client);
 
         assert!(errors.is_empty());
         assert!(result.is_some());
@@ -569,7 +569,7 @@ mod tests {
         let client = get_test_client();
         let value = Value::String("john".to_string());
 
-        let (result, errors) = template(Arc::new(TestScopeTemplater), &value, &user, &client);
+        let (result, errors) = template(Arc::new(TestTemplater), &value, &user, &client);
 
         assert!(errors.is_empty());
         assert!(result.is_some());

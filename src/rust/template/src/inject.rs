@@ -16,7 +16,7 @@
  */
 
 use crate::tera::{BindDnTemplater, LdapSearchTemplater, ScopeTemplater};
-use crate::web::WebappRootTemplater;
+use crate::web::{AuthorizeTemplater, WebappRootTemplater};
 use std::sync::Arc;
 use tera::Tera;
 use tiny_auth_business::template::ldap_search::LdapSearchContext;
@@ -38,4 +38,8 @@ pub fn scope_templater() -> Arc<dyn for<'a> Templater<ScopeContext<'a>>> {
 
 pub fn webapp_templater(tera: Arc<Tera>) -> Arc<dyn WebTemplater<WebappRoot>> {
     Arc::new(WebappRootTemplater(tera))
+}
+
+pub fn authorize_templater(tera: Arc<Tera>) -> Arc<dyn WebTemplater<()>> {
+    Arc::new(AuthorizeTemplater(tera))
 }

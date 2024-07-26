@@ -14,25 +14,28 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::template::scope::ScopeContext;
+use crate::template::web::{ErrorPage, WebTemplater};
 use crate::template::{InstantiatedTemplate, TemplateError, Templater};
 
-pub struct TestScopeTemplater;
+pub struct TestTemplater;
 
-impl<'a> Templater<ScopeContext<'a>> for TestScopeTemplater {
+impl<T: Send + Sync> Templater<T> for TestTemplater {
     fn instantiate_by_name(
         &self,
-        _context: ScopeContext<'a>,
+        _context: T,
         _name: &str,
         content: &str,
     ) -> Result<InstantiatedTemplate, TemplateError> {
         Ok(InstantiatedTemplate(content.to_string()))
     }
 
-    fn instantiate(
-        &self,
-        _context: ScopeContext<'a>,
-    ) -> Result<InstantiatedTemplate, TemplateError> {
+    fn instantiate(&self, _context: T) -> Result<InstantiatedTemplate, TemplateError> {
         Ok(InstantiatedTemplate("".to_string()))
+    }
+}
+
+impl<T: Send + Sync> WebTemplater<T> for TestTemplater {
+    fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate {
+        InstantiatedTemplate(error.title().to_string())
     }
 }

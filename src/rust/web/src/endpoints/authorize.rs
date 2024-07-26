@@ -15,8 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::render_template;
-use crate::endpoints::server_error;
+use super::{server_error_new, server_error_new_code};
 use crate::session::AuthorizeSession;
 use actix_session::Session;
 use actix_web::http::StatusCode;
@@ -24,13 +23,13 @@ use actix_web::web;
 use actix_web::HttpResponse;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
-use tera::Tera;
 use tiny_auth_business::authorize_endpoint::{Error, Handler};
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc::OidcResponseType;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::oidc::ResponseType;
 use tiny_auth_business::serde::deserialise_empty_as_none;
+use tiny_auth_business::template::web::{ErrorPage, WebTemplater};
 use tracing::instrument;
 use tracing::Level;
 use web::Data;
@@ -135,7 +134,7 @@ impl Request {
     nonce = query.nonce))]
 pub async fn handle(
     query: web::Query<Request>,
-    tera: Data<Tera>,
+    templater: Data<dyn WebTemplater<()>>,
     session: Session,
     handler: Data<Handler>,
 ) -> HttpResponse {
@@ -160,8 +159,8 @@ pub async fn handle(
         )
         .await
         .map_err(|e| match e {
-            Error::InvalidRedirectUri => render_invalid_redirect_uri_error(&tera),
-            Error::InvalidClientId => render_invalid_client_id_error(&tera),
+            Error::InvalidRedirectUri => render_invalid_redirect_uri_error(templater),
+            Error::InvalidClientId => render_invalid_client_id_error(templater),
             Error::MissingScopes { redirect_uri } => return_error(
                 &redirect_uri,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
@@ -204,7 +203,9 @@ pub async fn handle(
                 &query.state,
                 encode_redirect_to_fragment,
             ),
-            Error::ServerError => server_error(&tera),
+            Error::ServerError => {
+                server_error_new(templater.instantiate_error_page(ErrorPage::ServerError))
+            }
         }) {
         Err(e) => e,
         Ok(_) => HttpResponse::SeeOther()
@@ -213,15 +214,17 @@ pub async fn handle(
     };
 }
 
-fn render_invalid_client_id_error(tera: &Tera) -> HttpResponse {
-    render_template("invalid_client_id.html.j2", StatusCode::BAD_REQUEST, tera)
+fn render_invalid_client_id_error(templater: Data<dyn WebTemplater<()>>) -> HttpResponse {
+    server_error_new_code(
+        templater.instantiate_error_page(ErrorPage::InvalidClientId),
+        StatusCode::BAD_REQUEST,
+    )
 }
 
-fn render_invalid_redirect_uri_error(tera: &Tera) -> HttpResponse {
-    render_template(
-        "invalid_redirect_uri.html.j2",
+fn render_invalid_redirect_uri_error(templater: Data<dyn WebTemplater<()>>) -> HttpResponse {
+    server_error_new_code(
+        templater.instantiate_error_page(ErrorPage::InvalidRedirectUri),
         StatusCode::BAD_REQUEST,
-        tera,
     )
 }
 
@@ -246,7 +249,8 @@ fn return_error(
 mod tests {
     use super::*;
     use crate::endpoints::parse_first_request;
-    use crate::endpoints::tests::build_test_tera;
+    use std::sync::Arc;
+
     use actix_session::SessionExt;
     use actix_web::test;
     use actix_web::web::Data;
@@ -256,6 +260,7 @@ mod tests {
     use tiny_auth_business::store::test_fixtures::CONFIDENTIAL_CLIENT;
     use tiny_auth_business::store::test_fixtures::UNKNOWN_CLIENT_ID;
     use tiny_auth_business::store::ClientStore;
+    use tiny_auth_business::template::test_fixtures::TestTemplater;
     use url::Url;
 
     #[test_log::test(actix_web::test)]
@@ -266,7 +271,7 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
+        let resp = handle(query, build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
@@ -280,7 +285,7 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
+        let resp = handle(query, build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
@@ -294,7 +299,7 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
+        let resp = handle(query, build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
@@ -309,7 +314,7 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
+        let resp = handle(query, build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
@@ -334,7 +339,7 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
+        let resp = handle(query, build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
 
@@ -382,7 +387,7 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
+        let resp = handle(query, build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
 
@@ -428,7 +433,7 @@ mod tests {
             ..Request::default()
         });
 
-        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
+        let resp = handle(query, build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
 
@@ -476,7 +481,7 @@ mod tests {
         };
         let query = Query(request.clone());
 
-        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
+        let resp = handle(query, build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::SEE_OTHER);
 
@@ -510,7 +515,7 @@ mod tests {
         };
         let query = Query(request.clone());
 
-        let resp = handle(query, build_test_tera(), session, build_test_handler()).await;
+        let resp = handle(query, build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::SEE_OTHER);
 
@@ -520,5 +525,9 @@ mod tests {
 
     fn build_test_handler() -> Data<Handler> {
         Data::new(handler())
+    }
+
+    fn build_test_templater() -> Data<dyn WebTemplater<()>> {
+        Data::from(Arc::new(TestTemplater) as Arc<dyn WebTemplater<_>>)
     }
 }

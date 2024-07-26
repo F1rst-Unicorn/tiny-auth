@@ -77,6 +77,7 @@ pub trait Constructor<'a> {
     fn discovery_handler(&self) -> Arc<DiscoveryHandler>;
     fn health_checker(&self) -> Arc<HealthChecker>;
     fn webapp_template(&self) -> Arc<dyn WebTemplater<WebappRoot>>;
+    fn authorize_template(&self) -> Arc<dyn WebTemplater<()>>;
 
     fn get_template_engine(&self) -> Arc<Tera>;
     fn get_public_keys(&self) -> Vec<TokenCertificate>;
@@ -129,6 +130,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     let discovery_handler = constructor.discovery_handler();
     let health_checker = constructor.health_checker();
     let webapp_templater = constructor.webapp_template();
+    let authorize_templater = constructor.authorize_template();
 
     let bind = constructor.bind();
     let workers = constructor.workers();
@@ -157,6 +159,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             .app_data(Data::from(user_info_handler.clone()))
             .app_data(Data::from(discovery_handler.clone()))
             .app_data(Data::from(webapp_templater.clone()))
+            .app_data(Data::from(authorize_templater.clone()))
             .wrap(
                 SessionMiddleware::builder(
                     CookieSessionStore::default(),

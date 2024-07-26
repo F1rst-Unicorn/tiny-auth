@@ -779,6 +779,10 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
     fn webapp_template(&self) -> Arc<dyn WebTemplater<WebappRoot>> {
         tiny_auth_template::inject::webapp_templater(self.tera.clone())
     }
+
+    fn authorize_template(&self) -> Arc<dyn WebTemplater<()>> {
+        tiny_auth_template::inject::authorize_templater(self.tera.clone())
+    }
 }
 
 #[cfg(test)]

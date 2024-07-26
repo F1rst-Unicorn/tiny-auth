@@ -49,6 +49,21 @@ impl WebTemplater<WebappRoot> for WebappRootTemplater {
     }
 }
 
+pub(crate) struct AuthorizeTemplater(pub(crate) Arc<Tera>);
+
+impl Templater<()> for AuthorizeTemplater {
+    fn instantiate(&self, _context: ()) -> Result<InstantiatedTemplate, TemplateError> {
+        error!("no call expected");
+        Ok(InstantiatedTemplate("".to_string()))
+    }
+}
+
+impl WebTemplater<()> for AuthorizeTemplater {
+    fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate {
+        render_error_page(&self.0, error)
+    }
+}
+
 fn render_error_page(tera: &Tera, error: ErrorPage) -> InstantiatedTemplate {
     let mut context = Context::new();
     context.insert("id", error.id());
