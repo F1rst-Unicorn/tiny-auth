@@ -63,7 +63,7 @@ use tiny_auth_business::token::TokenValidator;
 use tiny_auth_ldap::inject::{
     connector, search_bind_check, simple_bind_check, ClientConfig, UserConfig,
 };
-use tiny_auth_template::inject::{bind_dn_templater, ldap_search_templater};
+use tiny_auth_template::inject::{bind_dn_templater, ldap_search_templater, scope_templater};
 use tiny_auth_web::cors::CorsChecker;
 use tiny_auth_web::endpoints::cert::TokenCertificate;
 use tiny_auth_web::endpoints::discovery::Handler as DiscoveryHandler;
@@ -465,6 +465,7 @@ impl<'a> Constructor<'a> {
                     .refresh_token_timeout_in_seconds
                     .expect("no default given"),
             ),
+            scope_templater(),
         )
     }
 

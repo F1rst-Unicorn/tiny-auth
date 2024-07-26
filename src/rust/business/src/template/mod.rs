@@ -19,5 +19,6 @@ pub mod bind_dn;
 pub mod common;
 pub mod ldap_search;
 pub mod scope;
+pub mod test_fixtures;
 
 pub use common::*;

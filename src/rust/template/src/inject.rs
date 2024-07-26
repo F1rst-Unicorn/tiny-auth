@@ -29,6 +29,6 @@ pub fn ldap_search_templater(template: &str) -> Arc<dyn Templater<LdapSearchCont
     Arc::new(LdapSearchTemplater(template.to_string().into()))
 }
 
-pub fn scope_templater<'a>(template: &str) -> Arc<dyn Templater<ScopeContext<'a>>> {
-    Arc::new(ScopeTemplater(template.to_string().into()))
+pub fn scope_templater() -> Arc<dyn for<'a> Templater<ScopeContext<'a>>> {
+    Arc::new(ScopeTemplater)
 }

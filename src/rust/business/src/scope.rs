@@ -16,15 +16,15 @@
  */
 
 use crate::client::Client;
+use crate::template::scope::ScopeContext;
+use crate::template::{TemplateError, Templater};
 use crate::user::User;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Map;
 use serde_json::Value;
 use std::cmp::Ord;
-use std::error::Error as ErrorTrait;
-use tera::Context;
-use tera::Tera;
+use std::sync::Arc;
 use thiserror::Error;
 use tracing::error;
 use tracing::{debug, warn};
@@ -109,10 +109,15 @@ impl Scope {
         }
     }
 
-    pub fn generate_claims(&self, user: &User, client: &Client) -> Result<Value, Error> {
+    pub fn generate_claims<'a>(
+        &self,
+        templater: Arc<dyn Templater<ScopeContext<'a>>>,
+        user: &'a User,
+        client: &'a Client,
+    ) -> Result<Value, Error> {
         let mut result = Map::new();
         for m in &self.mappings {
-            let claims = m.generate_claims(user, client)?;
+            let claims = m.generate_claims(templater.clone(), user, client)?;
             let merged = merge(Value::Object(result), claims)?;
             result = match merged {
                 Value::Object(result) => result,
@@ -136,22 +141,27 @@ struct Mapping {
 }
 
 impl Mapping {
-    fn generate_claims(&self, user: &User, client: &Client) -> Result<Value, Error> {
+    fn generate_claims<'a>(
+        &self,
+        templater: Arc<dyn Templater<ScopeContext<'a>>>,
+        user: &'a User,
+        client: &'a Client,
+    ) -> Result<Value, Error> {
         match &self.mapping_type {
             Type::Plain => Ok(self.structure.clone()),
             Type::Template => {
-                let (value, errors) = template(&self.structure, user, client);
+                let (value, errors) = template(templater, &self.structure, user, client);
                 if !errors.is_empty() {
                     if self.optional {
                         debug!("failed to template optional claims:");
                         for e in errors {
-                            debug!("{}", render_tera_error(&e));
+                            debug!("{}", &e);
                         }
                         Ok(value.unwrap_or_else(|| Value::Object(Map::new())))
                     } else {
                         warn!("failed to template claims:");
                         for e in errors {
-                            warn!("{}", render_tera_error(&e));
+                            debug!("{}", &e);
                         }
                         Err(Error::TemplateError)
                     }
@@ -257,30 +267,27 @@ enum Type {
     ClientAttribute(Value),
 }
 
-fn template(value: &Value, user: &User, client: &Client) -> (Option<Value>, Vec<tera::Error>) {
-    template_internally(value, &mut Default::default(), user, client)
+fn template<'a>(
+    templater: Arc<dyn Templater<ScopeContext<'a>>>,
+    value: &Value,
+    user: &'a User,
+    client: &'a Client,
+) -> (Option<Value>, Vec<TemplateError>) {
+    let context = ScopeContext { user, client };
+    template_internally(value, &mut Default::default(), context, templater)
 }
 
-fn template_internally(
+fn template_internally<'a>(
     value: &Value,
     path: &mut Vec<String>,
-    user: &User,
-    client: &Client,
-) -> (Option<Value>, Vec<tera::Error>) {
-    let mut context = Context::new();
-    context.insert("user", user);
-    context.insert("client", client);
-    let context = context;
-    let mut tera = Tera::default();
-
+    context: ScopeContext<'a>,
+    templater: Arc<dyn Templater<ScopeContext<'a>>>,
+) -> (Option<Value>, Vec<TemplateError>) {
     match value {
         Value::String(template) => {
             let path = path.join(".");
-            if let Err(e) = tera.add_raw_template(&path, template) {
-                return (None, vec![e]);
-            }
-            match tera.render(&path, &context) {
-                Ok(result) => (Some(Value::String(result)), Vec::new()),
+            match templater.instantiate_by_name(context, &path, template) {
+                Ok(result) => (Some(result.as_ref().into()), Vec::new()),
                 Err(e) => (None, vec![e]),
             }
         }
@@ -289,7 +296,7 @@ fn template_internally(
             let mut errors = Vec::new();
             for (i, v) in array.iter().enumerate() {
                 path.push(format!("{}", i));
-                let result = template_internally(v, path, user, client);
+                let result = template_internally(v, path, context, templater.clone());
                 path.pop();
                 match result {
                     (None, v) => errors.extend(v),
@@ -310,7 +317,7 @@ fn template_internally(
             let mut errors = Vec::new();
             for (k, v) in members {
                 path.push(k.clone());
-                let result = template_internally(v, path, user, client);
+                let result = template_internally(v, path, context, templater.clone());
                 path.pop();
                 match result {
                     (None, e) => errors.extend(e),
@@ -336,19 +343,8 @@ pub enum MergeError {
     #[error("type mismatch")]
     TypeMismatch,
 
-    #[error("unmergeable types")]
+    #[error("types are not mergable, one is not a collection")]
     UnmergableTypes,
-}
-
-pub fn render_tera_error(error: &tera::Error) -> String {
-    let mut result = String::new();
-    result += &format!("{}\n", error);
-    let mut source = error.source();
-    while let Some(error) = source {
-        result += &format!("{}\n", error);
-        source = error.source();
-    }
-    result.trim().to_string()
 }
 
 pub fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
@@ -388,6 +384,8 @@ mod tests {
     use crate::client::tests::get_test_client;
     use crate::user::tests::get_test_user;
 
+    use crate::template::test_fixtures::TestScopeTemplater;
+    use crate::template::InstantiatedTemplate;
     use serde_json::json;
 
     #[test]
@@ -541,9 +539,9 @@ mod tests {
     pub fn objects_are_templated() {
         let user = get_test_user();
         let client = get_test_client();
-        let value = json!({"key": "{{ user.name }}"});
+        let value = json!({"key": "john"});
 
-        let (result, errors) = template(&value, &user, &client);
+        let (result, errors) = template(Arc::new(TestScopeTemplater), &value, &user, &client);
 
         assert!(errors.is_empty());
         assert!(result.is_some());
@@ -555,9 +553,9 @@ mod tests {
     pub fn arrays_are_templated() {
         let user = get_test_user();
         let client = get_test_client();
-        let value = json!(["{{ user.name }}"]);
+        let value = json!(["john"]);
 
-        let (result, errors) = template(&value, &user, &client);
+        let (result, errors) = template(Arc::new(TestScopeTemplater), &value, &user, &client);
 
         assert!(errors.is_empty());
         assert!(result.is_some());
@@ -569,9 +567,9 @@ mod tests {
     pub fn strings_are_templated() {
         let user = get_test_user();
         let client = get_test_client();
-        let value = Value::String("{{ user.name }}".to_string());
+        let value = Value::String("john".to_string());
 
-        let (result, errors) = template(&value, &user, &client);
+        let (result, errors) = template(Arc::new(TestScopeTemplater), &value, &user, &client);
 
         assert!(errors.is_empty());
         assert!(result.is_some());

@@ -20,7 +20,6 @@ serde_derive.workspace = true
 tracing.workspace = true
 async-trait.workspace = true
 jsonwebtoken.workspace = true
-tera.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
 url.workspace = true

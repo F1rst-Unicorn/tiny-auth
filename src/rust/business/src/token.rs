@@ -21,6 +21,8 @@ use crate::issuer_configuration::IssuerConfiguration;
 use crate::jwk::Jwk;
 use crate::scope::merge;
 use crate::scope::Scope;
+use crate::template::scope::ScopeContext;
+use crate::template::Templater;
 use crate::user::User;
 use chrono::Duration;
 use jsonwebtoken::decode;
@@ -130,6 +132,8 @@ pub struct TokenCreator {
     token_expiration: Duration,
 
     refresh_token_expiration: Duration,
+
+    templater: Arc<dyn for<'a> Templater<ScopeContext<'a>>>,
 }
 
 impl TokenCreator {
@@ -140,6 +144,7 @@ impl TokenCreator {
         clock: Arc<dyn Clock>,
         token_expiration: Duration,
         refresh_token_expiration: Duration,
+        templater: Arc<dyn for<'a> Templater<ScopeContext<'a>>>,
     ) -> Self {
         Self {
             key,
@@ -148,6 +153,7 @@ impl TokenCreator {
             clock,
             token_expiration,
             refresh_token_expiration,
+            templater,
         }
     }
 
@@ -177,7 +183,7 @@ impl TokenCreator {
         debug!("issuing token");
         let mut claim_collector = Value::Object(Default::default());
         for scope in scopes {
-            let claims = match scope.generate_claims(user, client) {
+            let claims = match scope.generate_claims(self.templater.clone(), user, client) {
                 Err(_) => {
                     warn!(
                         scope = scope.name,

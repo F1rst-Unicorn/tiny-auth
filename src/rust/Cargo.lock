@@ -3402,7 +3402,6 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "serde_yaml",
- "tera",
  "test-log",
  "thiserror",
  "tokio",

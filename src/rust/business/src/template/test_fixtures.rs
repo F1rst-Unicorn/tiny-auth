@@ -14,48 +14,25 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use crate::template::scope::ScopeContext;
+use crate::template::{InstantiatedTemplate, TemplateError, Templater};
 
-use thiserror::Error;
+pub struct TestScopeTemplater;
 
-#[derive(Debug, Clone)]
-pub struct Template(String);
-
-impl From<String> for Template {
-    fn from(value: String) -> Self {
-        Self(value)
-    }
-}
-
-impl AsRef<str> for Template {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InstantiatedTemplate(pub String);
-
-impl AsRef<str> for InstantiatedTemplate {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-#[derive(Error, Debug, Clone)]
-pub enum TemplateError {
-    #[error("failed to render: {0}")]
-    RenderError(String),
-}
-
-pub trait Templater<Context: Send + Sync>: Send + Sync {
+impl<'a> Templater<ScopeContext<'a>> for TestScopeTemplater {
     fn instantiate_by_name(
         &self,
-        context: Context,
+        _context: ScopeContext<'a>,
         _name: &str,
-        _content: &str,
+        content: &str,
     ) -> Result<InstantiatedTemplate, TemplateError> {
-        self.instantiate(context)
+        Ok(InstantiatedTemplate(content.to_string()))
     }
 
-    fn instantiate(&self, context: Context) -> Result<InstantiatedTemplate, TemplateError>;
+    fn instantiate(
+        &self,
+        _context: ScopeContext<'a>,
+    ) -> Result<InstantiatedTemplate, TemplateError> {
+        Ok(InstantiatedTemplate("".to_string()))
+    }
 }

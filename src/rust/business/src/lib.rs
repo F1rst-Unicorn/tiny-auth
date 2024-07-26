@@ -43,6 +43,7 @@ pub mod test_fixtures {
     use crate::issuer_configuration::IssuerConfiguration;
     use crate::jwk::Jwk;
     use crate::rate_limiter::RateLimiter;
+    use crate::template::test_fixtures::TestScopeTemplater;
     use crate::token::TokenCreator;
     use crate::token::TokenValidator;
     use chrono::Duration;
@@ -59,6 +60,7 @@ pub mod test_fixtures {
             Arc::new(crate::clock::test_fixtures::clock()),
             Duration::minutes(1),
             Duration::minutes(3),
+            Arc::new(TestScopeTemplater),
         )
     }
 

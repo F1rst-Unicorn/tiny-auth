@@ -18,6 +18,7 @@
 use crate::client::Client;
 use crate::user::User;
 
+#[derive(Clone, Copy)]
 pub struct ScopeContext<'a> {
     pub user: &'a User,
     pub client: &'a Client,

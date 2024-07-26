@@ -46,7 +46,6 @@ use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
 use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::oauth2::ProtocolError as OAuthError;
 use tiny_auth_business::oidc::ProtocolError;
-use tiny_auth_business::scope::render_tera_error;
 use tiny_auth_business::store::memory::generate_random_string;
 use tracing::warn;
 use tracing::{debug, instrument, Level};
@@ -193,7 +192,7 @@ fn render_template_with_context(
             .insert_header(("Content-Type", "text/html"))
             .body(body),
         Err(e) => {
-            warn!("{}", render_tera_error(&e));
+            warn!("{}", &e);
             server_error(tera)
         }
     }
