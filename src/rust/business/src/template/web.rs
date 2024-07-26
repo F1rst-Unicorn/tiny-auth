@@ -17,11 +17,39 @@
 use crate::template::{InstantiatedTemplate, Templater};
 
 pub trait WebTemplater<Context: Send + Sync>: Templater<Context> {
-    fn instantiate_error_page(&self) -> InstantiatedTemplate;
+    fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate;
 }
 
 pub struct WebappRoot {
     pub provider_url: String,
     pub api_url: String,
     pub web_base: String,
+}
+
+pub enum ErrorPage {
+    ServerError,
+    InvalidAuthenticationRequest,
+    InvalidClientId,
+    InvalidConsentRequest,
+    InvalidRedirectUri,
+}
+
+impl ErrorPage {
+    pub fn id(&self) -> &str {
+        if let ErrorPage::InvalidRedirectUri = self {
+            "invalid_redirect_uri"
+        } else {
+            ""
+        }
+    }
+
+    pub fn title(&self) -> &str {
+        match self {
+            ErrorPage::ServerError => "Server Error",
+            ErrorPage::InvalidAuthenticationRequest => "Invalid Authentication Request",
+            ErrorPage::InvalidClientId => "Invalid Client ID",
+            ErrorPage::InvalidConsentRequest => "Invalid Consent Request",
+            ErrorPage::InvalidRedirectUri => "Invalid Redirect URI",
+        }
+    }
 }

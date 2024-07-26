@@ -23,7 +23,7 @@ use tera::Result as TeraResult;
 use tera::Tera;
 use tera::Value;
 use tera::{from_value, Context};
-use tiny_auth_business::template::web::{WebTemplater, WebappRoot};
+use tiny_auth_business::template::web::{ErrorPage, WebTemplater, WebappRoot};
 use tiny_auth_business::template::{InstantiatedTemplate, TemplateError, Templater};
 use tracing::{error, instrument, span, trace, warn, Level};
 
@@ -44,14 +44,21 @@ impl Templater<WebappRoot> for WebappRootTemplater {
 }
 
 impl WebTemplater<WebappRoot> for WebappRootTemplater {
-    fn instantiate_error_page(&self) -> InstantiatedTemplate {
-        match self.0.render("500.html.j2", &Context::default()) {
-            Err(e) => {
-                warn!(e = render_tera_error(&e));
-                InstantiatedTemplate("Server Error".to_string())
-            }
-            Ok(v) => InstantiatedTemplate(v),
+    fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate {
+        render_error_page(&self.0, error)
+    }
+}
+
+fn render_error_page(tera: &Tera, error: ErrorPage) -> InstantiatedTemplate {
+    let mut context = Context::new();
+    context.insert("id", error.id());
+    context.insert("title", error.title());
+    match tera.render("error.html.j2", &Context::default()) {
+        Err(e) => {
+            warn!(e = render_tera_error(&e));
+            InstantiatedTemplate(error.title().to_string())
         }
+        Ok(v) => InstantiatedTemplate(v),
     }
 }
 

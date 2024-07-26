@@ -21,7 +21,7 @@ use actix_web::http::StatusCode;
 use actix_web::web::Data;
 use actix_web::{HttpRequest, HttpResponse};
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
-use tiny_auth_business::template::web::{WebTemplater, WebappRoot};
+use tiny_auth_business::template::web::{ErrorPage, WebTemplater, WebappRoot};
 use tracing::{instrument, trace};
 
 #[instrument(skip_all, name = "webapp_redirect")]
@@ -51,6 +51,6 @@ pub async fn get(
         web_base: web_base_path.0.to_string(),
     };
     return_rendered_template(templater.instantiate(context), StatusCode::OK, || {
-        templater.instantiate_error_page()
+        templater.instantiate_error_page(ErrorPage::ServerError)
     })
 }
