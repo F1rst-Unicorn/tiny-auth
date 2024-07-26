@@ -16,33 +16,49 @@
  */
 
 use tera::{Context, Tera};
-use tiny_auth_business::templater::{
-    BindDnContext, FilledTemplate, InstantiatedTemplate, Template, TemplateError, Templater,
+use tiny_auth_business::template::ldap_search::LdapSearchContext;
+use tiny_auth_business::template::scope::ScopeContext;
+use tiny_auth_business::template::{
+    bind_dn::BindDnContext, InstantiatedTemplate, Template, TemplateError, Templater,
 };
 use tiny_auth_business::util::wrap_err;
 
 pub(crate) struct BindDnTemplater(pub(crate) Template);
 
-impl Templater for BindDnTemplater {
-    type Context = BindDnContext;
-
-    fn instantiate(&self, context: BindDnContext) -> Box<dyn FilledTemplate> {
-        Box::new(FilledBindDnTemplate(self.0.clone(), context))
+impl Templater<BindDnContext> for BindDnTemplater {
+    fn instantiate(&self, context: BindDnContext) -> Result<InstantiatedTemplate, TemplateError> {
+        let mut tera_context = Context::new();
+        tera_context.insert("user", &context.user);
+        let result = Tera::one_off(self.0.as_ref(), &tera_context, false).map_err(wrap_err)?;
+        Ok(self.wrap(result))
     }
 }
 
-struct FilledBindDnTemplate(Template, BindDnContext);
+pub(crate) struct LdapSearchTemplater(pub(crate) Template);
 
-impl FilledTemplate for FilledBindDnTemplate {
-    fn render(&self) -> Result<InstantiatedTemplate, TemplateError> {
-        let mut context = Context::new();
-        context.insert("user", &self.1.user);
-        let result = Tera::one_off(
-            &<Template as Into<String>>::into(self.0.clone()),
-            &context,
-            false,
-        )
-        .map_err(wrap_err)?;
+impl Templater<LdapSearchContext> for LdapSearchTemplater {
+    fn instantiate(
+        &self,
+        context: LdapSearchContext,
+    ) -> Result<InstantiatedTemplate, TemplateError> {
+        let mut tera_context = Context::new();
+        tera_context.insert("user", &context.user);
+        let result = Tera::one_off(self.0.as_ref(), &tera_context, false).map_err(wrap_err)?;
+        Ok(self.wrap(result))
+    }
+}
+
+pub(crate) struct ScopeTemplater(pub(crate) Template);
+
+impl<'a> Templater<ScopeContext<'a>> for ScopeTemplater {
+    fn instantiate(
+        &self,
+        context: ScopeContext<'a>,
+    ) -> Result<InstantiatedTemplate, TemplateError> {
+        let mut tera_context = Context::new();
+        tera_context.insert("user", context.user);
+        tera_context.insert("client", context.client);
+        let result = Tera::one_off(self.0.as_ref(), &tera_context, false).map_err(wrap_err)?;
         Ok(self.wrap(result))
     }
 }

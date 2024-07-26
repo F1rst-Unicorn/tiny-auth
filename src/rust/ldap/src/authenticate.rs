@@ -22,7 +22,8 @@ use enum_dispatch::enum_dispatch;
 use ldap3::{Ldap, Scope, SearchEntry};
 use std::sync::Arc;
 use tiny_auth_business::password::Error as PasswordError;
-use tiny_auth_business::templater::{BindDnContext, Templater};
+use tiny_auth_business::template::ldap_search::LdapSearchContext;
+use tiny_auth_business::template::{bind_dn::BindDnContext, Templater};
 use tiny_auth_business::user::Error as UserError;
 use tiny_auth_business::util::wrap_err;
 use tracing::{debug, instrument, warn, Level};
@@ -53,7 +54,7 @@ pub(crate) trait Authenticator {
 }
 
 pub(crate) struct SimpleBind {
-    pub(crate) bind_dn_templates: Vec<Arc<dyn Templater<Context = BindDnContext>>>,
+    pub(crate) bind_dn_templates: Vec<Arc<dyn Templater<BindDnContext>>>,
 }
 
 #[async_trait]
@@ -71,9 +72,8 @@ impl Authenticator for SimpleBind {
                         .instantiate(BindDnContext {
                             user: username.to_string(),
                         })
-                        .render()
                         .map_err(wrap_err)?;
-                    if simple_bind(ldap, &bind_dn.0, password)
+                    if simple_bind(ldap, bind_dn.as_ref(), password)
                         .await
                         .map_err(wrap_err)?
                     {
@@ -106,7 +106,7 @@ pub(crate) struct SearchBind {
 
 pub struct LdapSearch {
     pub base_dn: String,
-    pub search_filter: Arc<dyn Templater<Context = BindDnContext>>,
+    pub search_filter: Arc<dyn Templater<LdapSearchContext>>,
 }
 
 #[async_trait]
@@ -150,12 +150,11 @@ impl Authenticator for SearchBind {
         for search in &self.searches {
             let filter = search
                 .search_filter
-                .instantiate(BindDnContext {
+                .instantiate(LdapSearchContext {
                     user: username.to_string(),
                 })
-                .render()
                 .map_err(wrap_err)?;
-            if let Some(value) = Self::search(ldap, username, &search, &filter.0).await {
+            if let Some(value) = Self::search(ldap, username, &search, filter.as_ref()).await {
                 return value;
             }
         }
@@ -175,7 +174,7 @@ impl SearchBind {
         ldap: &mut Ldap,
         _username: &str,
         search: &&LdapSearch,
-        filter: &String,
+        filter: &str,
     ) -> Option<Result<SearchEntry, UserError>> {
         debug!(base_dn = &search.base_dn, "searching");
         let result = match ldap

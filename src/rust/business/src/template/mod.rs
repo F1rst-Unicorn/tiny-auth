@@ -15,20 +15,9 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::tera::{BindDnTemplater, LdapSearchTemplater, ScopeTemplater};
-use std::sync::Arc;
-use tiny_auth_business::template::ldap_search::LdapSearchContext;
-use tiny_auth_business::template::scope::ScopeContext;
-use tiny_auth_business::template::{bind_dn::BindDnContext, Templater};
+pub mod bind_dn;
+pub mod common;
+pub mod ldap_search;
+pub mod scope;
 
-pub fn bind_dn_templater(template: &str) -> Arc<dyn Templater<BindDnContext>> {
-    Arc::new(BindDnTemplater(template.to_string().into()))
-}
-
-pub fn ldap_search_templater(template: &str) -> Arc<dyn Templater<LdapSearchContext>> {
-    Arc::new(LdapSearchTemplater(template.to_string().into()))
-}
-
-pub fn scope_templater<'a>(template: &str) -> Arc<dyn Templater<ScopeContext<'a>>> {
-    Arc::new(ScopeTemplater(template.to_string().into()))
-}
+pub use common::*;

@@ -20,28 +20,26 @@ use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
-pub struct Template(pub String);
+pub struct Template(String);
 
-impl From<Template> for String {
-    fn from(value: Template) -> Self {
-        value.0
+impl From<String> for Template {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl AsRef<str> for Template {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InstantiatedTemplate(pub String);
+pub struct InstantiatedTemplate(String);
 
-impl From<InstantiatedTemplate> for String {
-    fn from(value: InstantiatedTemplate) -> Self {
-        value.0
-    }
-}
-
-pub trait FilledTemplate {
-    fn render(&self) -> Result<InstantiatedTemplate, TemplateError>;
-
-    fn wrap(&self, instantiated_template: String) -> InstantiatedTemplate {
-        InstantiatedTemplate(instantiated_template)
+impl AsRef<str> for InstantiatedTemplate {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
@@ -51,11 +49,10 @@ pub enum TemplateError {
     RenderError(#[from] Arc<dyn StdError + Send + Sync>),
 }
 
-pub trait Templater: Send + Sync {
-    type Context;
-    fn instantiate(&self, context: Self::Context) -> Box<dyn FilledTemplate>;
-}
+pub trait Templater<Context>: Send + Sync {
+    fn instantiate(&self, context: Context) -> Result<InstantiatedTemplate, TemplateError>;
 
-pub struct BindDnContext {
-    pub user: String,
+    fn wrap(&self, instantiated_template: String) -> InstantiatedTemplate {
+        InstantiatedTemplate(instantiated_template)
+    }
 }

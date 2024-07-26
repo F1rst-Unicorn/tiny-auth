@@ -63,7 +63,7 @@ use tiny_auth_business::token::TokenValidator;
 use tiny_auth_ldap::inject::{
     connector, search_bind_check, simple_bind_check, ClientConfig, UserConfig,
 };
-use tiny_auth_template::inject::bind_dn_templater;
+use tiny_auth_template::inject::{bind_dn_templater, ldap_search_templater};
 use tiny_auth_web::cors::CorsChecker;
 use tiny_auth_web::endpoints::cert::TokenCertificate;
 use tiny_auth_web::endpoints::discovery::Handler as DiscoveryHandler;
@@ -264,7 +264,7 @@ impl<'a> Constructor<'a> {
                         .iter()
                         .map(|v| tiny_auth_ldap::LdapSearch {
                             base_dn: v.base_dn.clone(),
-                            search_filter: bind_dn_templater(&v.search_filter),
+                            search_filter: ldap_search_templater(&v.search_filter),
                         })
                         .collect();
 

@@ -25,6 +25,7 @@ use std::cmp::Ord;
 use std::error::Error as ErrorTrait;
 use tera::Context;
 use tera::Tera;
+use thiserror::Error;
 use tracing::error;
 use tracing::{debug, warn};
 
@@ -83,27 +84,19 @@ impl From<Scope> for ScopeDescription {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum Error {
+    #[error("template error")]
     TemplateError,
 
+    #[error("attribute selection error")]
     AttributeSelectionError,
 
-    MergeError(MergeError),
+    #[error("failed to merge attributes: {0}")]
+    MergeError(#[from] MergeError),
 
-    SerialisationError(serde_json::Error),
-}
-
-impl From<MergeError> for Error {
-    fn from(e: MergeError) -> Self {
-        Error::MergeError(e)
-    }
-}
-
-impl From<serde_json::Error> for Error {
-    fn from(e: serde_json::Error) -> Self {
-        Error::SerialisationError(e)
-    }
+    #[error("serialisation error: {0}")]
+    SerialisationError(#[from] serde_json::Error),
 }
 
 impl Scope {
@@ -338,10 +331,12 @@ fn template_internally(
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Error)]
 pub enum MergeError {
+    #[error("type mismatch")]
     TypeMismatch,
 
+    #[error("unmergeable types")]
     UnmergableTypes,
 }
 
@@ -353,7 +348,7 @@ pub fn render_tera_error(error: &tera::Error) -> String {
         result += &format!("{}\n", error);
         source = error.source();
     }
-    result
+    result.trim().to_string()
 }
 
 pub fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
