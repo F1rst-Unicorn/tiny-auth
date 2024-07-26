@@ -58,17 +58,6 @@ pub enum OidcResponseType {
     IdToken,
 }
 
-#[derive(Serialize)]
-pub struct ErrorResponse {
-    error: ProtocolError,
-
-    error_description: Option<String>,
-
-    error_uri: Option<String>,
-
-    state: Option<String>,
-}
-
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ProtocolError {

@@ -62,6 +62,7 @@ use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::health::HealthChecker;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::jwk::Jwks;
+use tiny_auth_business::template::web::{WebTemplater, WebappRoot};
 use tracing::error;
 use tracing::warn;
 use tracing_actix_web::TracingLogger;
@@ -75,8 +76,9 @@ pub trait Constructor<'a> {
     fn user_info_handler(&self) -> Arc<UserInfoHandler>;
     fn discovery_handler(&self) -> Arc<DiscoveryHandler>;
     fn health_checker(&self) -> Arc<HealthChecker>;
+    fn webapp_template(&self) -> Arc<dyn WebTemplater<WebappRoot>>;
 
-    fn get_template_engine(&self) -> Option<Tera>;
+    fn get_template_engine(&self) -> Arc<Tera>;
     fn get_public_keys(&self) -> Vec<TokenCertificate>;
     fn get_issuer_config(&self) -> IssuerConfiguration;
     fn build_jwks(&self) -> Jwks;
@@ -113,7 +115,7 @@ pub enum Error {
 }
 
 pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
-    let tera = constructor.get_template_engine().ok_or(LoggedBeforeError)?;
+    let tera = constructor.get_template_engine();
     let token_certificates = constructor.get_public_keys();
     let issuer_config = constructor.get_issuer_config();
     let api_url = constructor.api_url();
@@ -126,6 +128,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     let user_info_handler = constructor.user_info_handler();
     let discovery_handler = constructor.discovery_handler();
     let health_checker = constructor.health_checker();
+    let webapp_templater = constructor.webapp_template();
 
     let bind = constructor.bind();
     let workers = constructor.workers();
@@ -139,7 +142,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
 
     let server = HttpServer::new(move || {
         App::new()
-            .app_data(Data::new(tera.clone()))
+            .app_data(Data::from(tera.clone()))
             .app_data(Data::new(issuer_config.clone()))
             .app_data(Data::new(api_url.clone()))
             .app_data(Data::new(WebBasePath(web_path.clone())))
@@ -153,6 +156,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             .app_data(Data::from(token_handler.clone()))
             .app_data(Data::from(user_info_handler.clone()))
             .app_data(Data::from(discovery_handler.clone()))
+            .app_data(Data::from(webapp_templater.clone()))
             .wrap(
                 SessionMiddleware::builder(
                     CookieSessionStore::default(),

@@ -73,11 +73,11 @@ impl<'a> Templater<ScopeContext<'a>> for ScopeTemplater {
     }
 }
 
-fn map_err(e: tera::Error) -> TemplateError {
+pub fn map_err(e: tera::Error) -> TemplateError {
     TemplateError::RenderError(render_tera_error(&e))
 }
 
-fn render_tera_error(error: &tera::Error) -> String {
+pub fn render_tera_error(error: &tera::Error) -> String {
     let mut result = String::new();
     result += &format!("{}", error);
     let mut source = error.source();

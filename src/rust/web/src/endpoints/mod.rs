@@ -47,6 +47,7 @@ use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::oauth2::ProtocolError as OAuthError;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::store::memory::generate_random_string;
+use tiny_auth_business::template::{InstantiatedTemplate, TemplateError};
 use tracing::warn;
 use tracing::{debug, instrument, Level};
 use url::Url;
@@ -175,6 +176,12 @@ fn server_error(tera: &Tera) -> HttpResponse {
     render_template("500.html.j2", StatusCode::INTERNAL_SERVER_ERROR, tera)
 }
 
+fn server_error_new(body: InstantiatedTemplate) -> HttpResponse {
+    HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+        .insert_header(("Content-Type", "text/html"))
+        .body::<String>(body.into())
+}
+
 fn render_template(name: &str, code: StatusCode, tera: &Tera) -> HttpResponse {
     render_template_with_context(name, code, tera, &Context::new())
 }
@@ -194,6 +201,26 @@ fn render_template_with_context(
         Err(e) => {
             warn!("{}", &e);
             server_error(tera)
+        }
+    }
+}
+
+#[instrument(level = Level::TRACE, skip(error_response))]
+fn return_rendered_template<F>(
+    template: Result<InstantiatedTemplate, TemplateError>,
+    code: StatusCode,
+    error_response: F,
+) -> HttpResponse
+where
+    F: FnOnce() -> InstantiatedTemplate,
+{
+    match template {
+        Ok(body) => HttpResponse::build(code)
+            .insert_header(("Content-Type", "text/html"))
+            .body::<String>(body.into()),
+        Err(e) => {
+            warn!("{}", &e);
+            server_error_new(error_response())
         }
     }
 }

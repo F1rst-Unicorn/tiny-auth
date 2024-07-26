@@ -26,6 +26,12 @@ impl From<String> for Template {
     }
 }
 
+impl From<InstantiatedTemplate> for String {
+    fn from(value: InstantiatedTemplate) -> Self {
+        value.0
+    }
+}
+
 impl AsRef<str> for Template {
     fn as_ref(&self) -> &str {
         &self.0

@@ -1,0 +1,114 @@
+/*  tiny-auth: Tiny OIDC Provider
+ *  Copyright (C) 2019 The tiny-auth developers
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+use crate::tera::{map_err, render_tera_error};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tera::to_value;
+use tera::Result as TeraResult;
+use tera::Tera;
+use tera::Value;
+use tera::{from_value, Context};
+use tiny_auth_business::template::web::{WebTemplater, WebappRoot};
+use tiny_auth_business::template::{InstantiatedTemplate, TemplateError, Templater};
+use tracing::{error, instrument, span, trace, warn, Level};
+
+pub(crate) struct WebappRootTemplater(pub(crate) Arc<Tera>);
+
+impl Templater<WebappRoot> for WebappRootTemplater {
+    fn instantiate(&self, context: WebappRoot) -> Result<InstantiatedTemplate, TemplateError> {
+        let mut tera_context = Context::new();
+        tera_context.insert("tiny_auth_provider_url", &context.provider_url);
+        tera_context.insert("tiny_auth_api_url", &context.api_url);
+        tera_context.insert("tiny_auth_web_base", &context.web_base);
+        Ok(InstantiatedTemplate(
+            self.0
+                .render("index.html.j2", &tera_context)
+                .map_err(map_err)?,
+        ))
+    }
+}
+
+impl WebTemplater<WebappRoot> for WebappRootTemplater {
+    fn instantiate_error_page(&self) -> InstantiatedTemplate {
+        match self.0.render("500.html.j2", &Context::default()) {
+            Err(e) => {
+                warn!(e = render_tera_error(&e));
+                InstantiatedTemplate("Server Error".to_string())
+            }
+            Ok(v) => InstantiatedTemplate(v),
+        }
+    }
+}
+
+pub fn load_template_engine(
+    static_files_root: &str,
+    http_path: &str,
+) -> Result<Tera, TemplateError> {
+    let template_path = static_files_root.to_string() + "/templates/";
+    let mut tera = Tera::new(&(template_path + "**/*")).map_err(map_err)?;
+    tera.register_function("url", url_mapper);
+    tera.register_function("translate", translator);
+    tera.register_function("static", make_static_mapper(http_path.to_string()));
+    Ok(tera)
+}
+
+#[instrument(level = Level::TRACE, ret)]
+fn url_mapper(args: &HashMap<String, Value>) -> TeraResult<Value> {
+    match args.get("name") {
+        Some(val) => Ok(val.clone()),
+        None => {
+            error!("no url name given");
+            Err("oops".into())
+        }
+    }
+}
+
+#[instrument(level = Level::TRACE, ret)]
+fn translator(args: &HashMap<String, Value>) -> TeraResult<Value> {
+    match args.get("term") {
+        Some(val) => Ok(val.clone()),
+        None => {
+            error!("no term given");
+            Err("oops".into())
+        }
+    }
+}
+
+#[allow(clippy::type_complexity)]
+fn make_static_mapper(
+    http_path: String,
+) -> Box<dyn Fn(&HashMap<String, Value>) -> TeraResult<Value> + Sync + Send> {
+    Box::new(move |args| -> TeraResult<Value> {
+        let _guard = span!(Level::DEBUG, "static_mapper", ?args).entered();
+        let result = match args.get("name") {
+            Some(val) => match from_value::<String>(val.clone()) {
+                Ok(v) => to_value(http_path.to_string() + &v).map_err(Into::into),
+                Err(e) => {
+                    error!(%e, "could not convert to string");
+                    Err("oops".into())
+                }
+            },
+            None => {
+                error!("no name given");
+                Err("oops".into())
+            }
+        };
+        trace!(?result);
+        result
+    })
+}

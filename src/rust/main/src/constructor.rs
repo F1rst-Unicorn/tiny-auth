@@ -58,18 +58,19 @@ use tiny_auth_business::password::DispatchingPasswordStore;
 use tiny_auth_business::rate_limiter::RateLimiter;
 use tiny_auth_business::store::memory::*;
 use tiny_auth_business::store::*;
+use tiny_auth_business::template::web::{WebTemplater, WebappRoot};
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
 use tiny_auth_ldap::inject::{
     connector, search_bind_check, simple_bind_check, ClientConfig, UserConfig,
 };
 use tiny_auth_template::inject::{bind_dn_templater, ldap_search_templater, scope_templater};
+use tiny_auth_template::web::load_template_engine;
 use tiny_auth_web::cors::CorsChecker;
 use tiny_auth_web::endpoints::cert::TokenCertificate;
 use tiny_auth_web::endpoints::discovery::Handler as DiscoveryHandler;
 use tiny_auth_web::endpoints::token::Handler as TokenHandler;
 use tiny_auth_web::endpoints::userinfo::Handler as UserInfoHandler;
-use tiny_auth_web::tera::load_template_engine;
 use tiny_auth_web::ApiUrl;
 use tracing::error;
 
@@ -84,7 +85,7 @@ pub struct Constructor<'a> {
 
     authorization_code_store: Arc<dyn AuthorizationCodeStore>,
 
-    tera: Option<Tera>,
+    tera: Arc<Tera>,
 
     public_keys: Vec<String>,
 
@@ -108,7 +109,7 @@ pub struct Constructor<'a> {
 impl<'a> Constructor<'a> {
     pub fn new(config: &'a Config) -> Result<Self, Error> {
         let (user_store, password_store, client_store, scope_store) = Self::build_stores(config)?;
-        let tera = Some(Self::build_template_engine(config)?);
+        let tera = Arc::new(Self::build_template_engine(config)?);
         let issuer_url = Self::build_issuer_url(config);
         let (public_keys, private_key) = Self::read_token_keypairs(config)?;
         let (encoding_key, algorithm) = Self::build_encoding_key(&private_key)?;
@@ -363,7 +364,7 @@ impl<'a> Constructor<'a> {
         result
     }
 
-    pub fn get_template_engine(&self) -> Option<Tera> {
+    pub fn get_template_engine(&self) -> Arc<Tera> {
         self.tera.clone()
     }
 
@@ -580,8 +581,8 @@ impl<'a> tiny_auth_api::Constructor<'a> for Constructor<'a> {
 }
 
 impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
-    fn get_template_engine(&self) -> Option<Tera> {
-        self.get_template_engine()
+    fn get_template_engine(&self) -> Arc<Tera> {
+        self.get_template_engine().clone()
     }
     fn get_public_keys(&self) -> Vec<TokenCertificate> {
         self.get_public_keys()
@@ -774,6 +775,10 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
 
         Arc::new(HealthChecker(checks))
     }
+
+    fn webapp_template(&self) -> Arc<dyn WebTemplater<WebappRoot>> {
+        tiny_auth_template::inject::webapp_templater(self.tera.clone())
+    }
 }
 
 #[cfg(test)]
@@ -791,7 +796,6 @@ pub mod tests {
     use tiny_auth_business::store::ScopeStore;
     use tiny_auth_business::store::UserStore;
     use tiny_auth_business::token::TokenValidator;
-    use tiny_auth_web::tera::load_template_engine;
 
     pub fn build_test_issuer_config_for_web() -> Data<IssuerConfiguration> {
         Data::new(build_test_issuer_config())

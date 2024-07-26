@@ -47,7 +47,7 @@ pub enum Error {
     JwtError(#[from] jsonwebtoken::errors::Error),
 
     #[error("Template error: {0}")]
-    TeraError(#[from] tera::Error),
+    TemplateError(#[from] tiny_auth_business::template::TemplateError),
 
     #[error("Crypto error: {0}")]
     OpensslError(#[from] ErrorStack),

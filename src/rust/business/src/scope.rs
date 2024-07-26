@@ -385,7 +385,7 @@ mod tests {
     use crate::user::tests::get_test_user;
 
     use crate::template::test_fixtures::TestScopeTemplater;
-    use crate::template::InstantiatedTemplate;
+
     use serde_json::json;
 
     #[test]

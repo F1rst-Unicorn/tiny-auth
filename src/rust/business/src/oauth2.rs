@@ -22,17 +22,6 @@ use std::fmt::Display;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
-#[derive(Serialize)]
-pub struct ErrorResponse {
-    error: ProtocolError,
-
-    error_description: Option<String>,
-
-    error_uri: Option<String>,
-
-    state: Option<String>,
-}
-
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ClientType {
     #[serde(rename = "public")]

@@ -14,12 +14,14 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use crate::template::{InstantiatedTemplate, Templater};
 
-pub mod bind_dn;
-pub mod common;
-pub mod ldap_search;
-pub mod scope;
-pub mod test_fixtures;
-pub mod web;
+pub trait WebTemplater<Context: Send + Sync>: Templater<Context> {
+    fn instantiate_error_page(&self) -> InstantiatedTemplate;
+}
 
-pub use common::*;
+pub struct WebappRoot {
+    pub provider_url: String,
+    pub api_url: String,
+    pub web_base: String,
+}

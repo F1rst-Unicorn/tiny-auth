@@ -16,9 +16,12 @@
  */
 
 use crate::tera::{BindDnTemplater, LdapSearchTemplater, ScopeTemplater};
+use crate::web::WebappRootTemplater;
 use std::sync::Arc;
+use tera::Tera;
 use tiny_auth_business::template::ldap_search::LdapSearchContext;
 use tiny_auth_business::template::scope::ScopeContext;
+use tiny_auth_business::template::web::{WebTemplater, WebappRoot};
 use tiny_auth_business::template::{bind_dn::BindDnContext, Templater};
 
 pub fn bind_dn_templater(template: &str) -> Arc<dyn Templater<BindDnContext>> {
@@ -31,4 +34,8 @@ pub fn ldap_search_templater(template: &str) -> Arc<dyn Templater<LdapSearchCont
 
 pub fn scope_templater() -> Arc<dyn for<'a> Templater<ScopeContext<'a>>> {
     Arc::new(ScopeTemplater)
+}
+
+pub fn webapp_templater(tera: Arc<Tera>) -> Arc<dyn WebTemplater<WebappRoot>> {
+    Arc::new(WebappRootTemplater(tera))
 }

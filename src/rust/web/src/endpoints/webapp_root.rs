@@ -15,14 +15,13 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::endpoints::render_template_with_context;
+use crate::endpoints::return_rendered_template;
 use crate::{ApiUrl, WebBasePath};
 use actix_web::http::StatusCode;
 use actix_web::web::Data;
 use actix_web::{HttpRequest, HttpResponse};
-use tera::Context;
-use tera::Tera;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
+use tiny_auth_business::template::web::{WebTemplater, WebappRoot};
 use tracing::{instrument, trace};
 
 #[instrument(skip_all, name = "webapp_redirect")]
@@ -40,15 +39,18 @@ pub async fn redirect(request: HttpRequest, web_base_path: Data<WebBasePath>) ->
 
 #[instrument(skip_all, name = "webapp")]
 pub async fn get(
-    tera: Data<Tera>,
+    templater: Data<dyn WebTemplater<WebappRoot>>,
     issuer_config: Data<IssuerConfiguration>,
     api_url: Data<ApiUrl>,
     web_base_path: Data<WebBasePath>,
 ) -> HttpResponse {
     trace!("rendering webapp");
-    let mut context = Context::new();
-    context.insert("tiny_auth_provider_url", &issuer_config.issuer_url);
-    context.insert("tiny_auth_api_url", &api_url.0);
-    context.insert("tiny_auth_web_base", &web_base_path.0);
-    render_template_with_context("index.html.j2", StatusCode::OK, &tera, &context)
+    let context = WebappRoot {
+        provider_url: issuer_config.issuer_url.to_string(),
+        api_url: api_url.0.to_string(),
+        web_base: web_base_path.0.to_string(),
+    };
+    return_rendered_template(templater.instantiate(context), StatusCode::OK, || {
+        templater.instantiate_error_page()
+    })
 }
