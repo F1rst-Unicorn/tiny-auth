@@ -69,6 +69,7 @@ log:
     - tiny_auth_business=info
     - tiny_auth_api=info
     - tiny_auth_ldap=info
+    - tiny_auth_template=info
     - tiny_auth=info
 
 hot reload: true

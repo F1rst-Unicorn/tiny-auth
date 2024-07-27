@@ -76,6 +76,7 @@ log:
     - tiny_auth_business=trace
     - tiny_auth_api=trace
     - tiny_auth_ldap=trace
+    - tiny_auth_template=trace
     - tiny_auth=trace
     - "[cid]=debug"
     - "[flow]=debug"
