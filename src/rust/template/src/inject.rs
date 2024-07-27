@@ -16,12 +16,16 @@
  */
 
 use crate::tera::{BindDnTemplater, LdapSearchTemplater, ScopeTemplater};
-use crate::web::{AuthenticateTemplater, AuthorizeTemplater, WebappRootTemplater};
+use crate::web::{
+    AuthenticateTemplater, AuthorizeTemplater, ConsentTemplater, WebappRootTemplater,
+};
 use std::sync::Arc;
 use tera::Tera;
 use tiny_auth_business::template::ldap_search::LdapSearchContext;
 use tiny_auth_business::template::scope::ScopeContext;
-use tiny_auth_business::template::web::{AuthenticateContext, WebTemplater, WebappRootContext};
+use tiny_auth_business::template::web::{
+    AuthenticateContext, ConsentContext, WebTemplater, WebappRootContext,
+};
 use tiny_auth_business::template::{bind_dn::BindDnContext, Templater};
 
 pub fn bind_dn_templater(template: &str) -> Arc<dyn Templater<BindDnContext>> {
@@ -46,4 +50,8 @@ pub fn authorize_templater(tera: Arc<Tera>) -> Arc<dyn WebTemplater<()>> {
 
 pub fn authenticate_templater(tera: Arc<Tera>) -> Arc<dyn WebTemplater<AuthenticateContext>> {
     Arc::new(AuthenticateTemplater(tera))
+}
+
+pub fn consent_templater(tera: Arc<Tera>) -> Arc<dyn WebTemplater<ConsentContext>> {
+    Arc::new(ConsentTemplater(tera))
 }

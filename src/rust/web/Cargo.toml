@@ -17,7 +17,6 @@ actix-web.workspace = true
 actix-files.workspace = true
 actix-session.workspace = true
 tracing.workspace = true
-tera.workspace = true
 serde.workspace = true
 serde_derive.workspace = true
 serde_urlencoded.workspace = true

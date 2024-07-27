@@ -24,7 +24,8 @@ use tera::Tera;
 use tera::Value;
 use tera::{from_value, Context};
 use tiny_auth_business::template::web::{
-    AuthenticateContext, AuthenticateError, ErrorPage, WebTemplater, WebappRootContext,
+    AuthenticateContext, AuthenticateError, ConsentContext, ErrorPage, WebTemplater,
+    WebappRootContext,
 };
 use tiny_auth_business::template::{InstantiatedTemplate, TemplateError, Templater};
 use tracing::{error, instrument, span, trace, warn, Level};
@@ -97,6 +98,29 @@ impl Templater<AuthenticateContext> for AuthenticateTemplater {
 }
 
 impl WebTemplater<AuthenticateContext> for AuthenticateTemplater {
+    fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate {
+        render_error_page(&self.0, error)
+    }
+}
+
+pub(crate) struct ConsentTemplater(pub(crate) Arc<Tera>);
+
+impl Templater<ConsentContext> for ConsentTemplater {
+    fn instantiate(&self, context: ConsentContext) -> Result<InstantiatedTemplate, TemplateError> {
+        let mut tera_context = Context::new();
+        tera_context.insert("client", &context.client);
+        tera_context.insert("user", &context.user);
+        tera_context.insert("csrftoken", &context.csrf_token);
+        tera_context.insert("scopes", &context.scopes);
+        Ok(InstantiatedTemplate(
+            self.0
+                .render("consent.html.j2", &tera_context)
+                .map_err(map_err)?,
+        ))
+    }
+}
+
+impl WebTemplater<ConsentContext> for ConsentTemplater {
     fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate {
         render_error_page(&self.0, error)
     }

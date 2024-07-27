@@ -185,10 +185,7 @@ impl TokenCreator {
         for scope in scopes {
             let claims = match scope.generate_claims(self.templater.clone(), user, client) {
                 Err(_) => {
-                    warn!(
-                        scope = scope.name,
-                        "failed to generate claims. Skipping",
-                    );
+                    warn!(scope = scope.name, "failed to generate claims. Skipping",);
                     continue;
                 }
                 Ok(c) => c,

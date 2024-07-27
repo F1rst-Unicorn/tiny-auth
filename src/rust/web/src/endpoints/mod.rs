@@ -40,8 +40,6 @@ use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use tera::Context;
-use tera::Tera;
 use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
 use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::oauth2::ProtocolError as OAuthError;
@@ -53,11 +51,6 @@ use tracing::{debug, instrument, Level};
 use url::Url;
 
 const CSRF_SESSION_KEY: &str = "c";
-
-const CSRF_CONTEXT: &str = "csrftoken";
-const CLIENT_ID_CONTEXT: &str = "client";
-const USER_NAME_CONTEXT: &str = "user";
-const SCOPES_CONTEXT: &str = "scopes";
 
 fn parse_first_request(session: &Session) -> Option<AuthorizeRequestState> {
     match session.get::<AuthorizeRequestState>(authorize::SESSION_KEY) {
@@ -169,43 +162,16 @@ fn render_redirect_error_with_base(
         .finish()
 }
 
-fn server_error(tera: &Tera) -> HttpResponse {
-    render_template("500.html.j2", StatusCode::INTERNAL_SERVER_ERROR, tera)
-}
-
-fn server_error_new(body: InstantiatedTemplate) -> HttpResponse {
+fn server_error(body: InstantiatedTemplate) -> HttpResponse {
     HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
         .insert_header(("Content-Type", "text/html"))
         .body::<String>(body.into())
 }
 
-fn server_error_new_code(body: InstantiatedTemplate, code: StatusCode) -> HttpResponse {
+fn error_with_code(body: InstantiatedTemplate, code: StatusCode) -> HttpResponse {
     HttpResponse::build(code)
         .insert_header(("Content-Type", "text/html"))
         .body::<String>(body.into())
-}
-
-fn render_template(name: &str, code: StatusCode, tera: &Tera) -> HttpResponse {
-    render_template_with_context(name, code, tera, &Context::new())
-}
-
-#[instrument(level = Level::TRACE, skip(tera))]
-fn render_template_with_context(
-    name: &str,
-    code: StatusCode,
-    tera: &Tera,
-    context: &Context,
-) -> HttpResponse {
-    let body = tera.render(name, context);
-    match body {
-        Ok(body) => HttpResponse::build(code)
-            .insert_header(("Content-Type", "text/html"))
-            .body(body),
-        Err(e) => {
-            warn!("{}", &e);
-            server_error(tera)
-        }
-    }
 }
 
 #[instrument(level = Level::TRACE, skip(error_response))]
@@ -223,7 +189,7 @@ where
             .body::<String>(body.into()),
         Err(e) => {
             warn!("{}", &e);
-            server_error_new(error_response())
+            server_error(error_response())
         }
     }
 }
@@ -299,7 +265,6 @@ fn parse_authorization(value: &HeaderValue, auth_type: &str) -> Option<String> {
 mod tests {
 
     use super::*;
-    use crate::tera::load_template_engine;
     use actix_session::SessionExt;
     use actix_web::body::to_bytes;
     use actix_web::test;
@@ -408,16 +373,6 @@ mod tests {
             bytes.extend_from_slice(&item);
         }
         serde_json::from_slice::<T>(&bytes).expect("Failed to deserialize response")
-    }
-
-    pub fn build_test_tera() -> Data<Tera> {
-        Data::new(
-            load_template_engine(
-                &(env!("CARGO_MANIFEST_DIR").to_string() + "/../../static/"),
-                "",
-            )
-            .unwrap(),
-        )
     }
 
     pub fn build_test_authenticator() -> Data<Authenticator> {

@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::{return_rendered_template, server_error_new, server_error_new_code};
+use super::{error_with_code, return_rendered_template, server_error};
 use crate::endpoints::parse_first_request;
 use actix_session::Session;
 use actix_web::http::StatusCode;
@@ -135,7 +135,7 @@ fn render_login_form(
                 templater.instantiate_error_page(ServerError)
             })
         }
-        None => server_error_new(templater.instantiate_error_page(ServerError)),
+        None => server_error(templater.instantiate_error_page(ServerError)),
     }
 }
 
@@ -203,11 +203,11 @@ pub async fn post(
         session.remove(ERROR_CODE_SESSION_KEY);
         if let Err(e) = session.insert(SESSION_KEY, &username) {
             error!(%e, "failed to serialise session");
-            return server_error_new(templater.instantiate_error_page(ServerError));
+            return server_error(templater.instantiate_error_page(ServerError));
         }
         if let Err(e) = session.insert(AUTH_TIME_SESSION_KEY, Local::now().timestamp()) {
             error!(%e, "failed to serialise auth_time");
-            return server_error_new(templater.instantiate_error_page(ServerError));
+            return server_error(templater.instantiate_error_page(ServerError));
         }
         redirect_successfully()
     } else if let Err(Error::RateLimited) = auth_result {
@@ -337,13 +337,13 @@ fn render_invalid_login_attempt_error(
 ) -> HttpResponse {
     if let Err(e) = session.insert::<u8>(ERROR_CODE_SESSION_KEY, error.into()) {
         error!(%e, "failed to serialise session");
-        return server_error_new(templater.instantiate_error_page(ServerError));
+        return server_error(templater.instantiate_error_page(ServerError));
     }
 
     if let Some(tries_left) = tries_left {
         if let Err(e) = session.insert(TRIES_LEFT_SESSION_KEY, tries_left) {
             error!(%e, "failed to serialise session");
-            return server_error_new(templater.instantiate_error_page(ServerError));
+            return server_error(templater.instantiate_error_page(ServerError));
         }
     }
 
@@ -355,7 +355,7 @@ fn render_invalid_login_attempt_error(
 fn render_invalid_authentication_request(
     templater: Data<dyn WebTemplater<AuthenticateContext>>,
 ) -> HttpResponse {
-    server_error_new_code(
+    error_with_code(
         templater.instantiate_error_page(ErrorPage::InvalidAuthenticationRequest),
         StatusCode::BAD_REQUEST,
     )

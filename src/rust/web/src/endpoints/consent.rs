@@ -15,13 +15,11 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::render_template;
-use super::server_error;
+use super::{error_with_code, return_rendered_template, server_error};
 use crate::endpoints::authenticate;
 use crate::endpoints::authorize;
 use crate::endpoints::parse_first_request;
 use crate::endpoints::render_redirect_error;
-use crate::endpoints::render_template_with_context;
 use actix_session::Session;
 use actix_web::http::StatusCode;
 use actix_web::web;
@@ -32,8 +30,6 @@ use serde_derive::Deserialize;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use tera::Context;
-use tera::Tera;
 use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
 use tiny_auth_business::consent::Error;
 use tiny_auth_business::consent::Handler;
@@ -42,19 +38,22 @@ use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
 use tiny_auth_business::scope::ScopeDescription;
 use tiny_auth_business::serde::deserialise_empty_as_none;
+use tiny_auth_business::template::web::ErrorPage::ServerError;
+use tiny_auth_business::template::web::{ConsentContext, ErrorPage, WebTemplater};
 use tracing::{debug, instrument};
 use tracing::{span, warn, Instrument, Level};
 use url::Url;
+use web::Data;
 
 #[instrument(skip_all, name = "consent_get")]
 pub async fn get(
-    tera: web::Data<Tera>,
+    templater: Data<dyn WebTemplater<ConsentContext>>,
     session: Session,
-    handler: web::Data<Handler>,
+    handler: Data<Handler>,
 ) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
-            return render_invalid_consent_request(&tera);
+            return render_invalid_consent_request(templater);
         }
         Some(v) => v,
     };
@@ -68,7 +67,7 @@ pub async fn get(
         let username = match session.get::<String>(authenticate::SESSION_KEY) {
             Err(_) | Ok(None) => {
                 debug!("unsolicited consent request, missing authentication session key");
-                return render_invalid_consent_request(&tera);
+                return render_invalid_consent_request(templater);
             }
             Ok(Some(v)) => v,
         };
@@ -78,7 +77,7 @@ pub async fn get(
             .await
         {
             Err(_) => {
-                return render_invalid_consent_request(&tera);
+                return render_invalid_consent_request(templater);
             }
             Ok(v) => v,
         };
@@ -91,7 +90,7 @@ pub async fn get(
                 return process_skipping_csrf(
                     first_request.scopes.iter().map(Clone::clone).collect(),
                     session,
-                    tera,
+                    templater,
                     handler,
                     &first_request,
                 )
@@ -109,9 +108,11 @@ pub async fn get(
 
         match build_context(&session, handler) {
             Some(context) => {
-                render_template_with_context("consent.html.j2", StatusCode::OK, &tera, &context)
+                return_rendered_template(templater.instantiate(context), StatusCode::OK, || {
+                    templater.instantiate_error_page(ServerError)
+                })
             }
-            None => server_error(&tera),
+            None => server_error(templater.instantiate_error_page(ErrorPage::ServerError)),
         }
     }
     .instrument(flow)
@@ -132,16 +133,16 @@ pub struct Request {
 pub async fn post(
     query: web::Form<Request>,
     session: Session,
-    tera: web::Data<Tera>,
-    handler: web::Data<Handler>,
+    templater: Data<dyn WebTemplater<ConsentContext>>,
+    handler: Data<Handler>,
 ) -> HttpResponse {
     if !super::is_csrf_valid(&query.csrftoken, &session) {
         debug!("CSRF protection violation detected");
-        return render_invalid_consent_request(&tera);
+        return render_invalid_consent_request(templater);
     }
     let first_request = match parse_first_request(&session) {
         None => {
-            return render_invalid_consent_request(&tera);
+            return render_invalid_consent_request(templater);
         }
         Some(v) => v,
     };
@@ -154,7 +155,7 @@ pub async fn post(
     process_skipping_csrf(
         query.0.scopes.into_keys().collect(),
         session,
-        tera,
+        templater,
         handler,
         &first_request,
     )
@@ -165,14 +166,14 @@ pub async fn post(
 async fn process_skipping_csrf(
     scopes: BTreeSet<String>,
     session: Session,
-    tera: web::Data<Tera>,
-    handler: web::Data<Handler>,
+    templater: Data<dyn WebTemplater<ConsentContext>>,
+    handler: Data<Handler>,
     first_request: &AuthorizeRequestState,
 ) -> HttpResponse {
     let username = match session.get::<String>(authenticate::SESSION_KEY) {
         Err(_) | Ok(None) => {
             debug!("unsolicited consent request");
-            return render_invalid_consent_request(&tera);
+            return render_invalid_consent_request(templater);
         }
         Ok(Some(username)) => username,
     };
@@ -180,7 +181,7 @@ async fn process_skipping_csrf(
     let auth_time = match session.get::<i64>(authenticate::AUTH_TIME_SESSION_KEY) {
         Err(_) | Ok(None) => {
             debug!("unsolicited consent request");
-            return render_invalid_consent_request(&tera);
+            return render_invalid_consent_request(templater);
         }
         Ok(Some(username)) => username,
     };
@@ -209,9 +210,11 @@ async fn process_skipping_csrf(
     {
         Ok(v) => v,
         Err(Error::ClientNotFound) | Err(Error::UserNotFound) => {
-            return render_invalid_consent_request(&tera);
+            return render_invalid_consent_request(templater);
         }
-        Err(Error::TokenEncodingError) => return server_error(&tera),
+        Err(Error::TokenEncodingError) => {
+            return server_error(templater.instantiate_error_page(ServerError))
+        }
     };
 
     response
@@ -253,10 +256,13 @@ async fn process_skipping_csrf(
 }
 
 #[instrument(skip_all, name = "consent_cancel")]
-pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
+pub async fn cancel(
+    session: Session,
+    templater: Data<dyn WebTemplater<ConsentContext>>,
+) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
-            return render_invalid_consent_request(&tera);
+            return render_invalid_consent_request(templater);
         }
         Some(req) => req,
     };
@@ -279,39 +285,36 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     )
 }
 
-fn render_invalid_consent_request(tera: &Tera) -> HttpResponse {
-    render_template(
-        "invalid_consent_request.html.j2",
+fn render_invalid_consent_request(
+    templater: Data<dyn WebTemplater<ConsentContext>>,
+) -> HttpResponse {
+    error_with_code(
+        templater.instantiate_error_page(ErrorPage::InvalidConsentRequest),
         StatusCode::BAD_REQUEST,
-        tera,
     )
 }
 
-fn build_context(session: &Session, handler: web::Data<Handler>) -> Option<Context> {
-    let mut context = Context::new();
-
+fn build_context(session: &Session, handler: Data<Handler>) -> Option<ConsentContext> {
     let first_request = parse_first_request(session)?;
-    context.insert(super::CLIENT_ID_CONTEXT, &first_request.client_id);
-
+    let username = session.get::<String>(authenticate::SESSION_KEY).ok()??;
+    let csrftoken = super::generate_csrf_token();
     let mut scopes: Vec<ScopeDescription> = Vec::new();
     for scope_name in &first_request.scopes {
         if let Some(scope) = handler.get_scope(scope_name) {
             scopes.push(scope.into());
         }
     }
-    context.insert(super::SCOPES_CONTEXT, &scopes);
 
-    let username = session.get::<String>(authenticate::SESSION_KEY).ok()??;
-    context.insert(super::USER_NAME_CONTEXT, &username);
-
-    let csrftoken = super::generate_csrf_token();
-    context.insert(super::CSRF_CONTEXT, &csrftoken);
-
-    if let Err(e) = session.insert(super::CSRF_SESSION_KEY, csrftoken) {
+    if let Err(e) = session.insert(super::CSRF_SESSION_KEY, csrftoken.clone()) {
         warn!("Failed to construct context: {}", e);
         return None;
     }
-    Some(context)
+    Some(ConsentContext {
+        user: username,
+        client: first_request.client_id,
+        scopes,
+        csrf_token: csrftoken,
+    })
 }
 
 #[cfg(test)]
@@ -319,18 +322,19 @@ mod tests {
     use super::super::generate_csrf_token;
     use super::super::CSRF_SESSION_KEY;
     use super::*;
-    use crate::endpoints::tests::build_test_tera;
     use actix_session::SessionExt;
     use actix_web::http;
     use actix_web::test;
     use actix_web::web::Data;
     use actix_web::web::Form;
     use std::collections::HashMap;
+    use std::sync::Arc;
     use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
     use tiny_auth_business::consent::test_fixtures::handler;
     use tiny_auth_business::oidc::ResponseType;
     use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
     use tiny_auth_business::store::test_fixtures::USER;
+    use tiny_auth_business::template::test_fixtures::TestTemplater;
     use url::Url;
 
     #[test_log::test(actix_web::test)]
@@ -338,7 +342,7 @@ mod tests {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
 
-        let resp = get(build_test_tera(), session, Data::new(handler())).await;
+        let resp = get(build_test_templater(), session, Data::new(handler())).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -351,7 +355,7 @@ mod tests {
             .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
             .unwrap();
 
-        let resp = get(build_test_tera(), session, Data::new(handler())).await;
+        let resp = get(build_test_templater(), session, Data::new(handler())).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -384,7 +388,7 @@ mod tests {
 
         session.insert(authenticate::SESSION_KEY, USER).unwrap();
 
-        let resp = get(build_test_tera(), session, Data::new(handler())).await;
+        let resp = get(build_test_templater(), session, Data::new(handler())).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
@@ -400,7 +404,13 @@ mod tests {
             scopes: Default::default(),
         });
 
-        let resp = post(request, session, build_test_tera(), Data::new(handler())).await;
+        let resp = post(
+            request,
+            session,
+            build_test_templater(),
+            Data::new(handler()),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -416,7 +426,13 @@ mod tests {
             scopes: Default::default(),
         });
 
-        let resp = post(request, session, build_test_tera(), Data::new(handler())).await;
+        let resp = post(
+            request,
+            session,
+            build_test_templater(),
+            Data::new(handler()),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -438,7 +454,13 @@ mod tests {
             scopes: Default::default(),
         });
 
-        let resp = post(request, session, build_test_tera(), Data::new(handler())).await;
+        let resp = post(
+            request,
+            session,
+            build_test_templater(),
+            Data::new(handler()),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -479,7 +501,13 @@ mod tests {
             scopes: Default::default(),
         });
 
-        let resp = post(request, session, build_test_tera(), Data::new(handler())).await;
+        let resp = post(
+            request,
+            session,
+            build_test_templater(),
+            Data::new(handler()),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::FOUND);
 
@@ -542,7 +570,13 @@ mod tests {
             scopes: Default::default(),
         });
 
-        let resp = post(request, session, build_test_tera(), Data::new(handler())).await;
+        let resp = post(
+            request,
+            session,
+            build_test_templater(),
+            Data::new(handler()),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::FOUND);
 
@@ -562,5 +596,9 @@ mod tests {
         assert_eq!(Some(&"state".to_string()), response_parameters.get("state"));
         assert!(!response_parameters.get("code").unwrap().is_empty());
         assert!(!response_parameters.get("id_token").unwrap().is_empty());
+    }
+
+    fn build_test_templater() -> Data<dyn WebTemplater<ConsentContext>> {
+        Data::from(Arc::new(TestTemplater) as Arc<dyn WebTemplater<_>>)
     }
 }

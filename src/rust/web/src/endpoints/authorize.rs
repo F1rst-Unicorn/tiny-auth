@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::{server_error_new, server_error_new_code};
+use super::{error_with_code, server_error};
 use crate::session::AuthorizeSession;
 use actix_session::Session;
 use actix_web::http::StatusCode;
@@ -204,7 +204,7 @@ pub async fn handle(
                 encode_redirect_to_fragment,
             ),
             Error::ServerError => {
-                server_error_new(templater.instantiate_error_page(ErrorPage::ServerError))
+                server_error(templater.instantiate_error_page(ErrorPage::ServerError))
             }
         }) {
         Err(e) => e,
@@ -215,14 +215,14 @@ pub async fn handle(
 }
 
 fn render_invalid_client_id_error(templater: Data<dyn WebTemplater<()>>) -> HttpResponse {
-    server_error_new_code(
+    error_with_code(
         templater.instantiate_error_page(ErrorPage::InvalidClientId),
         StatusCode::BAD_REQUEST,
     )
 }
 
 fn render_invalid_redirect_uri_error(templater: Data<dyn WebTemplater<()>>) -> HttpResponse {
-    server_error_new_code(
+    error_with_code(
         templater.instantiate_error_page(ErrorPage::InvalidRedirectUri),
         StatusCode::BAD_REQUEST,
     )

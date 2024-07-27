@@ -18,12 +18,10 @@
 pub mod cors;
 pub mod endpoints;
 pub mod session;
-pub mod tera;
 
 use crate::cors::cors_options_preflight;
 use crate::endpoints::cert::TokenCertificate;
 use crate::endpoints::discovery::Handler as DiscoveryHandler;
-use ::tera::Tera;
 use actix_session::config::CookieContentSecurity;
 use actix_session::config::PersistentSession;
 use actix_session::storage::CookieSessionStore;
@@ -62,7 +60,9 @@ use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::health::HealthChecker;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::jwk::Jwks;
-use tiny_auth_business::template::web::{AuthenticateContext, WebTemplater, WebappRootContext};
+use tiny_auth_business::template::web::{
+    AuthenticateContext, ConsentContext, WebTemplater, WebappRootContext,
+};
 use tracing::error;
 use tracing::warn;
 use tracing_actix_web::TracingLogger;
@@ -79,8 +79,8 @@ pub trait Constructor<'a> {
     fn webapp_template(&self) -> Arc<dyn WebTemplater<WebappRootContext>>;
     fn authorize_template(&self) -> Arc<dyn WebTemplater<()>>;
     fn authenticate_template(&self) -> Arc<dyn WebTemplater<AuthenticateContext>>;
+    fn consent_template(&self) -> Arc<dyn WebTemplater<ConsentContext>>;
 
-    fn get_template_engine(&self) -> Arc<Tera>;
     fn get_public_keys(&self) -> Vec<TokenCertificate>;
     fn get_issuer_config(&self) -> IssuerConfiguration;
     fn build_jwks(&self) -> Jwks;
@@ -117,7 +117,6 @@ pub enum Error {
 }
 
 pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
-    let tera = constructor.get_template_engine();
     let token_certificates = constructor.get_public_keys();
     let issuer_config = constructor.get_issuer_config();
     let api_url = constructor.api_url();
@@ -133,6 +132,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     let webapp_templater = constructor.webapp_template();
     let authorize_templater = constructor.authorize_template();
     let authenticate_templater = constructor.authenticate_template();
+    let consent_templater = constructor.consent_template();
 
     let bind = constructor.bind();
     let workers = constructor.workers();
@@ -146,7 +146,6 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
 
     let server = HttpServer::new(move || {
         App::new()
-            .app_data(Data::from(tera.clone()))
             .app_data(Data::new(issuer_config.clone()))
             .app_data(Data::new(api_url.clone()))
             .app_data(Data::new(WebBasePath(web_path.clone())))
@@ -163,6 +162,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             .app_data(Data::from(webapp_templater.clone()))
             .app_data(Data::from(authorize_templater.clone()))
             .app_data(Data::from(authenticate_templater.clone()))
+            .app_data(Data::from(consent_templater.clone()))
             .wrap(
                 SessionMiddleware::builder(
                     CookieSessionStore::default(),

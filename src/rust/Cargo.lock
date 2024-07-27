@@ -3499,7 +3499,6 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "serde_urlencoded",
- "tera",
  "test-log",
  "thiserror",
  "tiny_auth_business",

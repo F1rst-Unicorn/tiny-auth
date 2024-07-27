@@ -58,7 +58,9 @@ use tiny_auth_business::password::DispatchingPasswordStore;
 use tiny_auth_business::rate_limiter::RateLimiter;
 use tiny_auth_business::store::memory::*;
 use tiny_auth_business::store::*;
-use tiny_auth_business::template::web::{AuthenticateContext, WebTemplater, WebappRootContext};
+use tiny_auth_business::template::web::{
+    AuthenticateContext, ConsentContext, WebTemplater, WebappRootContext,
+};
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
 use tiny_auth_ldap::inject::{
@@ -364,10 +366,6 @@ impl<'a> Constructor<'a> {
         result
     }
 
-    pub fn get_template_engine(&self) -> Arc<Tera> {
-        self.tera.clone()
-    }
-
     fn build_template_engine(config: &'a Config) -> Result<Tera, Error> {
         Ok(load_template_engine(
             &config.web.static_files,
@@ -581,9 +579,6 @@ impl<'a> tiny_auth_api::Constructor<'a> for Constructor<'a> {
 }
 
 impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
-    fn get_template_engine(&self) -> Arc<Tera> {
-        self.get_template_engine().clone()
-    }
     fn get_public_keys(&self) -> Vec<TokenCertificate> {
         self.get_public_keys()
     }
@@ -786,6 +781,10 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
 
     fn authenticate_template(&self) -> Arc<dyn WebTemplater<AuthenticateContext>> {
         tiny_auth_template::inject::authenticate_templater(self.tera.clone())
+    }
+
+    fn consent_template(&self) -> Arc<dyn WebTemplater<ConsentContext>> {
+        tiny_auth_template::inject::consent_templater(self.tera.clone())
     }
 }
 

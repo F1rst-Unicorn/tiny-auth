@@ -14,6 +14,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use crate::scope::ScopeDescription;
 use crate::template::web::AuthenticateError::{
     MissingPassword, MissingUsername, RateLimit, WrongCredentials,
 };
@@ -80,6 +81,13 @@ impl AuthenticateError {
             RateLimit => "You tried to log in too often.\nPlease come back again later.",
         }
     }
+}
+
+pub struct ConsentContext {
+    pub user: String,
+    pub client: String,
+    pub scopes: Vec<ScopeDescription>,
+    pub csrf_token: String,
 }
 
 pub enum ErrorPage {
