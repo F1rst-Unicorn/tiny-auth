@@ -64,6 +64,7 @@ web:
     port: 34344
   static files: src/static
   shutdown timeout in seconds: 0
+#  path: /oidc
   cors:
     - http://correct.example
     - http://localhost:5173
@@ -71,6 +72,7 @@ web:
     - https://correct.example
     - https://localhost:5173
     - https://localhost:34344
+#    - https://localhost:8089
   session timeout in seconds: 60000
   token timeout in seconds: 60
   refresh token timeout in seconds: 180
@@ -88,6 +90,7 @@ api:
   public host:
     domain: localhost
     port: 8089
+#  public path: /oidc
 
 log:
   format: full
