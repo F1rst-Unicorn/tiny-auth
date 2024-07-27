@@ -1,19 +1,23 @@
 @startuml
 
-class Resource
-class Action
-class AtomicAction
-class CompositeAction
+package client {
+    class Resource
+    class Action
+    class AtomicAction
+    class CompositeAction
 
-class Permission
-class AuthorizationConstraint
+    class Permission
+    class AuthorizationConstraint
+}
 
-class Role
-class Subject
-class Group
-class User
+package tiny-auth {
+    class Role
+    class Subject
+    class Group
+    class User
 
-class Client???
+    class Client
+}
 
 User --|> Subject
 Group --|> Subject
@@ -22,6 +26,7 @@ Subject --o Group: User Hierarchy
 Role --o Role: Role Hierarchy
 
 Subject -- Role
+Role -- Client: visible to
 Role "1.." -- Permission: grants
 
 Permission -- "1.." Action: to perform
@@ -32,5 +37,19 @@ CompositeAction --|> Action
 Action --o CompositeAction: Action Hierarchy
 
 Action --* "1" Resource: on
+
+package data {
+    class Scope <<Resorce>>
+    class User <<Resorce>>
+    class Client <<Resorce>>
+    class Group <<Resorce>>
+    class CurrentUser <<Resorce>>
+    class CurrentClient <<Resorce>>
+
+    class DebugScope <<Action>>
+    DebugScope -- data.Scope
+    DebugScope -- data.User
+    DebugScope -- data.Client
+}
 
 @enduml
