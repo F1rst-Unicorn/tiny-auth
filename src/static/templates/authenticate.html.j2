@@ -22,7 +22,7 @@
 <form action="{{ url(name="authenticate") }}" method="post">
 {% if error != '' %}
     <div id="error" class="alert alert-danger"
-         role="alert">{{ translate(term=error) }}
+         role="alert">{{ translate(term=error) | linebreaksbr }}
       {% if tries > 0 %}<br>{{ translate(term="Tries left: ") }} {{ tries }}{% endif %}
     </div>
 {% endif %}

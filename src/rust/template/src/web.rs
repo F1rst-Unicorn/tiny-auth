@@ -130,7 +130,7 @@ fn render_error_page(tera: &Tera, error: ErrorPage) -> InstantiatedTemplate {
     let mut context = Context::new();
     context.insert("id", error.id());
     context.insert("title", error.title());
-    match tera.render("error.html.j2", &Context::default()) {
+    match tera.render("error.html.j2", &context) {
         Err(e) => {
             warn!(e = render_tera_error(&e));
             InstantiatedTemplate(error.title().to_string())
