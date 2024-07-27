@@ -23,14 +23,19 @@ use tera::Result as TeraResult;
 use tera::Tera;
 use tera::Value;
 use tera::{from_value, Context};
-use tiny_auth_business::template::web::{ErrorPage, WebTemplater, WebappRoot};
+use tiny_auth_business::template::web::{
+    AuthenticateContext, AuthenticateError, ErrorPage, WebTemplater, WebappRootContext,
+};
 use tiny_auth_business::template::{InstantiatedTemplate, TemplateError, Templater};
 use tracing::{error, instrument, span, trace, warn, Level};
 
 pub(crate) struct WebappRootTemplater(pub(crate) Arc<Tera>);
 
-impl Templater<WebappRoot> for WebappRootTemplater {
-    fn instantiate(&self, context: WebappRoot) -> Result<InstantiatedTemplate, TemplateError> {
+impl Templater<WebappRootContext> for WebappRootTemplater {
+    fn instantiate(
+        &self,
+        context: WebappRootContext,
+    ) -> Result<InstantiatedTemplate, TemplateError> {
         let mut tera_context = Context::new();
         tera_context.insert("tiny_auth_provider_url", &context.provider_url);
         tera_context.insert("tiny_auth_api_url", &context.api_url);
@@ -43,7 +48,7 @@ impl Templater<WebappRoot> for WebappRootTemplater {
     }
 }
 
-impl WebTemplater<WebappRoot> for WebappRootTemplater {
+impl WebTemplater<WebappRootContext> for WebappRootTemplater {
     fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate {
         render_error_page(&self.0, error)
     }
@@ -59,6 +64,39 @@ impl Templater<()> for AuthorizeTemplater {
 }
 
 impl WebTemplater<()> for AuthorizeTemplater {
+    fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate {
+        render_error_page(&self.0, error)
+    }
+}
+
+pub(crate) struct AuthenticateTemplater(pub(crate) Arc<Tera>);
+
+impl Templater<AuthenticateContext> for AuthenticateTemplater {
+    fn instantiate(
+        &self,
+        context: AuthenticateContext,
+    ) -> Result<InstantiatedTemplate, TemplateError> {
+        let mut tera_context = Context::new();
+        tera_context.insert(
+            "error",
+            &context
+                .error
+                .as_ref()
+                .map(AuthenticateError::message)
+                .unwrap_or(""),
+        );
+        tera_context.insert("tries", &context.tries_left);
+        tera_context.insert("login_hint", &context.login_hint);
+        tera_context.insert("csrftoken", &context.csrf_token);
+        Ok(InstantiatedTemplate(
+            self.0
+                .render("authenticate.html.j2", &tera_context)
+                .map_err(map_err)?,
+        ))
+    }
+}
+
+impl WebTemplater<AuthenticateContext> for AuthenticateTemplater {
     fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate {
         render_error_page(&self.0, error)
     }

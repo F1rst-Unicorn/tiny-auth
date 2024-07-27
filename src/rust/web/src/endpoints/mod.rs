@@ -55,12 +55,9 @@ use url::Url;
 const CSRF_SESSION_KEY: &str = "c";
 
 const CSRF_CONTEXT: &str = "csrftoken";
-const ERROR_CONTEXT: &str = "error";
-const TRIES_LEFT_CONTEXT: &str = "tries";
 const CLIENT_ID_CONTEXT: &str = "client";
 const USER_NAME_CONTEXT: &str = "user";
 const SCOPES_CONTEXT: &str = "scopes";
-const LOGIN_HINT_CONTEXT: &str = "login_hint";
 
 fn parse_first_request(session: &Session) -> Option<AuthorizeRequestState> {
     match session.get::<AuthorizeRequestState>(authorize::SESSION_KEY) {

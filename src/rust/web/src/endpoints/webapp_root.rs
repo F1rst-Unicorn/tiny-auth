@@ -21,7 +21,7 @@ use actix_web::http::StatusCode;
 use actix_web::web::Data;
 use actix_web::{HttpRequest, HttpResponse};
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
-use tiny_auth_business::template::web::{ErrorPage, WebTemplater, WebappRoot};
+use tiny_auth_business::template::web::{ErrorPage, WebTemplater, WebappRootContext};
 use tracing::{instrument, trace};
 
 #[instrument(skip_all, name = "webapp_redirect")]
@@ -39,13 +39,13 @@ pub async fn redirect(request: HttpRequest, web_base_path: Data<WebBasePath>) ->
 
 #[instrument(skip_all, name = "webapp")]
 pub async fn get(
-    templater: Data<dyn WebTemplater<WebappRoot>>,
+    templater: Data<dyn WebTemplater<WebappRootContext>>,
     issuer_config: Data<IssuerConfiguration>,
     api_url: Data<ApiUrl>,
     web_base_path: Data<WebBasePath>,
 ) -> HttpResponse {
     trace!("rendering webapp");
-    let context = WebappRoot {
+    let context = WebappRootContext {
         provider_url: issuer_config.issuer_url.to_string(),
         api_url: api_url.0.to_string(),
         web_base: web_base_path.0.to_string(),

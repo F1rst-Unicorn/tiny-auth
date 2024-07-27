@@ -187,7 +187,7 @@ impl TokenCreator {
                 Err(_) => {
                     warn!(
                         scope = scope.name,
-                        "failed to generate claims. Skipping scope",
+                        "failed to generate claims. Skipping",
                     );
                     continue;
                 }

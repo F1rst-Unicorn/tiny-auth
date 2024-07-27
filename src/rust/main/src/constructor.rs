@@ -58,7 +58,7 @@ use tiny_auth_business::password::DispatchingPasswordStore;
 use tiny_auth_business::rate_limiter::RateLimiter;
 use tiny_auth_business::store::memory::*;
 use tiny_auth_business::store::*;
-use tiny_auth_business::template::web::{WebTemplater, WebappRoot};
+use tiny_auth_business::template::web::{AuthenticateContext, WebTemplater, WebappRootContext};
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
 use tiny_auth_ldap::inject::{
@@ -776,12 +776,16 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
         Arc::new(HealthChecker(checks))
     }
 
-    fn webapp_template(&self) -> Arc<dyn WebTemplater<WebappRoot>> {
+    fn webapp_template(&self) -> Arc<dyn WebTemplater<WebappRootContext>> {
         tiny_auth_template::inject::webapp_templater(self.tera.clone())
     }
 
     fn authorize_template(&self) -> Arc<dyn WebTemplater<()>> {
         tiny_auth_template::inject::authorize_templater(self.tera.clone())
+    }
+
+    fn authenticate_template(&self) -> Arc<dyn WebTemplater<AuthenticateContext>> {
+        tiny_auth_template::inject::authenticate_templater(self.tera.clone())
     }
 }
 

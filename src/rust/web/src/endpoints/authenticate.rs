@@ -15,10 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::render_template;
-use super::server_error;
+use super::{return_rendered_template, server_error_new, server_error_new_code};
 use crate::endpoints::parse_first_request;
-use crate::endpoints::render_template_with_context;
 use actix_session::Session;
 use actix_web::http::StatusCode;
 use actix_web::web;
@@ -26,17 +24,23 @@ use actix_web::HttpResponse;
 use chrono::Local;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
-use tera::Context;
-use tera::Tera;
 use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::authenticator::Error;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
 use tiny_auth_business::oidc::Prompt;
 use tiny_auth_business::serde::deserialise_empty_as_none;
+use tiny_auth_business::template::web::AuthenticateError::{
+    MissingPassword, MissingUsername, RateLimit, WrongCredentials,
+};
+use tiny_auth_business::template::web::ErrorPage::ServerError;
+use tiny_auth_business::template::web::{
+    AuthenticateContext, AuthenticateError, ErrorPage, WebTemplater,
+};
 use tracing::{debug, instrument};
 use tracing::{error, span, Level};
 use tracing::{warn, Instrument};
+use web::Data;
 
 pub const SESSION_KEY: &str = "b";
 pub const AUTH_TIME_SESSION_KEY: &str = "t";
@@ -62,10 +66,13 @@ pub struct Request {
 }
 
 #[instrument(skip_all, name = "authenticate_get")]
-pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
+pub async fn get(
+    session: Session,
+    templater: Data<dyn WebTemplater<AuthenticateContext>>,
+) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
-            return render_invalid_authentication_request(&tera);
+            return render_invalid_authentication_request(templater);
         }
         Some(req) => req,
     };
@@ -83,12 +90,12 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
             || first_request.prompts.contains(&Prompt::SelectAccount)
         {
             debug!("recognised user but client demands login");
-            render_login_form(session, tera)
+            render_login_form(session, templater)
         } else if let Some(max_age) = first_request.max_age {
             let auth_time = match session.get::<i64>(AUTH_TIME_SESSION_KEY) {
                 Err(_) | Ok(None) => {
                     debug!("unsolicited authentication request, missing auth_time but username was present");
-                    return render_invalid_authentication_request(&tera);
+                    return render_invalid_authentication_request(templater);
                 }
                 Ok(Some(v)) => v,
             };
@@ -98,7 +105,7 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
                 redirect_successfully()
             } else {
                 debug!("recognised authenticated user but client demands more recent login",);
-                render_login_form(session, tera)
+                render_login_form(session, templater)
             }
         } else {
             debug!("recognised authenticated user",);
@@ -108,22 +115,27 @@ pub async fn get(session: Session, tera: web::Data<Tera>) -> HttpResponse {
         debug!("no user recognised but client demands no interaction");
         render_redirect_error(
             session,
-            &tera,
+            templater,
             oidc::ProtocolError::Oidc(oidc::OidcProtocolError::LoginRequired),
             "No username found",
             first_request.encode_redirect_to_fragment,
         )
     } else {
-        render_login_form(session, tera)
+        render_login_form(session, templater)
     }
 }
 
-fn render_login_form(session: Session, tera: web::Data<Tera>) -> HttpResponse {
+fn render_login_form(
+    session: Session,
+    templater: Data<dyn WebTemplater<AuthenticateContext>>,
+) -> HttpResponse {
     match build_context(&session) {
         Some(context) => {
-            render_template_with_context("authenticate.html.j2", StatusCode::OK, &tera, &context)
+            return_rendered_template(templater.instantiate(context), StatusCode::OK, || {
+                templater.instantiate_error_page(ServerError)
+            })
         }
-        None => server_error(&tera),
+        None => server_error_new(templater.instantiate_error_page(ServerError)),
     }
 }
 
@@ -131,19 +143,19 @@ fn render_login_form(session: Session, tera: web::Data<Tera>) -> HttpResponse {
 pub async fn post(
     query: web::Form<Request>,
     session: Session,
-    tera: web::Data<Tera>,
-    authenticator: web::Data<Authenticator>,
+    templater: Data<dyn WebTemplater<AuthenticateContext>>,
+    authenticator: Data<Authenticator>,
 ) -> HttpResponse {
     session.remove(ERROR_CODE_SESSION_KEY);
 
     if !super::is_csrf_valid(&query.csrftoken, &session) {
         debug!("CSRF protection violation detected");
-        return render_invalid_authentication_request(&tera);
+        return render_invalid_authentication_request(templater);
     }
 
     let first_request = match parse_first_request(&session) {
         None => {
-            return render_invalid_authentication_request(&tera);
+            return render_invalid_authentication_request(templater);
         }
         Some(req) => req,
     };
@@ -159,7 +171,7 @@ pub async fn post(
     let tries_left = match session.get::<i32>(TRIES_LEFT_SESSION_KEY) {
         Err(_) => {
             debug!("unsolicited authentication request");
-            return render_invalid_authentication_request(&tera);
+            return render_invalid_authentication_request(templater);
         }
         Ok(None) => 2,
         Ok(Some(tries)) => tries - 1,
@@ -167,14 +179,14 @@ pub async fn post(
 
     let username = if query.username.is_none() {
         debug!("missing username");
-        return render_invalid_login_attempt_error(1, &tera, &session, None);
+        return render_invalid_login_attempt_error(MissingUsername, templater, &session, None);
     } else {
         query.username.clone().unwrap()
     };
 
     let password = if query.password.is_none() {
         debug!("missing password");
-        return render_invalid_login_attempt_error(2, &tera, &session, None);
+        return render_invalid_login_attempt_error(MissingPassword, templater, &session, None);
     } else {
         query.password.clone().unwrap()
     };
@@ -191,25 +203,25 @@ pub async fn post(
         session.remove(ERROR_CODE_SESSION_KEY);
         if let Err(e) = session.insert(SESSION_KEY, &username) {
             error!(%e, "failed to serialise session");
-            return server_error(&tera);
+            return server_error_new(templater.instantiate_error_page(ServerError));
         }
         if let Err(e) = session.insert(AUTH_TIME_SESSION_KEY, Local::now().timestamp()) {
             error!(%e, "failed to serialise auth_time");
-            return server_error(&tera);
+            return server_error_new(templater.instantiate_error_page(ServerError));
         }
         redirect_successfully()
     } else if let Err(Error::RateLimited) = auth_result {
-        render_invalid_login_attempt_error(4, &tera, &session, None)
+        render_invalid_login_attempt_error(RateLimit, templater, &session, None)
     } else if tries_left > 0 {
         debug!(tries_left);
-        render_invalid_login_attempt_error(3, &tera, &session, Some(tries_left))
+        render_invalid_login_attempt_error(WrongCredentials, templater, &session, Some(tries_left))
     } else {
         debug!("no tries left");
         session.remove(TRIES_LEFT_SESSION_KEY);
         session.remove(ERROR_CODE_SESSION_KEY);
         render_redirect_error(
             session,
-            &tera,
+            templater,
             oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
             "user failed to authenticate",
             first_request.encode_redirect_to_fragment,
@@ -218,10 +230,13 @@ pub async fn post(
 }
 
 #[instrument(skip_all, name = "authenticate_cancel")]
-pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
+pub async fn cancel(
+    session: Session,
+    templater: Data<dyn WebTemplater<AuthenticateContext>>,
+) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
-            return render_invalid_authentication_request(&tera);
+            return render_invalid_authentication_request(templater);
         }
         Some(req) => req,
     };
@@ -236,7 +251,7 @@ pub async fn cancel(session: Session, tera: web::Data<Tera>) -> HttpResponse {
     debug!("cancelling flow");
     render_redirect_error(
         session,
-        &tera,
+        templater,
         oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
         "user denied authentication",
         first_request.encode_redirect_to_fragment,
@@ -256,14 +271,14 @@ pub async fn select_account(session: Session) -> HttpResponse {
 
 fn render_redirect_error(
     session: Session,
-    tera: &Tera,
+    templater: Data<dyn WebTemplater<AuthenticateContext>>,
     error: oidc::ProtocolError,
     description: &str,
     encode_to_fragment: bool,
 ) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
-            return render_invalid_authentication_request(tera);
+            return render_invalid_authentication_request(templater);
         }
         Some(req) => req,
     };
@@ -277,29 +292,35 @@ fn render_redirect_error(
     )
 }
 
-fn build_context(session: &Session) -> Option<Context> {
-    let mut context = Context::new();
-    if let Ok(Some(error_code)) = session.get::<u64>(ERROR_CODE_SESSION_KEY) {
-        context.insert(super::ERROR_CONTEXT, &error_code);
-    }
-
-    if let Ok(Some(tries_left)) = session.get::<u64>(TRIES_LEFT_SESSION_KEY) {
-        context.insert(super::TRIES_LEFT_CONTEXT, &tries_left);
-    }
-
+fn build_context(session: &Session) -> Option<AuthenticateContext> {
+    let error = session
+        .get::<u8>(ERROR_CODE_SESSION_KEY)
+        .ok()
+        .flatten()
+        .map(Into::into);
+    let tries_left = session
+        .get::<u64>(TRIES_LEFT_SESSION_KEY)
+        .ok()
+        .flatten()
+        .unwrap_or_default();
     let first_request = parse_first_request(session)?;
-    if let Some(login_hint) = first_request.login_hint {
-        context.insert(super::LOGIN_HINT_CONTEXT, &login_hint);
-    }
+    let login_hint = first_request.login_hint.unwrap_or_default();
+    let csrf_token = super::generate_csrf_token();
 
-    let csrftoken = super::generate_csrf_token();
-    context.insert(super::CSRF_CONTEXT, &csrftoken);
-
-    if let Err(e) = session.insert(super::CSRF_SESSION_KEY, csrftoken) {
+    if let Err(e) = session.insert(super::CSRF_SESSION_KEY, csrf_token.clone()) {
         warn!(%e, "failed to construct context");
         return None;
     }
-    Some(context)
+    Some(AuthenticateContext {
+        tries_left: error
+            .as_ref()
+            .filter(|v| **v == WrongCredentials)
+            .map(|_| tries_left)
+            .unwrap_or_default(),
+        login_hint,
+        error,
+        csrf_token,
+    })
 }
 
 fn redirect_successfully() -> HttpResponse {
@@ -309,20 +330,20 @@ fn redirect_successfully() -> HttpResponse {
 }
 
 fn render_invalid_login_attempt_error(
-    error: u64,
-    tera: &Tera,
+    error: AuthenticateError,
+    templater: Data<dyn WebTemplater<AuthenticateContext>>,
     session: &Session,
     tries_left: Option<i32>,
 ) -> HttpResponse {
-    if let Err(e) = session.insert(ERROR_CODE_SESSION_KEY, error) {
+    if let Err(e) = session.insert::<u8>(ERROR_CODE_SESSION_KEY, error.into()) {
         error!(%e, "failed to serialise session");
-        return server_error(tera);
+        return server_error_new(templater.instantiate_error_page(ServerError));
     }
 
     if let Some(tries_left) = tries_left {
         if let Err(e) = session.insert(TRIES_LEFT_SESSION_KEY, tries_left) {
             error!(%e, "failed to serialise session");
-            return server_error(tera);
+            return server_error_new(templater.instantiate_error_page(ServerError));
         }
     }
 
@@ -331,11 +352,12 @@ fn render_invalid_login_attempt_error(
         .finish()
 }
 
-fn render_invalid_authentication_request(tera: &Tera) -> HttpResponse {
-    render_template(
-        "invalid_authentication_request.html.j2",
+fn render_invalid_authentication_request(
+    templater: Data<dyn WebTemplater<AuthenticateContext>>,
+) -> HttpResponse {
+    server_error_new_code(
+        templater.instantiate_error_page(ErrorPage::InvalidAuthenticationRequest),
         StatusCode::BAD_REQUEST,
-        tera,
     )
 }
 
@@ -346,15 +368,17 @@ mod tests {
     use super::*;
     use crate::endpoints::authorize;
     use crate::endpoints::tests::build_test_authenticator;
-    use crate::endpoints::tests::build_test_tera;
+
     use actix_session::SessionExt;
     use actix_web::http;
     use actix_web::test;
     use actix_web::web::Form;
+    use std::sync::Arc;
     use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
     use tiny_auth_business::oidc::ResponseType;
     use tiny_auth_business::store::test_fixtures::UNKNOWN_USER;
     use tiny_auth_business::store::test_fixtures::USER;
+    use tiny_auth_business::template::test_fixtures::TestTemplater;
     use url::Url;
 
     #[test_log::test(actix_web::test)]
@@ -362,7 +386,7 @@ mod tests {
         let req = test::TestRequest::get().to_http_request();
         let session = req.get_session();
 
-        let resp = get(session, build_test_tera()).await;
+        let resp = get(session, build_test_templater()).await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -375,7 +399,7 @@ mod tests {
             .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
             .unwrap();
 
-        let resp = get(session, build_test_tera()).await;
+        let resp = get(session, build_test_templater()).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
@@ -389,7 +413,7 @@ mod tests {
             .unwrap();
         session.insert(SESSION_KEY, "dummy").unwrap();
 
-        let resp = get(session, build_test_tera()).await;
+        let resp = get(session, build_test_templater()).await;
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
     }
@@ -409,7 +433,7 @@ mod tests {
             .unwrap();
         session.insert(SESSION_KEY, "dummy").unwrap();
 
-        let resp = get(session, build_test_tera()).await;
+        let resp = get(session, build_test_templater()).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
@@ -429,7 +453,7 @@ mod tests {
             .unwrap();
         session.insert(SESSION_KEY, "dummy").unwrap();
 
-        let resp = get(session, build_test_tera()).await;
+        let resp = get(session, build_test_templater()).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
@@ -450,7 +474,7 @@ mod tests {
             )
             .unwrap();
 
-        let resp = get(session, build_test_tera()).await;
+        let resp = get(session, build_test_templater()).await;
 
         assert_eq!(resp.status(), http::StatusCode::FOUND);
     }
@@ -473,7 +497,7 @@ mod tests {
             .insert(AUTH_TIME_SESSION_KEY, Local::now().timestamp() - 1)
             .unwrap();
 
-        let resp = get(session, build_test_tera()).await;
+        let resp = get(session, build_test_templater()).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
@@ -488,7 +512,13 @@ mod tests {
             csrftoken: None,
         });
 
-        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
+        let resp = post(
+            form,
+            session,
+            build_test_templater(),
+            build_test_authenticator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -505,7 +535,13 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
+        let resp = post(
+            form,
+            session,
+            build_test_templater(),
+            build_test_authenticator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
@@ -526,7 +562,13 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
+        let resp = post(
+            form,
+            session,
+            build_test_templater(),
+            build_test_authenticator(),
+        )
+        .await;
         let session = req.get_session();
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
@@ -554,7 +596,13 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
+        let resp = post(
+            form,
+            session,
+            build_test_templater(),
+            build_test_authenticator(),
+        )
+        .await;
         let session = req.get_session();
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
@@ -582,7 +630,13 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
+        let resp = post(
+            form,
+            session,
+            build_test_templater(),
+            build_test_authenticator(),
+        )
+        .await;
         let session = req.get_session();
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
@@ -610,7 +664,13 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
+        let resp = post(
+            form,
+            session,
+            build_test_templater(),
+            build_test_authenticator(),
+        )
+        .await;
         let session = req.get_session();
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
@@ -638,7 +698,13 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
+        let resp = post(
+            form,
+            session,
+            build_test_templater(),
+            build_test_authenticator(),
+        )
+        .await;
         let session = req.get_session();
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
@@ -664,7 +730,13 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
+        let resp = post(
+            form,
+            session,
+            build_test_templater(),
+            build_test_authenticator(),
+        )
+        .await;
         let session = req.get_session();
 
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
@@ -704,7 +776,13 @@ mod tests {
             csrftoken: Some(csrftoken),
         });
 
-        let resp = post(form, session, build_test_tera(), build_test_authenticator()).await;
+        let resp = post(
+            form,
+            session,
+            build_test_templater(),
+            build_test_authenticator(),
+        )
+        .await;
 
         assert_eq!(resp.status(), http::StatusCode::FOUND);
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
@@ -723,5 +801,9 @@ mod tests {
             .into_owned()
             .any(|param| param.0 == "error_description".to_string()
                 && param.1 == "user failed to authenticate"));
+    }
+
+    fn build_test_templater() -> Data<dyn WebTemplater<AuthenticateContext>> {
+        Data::from(Arc::new(TestTemplater) as Arc<dyn WebTemplater<_>>)
     }
 }

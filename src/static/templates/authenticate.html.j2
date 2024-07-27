@@ -17,25 +17,14 @@
 
 {% extends "base.html.j2" %}
 {% block content %}
-{% set error = error | default(value=0) %}
-{% set tries = tries | default(value=0) %}
 <div class="form">
 <h2>{{ translate(term="Login") }}</h2>
 <form action="{{ url(name="authenticate") }}" method="post">
-{% if error == 1 %}
+{% if error != '' %}
     <div id="error" class="alert alert-danger"
-         role="alert">{{ translate(term="Missing username")}}</div>
-{% elif error == 2 %}
-    <div id="error" class="alert alert-danger"
-         role="alert">{{ translate(term="Missing password")}}</div>
-{% elif error == 3 %}
-    <div id="error" class="alert alert-danger"
-         role="alert">{{ translate(term="Username or password wrong")}}<br>
-         {% if tries > 0 %}{{ translate(term="Tries left: ") }} {{ tries }}{% endif %}</div>
-{% elif error == 4 %}
-    <div id="error" class="alert alert-danger"
-         role="alert">{{ translate(term="You tried to log in too often.")}}<br>
-         {{ translate(term="Please come back again later.")}}</div>
+         role="alert">{{ translate(term=error) }}
+      {% if tries > 0 %}<br>{{ translate(term="Tries left: ") }} {{ tries }}{% endif %}
+    </div>
 {% endif %}
     <div class="form-group">
         <input id="id_username" class="form-control" autofocus=""

@@ -62,7 +62,7 @@ use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::health::HealthChecker;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::jwk::Jwks;
-use tiny_auth_business::template::web::{WebTemplater, WebappRoot};
+use tiny_auth_business::template::web::{AuthenticateContext, WebTemplater, WebappRootContext};
 use tracing::error;
 use tracing::warn;
 use tracing_actix_web::TracingLogger;
@@ -76,8 +76,9 @@ pub trait Constructor<'a> {
     fn user_info_handler(&self) -> Arc<UserInfoHandler>;
     fn discovery_handler(&self) -> Arc<DiscoveryHandler>;
     fn health_checker(&self) -> Arc<HealthChecker>;
-    fn webapp_template(&self) -> Arc<dyn WebTemplater<WebappRoot>>;
+    fn webapp_template(&self) -> Arc<dyn WebTemplater<WebappRootContext>>;
     fn authorize_template(&self) -> Arc<dyn WebTemplater<()>>;
+    fn authenticate_template(&self) -> Arc<dyn WebTemplater<AuthenticateContext>>;
 
     fn get_template_engine(&self) -> Arc<Tera>;
     fn get_public_keys(&self) -> Vec<TokenCertificate>;
@@ -131,6 +132,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     let health_checker = constructor.health_checker();
     let webapp_templater = constructor.webapp_template();
     let authorize_templater = constructor.authorize_template();
+    let authenticate_templater = constructor.authenticate_template();
 
     let bind = constructor.bind();
     let workers = constructor.workers();
@@ -160,6 +162,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             .app_data(Data::from(discovery_handler.clone()))
             .app_data(Data::from(webapp_templater.clone()))
             .app_data(Data::from(authorize_templater.clone()))
+            .app_data(Data::from(authenticate_templater.clone()))
             .wrap(
                 SessionMiddleware::builder(
                     CookieSessionStore::default(),
