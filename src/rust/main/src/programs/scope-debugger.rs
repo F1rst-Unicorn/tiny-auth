@@ -15,10 +15,13 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::Arg;
 use clap::ArgAction::Count;
 use clap::ArgMatches;
 use clap::Command;
+use tiny_auth_business::scope::Destination;
+use tiny_auth_business::token::{Access, Id, Userinfo};
 use tiny_auth_main::config::parser::parse_config;
 use tiny_auth_main::constructor::Constructor;
 use tiny_auth_main::logging::initialise_from_verbosity;
@@ -30,6 +33,7 @@ pub const FLAG_CONFIG: &str = "config";
 pub const FLAG_USER: &str = "user";
 pub const FLAG_CLIENT: &str = "client";
 pub const FLAG_SCOPE: &str = "scope";
+pub const FLAG_DESTINATION: &str = "destination";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -100,13 +104,34 @@ async fn main() {
         Some(v) => v,
     };
 
-    let token = di
-        .build_token_creator()
-        .build_token(&user, &client, &[scope], 0);
-
-    match serde_json::to_string_pretty(&token) {
-        Err(_) => error!("failed to serialize data"),
-        Ok(v) => println!("{}", v),
+    match args.get_one::<Destination>(FLAG_DESTINATION).unwrap() {
+        Destination::AccessToken => {
+            let token = di
+                .build_token_creator()
+                .build_token::<Access>(&user, &client, &[scope], 0);
+            match serde_json::to_string_pretty(&token) {
+                Err(_) => error!("failed to serialize data"),
+                Ok(v) => println!("{}", v),
+            };
+        }
+        Destination::IdToken => {
+            let token = di
+                .build_token_creator()
+                .build_token::<Id>(&user, &client, &[scope], 0);
+            match serde_json::to_string_pretty(&token) {
+                Err(_) => error!("failed to serialize data"),
+                Ok(v) => println!("{}", v),
+            };
+        }
+        Destination::UserInfo => {
+            let token =
+                di.build_token_creator()
+                    .build_token::<Userinfo>(&user, &client, &[scope], 0);
+            match serde_json::to_string_pretty(&token) {
+                Err(_) => error!("failed to serialize data"),
+                Ok(v) => println!("{}", v),
+            };
+        }
     };
 }
 
@@ -150,6 +175,18 @@ pub fn parse_arguments() -> ArgMatches {
                 .help("Name of the scope")
                 .value_name("STRING")
                 .required(true),
+        )
+        .arg(
+            Arg::new(FLAG_DESTINATION)
+                .short('d')
+                .long(FLAG_DESTINATION)
+                .help("claims destination")
+                .value_name("STRING")
+                .value_parser(
+                    PossibleValuesParser::new(["userinfo", "access", "id"])
+                        .try_map(|v| serde_yaml::from_str::<Destination>(&v)),
+                )
+                .default_value("userinfo"),
         )
         .arg(
             Arg::new(FLAG_CONFIG)

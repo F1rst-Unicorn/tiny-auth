@@ -222,13 +222,13 @@ async fn process_skipping_csrf(
         .and_then(|v| response_parameters.insert("code", v));
     response
         .access_token
-        .and_then(|v| response_parameters.insert("access_token", v));
+        .and_then(|v| response_parameters.insert("access_token", v.into()));
     response
         .id_token
-        .and_then(|v| response_parameters.insert("id_token", v));
+        .and_then(|v| response_parameters.insert("id_token", v.into()));
     response
         .refresh_token
-        .and_then(|v| response_parameters.insert("refresh_token", v));
+        .and_then(|v| response_parameters.insert("refresh_token", v.into()));
     response
         .expiration
         .and_then(|v| response_parameters.insert("expires_in", v.num_seconds().to_string()));

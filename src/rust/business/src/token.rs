@@ -14,13 +14,12 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
 use crate::client::Client;
 use crate::clock::Clock;
 use crate::issuer_configuration::IssuerConfiguration;
 use crate::jwk::Jwk;
-use crate::scope::merge;
 use crate::scope::Scope;
+use crate::scope::{merge, Destination};
 use crate::template::scope::ScopeContext;
 use crate::template::Templater;
 use crate::user::User;
@@ -37,13 +36,14 @@ use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Value;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use tracing::{debug, instrument};
 use tracing::{error, warn};
 
 /// https://openid.net/specs/openid-connect-core-1_0.html#IDToken
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-pub struct Token {
+pub struct Token<T> {
     #[serde(rename = "iss")]
     issuer: String,
 
@@ -57,7 +57,7 @@ pub struct Token {
     expiration: i64,
 
     #[serde(rename = "iat")]
-    issuance_time: i64,
+    pub issuance_time: i64,
 
     #[serde(rename = "auth_time")]
     #[serde(skip_serializing_if = "is_zero")]
@@ -82,8 +82,63 @@ pub struct Token {
     #[serde(rename = "azp")]
     pub authorized_party: String,
 
+    #[serde(rename = "scopes")]
+    pub scopes: Vec<String>,
+
     #[serde(flatten)]
     scope_attributes: Value,
+
+    #[serde(skip)]
+    token_type: PhantomData<T>,
+}
+
+pub trait TokenType: Default + Clone {}
+
+#[derive(Default, Clone, Eq, PartialEq, Debug)]
+pub struct Access;
+
+impl TokenType for Access {}
+
+#[derive(Default, Clone, Eq, PartialEq, Debug)]
+pub struct Id;
+
+impl TokenType for Id {}
+
+#[derive(Default, Clone, Eq, PartialEq, Debug)]
+pub struct Userinfo;
+
+impl TokenType for Userinfo {}
+
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[serde(transparent)]
+pub struct EncodedAccessToken(String);
+
+impl From<EncodedAccessToken> for String {
+    fn from(value: EncodedAccessToken) -> Self {
+        value.0
+    }
+}
+
+impl AsRef<str> for EncodedAccessToken {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[serde(transparent)]
+pub struct EncodedIdToken(String);
+
+impl From<EncodedIdToken> for String {
+    fn from(value: EncodedIdToken) -> Self {
+        value.0
+    }
+}
+
+impl AsRef<str> for EncodedIdToken {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)] // serde needs this API
@@ -91,7 +146,7 @@ fn is_zero(n: &i64) -> bool {
     *n == 0
 }
 
-impl Token {
+impl<T> Token<T> {
     pub fn set_nonce(&mut self, nonce: Option<String>) {
         if let Some(nonce) = nonce {
             self.nonce = nonce;
@@ -111,12 +166,46 @@ pub struct RefreshToken {
     #[serde(rename = "iss")]
     pub issuer: String,
 
-    pub access_token: Token,
+    #[serde(rename = "sub")]
+    pub subject: String,
+
+    #[serde(rename = "nonce")]
+    pub nonce: String,
+
+    #[serde(rename = "azp")]
+    pub authorized_party: String,
 
     #[serde(rename = "exp")]
     pub expiration: i64,
 
+    #[serde(rename = "auth_time")]
+    pub auth_time: i64,
+
     pub scopes: Vec<String>,
+}
+
+impl RefreshToken {
+    pub fn set_nonce(&mut self, nonce: Option<String>) {
+        if let Some(nonce) = nonce {
+            self.nonce = nonce;
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Default, Debug, Eq, PartialEq)]
+#[serde(transparent)]
+pub struct EncodedRefreshToken(String);
+
+impl From<EncodedRefreshToken> for String {
+    fn from(value: EncodedRefreshToken) -> Self {
+        value.0
+    }
+}
+
+impl AsRef<str> for EncodedRefreshToken {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
 }
 
 #[derive(Clone)]
@@ -158,13 +247,13 @@ impl TokenCreator {
     }
 
     #[instrument(skip_all)]
-    pub fn build_token(
+    pub fn build_token<T: Default + Into<Destination>>(
         &self,
         user: &User,
         client: &Client,
         scopes: &[Scope],
         auth_time: i64,
-    ) -> Token {
+    ) -> Token<T> {
         let now = self.clock.now();
         let mut result = Token {
             issuer: self.issuer.issuer_url.to_string(),
@@ -177,13 +266,20 @@ impl TokenCreator {
             authentication_context_class_reference: "".to_string(),
             authentication_methods_request: vec![],
             authorized_party: client.client_id.to_string(),
+            scopes: scopes.iter().map(|v| v.name.clone()).collect(),
             scope_attributes: Value::Null,
+            token_type: PhantomData::default(),
         };
 
         debug!("issuing token");
         let mut claim_collector = Value::Object(Default::default());
         for scope in scopes {
-            let claims = match scope.generate_claims(self.templater.clone(), user, client) {
+            let claims = match scope.generate_claims(
+                self.templater.clone(),
+                user,
+                client,
+                T::default().into(),
+            ) {
                 Err(_) => {
                     warn!(scope = scope.name, "failed to generate claims. Skipping",);
                     continue;
@@ -211,36 +307,69 @@ impl TokenCreator {
         self.token_expiration
     }
 
-    pub fn renew(&self, token: &mut Token) {
+    pub fn renew<T>(&self, token: &mut Token<T>) {
         debug!("renewing token");
         let now = self.clock.now();
         token.issuance_time = now.clone().timestamp();
         token.expiration = (now + self.token_expiration).timestamp();
     }
 
-    pub fn build_refresh_token(&self, mut token: Token, scopes: &[Scope]) -> RefreshToken {
+    pub fn build_fresh_refresh_token(
+        &self,
+        scopes: &[Scope],
+        subject: &str,
+        authorized_party: &str,
+        auth_time: i64,
+    ) -> RefreshToken {
         debug!("issuing refresh token");
-        token.issuer = self.issuer.issuer_url.to_string();
+        self.build_refresh_token(
+            self.clock.now().timestamp(),
+            scopes,
+            subject,
+            authorized_party,
+            auth_time,
+        )
+    }
+
+    pub fn build_refresh_token(
+        &self,
+        issuance_time: i64,
+        scopes: &[Scope],
+        subject: &str,
+        authorized_party: &str,
+        auth_time: i64,
+    ) -> RefreshToken {
+        debug!("issuing refresh token");
         RefreshToken {
-            issuer: token.issuer.clone(),
-            expiration: token.issuance_time + self.refresh_token_expiration.num_seconds(),
-            access_token: token,
+            issuer: self.issuer.issuer_url.to_string(),
+            subject: subject.to_string(),
+            nonce: "".to_string(),
+            authorized_party: authorized_party.to_string(),
+            expiration: issuance_time + self.refresh_token_expiration.num_seconds(),
+            auth_time,
             scopes: scopes.iter().map(|v| v.name.to_string()).collect(),
         }
     }
 
-    pub fn finalize(&self, token: Token) -> Result<String> {
+    pub fn finalize_access_token(&self, token: Token<Access>) -> Result<EncodedAccessToken> {
         let mut header = Header::new(self.issuer.algorithm);
         header.kid = Some(self.jwk.key_id.clone());
         header.jku = Some(self.issuer.jwks());
-        encode(&header, &token, &self.key)
+        Ok(EncodedAccessToken(encode(&header, &token, &self.key)?))
     }
 
-    pub fn finalize_refresh_token(&self, token: RefreshToken) -> Result<String> {
+    pub fn finalize_id_token(&self, token: Token<Id>) -> Result<EncodedIdToken> {
         let mut header = Header::new(self.issuer.algorithm);
         header.kid = Some(self.jwk.key_id.clone());
         header.jku = Some(self.issuer.jwks());
-        encode(&header, &token, &self.key)
+        Ok(EncodedIdToken(encode(&header, &token, &self.key)?))
+    }
+
+    pub fn finalize_refresh_token(&self, token: RefreshToken) -> Result<EncodedRefreshToken> {
+        let mut header = Header::new(self.issuer.algorithm);
+        header.kid = Some(self.jwk.key_id.clone());
+        header.jku = Some(self.issuer.jwks());
+        Ok(EncodedRefreshToken(encode(&header, &token, &self.key)?))
     }
 }
 
@@ -271,6 +400,34 @@ impl TokenValidator {
             })
             .ok()
     }
+
+    pub fn validate_access_token(&self, token: EncodedAccessToken) -> Option<Token<Access>> {
+        self.validate(token.as_ref())
+    }
+
+    pub fn validate_id_token(&self, token: EncodedIdToken) -> Option<Token<Id>> {
+        self.validate(token.as_ref())
+    }
+
+    pub fn validate_refresh_token(&self, token: EncodedRefreshToken) -> Option<RefreshToken> {
+        self.validate(token.as_ref())
+    }
+}
+
+pub mod test_fixtures {
+    use crate::token::{EncodedAccessToken, EncodedIdToken, EncodedRefreshToken};
+
+    pub fn access_token(raw: String) -> EncodedAccessToken {
+        EncodedAccessToken(raw)
+    }
+
+    pub fn refresh_token(raw: String) -> EncodedRefreshToken {
+        EncodedRefreshToken(raw)
+    }
+
+    pub fn id_token(raw: String) -> EncodedIdToken {
+        EncodedIdToken(raw)
+    }
 }
 
 #[cfg(test)]
@@ -290,11 +447,15 @@ mod tests {
             "nonce":"",
             "acr":"",
             "amr":[],
-            "azp":""
+            "azp":"",
+            "scopes":[]
         }"#;
 
-        match from_str::<Token>(input) {
-            Err(_) => unreachable!(),
+        match from_str::<Token<Access>>(input) {
+            Err(e) => {
+                debug!(%e);
+                assert!(false);
+            }
             Ok(token) => {
                 assert_eq!(Audience::Single("audience".to_string()), token.audience);
             }
@@ -313,11 +474,15 @@ mod tests {
             "nonce":"",
             "acr":"",
             "amr":[],
-            "azp":""
+            "azp":"",
+            "scopes":[]
         }"#;
 
-        match from_str::<Token>(input) {
-            Err(_) => unreachable!(),
+        match from_str::<Token<Access>>(input) {
+            Err(e) => {
+                debug!(%e);
+                assert!(false);
+            }
             Ok(token) => {
                 assert_eq!(
                     Audience::Several(vec!["audience1".to_string(), "audience2".to_string()]),

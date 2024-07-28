@@ -35,8 +35,12 @@ mappings:
       zoneinfo: "{{ user.zoneinfo }}"
       locale: "{{ user.locale }}"
     type: template
+    destination:
+      - userinfo
 
   - structure: null
     type:
       user_attribute:
         updated_at: null
+    destination:
+      - userinfo

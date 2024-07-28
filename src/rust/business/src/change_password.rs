@@ -17,7 +17,7 @@
 
 use crate::authenticator::Authenticator;
 use crate::password::Password;
-use crate::token::{Token, TokenValidator};
+use crate::token::{Access, Token, TokenValidator};
 use std::sync::Arc;
 use tracing::{span, Instrument, Level};
 
@@ -50,7 +50,7 @@ impl Handler {
     ) -> Result<Password, Error> {
         let token = self
             .token_validator
-            .validate::<Token>(token)
+            .validate::<Token<Access>>(token)
             .ok_or(Error::TokenAuthentication)?;
         let cid_span = span!(Level::DEBUG, "cid", user = token.subject);
         let user = self

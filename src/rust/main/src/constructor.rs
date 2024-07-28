@@ -63,6 +63,7 @@ use tiny_auth_business::template::web::{
 };
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
+use tiny_auth_business::userinfo_endpoint;
 use tiny_auth_ldap::inject::{
     connector, search_bind_check, simple_bind_check, ClientConfig, UserConfig,
 };
@@ -699,7 +700,13 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
 
     fn user_info_handler(&self) -> Arc<UserInfoHandler> {
         Arc::new(tiny_auth_web::endpoints::userinfo::inject::handler(
-            self.token_validator.clone(),
+            Arc::new(userinfo_endpoint::inject::handler(
+                self.token_validator.clone(),
+                self.build_token_creator(),
+                self.client_store.clone(),
+                self.user_store.clone(),
+                self.scope_store.clone(),
+            )),
             Arc::new(CorsChecker::new(self.build_cors_lister())),
         ))
     }
