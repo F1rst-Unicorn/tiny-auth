@@ -1,0 +1,42 @@
+@startuml
+
+package config {
+    class NormalUser <<Role>>
+    class AdminUser <<Role>>
+}
+
+package data {
+    class Scope <<Resource>>
+    class User <<Resource>>
+    class Client <<Resource>>
+
+    class "Read" as ReadUser <<Action>>
+    class "Read" as ReadClient <<Action>>
+    class "Read" as ReadScope <<Action>>
+
+    ReadUser -- data.User: on
+    ReadClient -- data.Client: on
+    ReadScope -- data.Scope: on
+}
+
+package debugScope {
+    class DebugScope <<Action>>
+
+    class DebugOwnUserScope <<Permission>>
+    class OwnUser <<AuthorizationConstraint>> {
+        currentUser = resource.user
+    }
+    class DebugAllUserScopes <<Permission>>
+
+    DebugScope o-- ReadUser
+    DebugScope o-- ReadClient
+    DebugScope o-- ReadScope
+
+    DebugAllUserScopes -- DebugScope: to perform
+    (DebugOwnUserScope, DebugScope) .. OwnUser: to perform
+
+    NormalUser -- DebugOwnUserScope
+    AdminUser -- DebugAllUserScopes
+}
+
+@enduml

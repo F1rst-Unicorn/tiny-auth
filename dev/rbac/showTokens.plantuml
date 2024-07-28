@@ -1,0 +1,51 @@
+@startuml
+
+package config {
+    class NormalUser <<Role>>
+    class AdminUser <<Role>>
+}
+
+package data {
+    class User <<Resource>>
+    class Client <<Resource>>
+
+    class AccessToken <<Resource>>
+    class IdentityToken <<Resource>>
+    class RefreshToken <<Resource>>
+
+    class "List" as ListUser <<Action>>
+    class "List" as ListClient <<Action>>
+    class "Read" as ReadAccessToken <<Action>>
+    class "Read" as ReadIdentityToken <<Action>>
+    class "Read" as ReadRefreshToken <<Action>>
+
+    ListUser -- data.User: on
+    ListClient -- data.Client: on
+    ReadAccessToken -- data.AccessToken: on
+    ReadIdentityToken -- data.IdentityToken: on
+    ReadRefreshToken -- data.RefreshToken: on
+}
+
+package showTokens {
+    class ShowTokens <<Action>>
+
+    class ShowOwnUserTokens <<Permission>>
+    class OwnUser <<AuthorizationConstraint>> {
+        currentUser = resource.user
+    }
+    class ShowAllUserTokens <<Permission>>
+
+    ShowTokens o-- ReadAccessToken
+    ShowTokens o-- ReadIdentityToken
+    ShowTokens o-- ReadRefreshToken
+    ShowTokens o-- ListUser
+    ShowTokens o-- ListClient
+
+    ShowAllUserTokens -- ShowTokens: to perform
+    (ShowOwnUserTokens, ShowTokens) .. OwnUser: to perform
+
+    NormalUser -- ShowOwnUserTokens
+    AdminUser -- ShowAllUserTokens
+}
+
+@enduml

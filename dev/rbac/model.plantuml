@@ -1,0 +1,53 @@
+@startuml
+
+package client {
+    class Resource
+    class Action
+    class AtomicAction
+    class CompositeAction
+
+    class Permission
+    class AuthorizationConstraint
+
+    Permission -- "1.." Action: to perform
+    (Permission, Action) .. "0..1"  AuthorizationConstraint
+
+    AtomicAction --|> Action
+    CompositeAction --|> Action
+    Action --o CompositeAction: Action Hierarchy
+
+    Action --* "1" Resource: on
+}
+
+package tiny-auth {
+    class Role
+    class Subject
+    class Group
+    class User
+    class Scope
+    class ImplicitConsent
+    class Client
+
+    User --|> Subject
+    Group --|> Subject
+    Subject --o Group: User Hierarchy
+
+    Role --o Role: Role Hierarchy
+
+    Subject -- Role
+    Role -- Client: visible to
+    Role "1.." -- Permission: grants
+
+    Client o-- Scope: allowed
+
+    User o-- ImplicitConsent: grants
+    Client --o ImplicitConsent: for
+    Scope --o ImplicitConsent: to
+}
+
+package config {
+    class NormalUser <<Role>>
+    class AdminUser <<Role>>
+}
+
+@enduml
