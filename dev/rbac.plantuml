@@ -39,17 +39,44 @@ Action --o CompositeAction: Action Hierarchy
 Action --* "1" Resource: on
 
 package data {
-    class Scope <<Resorce>>
-    class User <<Resorce>>
-    class Client <<Resorce>>
-    class Group <<Resorce>>
-    class CurrentUser <<Resorce>>
-    class CurrentClient <<Resorce>>
+    class Scope <<Resource>>
+    class User <<Resource>>
+    class Client <<Resource>>
+    class Group <<Resource>>
 
+    class "Read" as ReadUser <<Action>>
+    class "Read" as ReadClient <<Action>>
+    class "Read" as ReadScope <<Action>>
+
+    ReadUser -- data.User: on
+    ReadClient -- data.Client: on
+    ReadScope -- data.Scope: on
+
+}
+
+package debugScope {
     class DebugScope <<Action>>
-    DebugScope -- data.Scope
-    DebugScope -- data.User
-    DebugScope -- data.Client
+
+    class DebugOwnUserScope <<Permission>>
+    class OwnUser <<AuthorizationConstraint>> {
+        currentUser = resource.user
+    }
+    class DebugAllUserScopes <<Permission>>
+
+    class NormalUser <<Role>>
+    class AdminUser <<Role>>
+
+    DebugScope --o ReadUser
+    DebugScope --o ReadClient
+    DebugScope --o ReadScope
+
+    DebugAllUserScopes -- DebugScope: to perform
+    DebugOwnUserScope -- OwnUser
+    DebugOwnUserScope -- DebugScope: to perform
+
+    NormalUser -- DebugOwnUserScope: grants
+    AdminUser -- DebugAllUserScopes: grants
+
 }
 
 @enduml
