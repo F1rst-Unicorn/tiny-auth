@@ -41,7 +41,7 @@ check() {
     cargo test -j 1
 
     cd "$srcdir/src/typescript"
-    npx prettier . --write
+    npx prettier . --check
     npm run lint
     npm audit
 }
