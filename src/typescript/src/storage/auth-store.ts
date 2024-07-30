@@ -30,7 +30,7 @@ export class UserStoreImpl implements UserStore {
 
   public getUser(): User | null {
     const oidcStorage = window.localStorage.getItem(
-      `oidc.user:${this.oidcAuthority}:${this.clientId}`
+      `oidc.user:${this.oidcAuthority}:${this.clientId}`,
     );
     if (!oidcStorage) {
       return null;

@@ -28,7 +28,7 @@ export default function MainMenu() {
         height: "100%",
         minHeight: "100%",
         flexGrow: 1,
-        backgroundColor: grey["100"]
+        backgroundColor: grey["100"],
       }}
     >
       <TopAppBar />

@@ -50,31 +50,31 @@ export const router = createBrowserRouter([
         children: [
           {
             index: true,
-            element: <Index />
+            element: <Index />,
           },
           {
             path: "profile",
-            element: <Profile />
+            element: <Profile />,
           },
           {
             path: "oidc-login-redirect",
-            element: <Index />
+            element: <Index />,
           },
           {
             path: "oidc-login-redirect-silent",
-            element: <AuthProvider {...oidcConfiguration} />
+            element: <AuthProvider {...oidcConfiguration} />,
           },
           {
             path: "api",
             children: [
               {
                 path: "changePassword",
-                action: changePasswordAction
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
+                action: changePasswordAction,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
 ]);

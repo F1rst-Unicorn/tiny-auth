@@ -17,41 +17,41 @@
 -->
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>tiny-auth</title>
-  <link rel="icon" type="image/png" href="/src/assets/favicon.svg" />
-  <style>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>tiny-auth</title>
+    <link rel="icon" type="image/png" href="/src/assets/favicon.svg" />
+    <style>
       body {
-          height: 100vh;
-          min-height: 100vh;
-          margin: 0;
+        height: 100vh;
+        min-height: 100vh;
+        margin: 0;
       }
 
       #root {
-          height: 100vh;
-          min-height: 100vh;
+        height: 100vh;
+        min-height: 100vh;
       }
-  </style>
-</head>
-<body>
-<div id="root"></div>
-<a
-  id="tiny-auth-provider"
-  href="{{ tiny_auth_provider_url }}"
-  style="display: none"
->Provider</a
->
-<a id="tiny-auth-api" href="{{ tiny_auth_api_url }}" style="display: none"
->Provider</a
->
-<a
-  id="tiny-auth-web-base"
-  href="{{ tiny_auth_web_base }}"
-  style="display: none"
->Webapp base</a
->
-<script type="module" src="/src/main.tsx"></script>
-</body>
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <a
+      id="tiny-auth-provider"
+      href="{{ tiny_auth_provider_url }}"
+      style="display: none"
+      >Provider</a
+    >
+    <a id="tiny-auth-api" href="{{ tiny_auth_api_url }}" style="display: none"
+      >Provider</a
+    >
+    <a
+      id="tiny-auth-web-base"
+      href="{{ tiny_auth_web_base }}"
+      style="display: none"
+      >Webapp base</a
+    >
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

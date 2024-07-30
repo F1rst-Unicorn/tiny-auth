@@ -24,7 +24,7 @@ import {
   Menu,
   MenuItem,
   Toolbar,
-  Typography
+  Typography,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import { NavLink, redirect } from "react-router-dom";
@@ -81,12 +81,12 @@ export default function TopAppBar() {
           anchorEl={profileMenuAnchor}
           anchorOrigin={{
             vertical: "bottom",
-            horizontal: "right"
+            horizontal: "right",
           }}
           keepMounted
           transformOrigin={{
             vertical: "top",
-            horizontal: "right"
+            horizontal: "right",
           }}
           open={Boolean(profileMenuAnchor)}
           onClose={closeProfileMenu}

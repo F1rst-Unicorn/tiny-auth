@@ -19,7 +19,7 @@
 import { ActionFunction } from "react-router-dom";
 import {
   changePassword,
-  ChangePasswordData
+  ChangePasswordData,
 } from "../../core/changePassword.ts";
 
 export const CURRENT = "current";
@@ -37,7 +37,7 @@ export const changePasswordAction: ActionFunction = async ({ request }) => {
   }
   try {
     return await changePassword(
-      new ChangePasswordData(current.toString(), newPassword.toString())
+      new ChangePasswordData(current.toString(), newPassword.toString()),
     );
   } catch (error) {
     return error;

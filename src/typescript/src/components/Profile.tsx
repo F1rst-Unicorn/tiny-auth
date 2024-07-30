@@ -24,14 +24,14 @@ import {
   Button,
   Card,
   Alert,
-  CircularProgress
+  CircularProgress,
 } from "@mui/material";
 import { useAuth } from "react-oidc-context";
 import { useFetcher } from "react-router-dom";
 import { useState } from "react";
 import {
   HashedPasswordPbkdf2HmacSha256,
-  ManagedPassword
+  ManagedPassword,
 } from "../core/changePassword.ts";
 import { CURRENT, NEW } from "./actions/changePassword.ts";
 import { buildUserName } from "../core/auth.ts";
@@ -59,7 +59,7 @@ export default function Profile() {
       <Alert
         severity="error"
         sx={{
-          marginBottom: 4
+          marginBottom: 4,
         }}
       >
         {actionData.message}
@@ -95,7 +95,7 @@ export default function Profile() {
           variant={"h6"}
           component={"h2"}
           sx={{
-            paddingBottom: 2
+            paddingBottom: 2,
           }}
         >
           Change Password
@@ -139,7 +139,7 @@ export default function Profile() {
                     : null
                 }
                 sx={{
-                  paddingBottom: 2
+                  paddingBottom: 2,
                 }}
               />
             </Grid>
@@ -156,7 +156,7 @@ function renderSuccessfulPasswordChange(data: HashedPasswordPbkdf2HmacSha256) {
     <Alert
       severity="success"
       sx={{
-        marginBottom: 4
+        marginBottom: 4,
       }}
     >
       This server doesn't support storing the password automatically. Send this
@@ -183,7 +183,7 @@ function renderSuccessfulManagedPasswordChange() {
     <Alert
       severity="info"
       sx={{
-        marginBottom: 4
+        marginBottom: 4,
       }}
     >
       Your password is not stored in tiny-auth and thus cannot be changed here.

@@ -29,7 +29,7 @@ function resolveAuthority() {
     return {
       authority: "http://localhost:34344",
       redirect_uri: "http://localhost:5173" + redirectPath,
-      silent_redirect_uri: "http://localhost:5173/oidc-login-redirect-silent"
+      silent_redirect_uri: "http://localhost:5173/oidc-login-redirect-silent",
     };
   } else {
     let oidcAuthority = document
@@ -41,7 +41,7 @@ function resolveAuthority() {
     return {
       authority: oidcAuthority,
       redirect_uri: oidcAuthority + redirectPath,
-      silent_redirect_uri: oidcAuthority + "/oidc-login-redirect-silent"
+      silent_redirect_uri: oidcAuthority + "/oidc-login-redirect-silent",
     };
   }
 }
@@ -59,10 +59,10 @@ export const oidcConfiguration: AuthProviderProps = {
       window.history.replaceState(
         {},
         document.title,
-        window.location.pathname.replace(new RegExp(redirectPath + "$"), "/")
+        window.location.pathname.replace(new RegExp(redirectPath + "$"), "/"),
       );
     }
-  }
+  },
 };
 
 function resolveApi(): string {
@@ -78,7 +78,7 @@ function resolveApi(): string {
 
 const userStore = new UserStoreImpl(
   oidcConfiguration.authority,
-  oidcConfiguration.client_id
+  oidcConfiguration.client_id,
 );
 
 const apiClient = new ApiService(resolveApi(), userStore);

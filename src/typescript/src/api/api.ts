@@ -20,7 +20,7 @@ import {
   ChangePasswordData,
   ChangePasswordResult,
   HashedPasswordPbkdf2HmacSha256,
-  ManagedPassword
+  ManagedPassword,
 } from "../core/changePassword.ts";
 import { TinyAuthApiClient } from "../generated/tiny-auth/tiny-auth.client.ts";
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
@@ -30,7 +30,7 @@ import {
   GENERAL_ERROR,
   NO_ID_TOKEN,
   UNKNOWN_PASSWORD_TYPE,
-  WRONG_PASSWORD
+  WRONG_PASSWORD,
 } from "../core/error.ts";
 
 export class ApiService {
@@ -40,28 +40,28 @@ export class ApiService {
   constructor(url: string, userStore: UserStore) {
     const transport = new GrpcWebFetchTransport({
       format: "binary",
-      baseUrl: url
+      baseUrl: url,
     });
     this.service = new TinyAuthApiClient(transport);
     this.userStore = userStore;
   }
 
   async changePassword(
-    data: ChangePasswordData
+    data: ChangePasswordData,
   ): Promise<ChangePasswordResult> {
     try {
       const response = await this.service.changePassword(
         {
           currentPassword: data.currentPassword,
-          newPassword: data.newPassword
+          newPassword: data.newPassword,
         },
-        this.buildOptions()
+        this.buildOptions(),
       );
       if (response.response.hashedPassword.oneofKind === "pbkdf2HmacSha256") {
         return new HashedPasswordPbkdf2HmacSha256(
           response.response.hashedPassword.pbkdf2HmacSha256.credential,
           response.response.hashedPassword.pbkdf2HmacSha256.iterations,
-          response.response.hashedPassword.pbkdf2HmacSha256.salt
+          response.response.hashedPassword.pbkdf2HmacSha256.salt,
         );
       } else if (response.response.hashedPassword.oneofKind === "managed") {
         return new ManagedPassword();
@@ -87,8 +87,8 @@ export class ApiService {
   private buildOptions(): RpcOptions {
     return {
       meta: {
-        "x-authorization": "Bearer " + this.accessToken()
-      }
+        "x-authorization": "Bearer " + this.accessToken(),
+      },
     };
   }
 
