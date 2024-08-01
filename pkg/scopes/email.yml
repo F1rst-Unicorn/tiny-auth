@@ -28,7 +28,12 @@ mappings:
       email: "{{ user.email }}"
     type: template
     optional: true
+    destination:
+      - userinfo
+      - id token
 
   - structure:
       email_verified: true
     type: plain
+    destination:
+      - userinfo

@@ -23,7 +23,11 @@ mappings:
   - structure:
       phone_number: "{{ user.phone_number }}"
     type: template
+    destination:
+      - userinfo
 
   - structure:
       phone_number_verified: true
     type: plain
+    destination:
+      - userinfo
