@@ -42,9 +42,23 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public interface TokenAsserter {
-    OidcToken verifyAccessToken(String token, Client client, User user) throws Exception;
+    default OidcToken verifyAccessToken(String token, Client client, User user) throws Exception {
+        JWTClaimsSet claims = verifyToken(token);
+        verifyAccessTokenClaims(claims.getClaims(), client, user);
+        return new OidcToken(token, claims);
+    }
 
-    OidcToken verifyRefreshToken(String token, Client client, User user, Set<String> scopes) throws Exception;
+    default OidcToken verifyRefreshToken(String token, Client client, User user, Set<String> scopes) throws Exception {
+        JWTClaimsSet claims = verifyToken(token);
+
+        assertEquals(endpoint().inContainer().getIssuer(), claims.getStringClaim(ISSUER));
+        assertEquals(user.getUsername(), claims.getStringClaim(SUBJECT));
+        assertEquals(client.getClientId(), claims.getStringClaim(AUTHORIZED_PARTY));
+        assertTrue(claims.getExpirationTime().after(new Date()), "token has already expired");
+        assertEquals(scopes, new HashSet<>(claims.getStringListClaim(SCOPES)));
+
+        return new OidcToken(token, claims);
+    }
 
     Endpoint endpoint();
 
@@ -107,13 +121,4 @@ public interface TokenAsserter {
             return new Date((Long) rawDate * 1000);
     }
 
-    default JWTClaimsSet verifyRefreshTokenSpecificClaims(String token, Set<String> scopes) throws Exception {
-        JWTClaimsSet claims = verifyToken(token);
-
-        assertEquals(endpoint().inContainer().getIssuer(), claims.getStringClaim(ISSUER));
-        assertEquals(scopes, new HashSet<>(claims.getStringListClaim(SCOPES)));
-        assertTrue(claims.getExpirationTime().after(new Date()), "token has already expired");
-
-        return claims;
-    }
 }
