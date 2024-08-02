@@ -76,8 +76,8 @@ public class ApiTests implements TinyAuthTest, ApiGadgets {
                 .extract().body().jsonPath();
 
         assertEquals(Set.of("openid"), Set.of(tokenResponse.getString(SCOPE).split(" ")));
-        assertEquals(tokenResponse.getString(ACCESS_TOKEN), tokenResponse.getString(ID_TOKEN), "access token different from id token");
         tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), client, client);
+        tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), client, client);
     }
 
     @Test
@@ -89,8 +89,8 @@ public class ApiTests implements TinyAuthTest, ApiGadgets {
                 .extract().body().jsonPath();
 
         assertEquals(scopes, Set.of(tokenResponse.getString(SCOPE).split(" ")));
-        assertEquals(tokenResponse.getString(ACCESS_TOKEN), tokenResponse.getString(ID_TOKEN), "access token different from id token");
         tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), client, user);
+        tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), client, user);
     }
 
     @Test
@@ -105,8 +105,8 @@ public class ApiTests implements TinyAuthTest, ApiGadgets {
                 .extract().body().jsonPath();
 
         assertEquals(Set.of("openid"), Set.of(tokenResponse.getString(SCOPE).split(" ")));
-        assertEquals(tokenResponse.getString(ACCESS_TOKEN), tokenResponse.getString(ID_TOKEN), "access token different from id token");
         tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), client, user);
+        tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), client, user);
     }
 
     @Test
@@ -151,8 +151,8 @@ public class ApiTests implements TinyAuthTest, ApiGadgets {
                 .extract().body().jsonPath();
 
         assertEquals(scopes, Set.of(tokenResponse.getString(SCOPE).split(" ")));
-        assertEquals(tokenResponse.getString(ACCESS_TOKEN), tokenResponse.getString(ID_TOKEN), "access token different from id token");
         tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), client, client);
+        tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), client, client);
     }
 
     private String buildTokenFromSharedSecret(Client client) throws Exception {
