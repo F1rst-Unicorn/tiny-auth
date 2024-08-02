@@ -53,7 +53,8 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     default void missingResponseTypeIsReported(Browser browser) {
         browser.startAuthenticationWithMissingResponseType(getClient(), getState(), getScopes(), getNonce());
 
-        HttpUrl oidcRedirect = new RedirectQueryExtractor(){}.getLastOidcRedirect(browser);
+        HttpUrl oidcRedirect = new RedirectQueryExtractor() {
+        }.getLastOidcRedirect(browser);
         assertUrlParameter(oidcRedirect, STATE, getState());
         assertUrlParameter(oidcRedirect, ERROR, "invalid_request");
     }

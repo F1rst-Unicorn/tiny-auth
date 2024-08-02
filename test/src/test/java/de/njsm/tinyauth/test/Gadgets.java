@@ -35,11 +35,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public interface Gadgets extends TinyAuthTest, RedirectExtractor, ApiGadgets {
 
-    OidcToken authenticate(Browser brower) throws Exception;
+    OidcToken authenticate(Browser browser) throws Exception;
 
-    OidcToken authenticate(Browser brower, Set<String> scopes) throws Exception;
+    OidcToken authenticate(Browser browser, Set<String> scopes) throws Exception;
 
-    OidcToken authenticateWithAdditionalParameters(Browser brower, Map<String, String> scopes) throws Exception;
+    OidcToken authenticateWithAdditionalParameters(Browser browser, Map<String, String> scopes) throws Exception;
 
     String getState();
 
