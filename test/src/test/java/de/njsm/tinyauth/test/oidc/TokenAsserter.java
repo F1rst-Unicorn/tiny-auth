@@ -38,11 +38,10 @@ import java.util.stream.Collectors;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
 import static java.util.Collections.singletonList;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 public interface TokenAsserter {
-    default OidcToken verifyAccessToken(String token, Client client, User user) throws Exception {
+    default OidcToken verifyToken(String token, Client client, User user) throws Exception {
         JWTClaimsSet claims = verifyToken(token);
         verifyAccessTokenClaims(claims.getClaims(), client, user);
         return new OidcToken(token, claims);
@@ -63,10 +62,23 @@ public interface TokenAsserter {
     Endpoint endpoint();
 
     default void verifyUserinfo(JsonPath userinfo, JWTClaimsSet accessTokenClaims) {
-        Map<String, Object> convertedClaims = new HashMap<>(accessTokenClaims.getClaims());
-        convertedClaims.put(EXPIRATION_TIME, ((Date) convertedClaims.get(EXPIRATION_TIME)).getTime() / 1000);
-        convertedClaims.put(ISSUANCE_TIME, ((Date) convertedClaims.get(ISSUANCE_TIME)).getTime() / 1000);
+        Map<String, Object> tokenClaims = convertTokenClaims(accessTokenClaims);
+        Map<String, Object> userinfoClaims = convertUserinfoClaims(userinfo);
+        assertEquals(tokenClaims.get(ISSUER), userinfoClaims.get(ISSUER));
+        assertEquals(tokenClaims.get(SUBJECT), userinfoClaims.get(SUBJECT));
+        assertEquals(tokenClaims.get(AUDIENCE), userinfoClaims.get(AUDIENCE));
+        assertTrue((long) tokenClaims.get(EXPIRATION_TIME) <= (long) userinfoClaims.get(EXPIRATION_TIME),
+                "userinfo expires (" + userinfoClaims.get(EXPIRATION_TIME)
+                        + ") before token (" + tokenClaims.get(EXPIRATION_TIME) + ")");
+        assertTrue((long) tokenClaims.get(ISSUANCE_TIME) <= (long) userinfoClaims.get(ISSUANCE_TIME),
+                "userinfo was issued (" + userinfoClaims.get(ISSUANCE_TIME)
+                        + ") before token (" + tokenClaims.get(ISSUANCE_TIME) + ")");
+        assertNull(userinfoClaims.get(AUTH_TIME));
+        assertEquals(tokenClaims.get(AUTHORIZED_PARTY), userinfoClaims.get(AUTHORIZED_PARTY));
+        assertEquals(tokenClaims.get(SCOPES), userinfoClaims.get(SCOPES));
+    }
 
+    public static Map<String, Object> convertUserinfoClaims(JsonPath userinfo) {
         Map<String, Object> convertedUserinfo = new HashMap<>(userinfo.getMap(""));
         Object audience = convertedUserinfo.get(AUDIENCE);
         if (audience instanceof String)
@@ -79,8 +91,14 @@ public interface TokenAsserter {
                         e.setValue(Long.valueOf((Integer) e.getValue()));
                     }
                 }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        return convertedUserinfo;
+    }
 
-        assertEquals(convertedClaims, convertedUserinfo);
+    public static Map<String, Object> convertTokenClaims(JWTClaimsSet accessTokenClaims) {
+        Map<String, Object> convertedClaims = new HashMap<>(accessTokenClaims.getClaims());
+        convertedClaims.put(EXPIRATION_TIME, ((Date) convertedClaims.get(EXPIRATION_TIME)).getTime() / 1000);
+        convertedClaims.put(ISSUANCE_TIME, ((Date) convertedClaims.get(ISSUANCE_TIME)).getTime() / 1000);
+        return convertedClaims;
     }
 
     default JWTClaimsSet verifyToken(String token) throws Exception {

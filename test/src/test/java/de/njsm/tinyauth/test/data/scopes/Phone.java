@@ -17,13 +17,13 @@
 
 package de.njsm.tinyauth.test.data.scopes;
 
-import com.nimbusds.jwt.JWTClaimsSet;
 import de.njsm.tinyauth.test.data.Scope;
 import de.njsm.tinyauth.test.data.User;
 
-import java.text.ParseException;
+import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class Phone extends Scope {
 
@@ -34,12 +34,8 @@ public class Phone extends Scope {
     }
 
     @Override
-    public void verifyClaimsFor(User user, JWTClaimsSet claims) {
-        try {
-            assertEquals(user.getPhone(), claims.getStringClaim("phone_number"));
-            assertTrue(claims.getBooleanClaim("phone_number_verified"), "phone number is not marked verified");
-        } catch (ParseException e) {
-            fail(e);
-        }
+    protected void verifyClaimsFor(User user, Map<String, Object> claims) {
+        assertEquals(user.getPhone(), claims.get("phone_number"));
+        assertTrue((Boolean) claims.get("phone_number_verified"), "phone number is not marked verified");
     }
 }

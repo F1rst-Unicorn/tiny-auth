@@ -18,6 +18,7 @@
 package de.njsm.tinyauth.test;
 
 import de.njsm.tinyauth.test.data.OidcToken;
+import de.njsm.tinyauth.test.data.Tokens;
 import de.njsm.tinyauth.test.oidc.redirect.RedirectQueryExtractor;
 import de.njsm.tinyauth.test.repository.Scopes;
 import de.njsm.tinyauth.test.runtime.Browser;
@@ -64,10 +65,11 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-implicit-certification-test-plan.oidcc-scope-profile")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-scope-profile")
     default void authenticateWithProfileScope(Browser browser) throws Exception {
-        OidcToken accessToken = authenticate(browser, Set.of("openid", "profile"));
-        Scopes.getProfile().verifyClaimsFor(getUser(), accessToken.getClaims());
-        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
-        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+        Tokens tokens = authenticate(browser, Set.of("openid", "profile"));
+        OidcToken token = selectToken(tokens);
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(token);
+        tokenAsserter().verifyUserinfo(userinfo, token.getClaims());
+        Scopes.getProfile().verifyClaimsFor(getUser(), userinfo);
     }
 
     @Test
@@ -75,10 +77,12 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-implicit-certification-test-plan.oidcc-scope-email")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-scope-email")
     default void authenticateWithEmailScope(Browser browser) throws Exception {
-        OidcToken accessToken = authenticate(browser, Set.of("openid", "email"));
-        Scopes.getEmail().verifyClaimsFor(getUser(), accessToken.getClaims());
-        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
-        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+        Tokens tokens = authenticate(browser, Set.of("openid", "email"));
+        OidcToken token = selectToken(tokens);
+        Scopes.getEmail().verifyClaimsFor(getUser(), tokens.idToken().get().getClaims());
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(token);
+        tokenAsserter().verifyUserinfo(userinfo, token.getClaims());
+        Scopes.getEmail().verifyClaimsFor(getUser(), userinfo);
     }
 
     @Test
@@ -86,10 +90,11 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-implicit-certification-test-plan.oidcc-scope-address")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-scope-address")
     default void authenticateWithAddressScope(Browser browser) throws Exception {
-        OidcToken accessToken = authenticate(browser, Set.of("openid", "address"));
-        Scopes.getAddress().verifyClaimsFor(getUser(), accessToken.getClaims());
-        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
-        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+        Tokens tokens = authenticate(browser, Set.of("openid", "address"));
+        OidcToken token = selectToken(tokens);
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(token);
+        tokenAsserter().verifyUserinfo(userinfo, token.getClaims());
+        Scopes.getAddress().verifyClaimsFor(getUser(), userinfo);
     }
 
     @Test
@@ -97,10 +102,11 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-implicit-certification-test-plan.oidcc-scope-phone")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-scope-phone")
     default void authenticateWithPhoneScope(Browser browser) throws Exception {
-        OidcToken accessToken = authenticate(browser, Set.of("openid", "phone"));
-        Scopes.getPhone().verifyClaimsFor(getUser(), accessToken.getClaims());
-        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
-        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+        Tokens tokens = authenticate(browser, Set.of("openid", "phone"));
+        OidcToken token = selectToken(tokens);
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(token);
+        tokenAsserter().verifyUserinfo(userinfo, token.getClaims());
+        Scopes.getPhone().verifyClaimsFor(getUser(), userinfo);
     }
 
     @Test
@@ -108,13 +114,15 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-implicit-certification-test-plan.oidcc-scope-all")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-scope-all")
     default void authenticateWithAllScopes(Browser browser) throws Exception {
-        OidcToken accessToken = authenticate(browser, Set.of("openid", "profile", "email", "address", "phone"));
-        Scopes.getProfile().verifyClaimsFor(getUser(), accessToken.getClaims());
-        Scopes.getEmail().verifyClaimsFor(getUser(), accessToken.getClaims());
-        Scopes.getAddress().verifyClaimsFor(getUser(), accessToken.getClaims());
-        Scopes.getPhone().verifyClaimsFor(getUser(), accessToken.getClaims());
-        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
-        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+        Tokens tokens = authenticate(browser, Set.of("openid", "profile", "email", "address", "phone"));
+        OidcToken token = selectToken(tokens);
+        Scopes.getEmail().verifyClaimsFor(getUser(), tokens.idToken().get().getClaims());
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(token);
+        tokenAsserter().verifyUserinfo(userinfo, token.getClaims());
+        Scopes.getProfile().verifyClaimsFor(getUser(), userinfo);
+        Scopes.getEmail().verifyClaimsFor(getUser(), userinfo);
+        Scopes.getAddress().verifyClaimsFor(getUser(), userinfo);
+        Scopes.getPhone().verifyClaimsFor(getUser(), userinfo);
     }
 
     @Test
@@ -122,10 +130,11 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-implicit-certification-test-plan.oidcc-ensure-other-scope-order-succeeds")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-ensure-other-scope-order-succeeds")
     default void authenticateWithDifferentScopeOrder(Browser browser) throws Exception {
-        OidcToken accessToken = authenticate(browser, Set.of("email", "openid"));
-        Scopes.getEmail().verifyClaimsFor(getUser(), accessToken.getClaims());
-        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
-        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+        Tokens tokens = authenticate(browser, Set.of("email", "openid"));
+        OidcToken token = selectToken(tokens);
+        Scopes.getEmail().verifyClaimsFor(getUser(), tokens.idToken().get().getClaims());
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(token);
+        tokenAsserter().verifyUserinfo(userinfo, token.getClaims());
     }
 
     @Test
@@ -133,9 +142,10 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-implicit-certification-test-plan.oidcc-display-page")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-display-page")
     default void authenticateWithDisplayPage(Browser browser) throws Exception {
-        OidcToken accessToken = authenticateWithAdditionalParameters(browser, Map.of("display", "page"));
-        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
-        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+        Tokens tokens = authenticateWithAdditionalParameters(browser, Map.of("display", "page"));
+        OidcToken token = selectToken(tokens);
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(token);
+        tokenAsserter().verifyUserinfo(userinfo, token.getClaims());
     }
 
     @Test
@@ -143,9 +153,10 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-implicit-certification-test-plan.oidcc-display-popup")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-display-popup")
     default void authenticateWithDisplayPopup(Browser browser) throws Exception {
-        OidcToken accessToken = authenticateWithAdditionalParameters(browser, Map.of("display", "popup"));
-        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
-        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+        Tokens tokens = authenticateWithAdditionalParameters(browser, Map.of("display", "popup"));
+        OidcToken token = selectToken(tokens);
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(token);
+        tokenAsserter().verifyUserinfo(userinfo, token.getClaims());
     }
 
     @Test
@@ -153,9 +164,11 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-implicit-certification-test-plan.oidcc-prompt-login")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-prompt-login")
     default void authenticateTwiceWithForcedLogin(Browser browser) throws Exception {
-        OidcToken tokenFromFirstLogin = authenticate(browser);
+        Tokens tokensFromFirstLogin = authenticate(browser);
+        OidcToken tokenFromFirstLogin = selectToken(tokensFromFirstLogin);
         Thread.sleep(2000);
-        OidcToken tokenFromSecondLogin = authenticateWithAdditionalParameters(browser, Map.of("prompt", "login"));
+        Tokens tokensFromSecondLogin = authenticateWithAdditionalParameters(browser, Map.of("prompt", "login"));
+        OidcToken tokenFromSecondLogin = selectToken(tokensFromSecondLogin);
 
         long firstAuthTime = tokenFromFirstLogin.getClaims().getLongClaim(AUTH_TIME);
         long secondAuthTime = tokenFromSecondLogin.getClaims().getLongClaim(AUTH_TIME);
@@ -167,10 +180,12 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-implicit-certification-test-plan.oidcc-max-age-1")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-max-age-1")
     default void authenticateWithMaxAge(Browser browser) throws Exception {
-        OidcToken firstToken = authenticate(browser);
+        Tokens firstTokens = authenticate(browser);
+        OidcToken firstToken = selectToken(firstTokens);
 
         Thread.sleep(2000);
-        OidcToken secondToken = authenticateWithAdditionalParameters(browser, Map.of("max_age", "1"));
+        Tokens secondTokens = authenticateWithAdditionalParameters(browser, Map.of("max_age", "1"));
+        OidcToken secondToken = selectToken(secondTokens);
 
         long firstAuthTime = firstToken.getClaims().getLongClaim(AUTH_TIME);
         long secondAuthTime = secondToken.getClaims().getLongClaim(AUTH_TIME);
@@ -209,9 +224,10 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-implicit-certification-test-plan.oidcc-userinfo-get")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-userinfo-get")
     default void authenticateAndQueryUserinfoEndpoint(Browser browser) throws Exception {
-        OidcToken accessToken = authenticate(browser);
-        JsonPath userinfo = userinfoEndpoint().getUserinfo(accessToken.getRawToken());
-        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+        Tokens tokens = authenticate(browser);
+        OidcToken token = selectToken(tokens);
+        JsonPath userinfo = userinfoEndpoint().getUserinfo(token);
+        tokenAsserter().verifyUserinfo(userinfo, token.getClaims());
     }
 
     /**
@@ -223,9 +239,10 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-implicit-certification-test-plan.oidcc-userinfo-post-header")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-userinfo-post-header")
     default void authenticateAndPostUserinfo(Browser browser) throws Exception {
-        OidcToken accessToken = authenticate(browser);
-        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
-        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+        Tokens tokens = authenticate(browser);
+        OidcToken token = selectToken(tokens);
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(token);
+        tokenAsserter().verifyUserinfo(userinfo, token.getClaims());
     }
 
     /**
@@ -237,9 +254,10 @@ public interface ConformanceTest extends TinyAuthTest, Gadgets {
     @Tag("oidcc-implicit-certification-test-plan.oidcc-userinfo-post-body")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-userinfo-post-body")
     default void authenticateAndPostUserinfoInBody(Browser browser) throws Exception {
-        OidcToken accessToken = authenticate(browser);
-        JsonPath userinfo = userinfoEndpoint().postUserinfoWithTokenInBody(accessToken.getRawToken());
-        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+        Tokens tokens = authenticate(browser);
+        OidcToken token = selectToken(tokens);
+        JsonPath userinfo = userinfoEndpoint().postUserinfoWithTokenInBody(token);
+        tokenAsserter().verifyUserinfo(userinfo, token.getClaims());
     }
 
     @Test

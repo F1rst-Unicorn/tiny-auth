@@ -55,8 +55,8 @@ public interface MissingNonceSuccessTest extends AuthorizationCodeGadgets {
                 .extract().body().jsonPath();
 
         assertEquals(getScopes(), Set.of(tokenResponse.getString(SCOPE).split(" ")));
-        tokenAsserter().verifyAccessToken(tokenResponse.getString(ACCESS_TOKEN), getClient(), getUser());
-        tokenAsserter().verifyAccessToken(tokenResponse.getString(ID_TOKEN), getClient(), getUser());
+        tokenAsserter().verifyToken(tokenResponse.getString(ACCESS_TOKEN), getClient(), getUser());
+        tokenAsserter().verifyToken(tokenResponse.getString(ID_TOKEN), getClient(), getUser());
         tokenAsserter().verifyRefreshToken(tokenResponse.getString(REFRESH_TOKEN), getClient(), getUser(), getScopes());
     }
 }

@@ -18,8 +18,22 @@
 package de.njsm.tinyauth.test.data;
 
 import com.nimbusds.jwt.JWTClaimsSet;
+import io.restassured.path.json.JsonPath;
+
+import java.util.Map;
+
+import static de.njsm.tinyauth.test.oidc.TokenAsserter.convertTokenClaims;
+import static de.njsm.tinyauth.test.oidc.TokenAsserter.convertUserinfoClaims;
 
 public abstract class Scope {
 
-    public abstract void verifyClaimsFor(User user, JWTClaimsSet claims);
+    public void verifyClaimsFor(User user, JWTClaimsSet claims) {
+        verifyClaimsFor(user, convertTokenClaims(claims));
+    }
+
+    public void verifyClaimsFor(User user, JsonPath claims) {
+        verifyClaimsFor(user, convertUserinfoClaims(claims));
+    }
+
+    protected abstract void verifyClaimsFor(User user, Map<String, Object> claims);
 }

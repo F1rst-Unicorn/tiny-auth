@@ -19,6 +19,7 @@ package de.njsm.tinyauth.test;
 
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.OidcToken;
+import de.njsm.tinyauth.test.data.Tokens;
 import de.njsm.tinyauth.test.data.User;
 import de.njsm.tinyauth.test.oidc.Identifiers;
 import de.njsm.tinyauth.test.oidc.TokenAsserter;
@@ -35,11 +36,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public interface Gadgets extends TinyAuthTest, RedirectExtractor, ApiGadgets {
 
-    OidcToken authenticate(Browser browser) throws Exception;
+    Tokens authenticate(Browser browser) throws Exception;
 
-    OidcToken authenticate(Browser browser, Set<String> scopes) throws Exception;
+    Tokens authenticate(Browser browser, Set<String> scopes) throws Exception;
 
-    OidcToken authenticateWithAdditionalParameters(Browser browser, Map<String, String> scopes) throws Exception;
+    Tokens authenticateWithAdditionalParameters(Browser browser, Map<String, String> scopes) throws Exception;
+
+    OidcToken selectToken(Tokens tokens);
 
     String getState();
 

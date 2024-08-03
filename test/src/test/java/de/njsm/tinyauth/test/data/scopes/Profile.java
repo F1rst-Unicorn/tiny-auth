@@ -17,14 +17,12 @@
 
 package de.njsm.tinyauth.test.data.scopes;
 
-import com.nimbusds.jwt.JWTClaimsSet;
 import de.njsm.tinyauth.test.data.Scope;
 import de.njsm.tinyauth.test.data.User;
 
-import java.text.ParseException;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class Profile extends Scope {
 
@@ -35,24 +33,20 @@ public class Profile extends Scope {
     }
 
     @Override
-    public void verifyClaimsFor(User user, JWTClaimsSet claims) {
-        try {
-            assertEquals(user.getName(), claims.getStringClaim("name"));
-            assertEquals(user.getFamilyName(), claims.getStringClaim("family_name"));
-            assertEquals(user.getGivenName(), claims.getStringClaim("given_name"));
-            assertEquals(user.getMiddleName(), claims.getStringClaim("middle_name"));
-            assertEquals(user.getNickname(), claims.getStringClaim("nickname"));
-            assertEquals(user.getPreferredUsername(), claims.getStringClaim("preferred_username"));
-            assertEquals(user.getProfile(), claims.getStringClaim("profile"));
-            assertEquals(user.getPicture(), claims.getStringClaim("picture"));
-            assertEquals(user.getWebsite(), claims.getStringClaim("website"));
-            assertEquals(user.getGender(), claims.getStringClaim("gender"));
-            assertEquals(user.getBirthday(), claims.getStringClaim("birthdate"));
-            assertEquals(user.getZoneinfo(), claims.getStringClaim("zoneinfo"));
-            assertEquals(user.getLocale(), claims.getStringClaim("locale"));
-            assertEquals(user.getUpdatedAt(), claims.getLongClaim("updated_at"));
-        } catch (ParseException e) {
-            fail(e);
-        }
+    protected void verifyClaimsFor(User user, Map<String, Object> claims) {
+        assertEquals(user.getName(), claims.get("name"));
+        assertEquals(user.getFamilyName(), claims.get("family_name"));
+        assertEquals(user.getGivenName(), claims.get("given_name"));
+        assertEquals(user.getMiddleName(), claims.get("middle_name"));
+        assertEquals(user.getNickname(), claims.get("nickname"));
+        assertEquals(user.getPreferredUsername(), claims.get("preferred_username"));
+        assertEquals(user.getProfile(), claims.get("profile"));
+        assertEquals(user.getPicture(), claims.get("picture"));
+        assertEquals(user.getWebsite(), claims.get("website"));
+        assertEquals(user.getGender(), claims.get("gender"));
+        assertEquals(user.getBirthday(), claims.get("birthdate"));
+        assertEquals(user.getZoneinfo(), claims.get("zoneinfo"));
+        assertEquals(user.getLocale(), claims.get("locale"));
+        assertEquals((long) user.getUpdatedAt(), claims.get("updated_at"));
     }
 }

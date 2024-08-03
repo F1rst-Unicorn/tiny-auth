@@ -18,6 +18,7 @@
 package de.njsm.tinyauth.test;
 
 import de.njsm.tinyauth.test.data.OidcToken;
+import de.njsm.tinyauth.test.data.Tokens;
 import de.njsm.tinyauth.test.repository.Clients;
 import de.njsm.tinyauth.test.runtime.Browser;
 import org.junit.jupiter.api.Tag;
@@ -82,11 +83,11 @@ public interface AuthorizationCodeTests extends AuthorizationCodeGadgets, Client
                 .withUser(getUser())
                 .loginAndAssumeScopesAreGranted();
         String authorizationCode = assertOnRedirect(browser);
-        OidcToken tokenFromFirstLogin = verifyTokensFromAuthorizationCode(getScopes(), authorizationCode);
+        OidcToken tokenFromFirstLogin = verifyTokensFromAuthorizationCode(getScopes(), authorizationCode).accessToken().get();
 
         browser.startAuthenticationWithoutInteraction(getClient(), getState(), getScopes(), getNonce(), Map.of("prompt", "none"));
         authorizationCode = assertOnRedirect(browser);
-        OidcToken tokenFromSecondLogin = verifyTokensFromAuthorizationCode(getScopes(), authorizationCode);
+        OidcToken tokenFromSecondLogin = verifyTokensFromAuthorizationCode(getScopes(), authorizationCode).accessToken().get();
 
         long firstAuthTime = tokenFromFirstLogin.getClaims().getLongClaim(AUTH_TIME);
         long secondAuthTime = tokenFromSecondLogin.getClaims().getLongClaim(AUTH_TIME);
@@ -101,15 +102,21 @@ public interface AuthorizationCodeTests extends AuthorizationCodeGadgets, Client
     @Tag("oidcc-basic-certification-test-plan.oidcc-max-age-10000")
     @Tag("oidcc-hybrid-certification-test-plan.oidcc-max-age-10000")
     default void authenticateWithMaxAgeWithoutLogin(Browser browser) throws Exception {
-        OidcToken firstToken = authenticateWithAdditionalParameters(browser, Map.of("max_age", "15000"));
+        OidcToken firstToken = authenticateWithAdditionalParameters(browser, Map.of("max_age", "15000")).accessToken().get();
 
         browser.startAuthenticationWithConsent(getClient(), getState(), getScopes(), getNonce(), Map.of("max_age", "10000"))
                 .confirm();
         String authorizationCode = assertOnRedirect(browser);
-        OidcToken secondToken = verifyTokensFromAuthorizationCode(getScopes(), authorizationCode);
+        OidcToken secondToken = verifyTokensFromAuthorizationCode(getScopes(), authorizationCode).accessToken().get();
 
         long firstAuthTime = firstToken.getClaims().getLongClaim(AUTH_TIME);
         long secondAuthTime = secondToken.getClaims().getLongClaim(AUTH_TIME);
         assertThat(firstAuthTime, is(equalTo(secondAuthTime)));
+    }
+
+
+    @Override
+    default OidcToken selectToken(Tokens tokens) {
+        return tokens.accessToken().orElseThrow();
     }
 }

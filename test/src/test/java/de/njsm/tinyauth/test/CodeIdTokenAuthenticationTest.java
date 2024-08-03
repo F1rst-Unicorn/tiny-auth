@@ -25,7 +25,14 @@ import org.junit.jupiter.api.BeforeEach;
 
 import java.util.Set;
 
-public class CodeIdTokenAuthenticationTest extends TinyAuthBrowserTest implements ConformanceTest, MissingNonceFailureTest, RefreshTokenTest, AuthorizationCodeTests, RedirectFragmentExtractor {
+public class CodeIdTokenAuthenticationTest
+        extends TinyAuthBrowserTest
+        implements
+        ConformanceTest,
+        MissingNonceFailureTest,
+        RefreshTokenTest,
+        AuthorizationCodeTests,
+        RedirectFragmentExtractor {
 
     @BeforeEach
     void setUp() {

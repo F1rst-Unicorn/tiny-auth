@@ -83,3 +83,4 @@ log:
     - tiny_auth_main::config::parser=info
     - tiny_auth_main::systemd=debug
     - tiny_auth_business::store::memory=debug
+    - tiny_auth_template::web=debug

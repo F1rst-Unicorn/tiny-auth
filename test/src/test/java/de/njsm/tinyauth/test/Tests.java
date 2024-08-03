@@ -17,6 +17,8 @@
 
 package de.njsm.tinyauth.test;
 
+import de.njsm.tinyauth.test.data.OidcToken;
+import de.njsm.tinyauth.test.data.Tokens;
 import de.njsm.tinyauth.test.repository.Clients;
 import de.njsm.tinyauth.test.repository.Users;
 import de.njsm.tinyauth.test.runtime.Browser;
@@ -81,5 +83,10 @@ public class Tests extends TinyAuthBrowserTest implements AuthorizationCodeGadge
 
         String authorizationCode = assertOnRedirect(browser);
         fetchTokensAndVerifyBasics(Set.of("openid", "email"), tokenEndpoint().request(client, authorizationCode));
+    }
+
+    @Override
+    public OidcToken selectToken(Tokens tokens) {
+        throw new UnsupportedOperationException("unused anyway");
     }
 }
