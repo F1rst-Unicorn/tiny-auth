@@ -73,7 +73,7 @@ pub async fn post(
                 "error=\"invalid_request\", error_description=\"Missing authorization header\"",
             ))
             .finish(),
-        Err(Error::BusinessError(e)) => cors_check_result
+        Err(Error::Business(e)) => cors_check_result
             .with_headers(HttpResponse::Unauthorized())
             .append_header((
                 "www-authenticate",
@@ -158,7 +158,7 @@ enum Error {
     #[error("missing authorization header")]
     MissingAuthorizationHeader,
     #[error("{0}")]
-    BusinessError(#[from] userinfo_endpoint::Error),
+    Business(#[from] userinfo_endpoint::Error),
 }
 
 #[cfg(test)]

@@ -166,7 +166,7 @@ impl Handler {
                     }
                     Ok(token) => token,
                 };
-                response.id_token = Some(encoded_token.into());
+                response.id_token = Some(encoded_token);
             }
             if request
                 .response_types
@@ -186,7 +186,7 @@ impl Handler {
                     }
                     Ok(token) => token,
                 };
-                response.access_token = Some(encoded_token.into());
+                response.access_token = Some(encoded_token);
             }
             if let oauth2::ClientType::Confidential { .. } = client.client_type {
                 let encoded_refresh_token = match self.token_creator.finalize_refresh_token(

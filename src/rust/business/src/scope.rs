@@ -152,14 +152,11 @@ struct Mapping {
 }
 
 fn default_destination() -> BTreeSet<Destination> {
-    BTreeSet::from_iter(
-        vec![
-            Destination::AccessToken,
-            Destination::IdToken,
-            Destination::UserInfo,
-        ]
-        .into_iter(),
-    )
+    BTreeSet::from_iter(vec![
+        Destination::AccessToken,
+        Destination::IdToken,
+        Destination::UserInfo,
+    ])
 }
 
 #[derive(Clone, Deserialize, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]

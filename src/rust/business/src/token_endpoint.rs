@@ -165,6 +165,7 @@ impl Handler {
         ))
     }
 
+    #[allow(clippy::type_complexity)]
     #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user))]
     async fn grant_token(
         &self,

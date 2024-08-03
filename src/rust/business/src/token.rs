@@ -268,7 +268,7 @@ impl TokenCreator {
             authorized_party: client.client_id.to_string(),
             scopes: scopes.iter().map(|v| v.name.clone()).collect(),
             scope_attributes: Value::Null,
-            token_type: PhantomData::default(),
+            token_type: PhantomData,
         };
 
         debug!("issuing token");
