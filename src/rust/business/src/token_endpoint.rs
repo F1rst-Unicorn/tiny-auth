@@ -213,7 +213,9 @@ impl Handler {
                     .build_token::<Id>(&user, &client, &scopes, auth_time);
 
                 access_token.set_nonce(nonce.clone());
-                refresh_token.as_mut().map(|v| v.set_nonce(nonce.clone()));
+                if let Some(v) = refresh_token.as_mut() {
+                    v.set_nonce(nonce.clone())
+                }
                 id_token.set_nonce(nonce);
 
                 Ok((access_token, id_token, refresh_token, scopes))
@@ -424,24 +426,28 @@ impl Handler {
             .map(Option::unwrap)
             .collect();
 
-        let access_token = self.token_creator.build_token::<Access>(
+        let nonce = Some(refresh_token.nonce);
+        let mut access_token = self.token_creator.build_token::<Access>(
             &user,
             &client,
             actual_scopes.as_slice(),
             refresh_token.auth_time,
         );
-        let id_token = self.token_creator.build_token::<Id>(
+        let mut id_token = self.token_creator.build_token::<Id>(
             &user,
             &client,
             actual_scopes.as_slice(),
             refresh_token.auth_time,
         );
-        let refresh_token = self.token_creator.build_fresh_refresh_token(
+        let mut refresh_token = self.token_creator.build_fresh_refresh_token(
             &actual_scopes,
             &user.name,
             &client.client_id,
             refresh_token.auth_time,
         );
+        access_token.set_nonce(nonce.clone());
+        refresh_token.set_nonce(nonce.clone());
+        id_token.set_nonce(nonce);
 
         Ok((access_token, id_token, Some(refresh_token), actual_scopes))
     }
@@ -927,9 +933,9 @@ mod tests {
         assert!(validator.validate_access_token(response.0).is_some());
         assert!(validator.validate_id_token(response.1).is_some());
         assert!(response.2.is_some());
-        assert!(validator
-            .validate_refresh_token(response.2.unwrap())
-            .is_some());
+        let refresh_token = validator.validate_refresh_token(response.2.unwrap());
+        assert!(refresh_token.is_some());
+        assert_eq!("nonce".to_string(), refresh_token.unwrap().nonce);
     }
 
     #[test(tokio::test)]
@@ -1167,13 +1173,14 @@ mod tests {
 
     async fn build_refresh_token(client_id: &str) -> EncodedRefreshToken {
         let token_creator = build_test_token_creator();
-        let token = token_creator.build_refresh_token(
+        let mut token = token_creator.build_refresh_token(
             Local::now().timestamp(),
             &vec![],
             USER,
             client_id,
             0,
         );
+        token.set_nonce(Some("nonce".to_string()));
         token_creator.finalize_refresh_token(token).unwrap()
     }
 }
