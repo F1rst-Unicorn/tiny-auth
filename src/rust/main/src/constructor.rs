@@ -100,6 +100,8 @@ pub struct Constructor<'a> {
 
     token_validator: Arc<TokenValidator>,
 
+    own_token_validator: Arc<TokenValidator>,
+
     authenticator: Arc<Authenticator>,
 
     tls_cert: Option<String>,
@@ -128,6 +130,11 @@ impl<'a> Constructor<'a> {
                 })?,
         );
         let token_validator: Arc<TokenValidator> = Arc::new(Self::build_token_validator(
+            public_keys.first().unwrap(),
+            algorithm,
+            &issuer_url,
+        )?);
+        let own_token_validator: Arc<TokenValidator> = Arc::new(Self::build_own_token_validator(
             public_keys.first().unwrap(),
             algorithm,
             &issuer_url,
@@ -162,6 +169,7 @@ impl<'a> Constructor<'a> {
             encoding_key,
             jwks,
             token_validator,
+            own_token_validator,
             authenticator,
             tls_cert,
             tls_key,
@@ -482,6 +490,23 @@ impl<'a> Constructor<'a> {
         Ok(TokenValidator::new(key, algorithm, issuer_url.to_string()))
     }
 
+    pub fn build_own_token_validator(
+        public_key: &str,
+        algorithm: Algorithm,
+        issuer_url: &str,
+    ) -> Result<TokenValidator, Error> {
+        let key = match DecodingKey::from_rsa_pem(public_key.as_bytes()) {
+            Err(_) => DecodingKey::from_ec_pem(public_key.as_bytes())?,
+            Ok(key) => key,
+        };
+
+        Ok(TokenValidator::new_for_own_api(
+            key,
+            algorithm,
+            issuer_url.to_string(),
+        ))
+    }
+
     // See https://tools.ietf.org/html/rfc7518#section-6
     fn build_jwk(
         public_key: &str,
@@ -575,7 +600,7 @@ impl<'a> tiny_auth_api::Constructor<'a> for Constructor<'a> {
     }
 
     fn change_password_handler(&self) -> ChangePasswordHandler {
-        ChangePasswordHandler::new(self.authenticator.clone(), self.token_validator.clone())
+        ChangePasswordHandler::new(self.authenticator.clone(), self.own_token_validator.clone())
     }
 }
 

@@ -76,7 +76,7 @@ pub mod test_fixtures {
         "https://localhost:8088".to_string()
     }
 
-    fn build_test_algorithm() -> Algorithm {
+    pub fn build_test_algorithm() -> Algorithm {
         Algorithm::HS256
     }
 
