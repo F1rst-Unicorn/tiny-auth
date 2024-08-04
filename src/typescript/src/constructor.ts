@@ -51,6 +51,7 @@ export const oidcConfiguration: AuthProviderProps = {
   client_id: "tiny-auth-frontend",
   scope: "openid profile",
   userStore: new WebStorageStateStore({ store: window.localStorage }),
+  loadUserInfo: true,
   accessTokenExpiringNotificationTimeInSeconds: 5,
   onSigninCallback: () => {
     console.log("onSigninCallback from " + window.location.href);
