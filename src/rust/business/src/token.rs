@@ -381,11 +381,23 @@ pub struct TokenValidator {
 }
 
 impl TokenValidator {
+    pub const TINY_AUTH_FRONTEND_CLIENT_ID: &'static str = "tiny-auth-frontend";
+
     pub fn new(key: DecodingKey, algorithm: Algorithm, issuer: String) -> Self {
         let mut validation = Validation::new(algorithm);
         validation.leeway = 5;
         validation.validate_exp = true;
         validation.validate_nbf = false;
+        validation.set_issuer(&[issuer]);
+        Self { key, validation }
+    }
+
+    pub fn new_for_own_api(key: DecodingKey, algorithm: Algorithm, issuer: String) -> Self {
+        let mut validation = Validation::new(algorithm);
+        validation.leeway = 5;
+        validation.validate_exp = true;
+        validation.validate_nbf = false;
+        validation.set_audience(&[Self::TINY_AUTH_FRONTEND_CLIENT_ID]);
         validation.set_issuer(&[issuer]);
         Self { key, validation }
     }
@@ -433,7 +445,18 @@ pub mod test_fixtures {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::test_fixtures::{
+        build_test_client_store, build_test_user_store, CONFIDENTIAL_CLIENT,
+        TINY_AUTH_FRONTEND_CLIENT, USER,
+    };
+    use crate::store::ClientStore;
+    use crate::store::UserStore;
+    use crate::test_fixtures::{
+        build_test_algorithm, build_test_decoding_key, build_test_token_creator,
+        build_test_token_issuer,
+    };
     use serde_json::from_str;
+    use test_log::test;
 
     #[test]
     pub fn deserialise_single_audience() {
@@ -490,5 +513,55 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test(tokio::test)]
+    pub async fn different_audience_is_rejected() {
+        let token_creator = build_test_token_creator();
+        let token = token_creator.build_token(
+            &build_test_user_store().get(USER).await.unwrap(),
+            &build_test_client_store()
+                .get(CONFIDENTIAL_CLIENT)
+                .await
+                .unwrap(),
+            &[],
+            0,
+        );
+        let token = build_test_token_creator()
+            .finalize_access_token(token)
+            .unwrap();
+
+        let actual = TokenValidator::new_for_own_api(
+            build_test_decoding_key(),
+            build_test_algorithm(),
+            build_test_token_issuer(),
+        )
+        .validate_access_token(token);
+
+        assert!(actual.is_none());
+    }
+
+    #[test(tokio::test)]
+    pub async fn own_audience_is_accepted() {
+        let token_creator = build_test_token_creator();
+        let token = token_creator.build_token(
+            &build_test_user_store().get(USER).await.unwrap(),
+            &build_test_client_store()
+                .get(TINY_AUTH_FRONTEND_CLIENT)
+                .await
+                .unwrap(),
+            &[],
+            0,
+        );
+        let token = token_creator.finalize_access_token(token).unwrap();
+
+        let actual = TokenValidator::new_for_own_api(
+            build_test_decoding_key(),
+            build_test_algorithm(),
+            build_test_token_issuer(),
+        )
+        .validate_access_token(token);
+
+        assert!(actual.is_some());
     }
 }

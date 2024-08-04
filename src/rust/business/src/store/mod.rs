@@ -210,6 +210,7 @@ pub mod test_fixtures {
     use crate::client::{Client, Error};
     use crate::oauth2::ClientType;
     use crate::password::Password;
+    use crate::token::TokenValidator;
     use crate::user::User;
 
     pub const UNKNOWN_USER: &str = "unknown_user";
@@ -239,6 +240,7 @@ pub mod test_fixtures {
     pub const UNKNOWN_CLIENT_ID: &str = "unknown_client";
     pub const CONFIDENTIAL_CLIENT: &str = "client1";
     pub const PUBLIC_CLIENT: &str = "client2";
+    pub const TINY_AUTH_FRONTEND_CLIENT: &str = TokenValidator::TINY_AUTH_FRONTEND_CLIENT_ID;
 
     struct TestClientStore {}
 
@@ -257,6 +259,13 @@ pub mod test_fixtures {
                     attributes: HashMap::new(),
                 }),
                 "client2" => Ok(Client {
+                    client_id: key.to_string(),
+                    client_type: ClientType::Public,
+                    redirect_uris: vec!["http://localhost/client2".to_string()],
+                    allowed_scopes: BTreeSet::from_iter(vec!["email".to_string()]),
+                    attributes: HashMap::new(),
+                }),
+                "tiny-auth-frontend" => Ok(Client {
                     client_id: key.to_string(),
                     client_type: ClientType::Public,
                     redirect_uris: vec!["http://localhost/client2".to_string()],

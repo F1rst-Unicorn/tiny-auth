@@ -10,6 +10,11 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 * Scope claims can now go to only some of access token, id token or userinfo
   ([#76](https://j.njsm.de/git/veenj/tiny-auth/issues/76)).
 
+### Fixed
+
+* Validate token audience for own API
+  ([#103](https://j.njsm.de/git/veenj/tiny-auth/issues/103)).
+
 ## [2.0.0]
 
 ### Added
