@@ -16,7 +16,6 @@
  */
 
 use systemd::daemon::notify;
-
 use tracing::error;
 use tracing::trace;
 

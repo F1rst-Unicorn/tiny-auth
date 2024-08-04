@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::config::Config;
+use crate::config::data::Config;
 use crate::logging::{FilterHandle, FormatHandle};
 use crate::systemd::notify_about_start;
 use crate::systemd::watchdog;

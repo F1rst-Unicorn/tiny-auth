@@ -14,7 +14,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::config::{Fields, Format, Log, Time};
+use crate::config::data::{Fields, Format, Log, Time};
 use std::env;
 use std::str::FromStr;
 use tracing::{debug, error, info, Subscriber};

@@ -16,12 +16,11 @@
  */
 
 use tiny_auth_main::cli_parser;
+use tiny_auth_main::cli_parser::FLAG_VERBOSE;
 use tiny_auth_main::config::parser::parse_config;
 use tiny_auth_main::logging;
-use tiny_auth_main::runtime;
-
-use tiny_auth_main::cli_parser::FLAG_VERBOSE;
 use tiny_auth_main::logging::initialise_from_verbosity;
+use tiny_auth_main::runtime;
 use tracing::error;
 use tracing::info;
 

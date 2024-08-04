@@ -21,7 +21,6 @@ use std::fs::File;
 use std::io::Error;
 use std::io::Read;
 use std::path::Path;
-
 use tracing::error;
 
 pub fn read_file(file_path: impl AsRef<Path>) -> Result<String, Error> {

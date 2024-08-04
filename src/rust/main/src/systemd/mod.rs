@@ -19,73 +19,14 @@
 mod linux;
 #[cfg(target_os = "linux")]
 use linux::notify_systemd;
+
 #[cfg(not(target_os = "linux"))]
 mod other;
 #[cfg(not(target_os = "linux"))]
 use other::notify_systemd;
 
-use std::str::FromStr;
-use std::time::Duration;
+pub mod common;
 
-use tracing::debug;
-use tracing::warn;
-
-use tokio::task::spawn_blocking;
-use tokio::time;
-
-pub async fn notify_about_start() {
-    let result = spawn_blocking(|| {
-        notify_systemd(&[("READY", "1")]);
-    })
-    .await;
-
-    if let Err(e) = result {
-        warn!(%e, "watchdog failed to notify about startup");
-    }
-}
-
-pub async fn notify_about_termination() {
-    let result = spawn_blocking(|| {
-        notify_systemd(&[("STOPPING", "1")]);
-    })
-    .await;
-
-    if let Err(e) = result {
-        warn!(%e, "watchdog failed to notify about termination");
-    }
-}
-
-/// See man 5 systemd.service
-/// and man 3 sd_notify
-pub async fn watchdog() {
-    let watchdog_interval = compute_watchdog_interval();
-    let mut clock = time::interval(Duration::from_micros(watchdog_interval));
-    debug!(
-        interval_in_us = watchdog_interval,
-        "watchdog will run periodically"
-    );
-
-    loop {
-        clock.tick().await;
-        let result = spawn_blocking(|| {
-            notify_systemd(&[("WATCHDOG", "1")]);
-        })
-        .await;
-
-        if let Err(e) = result {
-            warn!(%e, "watchdog failed to notify");
-        }
-    }
-}
-
-fn compute_watchdog_interval() -> u64 {
-    let default = 10_000_000;
-    let raw = std::env::var("WATCHDOG_USEC");
-    let microseconds: u64 = raw
-        .ok()
-        .as_deref()
-        .map(u64::from_str)
-        .and_then(Result::ok)
-        .unwrap_or(default);
-    microseconds * 4 / 5
-}
+pub use common::notify_about_start;
+pub use common::notify_about_termination;
+pub use common::watchdog;

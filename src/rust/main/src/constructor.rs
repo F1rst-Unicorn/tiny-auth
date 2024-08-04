@@ -15,9 +15,9 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::config::{ClientAttributes, Config, LdapMode, LdapUsageClients};
-use crate::config::{LdapUsageUsers, Store};
-use crate::config::{TlsVersion, UserAttributes};
+use crate::config::data::{ClientAttributes, Config, LdapMode, LdapUsageClients};
+use crate::config::data::{LdapUsageUsers, Store};
+use crate::config::data::{TlsVersion, UserAttributes};
 use crate::runtime::Error;
 use crate::runtime::Error::LoggedBeforeError;
 use crate::store::file::*;

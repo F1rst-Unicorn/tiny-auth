@@ -15,12 +15,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::config::Config;
+use crate::config::data::Config;
 use crate::util::read_file as read;
-
 use std::fs;
 use std::process::exit;
-
 use tracing::trace;
 use tracing::{error, instrument, warn};
 
