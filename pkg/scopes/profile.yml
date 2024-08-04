@@ -36,9 +36,13 @@ mappings:
       locale: "{{ user.locale }}"
     type: template
     optional: true
+    destination:
+      - userinfo
 
   - structure: null
     type:
       user_attribute:
         updated_at: null
     optional: true
+    destination:
+      - userinfo

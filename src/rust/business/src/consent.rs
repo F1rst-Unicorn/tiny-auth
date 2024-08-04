@@ -24,7 +24,9 @@ use crate::store::AuthorizationCodeStore;
 use crate::store::ClientStore;
 use crate::store::ScopeStore;
 use crate::store::UserStore;
-use crate::token::TokenCreator;
+use crate::token::{
+    Access, EncodedAccessToken, EncodedIdToken, EncodedRefreshToken, Id, TokenCreator,
+};
 use chrono::{DateTime, Duration, Local};
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -43,9 +45,9 @@ pub struct Request<'a> {
 }
 
 pub struct Response {
-    pub access_token: Option<String>,
-    pub id_token: Option<String>,
-    pub refresh_token: Option<String>,
+    pub access_token: Option<EncodedAccessToken>,
+    pub id_token: Option<EncodedIdToken>,
+    pub refresh_token: Option<EncodedRefreshToken>,
     pub code: Option<String>,
     pub expiration: Option<Duration>,
 }
@@ -146,36 +148,54 @@ impl Handler {
 
             let all_scopes = self.scope_store.get_all(&scopes);
 
-            let mut token = self.token_creator.build_token(
-                &user,
-                &client,
-                &all_scopes,
-                request.auth_time.timestamp(),
-            );
-            token.set_nonce(request.nonce.cloned());
-
-            let encoded_token = match self.token_creator.finalize(token.clone()) {
-                Err(e) => {
-                    debug!(%e, "failed to encode token");
-                    return Err(Error::TokenEncodingError);
-                }
-                Ok(token) => token,
-            };
             if request
                 .response_types
                 .contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken))
             {
-                response.id_token = Some(encoded_token.clone());
+                let mut token = self.token_creator.build_token::<Id>(
+                    &user,
+                    &client,
+                    &all_scopes,
+                    request.auth_time.timestamp(),
+                );
+                token.set_nonce(request.nonce.cloned());
+                let encoded_token = match self.token_creator.finalize_id_token(token.clone()) {
+                    Err(e) => {
+                        debug!(%e, "failed to encode token");
+                        return Err(Error::TokenEncodingError);
+                    }
+                    Ok(token) => token,
+                };
+                response.id_token = Some(encoded_token);
             }
             if request
                 .response_types
                 .contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Token))
             {
-                response.access_token = Some(encoded_token.clone());
+                let mut token = self.token_creator.build_token::<Access>(
+                    &user,
+                    &client,
+                    &all_scopes,
+                    request.auth_time.timestamp(),
+                );
+                token.set_nonce(request.nonce.cloned());
+                let encoded_token = match self.token_creator.finalize_access_token(token.clone()) {
+                    Err(e) => {
+                        debug!(%e, "failed to encode token");
+                        return Err(Error::TokenEncodingError);
+                    }
+                    Ok(token) => token,
+                };
+                response.access_token = Some(encoded_token);
             }
             if let oauth2::ClientType::Confidential { .. } = client.client_type {
                 let encoded_refresh_token = match self.token_creator.finalize_refresh_token(
-                    self.token_creator.build_refresh_token(token, &all_scopes),
+                    self.token_creator.build_fresh_refresh_token(
+                        &all_scopes,
+                        &user.name,
+                        &client.client_id,
+                        request.auth_time.timestamp(),
+                    ),
                 ) {
                     Err(e) => {
                         debug!(%e, "failed to encode refresh token");
@@ -183,7 +203,7 @@ impl Handler {
                     }
                     Ok(token) => token,
                 };
-                response.refresh_token = Some(encoded_refresh_token.clone());
+                response.refresh_token = Some(encoded_refresh_token);
             }
 
             response.expiration = Some(self.token_creator.expiration());

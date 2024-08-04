@@ -18,6 +18,7 @@
 package de.njsm.tinyauth.test;
 
 import de.njsm.tinyauth.test.data.OidcToken;
+import de.njsm.tinyauth.test.data.Tokens;
 import de.njsm.tinyauth.test.oidc.Identifiers;
 import de.njsm.tinyauth.test.oidc.redirect.RedirectFragmentExtractor;
 import de.njsm.tinyauth.test.repository.Clients;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static de.njsm.tinyauth.test.oidc.Identifiers.*;
@@ -62,11 +64,13 @@ public abstract class ImplicitAuthenticationTest extends TinyAuthBrowserTest imp
     @Test
     @Tag("oidcc-implicit-certification-test-plan.oidcc-max-age-10000")
     void authenticateWithMaxAgeWithoutLogin(Browser browser) throws Exception {
-        OidcToken firstToken = authenticateWithAdditionalParameters(browser, Map.of("max_age", "15000"));
+        Tokens firstTokens = authenticateWithAdditionalParameters(browser, Map.of("max_age", "15000"));
+        OidcToken firstToken = selectToken(firstTokens);
 
         browser.startAuthenticationWithConsent(client, getState(), scopes, getNonce(), Map.of("max_age", "10000"))
                 .confirm();
-        OidcToken secondToken = extractTokenFromRedirect(browser);
+        Tokens secondTokens = extractTokenFromRedirect(browser);
+        OidcToken secondToken = selectToken(secondTokens);
 
         long firstAuthTime = firstToken.getClaims().getLongClaim(AUTH_TIME);
         long secondAuthTime = secondToken.getClaims().getLongClaim(AUTH_TIME);
@@ -76,10 +80,11 @@ public abstract class ImplicitAuthenticationTest extends TinyAuthBrowserTest imp
     @Test
     @Tag("oidcc-implicit-certification-test-plan.oidcc-ensure-other-scope-order-succeeds")
     void authenticateWithScopesInDifferentOrder(Browser browser) throws Exception {
-        OidcToken accessToken = authenticate(browser, Set.of("openid", "email"));
-        Scopes.getEmail().verifyClaimsFor(user, accessToken.getClaims());
-        JsonPath userinfo = userinfoEndpoint().postUserinfo(accessToken.getRawToken());
-        tokenAsserter().verifyUserinfo(userinfo, accessToken.getClaims());
+        Tokens tokens = authenticate(browser, Set.of("openid", "email"));
+        OidcToken token = selectToken(tokens);
+        Scopes.getEmail().verifyClaimsFor(getUser(), tokens.idToken().get().getClaims());
+        JsonPath userinfo = userinfoEndpoint().postUserinfo(token);
+        tokenAsserter().verifyUserinfo(userinfo, token.getClaims());
     }
 
     @Test
@@ -90,10 +95,11 @@ public abstract class ImplicitAuthenticationTest extends TinyAuthBrowserTest imp
         browser.startAuthentication(client, getState(), scopes, getNonce())
                 .withUser(user)
                 .loginAndAssumeScopesAreGranted();
-        OidcToken tokenFromFirstLogin = extractTokenFromRedirect(browser);
+        Tokens tokensFromFirstLogin = extractTokenFromRedirect(browser);
+        OidcToken tokenFromFirstLogin = selectToken(tokensFromFirstLogin);
 
         browser.startAuthenticationWithoutInteraction(client, getState(), scopes, getNonce(), Map.of("prompt", "none"));
-        OidcToken tokenFromSecondLogin = extractTokenFromRedirect(browser);
+        OidcToken tokenFromSecondLogin = selectToken(extractTokenFromRedirect(browser));
 
         long firstAuthTime = tokenFromFirstLogin.getClaims().getLongClaim(AUTH_TIME);
         long secondAuthTime = tokenFromSecondLogin.getClaims().getLongClaim(AUTH_TIME);
@@ -104,7 +110,8 @@ public abstract class ImplicitAuthenticationTest extends TinyAuthBrowserTest imp
         assertThat(firstSubject, is(equalTo(secondSubject)));
     }
 
-    public OidcToken authenticateWithAdditionalParameters(Browser browser, Map<String, String> additionalParameters) throws Exception {
+    @Override
+    public Tokens authenticateWithAdditionalParameters(Browser browser, Map<String, String> additionalParameters) throws Exception {
         browser.startAuthenticationWithAdditionalParameters(client, getState(), scopes, getNonce(), additionalParameters)
                 .withUser(user)
                 .login()
@@ -113,11 +120,20 @@ public abstract class ImplicitAuthenticationTest extends TinyAuthBrowserTest imp
         return extractTokenFromRedirect(browser);
     }
 
-    public OidcToken authenticate(Browser browser) throws Exception {
+    @Override
+    public OidcToken selectToken(Tokens tokens) {
+        return tokens.accessToken()
+                .or(tokens::idToken)
+                .orElseThrow();
+    }
+
+    @Override
+    public Tokens authenticate(Browser browser) throws Exception {
         return authenticate(browser, getScopes());
     }
 
-    public OidcToken authenticate(Browser browser, Set<String> scopes) throws Exception {
+    @Override
+    public Tokens authenticate(Browser browser, Set<String> scopes) throws Exception {
         browser.startAuthentication(client, getState(), scopes, getNonce())
                 .withUser(user)
                 .login()
@@ -126,7 +142,7 @@ public abstract class ImplicitAuthenticationTest extends TinyAuthBrowserTest imp
         return extractTokenFromRedirect(browser);
     }
 
-    OidcToken extractTokenFromRedirect(Browser browser) throws Exception {
+    private Tokens extractTokenFromRedirect(Browser browser) throws Exception {
         HttpUrl oidcRedirect = getLastOidcRedirect(browser);
 
         assertUrlParameter(oidcRedirect, EXPIRES_IN, "60");
@@ -136,14 +152,15 @@ public abstract class ImplicitAuthenticationTest extends TinyAuthBrowserTest imp
         List<String> errors = oidcRedirect.queryParameterValues(ERROR);
         assertTrue(errors.isEmpty(), "server returned error: " + String.join(" ", errors));
 
-        OidcToken returnToken = null;
+        Optional<OidcToken> idToken = Optional.empty();
         if (getResponseTypes().contains(ResponseType.ID_TOKEN)) {
-            returnToken = tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(Identifiers.ID_TOKEN), client, user);
+            idToken = Optional.ofNullable(tokenAsserter().verifyToken(oidcRedirect.queryParameter(Identifiers.ID_TOKEN), client, user));
         }
+        Optional<OidcToken> accessToken = Optional.empty();
         if (getResponseTypes().contains(ResponseType.TOKEN)) {
-            returnToken = tokenAsserter().verifyAccessToken(oidcRedirect.queryParameter(ACCESS_TOKEN), client, user);
+            accessToken = Optional.ofNullable(tokenAsserter().verifyToken(oidcRedirect.queryParameter(ACCESS_TOKEN), client, user));
         }
 
-        return returnToken;
+        return new Tokens(accessToken, idToken, Optional.empty());
     }
 }

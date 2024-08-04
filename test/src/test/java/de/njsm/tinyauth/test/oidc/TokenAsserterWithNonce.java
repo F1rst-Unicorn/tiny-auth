@@ -17,7 +17,6 @@
 
 package de.njsm.tinyauth.test.oidc;
 
-import com.nimbusds.jwt.JWTClaimsSet;
 import de.njsm.tinyauth.test.data.Client;
 import de.njsm.tinyauth.test.data.OidcToken;
 import de.njsm.tinyauth.test.data.User;
@@ -26,7 +25,6 @@ import de.njsm.tinyauth.test.repository.Endpoint;
 import java.util.Map;
 import java.util.Set;
 
-import static de.njsm.tinyauth.test.oidc.Identifiers.ACCESS_TOKEN;
 import static de.njsm.tinyauth.test.oidc.Identifiers.NONCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -42,17 +40,10 @@ public class TokenAsserterWithNonce implements TokenAsserter {
     }
 
     @Override
-    public OidcToken verifyAccessToken(String token, Client client, User user) throws Exception {
-        JWTClaimsSet claims = verifyToken(token);
-        verifyAccessTokenClaims(claims.getClaims(), client, user);
-        return new OidcToken(token, claims);
-    }
-
-    @Override
     public OidcToken verifyRefreshToken(String token, Client client, User user, Set<String> scopes) throws Exception {
-        JWTClaimsSet claims = verifyRefreshTokenSpecificClaims(token, scopes);
-        verifyAccessTokenClaims(claims.getJSONObjectClaim(ACCESS_TOKEN), client, user);
-        return new OidcToken(token, claims);
+        OidcToken result = TokenAsserter.super.verifyRefreshToken(token, client, user, scopes);
+        assertEquals(nonce, result.getClaims().getClaims().get(NONCE));
+        return result;
     }
 
     @Override

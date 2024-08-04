@@ -14,7 +14,7 @@ name: Technical name for usage in HTTP requests
 pretty name: A human-friendly name presented on the consent webpage
 description: A human-friendly description of what the user agrees to release
 
-mappings: []
+mappings: [ ]
 ```
 
 The file has to carry the name stated inside the file with the `.yml`
@@ -35,12 +35,21 @@ structure:
   my_claim: hello world
 type: plain
 optional: false
+destination:
+  - access token
 ```
 
 This will map the plain YAML object below `structure` into the token. Every
 mapping has a `structure` which defines the structure of the object put into
 the token. The compulsory `type` defines the behaviour of the mapping (see
 below for all types).
+
+`destination` controls, where the mapping should be visible. It takes a list of
+any of these values: `access token`, `id token`, `userinfo`. The default is to
+include it in all destinations. Most claims should only have destination
+`userinfo`. Tokens are used for authentication via HTTP headers for which most
+servers have size limitations. To avoid having tokens rejected because of their
+size, only the minimal needed information should be included in the tokens.
 
 `optional` is an optional flag defaulting to `false`. Since claim generation
 may fail due to configuration errors, there are two behaviours: Claims coming
@@ -69,9 +78,9 @@ scopes `email` and `profile`.
 
 Inside the templates you can access the following variables:
 
-| Name | Description |
-|:-----|:------------|
-| `user`   | The user currently authenticating. You can access any attribute set for the current user |
+| Name     | Description                                                                                                |
+|:---------|:-----------------------------------------------------------------------------------------------------------|
+| `user`   | The user currently authenticating. You can access any attribute set for the current user                   |
 | `client` | The OpenID Connect Client initiating the protocol. You can access any attribute set for the current client |
 
 #### User / Client attribute

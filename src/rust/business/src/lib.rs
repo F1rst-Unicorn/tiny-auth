@@ -37,6 +37,7 @@ pub mod template;
 pub mod token;
 pub mod token_endpoint;
 pub mod user;
+pub mod userinfo_endpoint;
 pub mod util;
 
 pub mod test_fixtures {

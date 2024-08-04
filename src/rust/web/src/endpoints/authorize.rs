@@ -199,7 +199,7 @@ pub async fn handle(
             Error::MissingNonceForImplicitFlow { redirect_uri } => return_error(
                 &redirect_uri,
                 ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest),
-                "Invalid required parameter response_type",
+                "Invalid required parameter nonce",
                 &query.state,
                 encode_redirect_to_fragment,
             ),

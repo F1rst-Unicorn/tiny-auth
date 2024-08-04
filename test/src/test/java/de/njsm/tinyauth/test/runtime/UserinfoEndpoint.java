@@ -17,6 +17,7 @@
 
 package de.njsm.tinyauth.test.runtime;
 
+import de.njsm.tinyauth.test.data.OidcToken;
 import de.njsm.tinyauth.test.repository.Endpoint;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
@@ -39,25 +40,27 @@ public class UserinfoEndpoint {
         this.endpoint = endpoint;
     }
 
-    public JsonPath getUserinfo(String accessToken) {
+    public JsonPath getUserinfo(OidcToken accessToken) {
+        String accessToken1 = accessToken.getRawToken();
         LOG.info("getting userinfo");
         return verifyBasics(when()
-                .header("Authorization", TOKEN_TYPE_CONTENT + " " + accessToken)
+                .header("Authorization", TOKEN_TYPE_CONTENT + " " + accessToken1)
                 .get());
     }
 
-    public JsonPath postUserinfo(String accessToken) {
+    public JsonPath postUserinfo(OidcToken accessToken) {
+        String accessToken1 = accessToken.getRawToken();
         LOG.info("posting userinfo");
         return verifyBasics(when()
-                .header("Authorization", TOKEN_TYPE_CONTENT + " " + accessToken)
+                .header("Authorization", TOKEN_TYPE_CONTENT + " " + accessToken1)
                 .post());
     }
 
-    public JsonPath postUserinfoWithTokenInBody(String accessToken) {
+    public JsonPath postUserinfoWithTokenInBody(OidcToken accessToken) {
         LOG.info("posting userinfo");
         return verifyBasics(when()
                 .contentType(ContentType.URLENC)
-                .formParam(ACCESS_TOKEN, accessToken)
+                .formParam(ACCESS_TOKEN, accessToken.getRawToken())
                 .post());
     }
 

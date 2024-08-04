@@ -28,3 +28,5 @@ mappings:
     type:
       user_attribute:
         address: null
+    destination:
+      - userinfo

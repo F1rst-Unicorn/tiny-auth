@@ -31,6 +31,7 @@ use tiny_auth_business::oauth2::GrantType;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::scope::Scope;
 use tiny_auth_business::serde::deserialise_empty_as_none;
+use tiny_auth_business::token::{EncodedAccessToken, EncodedIdToken, EncodedRefreshToken};
 use tiny_auth_business::token_endpoint::Error;
 use tracing::instrument;
 
@@ -67,8 +68,7 @@ pub struct Request {
     password: Option<String>,
 
     #[serde(default)]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    refresh_token: Option<String>,
+    refresh_token: Option<EncodedRefreshToken>,
 
     #[serde(default)]
     #[serde(deserialize_with = "deserialise_empty_as_none")]
@@ -85,7 +85,7 @@ pub struct Request {
 
 #[derive(Serialize, Deserialize)]
 pub struct Response {
-    access_token: String,
+    access_token: EncodedAccessToken,
 
     token_type: String,
 
@@ -93,13 +93,13 @@ pub struct Response {
     expires_in: Option<u64>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    refresh_token: Option<String>,
+    refresh_token: Option<EncodedRefreshToken>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     scope: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    id_token: Option<String>,
+    id_token: Option<EncodedIdToken>,
 }
 
 #[instrument(skip_all, name = "token_post")]
@@ -120,7 +120,7 @@ pub async fn post(
         Some(grant_type) => grant_type.to_owned(),
     };
 
-    let (token, refresh_token, scopes) = match handler
+    let (access_token, id_token, refresh_token, scopes) = match handler
         .grant_tokens(&headers, request, grant_type)
         .await
         .map_err(|e| match e {
@@ -227,7 +227,7 @@ pub async fn post(
     cors_check_result
         .with_headers(HttpResponse::Ok())
         .json(Response {
-            access_token: token.clone(),
+            access_token,
             token_type: "bearer".to_string(),
             expires_in: Some(60),
             refresh_token,
@@ -238,7 +238,7 @@ pub async fn post(
                     .collect::<Vec<String>>()
                     .join(" "),
             ),
-            id_token: Some(token),
+            id_token: Some(id_token),
         })
 }
 
@@ -268,7 +268,15 @@ impl Handler {
         headers: &HttpRequest,
         mut request: Form<Request>,
         grant_type: GrantType,
-    ) -> Result<(String, Option<String>, Vec<Scope>), Error> {
+    ) -> Result<
+        (
+            EncodedAccessToken,
+            EncodedIdToken,
+            Option<EncodedRefreshToken>,
+            Vec<Scope>,
+        ),
+        Error,
+    > {
         self.handler
             .grant_tokens(tiny_auth_business::token_endpoint::Request {
                 basic_authentication: headers

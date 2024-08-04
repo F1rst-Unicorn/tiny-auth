@@ -66,7 +66,7 @@ Timeout for each connection attempt. After expiry, the next entry is tried.
 
 Enable STARTTLS on `ldap` connection.
 
-### Simple Bind Mode
+## Simple Bind Mode
 
 tiny-auth binds as the `user` name passed by the user and the supplied password.
 

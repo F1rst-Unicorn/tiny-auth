@@ -25,16 +25,18 @@ use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use serde_derive::Deserialize;
 use std::sync::Arc;
-use tiny_auth_business::serde::deserialise_empty_as_none;
+use thiserror::Error;
 use tiny_auth_business::token::Token;
-use tiny_auth_business::token::TokenValidator;
+use tiny_auth_business::token::{EncodedAccessToken, Userinfo};
+use tiny_auth_business::userinfo_endpoint;
+use tiny_auth_business::userinfo_endpoint::Handler as BusinessHandler;
+use tiny_auth_business::userinfo_endpoint::Request as BusinessRequest;
 use tracing::{debug, instrument};
 
 #[derive(Deserialize)]
 pub struct Request {
     #[serde(default)]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    access_token: Option<String>,
+    access_token: Option<EncodedAccessToken>,
 }
 
 #[instrument(skip_all, name = "userinfo_get")]
@@ -53,7 +55,7 @@ pub async fn post(
         return render_invalid_request();
     }
 
-    match handler.handle(query, &request) {
+    match handler.handle(query, &request).await {
         Ok(token) => cors_check_result
             .with_headers(HttpResponse::Ok())
             .json(token),
@@ -71,11 +73,11 @@ pub async fn post(
                 "error=\"invalid_request\", error_description=\"Missing authorization header\"",
             ))
             .finish(),
-        Err(Error::InvalidToken) => cors_check_result
+        Err(Error::Business(e)) => cors_check_result
             .with_headers(HttpResponse::Unauthorized())
             .append_header((
                 "www-authenticate",
-                "error=\"invalid_token\", error_description=\"Invalid token\"",
+                format!("error=\"invalid_token\", error_description=\"{}\"", e),
             ))
             .finish(),
     }
@@ -83,7 +85,7 @@ pub async fn post(
 
 #[derive(Clone)]
 pub struct Handler {
-    validator: Arc<TokenValidator>,
+    handler: Arc<BusinessHandler>,
     cors_checker: Arc<CorsChecker>,
 }
 
@@ -92,25 +94,35 @@ impl Handler {
         self.cors_checker.check(request)
     }
 
-    fn handle(&self, query: Form<Request>, request: &HttpRequest) -> Result<Token, Error> {
-        let token = Self::look_up_token(&query, request)?;
+    async fn handle(
+        &self,
+        query: Form<Request>,
+        request: &HttpRequest,
+    ) -> Result<Token<Userinfo>, Error> {
+        let token = Self::look_up_token(query, request)?;
 
-        match self.validator.validate::<Token>(&token) {
-            None => {
-                debug!("invalid token");
-                Err(Error::InvalidToken)
-            }
-            Some(token) => Ok(token),
-        }
+        Ok(self.handler.get_userinfo(BusinessRequest { token }).await?)
     }
 
-    fn look_up_token(query: &Form<Request>, request: &HttpRequest) -> Result<String, Error> {
+    fn look_up_token(
+        query: Form<Request>,
+        request: &HttpRequest,
+    ) -> Result<EncodedAccessToken, Error> {
         if let Some(token) = &query.access_token {
-            Ok(token.to_string())
+            Ok(token.clone())
         } else {
             match request.headers().get("Authorization") {
                 Some(header) => match parse_bearer_authorization(header) {
-                    Some(token) => Ok(token),
+                    Some(token) => {
+                        match serde_json::from_str::<EncodedAccessToken>(&format!("\"{}\"", &token))
+                        {
+                            Err(e) => {
+                                debug!(%e, "invalid authorization header");
+                                Err(Error::InvalidAuthorizationHeader)
+                            }
+                            Ok(v) => Ok(v),
+                        }
+                    }
                     None => {
                         debug!("invalid authorization header");
                         Err(Error::InvalidAuthorizationHeader)
@@ -129,20 +141,24 @@ pub mod inject {
     use super::Handler;
     use crate::cors::CorsChecker;
     use std::sync::Arc;
-    use tiny_auth_business::token::TokenValidator;
+    use tiny_auth_business::userinfo_endpoint::Handler as BusinessHandler;
 
-    pub fn handler(validator: Arc<TokenValidator>, cors_checker: Arc<CorsChecker>) -> Handler {
+    pub fn handler(handler: Arc<BusinessHandler>, cors_checker: Arc<CorsChecker>) -> Handler {
         Handler {
-            validator,
+            handler,
             cors_checker,
         }
     }
 }
 
+#[derive(Debug, Error)]
 enum Error {
+    #[error("invalid authorization header")]
     InvalidAuthorizationHeader,
+    #[error("missing authorization header")]
     MissingAuthorizationHeader,
-    InvalidToken,
+    #[error("{0}")]
+    Business(#[from] userinfo_endpoint::Error),
 }
 
 #[cfg(test)]
@@ -159,8 +175,8 @@ mod tests {
     use tiny_auth_business::store::ClientStore;
     use tiny_auth_business::store::UserStore;
     use tiny_auth_business::test_fixtures::build_test_token_creator;
-    use tiny_auth_business::test_fixtures::build_test_token_validator;
     use tiny_auth_business::token::Token;
+    use tiny_auth_business::userinfo_endpoint::test_fixtures::build_test_userinfo_handler;
 
     #[tokio::test]
     pub async fn missing_header_is_rejected() {
@@ -190,10 +206,15 @@ mod tests {
         let user = build_test_user_store().get(USER).await.unwrap();
         let client = build_test_client_store().get(PUBLIC_CLIENT).await.unwrap();
         let token = creator.build_token(&user, &client, &Vec::new(), 0);
+        let expected_userinfo = creator.build_token(&user, &client, &Vec::new(), 0);
         let request = test::TestRequest::post()
             .insert_header((
                 "authorization",
-                "Bearer ".to_string() + &creator.finalize(token.clone()).unwrap(),
+                <&str as Into<String>>::into("Bearer ")
+                    + &creator
+                        .finalize_access_token(token.clone())
+                        .unwrap()
+                        .as_ref(),
             ))
             .to_http_request();
         let query = Form(Request { access_token: None });
@@ -201,13 +222,13 @@ mod tests {
         let resp = post(query, request, build_test_handler()).await;
 
         assert_eq!(resp.status(), http::StatusCode::OK);
-        let response = read_response::<Token>(resp).await;
-        assert_eq!(token, response);
+        let response = read_response::<Token<Userinfo>>(resp).await;
+        assert_eq!(expected_userinfo, response);
     }
 
     fn build_test_handler() -> Data<Handler> {
         Data::new(Handler {
-            validator: Arc::new(build_test_token_validator()),
+            handler: Arc::new(build_test_userinfo_handler()),
             cors_checker: Arc::new(CorsChecker::new(cors_lister())),
         })
     }

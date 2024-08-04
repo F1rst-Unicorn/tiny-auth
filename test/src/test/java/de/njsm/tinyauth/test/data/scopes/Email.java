@@ -17,13 +17,13 @@
 
 package de.njsm.tinyauth.test.data.scopes;
 
-import com.nimbusds.jwt.JWTClaimsSet;
 import de.njsm.tinyauth.test.data.Scope;
 import de.njsm.tinyauth.test.data.User;
 
-import java.text.ParseException;
+import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class Email extends Scope {
 
@@ -34,12 +34,8 @@ public class Email extends Scope {
     }
 
     @Override
-    public void verifyClaimsFor(User user, JWTClaimsSet claims) {
-        try {
-            assertEquals(user.getEmail(), claims.getStringClaim("email"));
-            assertTrue(claims.getBooleanClaim("email_verified"), "email is not marked verified");
-        } catch (ParseException e) {
-            fail(e);
-        }
+    protected void verifyClaimsFor(User user, Map<String, Object> claims) {
+        assertEquals(user.getEmail(), claims.get("email"));
+        assertTrue((Boolean) claims.get("email_verified"), "email is not marked verified");
     }
 }

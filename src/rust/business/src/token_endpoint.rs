@@ -30,10 +30,12 @@ use crate::store::ScopeStore;
 use crate::store::UserStore;
 use crate::store::AUTH_CODE_LIFE_TIME;
 use crate::store::{AuthorizationCodeStore, ValidationRequest};
-use crate::token::RefreshToken;
 use crate::token::Token;
 use crate::token::TokenCreator;
 use crate::token::TokenValidator;
+use crate::token::{
+    Access, EncodedAccessToken, EncodedIdToken, EncodedRefreshToken, Id, RefreshToken,
+};
 use crate::user::User;
 use chrono::offset::Local;
 use chrono::Duration;
@@ -88,7 +90,7 @@ pub struct Request {
     pub scope: Option<String>,
     pub username: Option<String>,
     pub password: Option<String>,
-    pub refresh_token: Option<String>,
+    pub refresh_token: Option<EncodedRefreshToken>,
     pub client_assertion: Option<String>,
     pub client_assertion_type: Option<String>,
     pub pkce_verifier: Option<String>,
@@ -118,41 +120,58 @@ impl Handler {
     pub async fn grant_tokens(
         &self,
         request: Request,
-    ) -> Result<(String, Option<String>, Vec<Scope>), Error> {
+    ) -> Result<
+        (
+            EncodedAccessToken,
+            EncodedIdToken,
+            Option<EncodedRefreshToken>,
+            Vec<Scope>,
+        ),
+        Error,
+    > {
         let span = Span::current();
-        let (token, scopes, generate_refresh_token) = self.grant_token(request, span).await?;
+        let (access_token, id_token, refresh_token, scopes) =
+            self.grant_token(request, span).await?;
 
-        let encoded_token = match self.token_creator.finalize(token.clone()) {
+        let encoded_access_token = match self.token_creator.finalize_access_token(access_token) {
             Err(e) => {
                 debug!(%e, "failed to encode token");
                 return Err(Error::TokenEncodingFailed);
             }
             Ok(token) => token,
         };
-        let refresh_token = if generate_refresh_token {
-            match self
-                .token_creator
-                .finalize_refresh_token(self.token_creator.build_refresh_token(token, &scopes))
-            {
-                Err(e) => {
-                    debug!(%e, "failed to encode refresh token");
-                    return Err(Error::RefreshTokenEncodingFailed);
-                }
-                token => token.ok(),
+        let encoded_id_token = match self.token_creator.finalize_id_token(id_token) {
+            Err(e) => {
+                debug!(%e, "failed to encode token");
+                return Err(Error::TokenEncodingFailed);
             }
-        } else {
-            None
+            Ok(token) => token,
         };
+        let refresh_token = refresh_token
+            .map(|v| match self.token_creator.finalize_refresh_token(v) {
+                Err(e) => {
+                    debug!(%e, "failed to encode token");
+                    Err(Error::TokenEncodingFailed)
+                }
+                Ok(v) => Ok(v),
+            })
+            .transpose()?;
 
-        Ok((encoded_token, refresh_token, scopes))
+        Ok((
+            encoded_access_token,
+            encoded_id_token,
+            refresh_token,
+            scopes,
+        ))
     }
 
+    #[allow(clippy::type_complexity)]
     #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user))]
     async fn grant_token(
         &self,
         request: Request,
         span: Span,
-    ) -> Result<(Token, Vec<Scope>, bool), Error> {
+    ) -> Result<(Token<Access>, Token<Id>, Option<RefreshToken>, Vec<Scope>), Error> {
         let cid_span = Span::current();
         match request.grant_type {
             GrantType::RefreshToken => self.grant_with_refresh_token(request, span, cid_span).await,
@@ -175,15 +194,31 @@ impl Handler {
                     }
                 };
 
-                let generate_refresh_token =
-                    matches!(client.client_type, ClientType::Confidential { .. });
-
-                let mut token = self
+                let mut refresh_token = if let ClientType::Confidential { .. } = client.client_type
+                {
+                    Some(self.token_creator.build_fresh_refresh_token(
+                        &scopes,
+                        &user.name,
+                        &client.client_id,
+                        auth_time,
+                    ))
+                } else {
+                    None
+                };
+                let mut access_token = self
                     .token_creator
-                    .build_token(&user, &client, &scopes, auth_time);
-                token.set_nonce(nonce);
+                    .build_token::<Access>(&user, &client, &scopes, auth_time);
+                let mut id_token = self
+                    .token_creator
+                    .build_token::<Id>(&user, &client, &scopes, auth_time);
 
-                Ok((token, scopes, generate_refresh_token))
+                access_token.set_nonce(nonce.clone());
+                if let Some(v) = refresh_token.as_mut() {
+                    v.set_nonce(nonce.clone())
+                }
+                id_token.set_nonce(nonce);
+
+                Ok((access_token, id_token, refresh_token, scopes))
             }
         }
     }
@@ -342,30 +377,40 @@ impl Handler {
         request: Request,
         span: Span,
         cid_span: Span,
-    ) -> Result<(Token, Vec<Scope>, bool), Error> {
-        let raw_token = &request
+    ) -> Result<(Token<Access>, Token<Id>, Option<RefreshToken>, Vec<Scope>), Error> {
+        let raw_token = request
             .refresh_token
             .as_ref()
             .ok_or(Error::MissingRefreshToken)?;
 
         let refresh_token = self
             .token_validator
-            .validate::<RefreshToken>(raw_token)
+            .validate::<RefreshToken>(raw_token.as_ref())
             .ok_or(Error::InvalidRefreshToken)?;
-        cid_span.record("user", &refresh_token.access_token.subject);
-        span.record("nonce", &refresh_token.access_token.nonce);
+        cid_span.record("user", &refresh_token.subject);
+        span.record("nonce", &refresh_token.nonce);
         let client = self.authenticate_client(&request).await?;
 
-        if client.client_id != refresh_token.access_token.authorized_party {
+        if client.client_id != refresh_token.authorized_party {
             warn!(
-                different_client = refresh_token.access_token.authorized_party,
+                different_client = refresh_token.authorized_party,
                 "client tried to use refresh_token issued to different client"
             );
             return Err(Error::InvalidRefreshToken);
         }
 
-        let mut token = refresh_token.access_token;
-        self.token_creator.renew(&mut token);
+        let user = self
+            .user_store
+            .get(&refresh_token.subject)
+            .await
+            .map_err(|e| match e {
+                crate::user::Error::NotFound => {
+                    debug!("user not found");
+                    Error::WrongUsernameOrPassword(format!("{}", WrongCredentials))
+                }
+                crate::user::Error::BackendError
+                | crate::user::Error::BackendErrorWithContext(_) => Error::AuthenticationFailed,
+            })?;
 
         let granted_scopes = BTreeSet::from_iter(refresh_token.scopes);
         let requested_scopes = match &request.scope {
@@ -375,13 +420,36 @@ impl Handler {
             Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
         };
 
-        let actual_scopes = granted_scopes
+        let actual_scopes: Vec<_> = granted_scopes
             .intersection(&requested_scopes)
             .map(|v| self.scope_store.get(v))
             .map(Option::unwrap)
             .collect();
 
-        Ok((token, actual_scopes, true))
+        let nonce = Some(refresh_token.nonce);
+        let mut access_token = self.token_creator.build_token::<Access>(
+            &user,
+            &client,
+            actual_scopes.as_slice(),
+            refresh_token.auth_time,
+        );
+        let mut id_token = self.token_creator.build_token::<Id>(
+            &user,
+            &client,
+            actual_scopes.as_slice(),
+            refresh_token.auth_time,
+        );
+        let mut refresh_token = self.token_creator.build_fresh_refresh_token(
+            &actual_scopes,
+            &user.name,
+            &client.client_id,
+            refresh_token.auth_time,
+        );
+        access_token.set_nonce(nonce.clone());
+        refresh_token.set_nonce(nonce.clone());
+        id_token.set_nonce(nonce);
+
+        Ok((access_token, id_token, Some(refresh_token), actual_scopes))
     }
 
     async fn authenticate_client(&self, request: &Request) -> Result<Client, Error> {
@@ -644,6 +712,7 @@ mod tests {
     use crate::test_fixtures::build_test_issuer_config;
     use crate::test_fixtures::build_test_token_creator;
     use crate::test_fixtures::build_test_token_validator;
+    use crate::token::test_fixtures::refresh_token;
     use test_log::test;
 
     #[test(tokio::test)]
@@ -803,10 +872,12 @@ mod tests {
             .grant_tokens(request)
             .await;
 
+        let validator = build_test_token_validator();
         assert!(response.is_ok());
         let response = response.unwrap();
-        assert!(!response.0.is_empty());
-        assert_eq!(None, response.1);
+        assert!(validator.validate_access_token(response.0).is_some());
+        assert!(validator.validate_id_token(response.1).is_some());
+        assert!(response.2.is_none());
     }
 
     #[test(tokio::test)]
@@ -856,10 +927,15 @@ mod tests {
             .grant_tokens(request)
             .await;
 
+        let validator = build_test_token_validator();
         assert!(response.is_ok());
         let response = response.unwrap();
-        assert!(!response.0.is_empty());
-        assert!(response.1.is_some());
+        assert!(validator.validate_access_token(response.0).is_some());
+        assert!(validator.validate_id_token(response.1).is_some());
+        assert!(response.2.is_some());
+        let refresh_token = validator.validate_refresh_token(response.2.unwrap());
+        assert!(refresh_token.is_some());
+        assert_eq!("nonce".to_string(), refresh_token.unwrap().nonce);
     }
 
     #[test(tokio::test)]
@@ -888,10 +964,15 @@ mod tests {
 
         let response = uut().grant_tokens(request).await;
 
+        let validator = build_test_token_validator();
         assert!(response.is_ok());
         let response = response.unwrap();
-        assert!(!response.0.is_empty());
-        assert!(response.1.is_some());
+        assert!(validator.validate_access_token(response.0).is_some());
+        assert!(validator.validate_id_token(response.1).is_some());
+        assert!(response.2.is_some());
+        assert!(validator
+            .validate_refresh_token(response.2.unwrap())
+            .is_some());
     }
 
     #[test(tokio::test)]
@@ -958,10 +1039,15 @@ mod tests {
 
         let response = uut().grant_tokens(request).await;
 
+        let validator = build_test_token_validator();
         assert!(response.is_ok());
         let response = response.unwrap();
-        assert!(!response.0.is_empty());
-        assert!(response.1.is_some());
+        assert!(validator.validate_access_token(response.0).is_some());
+        assert!(validator.validate_id_token(response.1).is_some());
+        assert!(response.2.is_some());
+        assert!(validator
+            .validate_refresh_token(response.2.unwrap())
+            .is_some());
     }
 
     #[test(tokio::test)]
@@ -980,7 +1066,7 @@ mod tests {
     async fn invalid_refresh_token_is_rejected() {
         let request = Request {
             grant_type: GrantType::RefreshToken,
-            refresh_token: Some("invalid".to_string()),
+            refresh_token: Some(refresh_token("invalid".into())),
             ..Request::default()
         };
 
@@ -1034,10 +1120,15 @@ mod tests {
 
         let response = uut().grant_tokens(request).await;
 
+        let validator = build_test_token_validator();
         assert!(response.is_ok());
         let response = response.unwrap();
-        assert!(!response.0.is_empty());
-        assert!(response.1.is_some());
+        assert!(validator.validate_access_token(response.0).is_some());
+        assert!(validator.validate_id_token(response.1).is_some());
+        assert!(response.2.is_some());
+        assert!(validator
+            .validate_refresh_token(response.2.unwrap())
+            .is_some());
     }
 
     #[test(tokio::test)]
@@ -1052,10 +1143,15 @@ mod tests {
 
         let response = uut().grant_tokens(request).await;
 
+        let validator = build_test_token_validator();
         assert!(response.is_ok());
         let response = response.unwrap();
-        assert!(!response.0.is_empty());
-        assert!(response.1.is_some());
+        assert!(validator.validate_access_token(response.0).is_some());
+        assert!(validator.validate_id_token(response.1).is_some());
+        assert!(response.2.is_some());
+        assert!(validator
+            .validate_refresh_token(response.2.unwrap())
+            .is_some());
     }
 
     fn uut() -> Handler {
@@ -1075,16 +1171,16 @@ mod tests {
         }
     }
 
-    async fn build_refresh_token(client_id: &str) -> String {
+    async fn build_refresh_token(client_id: &str) -> EncodedRefreshToken {
         let token_creator = build_test_token_creator();
-        let token = token_creator.build_token(
-            &build_test_user_store().get(USER).await.unwrap(),
-            &build_test_client_store().get(client_id).await.unwrap(),
-            &Vec::new(),
+        let mut token = token_creator.build_refresh_token(
+            Local::now().timestamp(),
+            &vec![],
+            USER,
+            client_id,
             0,
         );
-        token_creator
-            .finalize_refresh_token(token_creator.build_refresh_token(token, &Vec::new()))
-            .unwrap()
+        token.set_nonce(Some("nonce".to_string()));
+        token_creator.finalize_refresh_token(token).unwrap()
     }
 }

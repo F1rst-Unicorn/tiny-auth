@@ -18,6 +18,8 @@
 package de.njsm.tinyauth.test;
 
 import com.google.common.hash.Hashing;
+import de.njsm.tinyauth.test.data.OidcToken;
+import de.njsm.tinyauth.test.data.Tokens;
 import de.njsm.tinyauth.test.oidc.Identifiers;
 import de.njsm.tinyauth.test.repository.Clients;
 import de.njsm.tinyauth.test.runtime.Browser;
@@ -91,5 +93,10 @@ public class PkceTest extends TinyAuthBrowserTest implements AuthorizationCodeGa
     @Override
     public Set<Identifiers.ResponseType> getResponseTypes() {
         return Set.of(Identifiers.ResponseType.CODE);
+    }
+
+    @Override
+    public OidcToken selectToken(Tokens tokens) {
+        throw new UnsupportedOperationException("unused anyway");
     }
 }

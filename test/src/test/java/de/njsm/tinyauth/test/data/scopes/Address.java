@@ -17,14 +17,12 @@
 
 package de.njsm.tinyauth.test.data.scopes;
 
-import com.nimbusds.jwt.JWTClaimsSet;
 import de.njsm.tinyauth.test.data.Scope;
 import de.njsm.tinyauth.test.data.User;
 
-import java.text.ParseException;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class Address extends Scope {
 
@@ -35,11 +33,7 @@ public class Address extends Scope {
     }
 
     @Override
-    public void verifyClaimsFor(User user, JWTClaimsSet claims) {
-        try {
-            assertEquals(user.getAddress(), claims.getStringClaim("address"));
-        } catch (ParseException e) {
-            fail(e);
-        }
+    protected void verifyClaimsFor(User user, Map<String, Object> claims) {
+        assertEquals(user.getAddress(), claims.get("address"));
     }
 }

@@ -14,20 +14,22 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
 use crate::client::Client;
 use crate::template::scope::ScopeContext;
 use crate::template::{TemplateError, Templater};
+use crate::token::{Access, Id, TokenType, Userinfo};
 use crate::user::User;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Map;
 use serde_json::Value;
+use std::any::{type_name, TypeId};
 use std::cmp::Ord;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::error;
 use tracing::{debug, warn};
+use tracing::{error, instrument};
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct Scope {
@@ -109,14 +111,20 @@ impl Scope {
         }
     }
 
+    #[instrument(level = "debug", skip(templater, user, client, self), fields(scope = self.name, ?destination))]
     pub fn generate_claims<'a>(
         &self,
         templater: Arc<dyn Templater<ScopeContext<'a>>>,
         user: &'a User,
         client: &'a Client,
+        destination: Destination,
     ) -> Result<Value, Error> {
         let mut result = Map::new();
-        for m in &self.mappings {
+        for m in self
+            .mappings
+            .iter()
+            .filter(|v| v.destination.contains(&destination))
+        {
             let claims = m.generate_claims(templater.clone(), user, client)?;
             let merged = merge(Value::Object(result), claims)?;
             result = match merged {
@@ -138,6 +146,50 @@ struct Mapping {
 
     #[serde(default)]
     optional: bool,
+
+    #[serde(default = "default_destination")]
+    destination: BTreeSet<Destination>,
+}
+
+fn default_destination() -> BTreeSet<Destination> {
+    BTreeSet::from_iter(vec![
+        Destination::AccessToken,
+        Destination::IdToken,
+        Destination::UserInfo,
+    ])
+}
+
+#[derive(Clone, Deserialize, Debug, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Destination {
+    #[serde(alias = "access_token")]
+    #[serde(alias = "access token")]
+    #[serde(alias = "accesstoken")]
+    #[serde(alias = "access")]
+    AccessToken,
+    #[serde(alias = "id_token")]
+    #[serde(alias = "id token")]
+    #[serde(alias = "idtoken")]
+    #[serde(alias = "id")]
+    IdToken,
+    #[serde(alias = "user_info")]
+    #[serde(alias = "user info")]
+    #[serde(alias = "userinfo")]
+    UserInfo,
+}
+
+impl<T: TokenType + 'static> From<T> for Destination {
+    fn from(_: T) -> Self {
+        if TypeId::of::<T>() == TypeId::of::<Access>() {
+            Self::AccessToken
+        } else if TypeId::of::<T>() == TypeId::of::<Userinfo>() {
+            Self::UserInfo
+        } else if TypeId::of::<T>() == TypeId::of::<Id>() {
+            Self::IdToken
+        } else {
+            error!(typename = %type_name::<T>(), "missing destination type, returning default");
+            Self::AccessToken
+        }
+    }
 }
 
 impl Mapping {

@@ -88,7 +88,6 @@ public class TokenEndpoint {
     }
 
     public ValidatableResponse requestWithRefreshToken(Client client, OidcToken refreshToken, Set<String> scopes) {
-        LOG.info("getting token with refresh token");
         return request(client, refreshToken, scopes)
                 .statusCode(200)
                 .contentType(ContentType.JSON)
