@@ -97,7 +97,7 @@ See [`tls.md`](tls.md) for details.
 
 Options for the gRPC API used by the web frontend.
 
-#### `bind`
+#### `endpoint`
 
 Host and port of the API.
 

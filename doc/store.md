@@ -39,13 +39,13 @@ The following options are shared for both modes
 ```yaml
 ---
 store:
-  ldap:
-    name: LDAP
-    urls:
-      - ldap://localhost:1389
-      - ldap://localhost:1390
-    connect timeout in seconds: 5
-    starttls: false
+  - ldap:
+      name: LDAP
+      urls:
+        - ldap://localhost:1389
+        - ldap://localhost:1390
+      connect timeout in seconds: 5
+      starttls: false
 ```
 
 ### name
@@ -73,12 +73,12 @@ tiny-auth binds as the `user` name passed by the user and the supplied password.
 ```yaml
 ---
 store:
-  ldap:
-    # see above for common options
-    mode:
-      simple bind:
-        bind dn format:
-          - cn={{ user }},ou=users,dc=example,dc=org
+  - ldap:
+      # see above for common options
+      mode:
+        simple bind:
+          bind dn format:
+            - cn={{ user }},ou=users,dc=example,dc=org
 ```
 
 ### bind dn format
@@ -96,26 +96,26 @@ verification.
 ```yaml
 ---
 store:
-  ldap:
-    # see above for common options
-    mode:
-      search bind:
-        bind dn: "cn=tiny-auth-user,ou=users,dc=example,dc=org"
-        bind dn password: "password"
-        searches:
-          - base dn: ou=users,dc=example,dc=org
-            search filter: "(|(uid={{ user }})(mail={{ user }}))"
-        use for:
-          users:
-            attributes:
-              allowed scopes: allowed_scope
-          clients:
-            attributes:
-              type: client_type
-              redirect uri: redirect_uri
-              password: password
-              public key: pk
-              allowed scopes: asc
+  - ldap:
+      # see above for common options
+      mode:
+        search bind:
+          bind dn: "cn=tiny-auth-user,ou=users,dc=example,dc=org"
+          bind dn password: "password"
+          searches:
+            - base dn: ou=users,dc=example,dc=org
+              search filter: "(|(uid={{ user }})(mail={{ user }}))"
+          use for:
+            users:
+              attributes:
+                allowed scopes: allowed_scope
+            clients:
+              attributes:
+                type: client_type
+                redirect uri: redirect_uri
+                password: password
+                public key: pk
+                allowed scopes: asc
 ```
 
 ### bind dn
