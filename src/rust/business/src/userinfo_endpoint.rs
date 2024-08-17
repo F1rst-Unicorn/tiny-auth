@@ -58,7 +58,7 @@ impl Handler {
 
         let user = self.user_store.get(&token.subject).await?;
         let client = self.client_store.get(&token.authorized_party).await?;
-        let scopes = self.scope_store.get_all(&token.scopes);
+        let scopes = self.scope_store.get_all(&token.scopes).await;
 
         Ok(self.token_creator.build_token(&user, &client, &scopes, 0))
     }

@@ -139,18 +139,18 @@ pub struct Handler {
 
 #[instrument(skip_all, name = "discovery")]
 pub async fn get(request: HttpRequest, handler: Data<Handler>) -> HttpResponse {
-    handler.handle(request)
+    handler.handle(request).await
 }
 
 impl Handler {
-    fn handle(&self, request: HttpRequest) -> HttpResponse {
+    async fn handle(&self, request: HttpRequest) -> HttpResponse {
         let response = Response {
             issuer: self.issuer_configuration.issuer_url.clone(),
             authorization_endpoint: self.issuer_configuration.issuer_url.clone() + "/authorize",
             token_endpoint: self.issuer_configuration.issuer_url.clone() + "/token",
             userinfo_endpoint: self.issuer_configuration.issuer_url.clone() + "/userinfo",
             jwks_uri: self.issuer_configuration.issuer_url.clone() + "/jwks",
-            scopes_supported: self.scope_store.get_scope_names(),
+            scopes_supported: self.scope_store.get_scope_names().await,
             response_types_supported: vec![
                 "code".to_string(),
                 "token".to_string(),

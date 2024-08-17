@@ -226,11 +226,10 @@ impl<'a> Constructor<'a> {
         ),
         Error,
     > {
-        let mut client_store = FileClientStore::default();
         let mut client_stores: Vec<Arc<dyn ClientStore>> = vec![];
         let mut user_stores: Vec<Arc<dyn UserStore>> = vec![];
+        let mut scope_stores: Vec<Arc<dyn ScopeStore>> = vec![];
         let mut password_stores = BTreeMap::default();
-        let mut scope_store = FileScopeStore::default();
         let (sender, _receiver) = channel(8);
         let mut store_paths = Vec::new();
 
@@ -238,16 +237,18 @@ impl<'a> Constructor<'a> {
             match store_config {
                 Store::Config { name: _, base } => {
                     store_paths.push(base.into());
-                    if !client_store.read_clients(base) {
-                        return Err(LoggedBeforeError);
-                    }
-                    match FileUserStore::new(Path::new(&base), sender.subscribe()).await {
+                    match FileStore::new(Path::new(&base), "clients", sender.subscribe()).await {
+                        None => return Err(LoggedBeforeError),
+                        Some(v) => client_stores.push(v),
+                    };
+                    match FileStore::new(Path::new(&base), "users", sender.subscribe()).await {
                         None => return Err(LoggedBeforeError),
                         Some(v) => user_stores.push(v),
                     };
-                    if !scope_store.read_scopes(base) {
-                        return Err(LoggedBeforeError);
-                    }
+                    match FileStore::new(Path::new(&base), "scopes", sender.subscribe()).await {
+                        None => return Err(LoggedBeforeError),
+                        Some(v) => scope_stores.push(v),
+                    };
                 }
                 Store::Ldap {
                     name,
@@ -361,13 +362,12 @@ impl<'a> Constructor<'a> {
             password_stores,
             Arc::new(in_place_password_store(&config.crypto.pepper)),
         );
-        client_stores.push(Arc::new(client_store));
 
         Ok((
             Arc::new(MergingUserStore::from(user_stores)),
             Arc::new(password_store),
             Arc::new(MergingClientStore::from(client_stores)),
-            Arc::new(scope_store),
+            Arc::new(MergingScopeStore::from(scope_stores)),
             sender,
             store_paths,
         ))

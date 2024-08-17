@@ -92,11 +92,14 @@ async fn main() {
     };
 
     let store = di.get_scope_store();
-    let scope = match store.get(
-        args.get_one::<String>(FLAG_SCOPE)
-            .map(String::as_str)
-            .unwrap(),
-    ) {
+    let scope = match store
+        .get(
+            args.get_one::<String>(FLAG_SCOPE)
+                .map(String::as_str)
+                .unwrap(),
+        )
+        .await
+    {
         None => {
             error!("scope not found");
             return;

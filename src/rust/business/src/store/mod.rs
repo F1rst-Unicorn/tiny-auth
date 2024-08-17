@@ -29,7 +29,7 @@ use chrono::Duration;
 use chrono::Local;
 use futures_util::future::join_all;
 use std::sync::Arc;
-use tracing::{debug, info, instrument, Level};
+use tracing::{debug, instrument, Level};
 
 #[async_trait]
 pub trait UserStore: Send + Sync {
@@ -125,22 +125,49 @@ pub trait PasswordStore: Send + Sync {
     ) -> Result<bool, PasswordError>;
 }
 
+#[async_trait]
 pub trait ScopeStore: Send + Sync {
-    fn get(&self, key: &str) -> Option<Scope>;
+    async fn get(&self, key: &str) -> Option<Scope>;
 
-    fn get_all(&self, keys: &[String]) -> Vec<Scope> {
-        keys.iter()
-            .filter_map(|v| match self.get(v) {
-                None => {
-                    info!("requested unknown scope {}, ignoring", v);
-                    None
-                }
-                s => s,
-            })
+    async fn get_all(&self, keys: &[String]) -> Vec<Scope> {
+        join_all(keys.iter().map(|v| self.get(v)))
+            .await
+            .into_iter()
+            .filter_map(|v| v)
             .collect()
     }
 
-    fn get_scope_names(&self) -> Vec<String>;
+    async fn get_scope_names(&self) -> Vec<String>;
+}
+
+pub struct MergingScopeStore {
+    stores: Vec<Arc<dyn ScopeStore>>,
+}
+
+impl From<Vec<Arc<dyn ScopeStore>>> for MergingScopeStore {
+    fn from(value: Vec<Arc<dyn ScopeStore>>) -> Self {
+        Self { stores: value }
+    }
+}
+
+#[async_trait]
+impl ScopeStore for MergingScopeStore {
+    #[instrument(level = Level::DEBUG, name = "get_scope", skip_all)]
+    async fn get(&self, key: &str) -> Option<Scope> {
+        join_all(self.stores.iter().map(|v| v.get(key)))
+            .await
+            .into_iter()
+            .filter_map(|v| v)
+            .reduce(Scope::merge)
+    }
+
+    async fn get_scope_names(&self) -> Vec<String> {
+        join_all(self.stores.iter().map(|v| v.get_scope_names()))
+            .await
+            .into_iter()
+            .flatten()
+            .collect()
+    }
 }
 
 /// Recommended lifetime is 10 minutes as of the [RFC](https://tools.ietf.org/html/rfc6749#section-4.1.2)
@@ -283,11 +310,12 @@ pub mod test_fixtures {
 
     struct TestScopeStore {}
 
+    #[async_trait]
     impl ScopeStore for TestScopeStore {
-        fn get(&self, key: &str) -> Option<Scope> {
+        async fn get(&self, key: &str) -> Option<Scope> {
             Some(Scope::new(key, key, key))
         }
-        fn get_scope_names(&self) -> Vec<String> {
+        async fn get_scope_names(&self) -> Vec<String> {
             Vec::new()
         }
     }

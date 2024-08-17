@@ -106,7 +106,7 @@ pub async fn get(
             );
         }
 
-        match build_context(&session, handler) {
+        match build_context(&session, handler).await {
             Some(context) => {
                 return_rendered_template(templater.instantiate(context), StatusCode::OK, || {
                     templater.instantiate_error_page(ServerError)
@@ -294,13 +294,13 @@ fn render_invalid_consent_request(
     )
 }
 
-fn build_context(session: &Session, handler: Data<Handler>) -> Option<ConsentContext> {
+async fn build_context(session: &Session, handler: Data<Handler>) -> Option<ConsentContext> {
     let first_request = parse_first_request(session)?;
     let username = session.get::<String>(authenticate::SESSION_KEY).ok()??;
     let csrftoken = super::generate_csrf_token();
     let mut scopes: Vec<ScopeDescription> = Vec::new();
     for scope_name in &first_request.scopes {
-        if let Some(scope) = handler.get_scope(scope_name) {
+        if let Some(scope) = handler.get_scope(scope_name).await {
             scopes.push(scope.into());
         }
     }

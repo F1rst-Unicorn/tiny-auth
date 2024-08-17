@@ -34,15 +34,24 @@ use tokio::sync::broadcast::Receiver;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, span, trace, warn, Level};
 
-pub struct FileUserStore {
+pub struct FileStore<T> {
     base: PathBuf,
-    users: Mutex<BTreeMap<String, User>>,
+    data: Mutex<BTreeMap<String, T>>,
+}
+
+pub(crate) trait DataExt {
+    fn name(&self) -> String;
+    fn validate(data: Self, file: &Path) -> Option<Self>
+    where
+        Self: Sized;
+    fn log_single_refresh(name: &str);
+    fn log_single_remove(name: &str);
 }
 
 #[async_trait]
-impl UserStore for FileUserStore {
+impl UserStore for FileStore<User> {
     async fn get(&self, key: &str) -> Result<User, Error> {
-        self.users
+        self.data
             .lock()
             .await
             .get(key)
@@ -52,13 +61,40 @@ impl UserStore for FileUserStore {
     }
 }
 
-impl FileUserStore {
-    pub async fn new(base: &Path, hot_reload_receiver: Receiver<ReloadEvent>) -> Option<Arc<Self>> {
+#[async_trait]
+impl ClientStore for FileStore<Client> {
+    async fn get(&self, key: &str) -> Result<Client, client::Error> {
+        self.data
+            .lock()
+            .await
+            .get(key)
+            .cloned()
+            .ok_or(client::Error::NotFound)
+    }
+}
+
+#[async_trait]
+impl ScopeStore for FileStore<Scope> {
+    async fn get(&self, key: &str) -> Option<Scope> {
+        self.data.lock().await.get(key).cloned()
+    }
+
+    async fn get_scope_names(&self) -> Vec<String> {
+        self.data.lock().await.keys().map(Clone::clone).collect()
+    }
+}
+
+impl<T: for<'a> Deserialize<'a> + Send + DataExt + 'static> FileStore<T> {
+    pub async fn new(
+        base: &Path,
+        sub_path: &str,
+        hot_reload_receiver: Receiver<ReloadEvent>,
+    ) -> Option<Arc<Self>> {
         let mut base = PathBuf::from(base);
-        base.push("users");
+        base.push(sub_path);
         let result = Self {
             base: base.clone(),
-            users: Mutex::default(),
+            data: Mutex::default(),
         };
         let result = Arc::new(result);
         result.clone().refresh_all(base.as_path()).await;
@@ -111,28 +147,29 @@ impl FileUserStore {
 
         let raw_content = match read_file(path) {
             Err(e) => {
-                warn!(%e, "could not read file, ignoring");
+                info!(%e, "ignoring file due to error");
                 return;
             }
             Ok(content) => content,
         };
-        let user = match serde_yaml::from_str::<User>(&raw_content) {
+        let data_item = match serde_yaml::from_str::<T>(&raw_content) {
             Err(e) => {
                 error!(%e, "file is malformed");
                 return;
             }
             Ok(v) => v,
         };
-        let user = match Self::validate_file_name(user, path) {
+        let data_item = match T::validate(data_item, path) {
             None => return,
             Some(v) => v,
         };
-        let username = user.name.clone();
-        self.users.lock().await.insert(user.name.clone(), user);
+        let name = data_item.name().clone();
+        self.data
+            .lock()
+            .await
+            .insert(data_item.name().clone(), data_item);
 
-        let cid_span = span!(Level::DEBUG, "cid", user = username);
-        let _guard = cid_span.enter();
-        info!("user refreshed");
+        T::log_single_refresh(&name)
     }
 
     pub async fn remove(self: Arc<Self>, path: &Path) {
@@ -142,11 +179,9 @@ impl FileUserStore {
         }
 
         let username = path.file_stem().unwrap().to_string_lossy().to_string();
-        self.users.lock().await.remove(&username);
+        self.data.lock().await.remove(&username);
 
-        let cid_span = span!(Level::DEBUG, "cid", user = username);
-        let _guard = cid_span.enter();
-        info!("user removed");
+        T::log_single_remove(&username)
     }
 
     pub async fn refresh_all(self: Arc<Self>, path: &Path) -> Option<()> {
@@ -154,23 +189,26 @@ impl FileUserStore {
             trace!(path = %path.display(), own_path = %&self.base.display(), "path doesn't match");
             return None;
         }
-        let read_users = read_object(
-            self.base.to_string_lossy().as_ref(),
-            Self::validate_file_name,
-        )?;
-        let mut users = self.users.lock().await;
+        let read_users = read_object(self.base.to_string_lossy().as_ref(), T::validate)?;
+        let mut users = self.data.lock().await;
         users.clear();
         read_users
             .into_iter()
-            .map(|v| (v.name.clone(), v))
+            .map(|v| (v.name().clone(), v))
             .for_each(|v| {
                 users.insert(v.0, v.1);
             });
-        info!("users refreshed");
+        info!("data refreshed");
         Some(())
     }
+}
 
-    fn validate_file_name(user: User, file: &Path) -> Option<User> {
+impl DataExt for User {
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    fn validate(user: User, file: &Path) -> Option<User> {
         if PathBuf::from(user.name.clone() + ".yml") != file.file_name().unwrap() {
             let cid_span = span!(Level::DEBUG, "cid", user = user.name,
                 expected_filename = user.name.clone() + ".yml",
@@ -181,103 +219,79 @@ impl FileUserStore {
         }
         Some(user)
     }
-}
 
-#[derive(Default)]
-pub struct FileClientStore {
-    clients: BTreeMap<String, Client>,
-}
+    fn log_single_refresh(name: &str) {
+        let cid_span = span!(Level::DEBUG, "cid", user = name);
+        let _guard = cid_span.enter();
+        info!("user refreshed");
+    }
 
-#[async_trait]
-impl ClientStore for FileClientStore {
-    async fn get(&self, key: &str) -> Result<Client, client::Error> {
-        self.clients
-            .get(key)
-            .cloned()
-            .ok_or(client::Error::NotFound)
+    fn log_single_remove(name: &str) {
+        let cid_span = span!(Level::DEBUG, "cid", user = name);
+        let _guard = cid_span.enter();
+        info!("user removed");
     }
 }
 
-impl FileClientStore {
-    pub fn read_clients(&mut self, base: &str) -> bool {
-        if let Some(clients) = read_object(
-            (base.to_string() + "/clients").as_str(),
-            |client: Client, file| {
-                if PathBuf::from(client.client_id.clone() + ".yml") != file.file_name().unwrap() {
-                    error!(client = client.client_id,
-                        expected_filename = client.client_id.clone() + ".yml",
-                        actual_filename = ?file,
-                        "client is stored in wrong file",
-                    );
-                    return None;
-                }
+impl DataExt for Client {
+    fn name(&self) -> String {
+        self.client_id.clone()
+    }
 
-                if !client.are_all_redirect_uris_valid() {
-                    return None;
-                }
-                Some(client)
-            },
-        ) {
-            clients
-                .into_iter()
-                .map(|v| (v.client_id.clone(), v))
-                .for_each(|v| {
-                    self.clients.insert(v.0, v.1);
-                });
-            true
-        } else {
-            false
+    fn validate(client: Client, file: &Path) -> Option<Client> {
+        if PathBuf::from(client.client_id.clone() + ".yml") != file.file_name().unwrap() {
+            error!(client = client.client_id,
+                expected_filename = client.client_id.clone() + ".yml",
+                actual_filename = ?file,
+                "client is stored in wrong file",
+            );
+            return None;
         }
-    }
-}
 
-#[derive(Default)]
-pub struct FileScopeStore {
-    scopes: BTreeMap<String, Scope>,
-}
-
-impl ScopeStore for FileScopeStore {
-    fn get(&self, key: &str) -> Option<Scope> {
-        self.scopes.get(key).cloned()
-    }
-
-    fn get_scope_names(&self) -> Vec<String> {
-        self.scopes.keys().map(Clone::clone).collect()
-    }
-}
-
-impl FileScopeStore {
-    pub fn read_scopes(&mut self, base: &str) -> bool {
-        if let Some(scopes) = read_object(
-            (base.to_string() + "/scopes").as_str(),
-            |scope: Scope, file| {
-                let pattern = Regex::new(r"^[\x21\x23-\x5B\x5D-\x7E]+$").unwrap();
-                if !pattern.is_match(&scope.name) {
-                    error!(name = scope.name, "Invalid scope");
-                    return None;
-                }
-
-                if PathBuf::from(scope.name.clone() + ".yml") != file.file_name().unwrap() {
-                    error!(scope = scope.name,
-                        expected_filename = scope.name.clone() + ".yml",
-                        actual_filename = ?file,
-                        "scope is stored in wrong file",
-                    );
-                    return None;
-                }
-                Some(scope)
-            },
-        ) {
-            scopes
-                .into_iter()
-                .map(|v| (v.name.clone(), v))
-                .for_each(|v| {
-                    self.scopes.insert(v.0, v.1);
-                });
-            true
-        } else {
-            false
+        if !client.are_all_redirect_uris_valid() {
+            return None;
         }
+        Some(client)
+    }
+
+    fn log_single_refresh(name: &str) {
+        info!(name, "client refreshed");
+    }
+
+    fn log_single_remove(name: &str) {
+        info!(name, "client removed");
+    }
+}
+
+impl DataExt for Scope {
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    fn validate(scope: Scope, file: &Path) -> Option<Scope> {
+        let pattern = Regex::new(r"^[\x21\x23-\x5B\x5D-\x7E]+$").unwrap();
+        if !pattern.is_match(&scope.name) {
+            error!(name = scope.name, "Invalid scope");
+            return None;
+        }
+
+        if PathBuf::from(scope.name.clone() + ".yml") != file.file_name().unwrap() {
+            error!(scope = scope.name,
+                expected_filename = scope.name.clone() + ".yml",
+                actual_filename = ?file,
+                "scope is stored in wrong file",
+            );
+            return None;
+        }
+        Some(scope)
+    }
+
+    fn log_single_refresh(name: &str) {
+        info!(name, "scope refreshed");
+    }
+
+    fn log_single_remove(name: &str) {
+        info!(name, "scope removed");
     }
 }
 
