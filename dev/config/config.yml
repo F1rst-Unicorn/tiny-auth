@@ -106,17 +106,19 @@ log:
     time: none
   filter:
     - warn
-    - tiny_auth_main=trace
-    - tiny_auth_web=trace
-    - tiny_auth_business=trace
-    - tiny_auth_api=trace
-    - tiny_auth_ldap=trace
-    - tiny_auth_template=trace
     - tiny_auth=trace
-    - "[cid]=debug"
-    - tiny_auth_main::config::parser=debug
-    - tiny_auth_main::systemd=debug
+    - tiny_auth_api=trace
+    - tiny_auth_business=trace
     - tiny_auth_business::store::memory=debug
+    - tiny_auth_ldap=trace
+    - tiny_auth_main=trace
+    - tiny_auth_main::config::parser=debug
+    - tiny_auth_main::runtime=debug
+    - tiny_auth_main::store::file=debug
+    - tiny_auth_main::systemd=debug
+    - tiny_auth_template=trace
     - tiny_auth_template::web=debug
+    - tiny_auth_web=trace
+    - "[cid]=debug"
 
 hot reload: true

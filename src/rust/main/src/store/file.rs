@@ -21,7 +21,8 @@ use async_trait::async_trait;
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tiny_auth_business::client;
 use tiny_auth_business::client::Client;
 use tiny_auth_business::scope::Scope;
@@ -29,17 +30,21 @@ use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::ScopeStore;
 use tiny_auth_business::store::UserStore;
 use tiny_auth_business::user::{Error, User};
-use tracing::{debug, error, instrument, span, Level};
+use tokio::sync::broadcast::Receiver;
+use tokio::sync::Mutex;
+use tracing::{debug, error, info, instrument, span, trace, warn, Level};
 
-#[derive(Default)]
 pub struct FileUserStore {
-    users: BTreeMap<String, User>,
+    base: PathBuf,
+    users: Mutex<BTreeMap<String, User>>,
 }
 
 #[async_trait]
 impl UserStore for FileUserStore {
     async fn get(&self, key: &str) -> Result<User, Error> {
         self.users
+            .lock()
+            .await
             .get(key)
             .cloned()
             .inspect(|_| debug!("found"))
@@ -48,31 +53,133 @@ impl UserStore for FileUserStore {
 }
 
 impl FileUserStore {
-    pub fn read_users(&mut self, base: &str) -> bool {
-        if let Some(users) = read_object(
-            (base.to_string() + "/users").as_str(),
-            |user: User, file| {
-                if PathBuf::from(user.name.clone() + ".yml") != file.file_name() {
-                    error!(user = user.name,
-                        expected_filename = user.name.clone() + ".yml",
-                        actual_filename = ?file.path(),
-                        "user is stored in wrong file",
-                    );
-                    return None;
+    pub async fn new(base: &Path, hot_reload_receiver: Receiver<ReloadEvent>) -> Option<Arc<Self>> {
+        let mut base = PathBuf::from(base);
+        base.push("users");
+        let result = Self {
+            base: base.clone(),
+            users: Mutex::default(),
+        };
+        let result = Arc::new(result);
+        result.clone().refresh_all(base.as_path()).await;
+        tokio::spawn(result.clone().listen_for_reload_events(hot_reload_receiver));
+        Some(result)
+    }
+
+    async fn listen_for_reload_events(
+        self: Arc<Self>,
+        mut hot_reload_receiver: Receiver<ReloadEvent>,
+    ) {
+        loop {
+            let this = self.clone();
+            let reload_event = match hot_reload_receiver.recv().await {
+                Err(e) => {
+                    info!(%e, "failed to receive hot reload event");
+                    continue;
                 }
-                Some(user)
-            },
-        ) {
-            users
-                .into_iter()
-                .map(|v| (v.name.clone(), v))
-                .for_each(|v| {
-                    self.users.insert(v.0, v.1);
-                });
-            true
-        } else {
-            false
+                Ok(v) => v,
+            };
+
+            match reload_event {
+                ReloadEvent::Add(path) | ReloadEvent::Modify(path) => {
+                    this.refresh(path.as_path()).await;
+                }
+                ReloadEvent::DirectoryChange(path) => {
+                    this.refresh_all(path.as_path()).await;
+                }
+                ReloadEvent::Delete(path) => {
+                    this.remove(path.as_path()).await;
+                }
+            }
         }
+    }
+
+    fn applies_to(new_path: &Path, own_path: &Path) -> bool {
+        (new_path.is_dir() && new_path.ends_with(own_path))
+            || (!new_path.is_dir()
+                && new_path
+                    .parent()
+                    .map(|v| v.ends_with(own_path))
+                    .unwrap_or(false))
+    }
+
+    pub async fn refresh(self: Arc<Self>, path: &Path) {
+        if !Self::applies_to(path, &self.base) {
+            trace!(path = %path.display(), own_path = %&self.base.display(), "path doesn't match");
+            return;
+        }
+
+        let raw_content = match read_file(path) {
+            Err(e) => {
+                warn!(%e, "could not read file, ignoring");
+                return;
+            }
+            Ok(content) => content,
+        };
+        let user = match serde_yaml::from_str::<User>(&raw_content) {
+            Err(e) => {
+                error!(%e, "file is malformed");
+                return;
+            }
+            Ok(v) => v,
+        };
+        let user = match Self::validate_file_name(user, path) {
+            None => return,
+            Some(v) => v,
+        };
+        let username = user.name.clone();
+        self.users.lock().await.insert(user.name.clone(), user);
+
+        let cid_span = span!(Level::DEBUG, "cid", user = username);
+        let _guard = cid_span.enter();
+        info!("user refreshed");
+    }
+
+    pub async fn remove(self: Arc<Self>, path: &Path) {
+        if !Self::applies_to(path, &self.base) {
+            trace!(path = %path.display(), own_path = %&self.base.display(), "path doesn't match");
+            return;
+        }
+
+        let username = path.file_stem().unwrap().to_string_lossy().to_string();
+        self.users.lock().await.remove(&username);
+
+        let cid_span = span!(Level::DEBUG, "cid", user = username);
+        let _guard = cid_span.enter();
+        info!("user removed");
+    }
+
+    pub async fn refresh_all(self: Arc<Self>, path: &Path) -> Option<()> {
+        if !Self::applies_to(path, &self.base) {
+            trace!(path = %path.display(), own_path = %&self.base.display(), "path doesn't match");
+            return None;
+        }
+        let read_users = read_object(
+            self.base.to_string_lossy().as_ref(),
+            Self::validate_file_name,
+        )?;
+        let mut users = self.users.lock().await;
+        users.clear();
+        read_users
+            .into_iter()
+            .map(|v| (v.name.clone(), v))
+            .for_each(|v| {
+                users.insert(v.0, v.1);
+            });
+        info!("users refreshed");
+        Some(())
+    }
+
+    fn validate_file_name(user: User, file: &Path) -> Option<User> {
+        if PathBuf::from(user.name.clone() + ".yml") != file.file_name().unwrap() {
+            let cid_span = span!(Level::DEBUG, "cid", user = user.name,
+                expected_filename = user.name.clone() + ".yml",
+                actual_filename = ?file);
+            let _guard = cid_span.enter();
+            error!("user is stored in wrong file");
+            return None;
+        }
+        Some(user)
     }
 }
 
@@ -96,10 +203,10 @@ impl FileClientStore {
         if let Some(clients) = read_object(
             (base.to_string() + "/clients").as_str(),
             |client: Client, file| {
-                if PathBuf::from(client.client_id.clone() + ".yml") != file.file_name() {
+                if PathBuf::from(client.client_id.clone() + ".yml") != file.file_name().unwrap() {
                     error!(client = client.client_id,
                         expected_filename = client.client_id.clone() + ".yml",
-                        actual_filename = ?file.path(),
+                        actual_filename = ?file,
                         "client is stored in wrong file",
                     );
                     return None;
@@ -150,10 +257,10 @@ impl FileScopeStore {
                     return None;
                 }
 
-                if PathBuf::from(scope.name.clone() + ".yml") != file.file_name() {
+                if PathBuf::from(scope.name.clone() + ".yml") != file.file_name().unwrap() {
                     error!(scope = scope.name,
                         expected_filename = scope.name.clone() + ".yml",
-                        actual_filename = ?file.path(),
+                        actual_filename = ?file,
                         "scope is stored in wrong file",
                     );
                     return None;
@@ -174,11 +281,19 @@ impl FileScopeStore {
     }
 }
 
+#[derive(Clone)]
+pub enum ReloadEvent {
+    Add(PathBuf),
+    Modify(PathBuf),
+    Delete(PathBuf),
+    DirectoryChange(PathBuf),
+}
+
 #[instrument(name = "iterate_directory", skip(transformer))]
 fn read_object<O, T>(base: &str, transformer: T) -> Option<Vec<O>>
 where
     O: for<'a> Deserialize<'a>,
-    T: Fn(O, &std::fs::DirEntry) -> Option<O>,
+    T: Fn(O, &Path) -> Option<O>,
 {
     let mut result = Vec::default();
     for file in iterate_directory(base)? {
@@ -213,7 +328,7 @@ where
             Ok(v) => v,
         };
 
-        let object = transformer(object, &file)?;
+        let object = transformer(object, &file.path())?;
         result.push(object);
     }
     Some(result)

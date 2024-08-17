@@ -17,6 +17,7 @@
 
 use crate::config::Config;
 use crate::logging::{FilterHandle, FormatHandle};
+use crate::store::file::ReloadEvent;
 use crate::systemd::notify_about_start;
 use crate::systemd::watchdog;
 use crate::terminate::terminator;
@@ -24,6 +25,7 @@ use crate::{config, logging};
 use actix_web::dev::ServerHandle;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use openssl::error::ErrorStack;
+use std::path::PathBuf;
 use tokio::sync::mpsc::channel;
 use tokio::sync::mpsc::Receiver as MpscReceiver;
 use tokio::sync::oneshot;
@@ -74,7 +76,7 @@ pub fn run(
             .unwrap()
     });
     actor_system.block_on(async move {
-        let constructor = crate::constructor::Constructor::new(&config)?;
+        let constructor = crate::constructor::Constructor::new(&config).await?;
 
         let (pass_server, receive_server) = oneshot::channel();
         let api_join_handle = match tiny_auth_api::start(&constructor).await {
@@ -93,8 +95,16 @@ pub fn run(
             }
             Ok(srv) => srv,
         };
+        let reload_sender = constructor.reload_sender();
+        let store_paths = constructor.store_paths();
         drop(constructor);
-        tokio::spawn(config_refresher(config_path.to_string(), config, handles));
+        tokio::spawn(config_refresher(
+            config_path.to_string(),
+            config,
+            handles,
+            store_paths,
+            reload_sender,
+        ));
         if pass_server.send(srv.handle()).is_err() {
             error!("failed to create server");
             return Ok(());
@@ -112,6 +122,8 @@ async fn config_refresher(
     config_path: String,
     mut config: Config,
     handles: (FilterHandle, FormatHandle),
+    store_paths: Vec<PathBuf>,
+    reload_sender: tokio::sync::broadcast::Sender<ReloadEvent>,
 ) {
     if !config.hot_reload {
         trace!(%config.hot_reload);
@@ -126,9 +138,18 @@ async fn config_refresher(
         Ok(v) => v,
     };
 
-    if let Err(e) = watcher.watch(config_path.as_ref(), RecursiveMode::NonRecursive) {
+    if let Err(e) = watcher.watch(
+        PathBuf::from(config_path.clone()).parent().unwrap(),
+        RecursiveMode::Recursive,
+    ) {
         warn!(%e, "watching config file failed");
         return;
+    }
+    for store_path in store_paths {
+        if let Err(e) = watcher.watch(&store_path, RecursiveMode::Recursive) {
+            warn!(%e, store_path = %store_path.display(), "watching failed");
+            return;
+        }
     }
 
     debug!("watching config file for changes");
@@ -136,20 +157,71 @@ async fn config_refresher(
         match res {
             Err(e) => warn!(%e, "failed to get new config file info"),
             Ok(event) => {
-                if matches!(
-                    event.kind,
-                    EventKind::Any | EventKind::Modify(_) | EventKind::Other
-                ) {
-                    let new_config = match config::parser::parse_config_fallibly(&config_path) {
-                        None => {
-                            continue;
+                if event
+                    .paths
+                    .iter()
+                    .any(|v| v.ends_with(&config_path.clone()))
+                {
+                    match event.kind {
+                        EventKind::Any | EventKind::Modify(_) | EventKind::Other => {
+                            let new_config =
+                                match config::parser::parse_config_fallibly(&config_path) {
+                                    Err(e) => {
+                                        trace!(%e, "ignoring invalid config");
+                                        continue;
+                                    }
+                                    Ok(v) => v,
+                                };
+                            if new_config.log != config.log {
+                                logging::reload_with_config(&new_config.log, &handles);
+                            }
+                            config = new_config;
                         }
-                        Some(v) => v,
-                    };
-                    if new_config.log != config.log {
-                        logging::reload_with_config(&new_config.log, &handles);
+                        _ => {}
                     }
-                    config = new_config;
+                } else {
+                    if event.need_rescan() {
+                        event.paths.iter().for_each(|v| {
+                            match reload_sender.send(ReloadEvent::DirectoryChange(v.to_owned())) {
+                                Err(e) => warn!(%e, ?event.kind, "failed to apply file reload"),
+                                Ok(_) => {}
+                            }
+                        });
+                        continue;
+                    }
+                    match event.kind {
+                        EventKind::Create(_) => {
+                            event.paths.iter().for_each(|v| {
+                                match reload_sender.send(ReloadEvent::Add(v.to_owned())) {
+                                    Err(e) => warn!(%e, ?event.kind, "failed to apply file reload"),
+                                    Ok(_) => {}
+                                }
+                            })
+                        }
+                        EventKind::Modify(_) => {
+                            event.paths.iter().for_each(|v| {
+                                match reload_sender.send(ReloadEvent::Modify(v.to_owned())) {
+                                    Err(e) => warn!(%e, ?event.kind, "failed to apply file reload"),
+                                    Ok(_) => {}
+                                }
+                            })
+                        }
+                        EventKind::Remove(_) => {
+                            event.paths.iter().for_each(|v| {
+                                match reload_sender.send(ReloadEvent::Delete(v.to_owned())) {
+                                    Err(e) => warn!(%e, ?event.kind, "failed to apply file reload"),
+                                    Ok(_) => {}
+                                }
+                            })
+                        }
+                        EventKind::Any | EventKind::Other => event.paths.iter().for_each(|v| {
+                            match reload_sender.send(ReloadEvent::DirectoryChange(v.to_owned())) {
+                                Err(e) => warn!(%e, ?event.kind, "failed to apply file reload"),
+                                Ok(_) => {}
+                            }
+                        }),
+                        EventKind::Access(_) => {}
+                    }
                 }
             }
         }
@@ -161,6 +233,7 @@ fn async_watcher() -> notify::Result<(RecommendedWatcher, MpscReceiver<notify::R
 
     let watcher = RecommendedWatcher::new(
         move |event| {
+            trace!(hot_reload_event = ?event);
             if let Err(e) = tx.blocking_send(event) {
                 warn!(%e, "failed to notify about config file change")
             }

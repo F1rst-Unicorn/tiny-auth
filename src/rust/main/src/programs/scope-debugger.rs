@@ -51,7 +51,7 @@ async fn main() {
     debug!("parsing config");
     let config = parse_config(config_path);
 
-    let di = match Constructor::new(&config) {
+    let di = match Constructor::new(&config).await {
         Err(e) => {
             error!(%e, "failed to read config");
             return;
