@@ -51,7 +51,7 @@ async fn main() {
     debug!("parsing config");
     let config = parse_config(config_path);
 
-    let di = match Constructor::new(&config) {
+    let di = match Constructor::new(&config).await {
         Err(e) => {
             error!(%e, "failed to read config");
             return;
@@ -92,11 +92,14 @@ async fn main() {
     };
 
     let store = di.get_scope_store();
-    let scope = match store.get(
-        args.get_one::<String>(FLAG_SCOPE)
-            .map(String::as_str)
-            .unwrap(),
-    ) {
+    let scope = match store
+        .get(
+            args.get_one::<String>(FLAG_SCOPE)
+                .map(String::as_str)
+                .unwrap(),
+        )
+        .await
+    {
         None => {
             error!("scope not found");
             return;

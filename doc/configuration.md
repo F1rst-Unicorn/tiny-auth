@@ -240,5 +240,5 @@ and [state](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
 ### `hot reload`
 
 Turn on hot-reloading the config file. When the config is changed, tiny-auth
-will reconfigure itself according to the new config. Only the `log` format is
-affected.
+will reconfigure itself according to the new config. This affects the `log`
+section and all file-based store directories.

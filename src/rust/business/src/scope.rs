@@ -111,6 +111,11 @@ impl Scope {
         }
     }
 
+    pub fn merge(mut self, other: Self) -> Self {
+        self.mappings.extend(other.mappings);
+        self
+    }
+
     #[instrument(level = "debug", skip(templater, user, client, self), fields(scope = self.name, ?destination))]
     pub fn generate_claims<'a>(
         &self,

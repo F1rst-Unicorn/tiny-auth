@@ -39,6 +39,7 @@ use openssl::hash::MessageDigest;
 use openssl::rsa::Rsa;
 use rustls::SupportedProtocolVersion;
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tera::Tera;
 use tiny_auth_business::authenticator::inject::authenticator;
@@ -75,6 +76,7 @@ use tiny_auth_web::endpoints::discovery::Handler as DiscoveryHandler;
 use tiny_auth_web::endpoints::token::Handler as TokenHandler;
 use tiny_auth_web::endpoints::userinfo::Handler as UserInfoHandler;
 use tiny_auth_web::ApiUrl;
+use tokio::sync::broadcast::{channel, Sender};
 use tracing::error;
 
 pub struct Constructor<'a> {
@@ -85,6 +87,10 @@ pub struct Constructor<'a> {
     client_store: Arc<dyn ClientStore>,
 
     scope_store: Arc<dyn ScopeStore>,
+
+    reload_sender: Sender<ReloadEvent>,
+
+    store_paths: Vec<PathBuf>,
 
     authorization_code_store: Arc<dyn AuthorizationCodeStore>,
 
@@ -112,8 +118,9 @@ pub struct Constructor<'a> {
 }
 
 impl<'a> Constructor<'a> {
-    pub fn new(config: &'a Config) -> Result<Self, Error> {
-        let (user_store, password_store, client_store, scope_store) = Self::build_stores(config)?;
+    pub async fn new(config: &'a Config) -> Result<Self, Error> {
+        let (user_store, password_store, client_store, scope_store, reload_sender, store_paths) =
+            Self::build_stores(config).await?;
         let tera = Arc::new(Self::build_template_engine(config)?);
         let issuer_url = Self::build_issuer_url(config);
         let (public_keys, private_key) = Self::read_token_keypairs(config)?;
@@ -162,6 +169,8 @@ impl<'a> Constructor<'a> {
             user_store,
             client_store,
             scope_store,
+            reload_sender,
+            store_paths,
             authorization_code_store: Self::build_auth_code_store(),
             tera,
             public_keys,
@@ -204,7 +213,7 @@ impl<'a> Constructor<'a> {
     }
 
     #[allow(clippy::type_complexity)]
-    fn build_stores(
+    async fn build_stores(
         config: &Config,
     ) -> Result<
         (
@@ -212,28 +221,34 @@ impl<'a> Constructor<'a> {
             Arc<DispatchingPasswordStore>,
             Arc<dyn ClientStore>,
             Arc<dyn ScopeStore>,
+            Sender<ReloadEvent>,
+            Vec<PathBuf>,
         ),
         Error,
     > {
-        let mut client_store = FileClientStore::default();
         let mut client_stores: Vec<Arc<dyn ClientStore>> = vec![];
-        let mut user_store = FileUserStore::default();
         let mut user_stores: Vec<Arc<dyn UserStore>> = vec![];
+        let mut scope_stores: Vec<Arc<dyn ScopeStore>> = vec![];
         let mut password_stores = BTreeMap::default();
-        let mut scope_store = FileScopeStore::default();
+        let (sender, _receiver) = channel(8);
+        let mut store_paths = Vec::new();
 
         for store_config in &config.store {
             match store_config {
                 Store::Config { name: _, base } => {
-                    if !client_store.read_clients(base) {
-                        return Err(LoggedBeforeError);
-                    }
-                    if !user_store.read_users(base) {
-                        return Err(LoggedBeforeError);
-                    }
-                    if !scope_store.read_scopes(base) {
-                        return Err(LoggedBeforeError);
-                    }
+                    store_paths.push(base.into());
+                    match FileStore::new(Path::new(&base), "clients", sender.subscribe()).await {
+                        None => return Err(LoggedBeforeError),
+                        Some(v) => client_stores.push(v),
+                    };
+                    match FileStore::new(Path::new(&base), "users", sender.subscribe()).await {
+                        None => return Err(LoggedBeforeError),
+                        Some(v) => user_stores.push(v),
+                    };
+                    match FileStore::new(Path::new(&base), "scopes", sender.subscribe()).await {
+                        None => return Err(LoggedBeforeError),
+                        Some(v) => scope_stores.push(v),
+                    };
                 }
                 Store::Ldap {
                     name,
@@ -347,14 +362,14 @@ impl<'a> Constructor<'a> {
             password_stores,
             Arc::new(in_place_password_store(&config.crypto.pepper)),
         );
-        user_stores.push(Arc::new(user_store));
-        client_stores.push(Arc::new(client_store));
 
         Ok((
             Arc::new(MergingUserStore::from(user_stores)),
             Arc::new(password_store),
             Arc::new(MergingClientStore::from(client_stores)),
-            Arc::new(scope_store),
+            Arc::new(MergingScopeStore::from(scope_stores)),
+            sender,
+            store_paths,
         ))
     }
 
@@ -364,6 +379,14 @@ impl<'a> Constructor<'a> {
 
     pub fn get_scope_store(&self) -> Arc<dyn ScopeStore> {
         self.scope_store.clone()
+    }
+
+    pub fn reload_sender(&self) -> Sender<ReloadEvent> {
+        self.reload_sender.clone()
+    }
+
+    pub fn store_paths(&self) -> Vec<PathBuf> {
+        self.store_paths.clone()
     }
 
     pub fn build_auth_code_store() -> Arc<dyn AuthorizationCodeStore> {

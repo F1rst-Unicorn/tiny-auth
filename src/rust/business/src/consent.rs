@@ -92,8 +92,8 @@ impl Handler {
         return Ok(requested_scopes.is_subset(&allowed_scopes.iter().collect()));
     }
 
-    pub fn get_scope(&self, key: &str) -> Option<Scope> {
-        self.scope_store.get(key)
+    pub async fn get_scope(&self, key: &str) -> Option<Scope> {
+        self.scope_store.get(key).await
     }
 
     #[instrument(level = Level::DEBUG, skip_all, fields(
@@ -146,7 +146,7 @@ impl Handler {
                 Ok(client) => client,
             };
 
-            let all_scopes = self.scope_store.get_all(&scopes);
+            let all_scopes = self.scope_store.get_all(&scopes).await;
 
             if request
                 .response_types

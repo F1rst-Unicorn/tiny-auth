@@ -7,6 +7,10 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* Store files are now watched for changes and reload their content automatically
+  without server restart
+  ([#102](https://j.njsm.de/git/veenj/tiny-auth/issues/102)).
+
 * Scope claims can now go to only some of access token, id token or userinfo
   ([#76](https://j.njsm.de/git/veenj/tiny-auth/issues/76)).
 
@@ -14,6 +18,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 * Validate token audience for own API
   ([#103](https://j.njsm.de/git/veenj/tiny-auth/issues/103)).
+
+* Configuration reloading now also works with vim.
 
 ## [2.0.0]
 

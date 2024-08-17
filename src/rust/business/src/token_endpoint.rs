@@ -39,6 +39,7 @@ use crate::token::{
 use crate::user::User;
 use chrono::offset::Local;
 use chrono::Duration;
+use futures_util::future::join_all;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 use jsonwebtoken::TokenData;
@@ -304,7 +305,10 @@ impl Handler {
                 | crate::user::Error::BackendErrorWithContext(_) => Error::AuthenticationFailed,
             })?;
 
-        let scopes = self.scope_store.get_all(&parse_scope_names(&record.scopes));
+        let scopes = self
+            .scope_store
+            .get_all(&parse_scope_names(&record.scopes))
+            .await;
 
         Ok((
             user,
@@ -328,11 +332,15 @@ impl Handler {
             Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
         };
 
-        let scopes = allowed_scopes
-            .intersection(&requested_scopes)
-            .map(|v| self.scope_store.get(v))
-            .map(Option::unwrap)
-            .collect();
+        let scopes = join_all(
+            allowed_scopes
+                .intersection(&requested_scopes)
+                .map(|v| self.scope_store.get(v)),
+        )
+        .await
+        .into_iter()
+        .filter_map(|v| v)
+        .collect();
 
         Ok((
             client.clone().try_into().unwrap(),
@@ -363,11 +371,15 @@ impl Handler {
             Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
         };
 
-        let scopes = allowed_scopes
-            .intersection(&requested_scopes)
-            .map(|v| self.scope_store.get(v))
-            .map(Option::unwrap)
-            .collect();
+        let scopes = join_all(
+            allowed_scopes
+                .intersection(&requested_scopes)
+                .map(|v| self.scope_store.get(v)),
+        )
+        .await
+        .into_iter()
+        .filter_map(|v| v)
+        .collect();
 
         Ok((user, client, scopes, Local::now().timestamp()))
     }
@@ -420,11 +432,15 @@ impl Handler {
             Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
         };
 
-        let actual_scopes: Vec<_> = granted_scopes
-            .intersection(&requested_scopes)
-            .map(|v| self.scope_store.get(v))
-            .map(Option::unwrap)
-            .collect();
+        let actual_scopes: Vec<_> = join_all(
+            granted_scopes
+                .intersection(&requested_scopes)
+                .map(|v| self.scope_store.get(v)),
+        )
+        .await
+        .into_iter()
+        .filter_map(|v| v)
+        .collect();
 
         let nonce = Some(refresh_token.nonce);
         let mut access_token = self.token_creator.build_token::<Access>(

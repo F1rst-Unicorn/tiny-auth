@@ -28,6 +28,7 @@ test-log.workspace = true
 env_logger.workspace = true
 regex.workspace = true
 futures-util.workspace = true
+futures.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
