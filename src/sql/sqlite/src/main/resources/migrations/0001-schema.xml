@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    tiny-auth: Tiny OIDC Provider
+    Copyright (C) 2019 The tiny-auth developers
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+            http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd"
+        context="production">
+
+    <changeSet id="1" author="admin">
+        <sql endDelimiter=";;">
+            create table "user" (
+                id integer primary key,
+                name text not null,
+                password integer not null,
+                email text not null,
+                email_verified integer not null,
+                phone_number text not null,
+                phone_number_verified integer not null,
+                address text not null,
+                given_name text not null,
+                middle_name text not null,
+                family_name text not null,
+                nickname text not null,
+                preferred_username text not null,
+                profile text not null,
+                picture blob not null,
+                website text not null,
+                gender text not null,
+                birthday text not null,
+                zoneinfo text not null,
+                locale text not null,
+                updated_at text not null
+            ) strict;;
+
+            create unique index user_name on user (name);;
+
+            create table user_allowed_scopes (
+                id integer primary key,
+                user integer not null,
+                client integer not null,
+                scope integer not null
+            ) strict;;
+
+            create unique index user_allowed_scopes_user on user_allowed_scopes (user);;
+
+            create table password (
+                id integer primary key,
+                algorithm text not null
+            ) strict;;
+
+            create table password_pbkf2hmacsha256 (
+                id integer primary key,
+                password integer not null,
+                credential blob not null,
+                iterations integer not null,
+                salt blob not null
+            ) strict;;
+
+            create unique index password_pbkf2hmacsha256_password on password_pbkf2hmacsha256 (password);;
+
+            create table client (
+                id integer primary key,
+                client_id text not null,
+                client_type text not null,
+                password integer null,
+                public_key text null
+            ) strict;;
+
+            create unique index client_client_id on client (client_id);;
+
+            create table redirect_uri (
+                id integer primary key,
+                redirect_uri text not null,
+                client integer not null
+            ) strict;;
+
+            create index redirect_uri_client on redirect_uri (client);;
+
+            create table client_allowed_scopes (
+                id integer primary key,
+                client integer not null,
+                scope integer not null
+            ) strict;;
+
+            create index client_allowed_scopes_client on client_allowed_scopes (client);;
+
+            create table scope (
+                id integer primary key,
+                name text not null,
+                pretty_name text not null,
+                description text not null
+            ) strict;;
+
+            create table scope_mapping (
+                id integer primary key,
+                scope integer not null,
+                type text not null,
+                destination_userinfo integer not null default 0,
+                destination_access_token integer not null default 0,
+                destination_id_token integer not null default 0
+            ) strict;;
+
+            create index scope_mapping_scope on scope_mapping (scope);;
+
+            create table scope_mapping_plain (
+                id integer primary key,
+                scope_mapping integer not null,
+                structure text not null,
+                delimiter text not null default ' ',
+                type text not null,
+                value text not null
+            ) strict;;
+
+            create index scope_mapping_plain_scope_mapping on scope_mapping_plain (scope_mapping);;
+
+            create table scope_mapping_template (
+                id integer primary key,
+                scope_mapping integer not null,
+                structure text not null,
+                delimiter text not null default ' ',
+                template text not null
+            ) strict;;
+
+            create index scope_mapping_template_scope_mapping on scope_mapping_template (scope_mapping);;
+        </sql>
+        <rollback>
+            <sql endDelimiter=";;">
+                drop table "user";;
+                drop table "user_allowed_scopes";;
+                drop table "password";;
+                drop table "password_pbkf2hmacsha256";;
+                drop table "client";;
+                drop table "redirect_uri";;
+                drop table "client_allowed_scopes";;
+                drop table "scope";;
+                drop table "scope_mapping";;
+                drop table "scope_mapping_plain";;
+                drop table "scope_mapping_template";;
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,11 @@
+[versions]
+
+[libraries]
+jaxb-api = "javax.xml.bind:jaxb-api:2.3.1"
+liquibase = "org.liquibase:liquibase-core:4.26.0"
+liquibase-plugin = "org.liquibase:liquibase-gradle-plugin:2.2.1"
+picocli = "info.picocli:picocli:4.6.2"
+slf4j = "org.slf4j:slf4j-simple:2.0.16"
+sqlite = "org.xerial:sqlite-jdbc:3.46.1.0"
+
+[bundles]
