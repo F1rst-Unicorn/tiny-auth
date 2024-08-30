@@ -3,6 +3,9 @@ src/rust/target
 src/rust/licenses.html
 src/typescript/src/generated
 
+build
+.gradle
+
 pkg/Archlinux/pkg
 pkg/Archlinux/*.pkg.tar*
 
