@@ -589,4 +589,25 @@
             </sql>
         </rollback>
     </changeSet>
+    <changeSet id="4" author="admin" labels="schema,authcode">
+        <sql endDelimiter=";;">
+            create table authorization_code (
+                id integer primary key,
+                client integer not null,
+                user integer not null,
+                redirect_uri integer not null,
+                scope integer not null,
+                code text not null,
+                insertion_time real not null,
+                authentication_time real not null,
+                nonce text not null,
+                pkce_challenge text null
+            );;
+        </sql>
+        <rollback>
+            <sql endDelimiter=";;">
+                drop table authorization_code;;
+            </sql>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>
