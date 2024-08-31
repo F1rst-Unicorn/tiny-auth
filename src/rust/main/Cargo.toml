@@ -26,6 +26,7 @@ tiny_auth_web = { path = "../web" }
 tiny_auth_api = { path = "../api" }
 tiny_auth_ldap = { path = "../ldap" }
 tiny_auth_template = { path = "../template" }
+tiny_auth_sqlite = { path = "../sqlite" }
 
 clap.workspace = true
 serde.workspace = true
