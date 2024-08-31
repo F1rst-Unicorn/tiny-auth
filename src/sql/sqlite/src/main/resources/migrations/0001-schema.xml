@@ -123,7 +123,6 @@
                 id integer primary key,
                 scope_mapping integer not null,
                 structure text not null,
-                delimiter text not null default ' ',
                 type text not null,
                 value text not null
             ) strict;;
@@ -134,11 +133,28 @@
                 id integer primary key,
                 scope_mapping integer not null,
                 structure text not null,
-                delimiter text not null default ' ',
                 template text not null
             ) strict;;
 
             create index scope_mapping_template_scope_mapping on scope_mapping_template (scope_mapping);;
+
+            create table scope_mapping_user_attribute (
+                id integer primary key,
+                scope_mapping integer not null,
+                structure text not null,
+                user_attribute text not null
+            ) strict;;
+
+            create index scope_mapping_user_attribute_scope_mapping on scope_mapping_user_attribute (scope_mapping);;
+
+            create table scope_mapping_client_attribute (
+                id integer primary key,
+                scope_mapping integer not null,
+                structure text not null,
+                client_attribute text not null
+            ) strict;;
+
+            create index scope_mapping_client_attribute_scope_mapping on scope_mapping_client_attribute (scope_mapping);;
         </sql>
         <rollback>
             <sql endDelimiter=";;">
@@ -153,6 +169,8 @@
                 drop table "scope_mapping";;
                 drop table "scope_mapping_plain";;
                 drop table "scope_mapping_template";;
+                drop table "scope_mapping_user_attribute";;
+                drop table "scope_mapping_client_attribute";;
             </sql>
         </rollback>
     </changeSet>
