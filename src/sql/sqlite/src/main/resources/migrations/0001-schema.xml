@@ -23,7 +23,7 @@
             http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd"
         context="production">
 
-    <changeSet id="1" author="admin">
+    <changeSet id="1" author="admin" labels="schema">
         <sql endDelimiter=";;">
             create table "user" (
                 id integer primary key,
@@ -171,6 +171,421 @@
                 drop table "scope_mapping_template";;
                 drop table "scope_mapping_user_attribute";;
                 drop table "scope_mapping_client_attribute";;
+            </sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="2" author="admin" labels="data,scope">
+        <sql endDelimiter=";;">
+            insert into scope (name, pretty_name, description)
+            values ('openid', 'Authentication', 'Your username');;
+
+            insert into scope (name, pretty_name, description)
+            values ('email', 'Email Address', 'Access to your email address');;
+
+            insert into scope_mapping (scope, type, destination_userinfo, destination_id_token)
+            select
+                id,
+                'template',
+                1,
+                1
+            from scope
+            where name = 'email';;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/email',
+                '{{ user.email }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'email');;
+
+            insert into scope_mapping (scope, type, destination_userinfo, destination_id_token)
+            select
+                id,
+                'plain',
+                1,
+                1
+            from scope
+            where name = 'email';;
+
+            insert into scope_mapping_plain (scope_mapping, structure, type, "value")
+            select
+                id,
+                '/email_verified',
+                'boolean',
+                'true'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'email');;
+
+            insert into scope (name, pretty_name, description)
+            values ('address', 'Address', 'Access to your address');;
+
+            insert into scope_mapping (scope, type, destination_userinfo)
+            select
+                id,
+                'user_attribute',
+                1
+            from scope
+            where name = 'address';;
+
+            insert into scope_mapping_user_attribute (scope_mapping, structure, user_attribute)
+            select
+                id,
+                '/',
+                '/address'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'email');;
+
+            insert into scope (name, pretty_name, description)
+            values ('phone', 'Phone Number', 'Access to your phone number');;
+
+            insert into scope_mapping (scope, type, destination_userinfo)
+            select
+                id,
+                'template',
+                1
+            from scope
+            where name = 'phone';;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/phone_number',
+                '{{ user.phone_number }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'phone');;
+
+            insert into scope_mapping (scope, type, destination_userinfo, destination_id_token)
+            select
+                id,
+                'plain',
+                1,
+                1
+            from scope
+            where name = 'phone';;
+
+            insert into scope_mapping_plain (scope_mapping, structure, type, "value")
+            select
+                id,
+                '/phone_number_verified',
+                'boolean',
+                'true'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'phone');;
+
+            insert into scope (name, pretty_name, description)
+            values ('profile', 'Profile Information', 'Access to your name, birthdate, gender and position');;
+
+            insert into scope_mapping (scope, type, destination_userinfo)
+            select
+                id,
+                'template',
+                1
+            from scope
+            where name = 'profile';;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/name',
+                '{{ user.given_name }}{% if user.middle_name is defined %} {{ user.middle_name }} {% else %} {% endif %}{{ user.family_name }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/family_name',
+                '{{ user.family_name }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/given_name',
+                '{{ user.given_name }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/middle_name',
+                '{{ user.middle_name | default(value='''') }'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/nickname',
+                '{{ user.nickname | default(value=user.given_name) }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/preferred_username',
+                '{{ user.preferred_username }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/profile',
+                '{{ user.profile | default(value='''') }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/picture',
+                '{{ user.picture | default(value='''') }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/website',
+                '{{ user.website | default(value='''') }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/gender',
+                '{{ user.gender }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/birthdate',
+                '{{ user.birthdate }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/zoneinfo',
+                '{{ user.zoneinfo }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+
+            insert into scope_mapping_template (scope_mapping, structure, template)
+            select
+                id,
+                '/locale',
+                '{{ user.locale }}'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+
+            insert into scope_mapping (scope, type, destination_userinfo)
+            select
+                id,
+                'user_attribute',
+                1
+            from scope
+            where name = 'profile';;
+
+            insert into scope_mapping_user_attribute (scope_mapping, structure, user_attribute)
+            select
+                id,
+                '/',
+                '/updated_at'
+            from scope_mapping
+            where scope = (
+                select
+                    id
+                from scope
+                where name = 'profile');;
+        </sql>
+        <rollback>
+            <sql endDelimiter=";;">
+                delete
+                from scope_mapping_plain
+                where scope_mapping in (
+                    select
+                        id
+                    from scope_mapping
+                    where scope in (
+                        select
+                            id
+                        from scope
+                        where name in ('openid', 'address', 'profile', 'email', 'phone')));;
+
+                delete
+                from scope_mapping_template
+                where scope_mapping in (
+                    select
+                        id
+                    from scope_mapping
+                    where scope in (
+                        select
+                            id
+                        from scope
+                        where name in ('openid', 'address', 'profile', 'email', 'phone')));;
+
+                delete
+                from scope_mapping_user_attribute
+                where scope_mapping in (
+                    select
+                        id
+                    from scope_mapping
+                    where scope in (
+                        select
+                            id
+                        from scope
+                        where name in ('openid', 'address', 'profile', 'email', 'phone')));;
+
+                delete
+                from scope_mapping_client_attribute
+                where scope_mapping in (
+                    select
+                        id
+                    from scope_mapping
+                    where scope in (
+                        select
+                            id
+                        from scope
+                        where name in ('openid', 'address', 'profile', 'email', 'phone')));;
+
+                delete
+                from scope_mapping
+                where scope in (
+                    select
+                        id
+                    from scope
+                    where name in ('openid', 'address', 'profile', 'email', 'phone'));;
+
+                delete
+                from scope
+                where name in ('openid', 'address', 'profile', 'email', 'phone');;
+            </sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="3" author="admin" labels="data,client">
+        <sql endDelimiter=";;">
+            insert into client (client_id, client_type)
+            values ('tiny-auth-frontend', 'public');;
+
+            insert into redirect_uri (redirect_uri, client)
+            select
+                'http://localhost:8088/oidc-login-redirect',
+                id
+            from client
+            where client_id = 'tiny-auth-frontend';;
+
+            insert into redirect_uri (redirect_uri, client)
+            select
+                'http://localhost:8088/oidc-login-redirect-silent',
+                id
+            from client
+            where client_id = 'tiny-auth-frontend';;
+
+            insert into client_allowed_scopes (client, scope)
+            select *
+            from (
+                     select
+                         id
+                     from client
+                     where client_id = 'tiny-auth-frontend'),
+                 (
+                     select id from scope where name in ('openid', 'address', 'profile', 'email', 'phone'));;
+        </sql>
+        <rollback>
+            <sql endDelimiter=";;">
+                delete
+                from redirect_uri
+                where client = (
+                    select
+                        id
+                    from client
+                    where client_id = 'tiny-auth-frontend');;
+
+                delete
+                from client
+                where client_id = 'tiny-auth-frontend';;
             </sql>
         </rollback>
     </changeSet>
