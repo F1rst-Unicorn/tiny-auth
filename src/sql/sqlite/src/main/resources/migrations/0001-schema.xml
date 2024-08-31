@@ -43,10 +43,10 @@
                 picture blob not null,
                 website text not null,
                 gender text not null,
-                birthday text not null,
+                birthday real not null,
                 zoneinfo text not null,
                 locale text not null,
-                updated_at text not null
+                updated_at real not null
             ) strict;;
 
             create unique index user_name on user (name);;
