@@ -119,6 +119,7 @@ log:
     - tiny_auth_template=trace
     - tiny_auth_template::web=debug
     - tiny_auth_web=trace
+    - sqlx::query=trace
     - "[cid]=debug"
 
 hot reload: true

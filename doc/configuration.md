@@ -237,6 +237,9 @@ and [state](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest).
 
 `[HTTP request]=debug`: Enable logging of HTTP request fields.
 
+`sqlx::query=trace`: Enable SQL statement logging. Only contains statements
+without bound values.
+
 ### `hot reload`
 
 Turn on hot-reloading the config file. When the config is changed, tiny-auth
