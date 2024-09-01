@@ -84,6 +84,13 @@ impl TryFrom<&String> for CodeChallenge {
 }
 
 impl CodeChallenge {
+    pub unsafe fn from_parts(
+        code_challenge: String,
+        code_challenge_method: CodeChallengeMethod,
+    ) -> Self {
+        Self(code_challenge_method, code_challenge)
+    }
+
     pub fn verify(&self, val: CodeVerifier) -> bool {
         match self.0 {
             CodeChallengeMethod::Plain => self.1 == val.0,
@@ -92,6 +99,14 @@ impl CodeChallenge {
                     == Cow::<str>::Owned(URL_SAFE_NO_PAD.encode(digest(&SHA256, val.0.as_bytes())))
             }
         }
+    }
+
+    pub fn code_challenge(&self) -> String {
+        self.1.clone()
+    }
+
+    pub fn code_challenge_method(&self) -> CodeChallengeMethod {
+        self.0
     }
 }
 

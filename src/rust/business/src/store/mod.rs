@@ -28,7 +28,9 @@ use chrono::DateTime;
 use chrono::Duration;
 use chrono::Local;
 use futures_util::future::join_all;
+use std::error::Error as StdError;
 use std::sync::Arc;
+use thiserror::Error;
 use tracing::{debug, instrument, Level};
 
 #[async_trait]
@@ -173,6 +175,7 @@ impl ScopeStore for MergingScopeStore {
 /// Recommended lifetime is 10 minutes as of the [RFC](https://tools.ietf.org/html/rfc6749#section-4.1.2)
 pub const AUTH_CODE_LIFE_TIME: i64 = 10;
 
+#[derive(Clone)]
 pub struct AuthorizationCodeRequest<'a> {
     pub client_id: &'a str,
 
@@ -215,14 +218,35 @@ pub struct ValidationRequest<'a> {
     pub validation_time: DateTime<Local>,
 }
 
+#[derive(Error, Debug, Clone)]
+pub enum AuthCodeError {
+    #[error("backend error")]
+    BackendError,
+    #[error("backend error: {0}")]
+    BackendErrorWithContext(#[from] Arc<dyn StdError + Send + Sync>),
+}
+
+#[derive(Error, Debug, Clone)]
+pub enum AuthCodeValidationError {
+    #[error("not found")]
+    NotFound,
+    #[error("backend error")]
+    BackendError,
+    #[error("backend error: {0}")]
+    BackendErrorWithContext(#[from] Arc<dyn StdError + Send + Sync>),
+}
+
 #[async_trait]
 pub trait AuthorizationCodeStore: Send + Sync {
-    async fn get_authorization_code<'a>(&self, request: AuthorizationCodeRequest<'a>) -> String;
+    async fn get_authorization_code<'a>(
+        &self,
+        request: AuthorizationCodeRequest<'a>,
+    ) -> Result<String, AuthCodeError>;
 
     async fn validate<'a>(
         &self,
         request: ValidationRequest<'a>,
-    ) -> Option<AuthorizationCodeResponse>;
+    ) -> Result<AuthorizationCodeResponse, AuthCodeValidationError>;
 }
 
 pub mod test_fixtures {
@@ -237,6 +261,7 @@ pub mod test_fixtures {
     use crate::client::{Client, Error};
     use crate::oauth2::ClientType;
     use crate::password::Password;
+    use crate::store::AuthCodeValidationError::NotFound;
     use crate::token::TokenValidator;
     use crate::user::User;
 
@@ -347,7 +372,7 @@ pub mod test_fixtures {
         async fn get_authorization_code<'a>(
             &self,
             request: AuthorizationCodeRequest<'a>,
-        ) -> String {
+        ) -> Result<String, AuthCodeError> {
             self.store.borrow_mut().insert(
                 (
                     request.client_id.to_string(),
@@ -363,13 +388,13 @@ pub mod test_fixtures {
                     request.pkce_challenge,
                 ),
             );
-            request.insertion_time.to_rfc3339()
+            Ok(request.insertion_time.to_rfc3339())
         }
 
         async fn validate<'a>(
             &self,
             request: ValidationRequest<'a>,
-        ) -> Option<AuthorizationCodeResponse> {
+        ) -> Result<AuthorizationCodeResponse, AuthCodeValidationError> {
             let (
                 redirect_uri,
                 user,
@@ -378,11 +403,15 @@ pub mod test_fixtures {
                 authentication_time,
                 nonce,
                 pkce_challenge,
-            ) = self.store.borrow_mut().remove(&(
-                request.client_id.to_string(),
-                request.authorization_code.to_string(),
-            ))?;
-            Some(AuthorizationCodeResponse {
+            ) = self
+                .store
+                .borrow_mut()
+                .remove(&(
+                    request.client_id.to_string(),
+                    request.authorization_code.to_string(),
+                ))
+                .ok_or(NotFound)?;
+            Ok(AuthorizationCodeResponse {
                 redirect_uri,
                 stored_duration: request
                     .validation_time

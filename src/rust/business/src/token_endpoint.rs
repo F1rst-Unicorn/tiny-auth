@@ -25,10 +25,10 @@ use crate::oauth2::GrantType;
 use crate::pkce::{CodeChallenge, CodeVerifier};
 use crate::scope::parse_scope_names;
 use crate::scope::Scope;
-use crate::store::ClientStore;
 use crate::store::ScopeStore;
 use crate::store::UserStore;
 use crate::store::AUTH_CODE_LIFE_TIME;
+use crate::store::{AuthCodeValidationError, ClientStore};
 use crate::store::{AuthorizationCodeStore, ValidationRequest};
 use crate::token::Token;
 use crate::token::TokenCreator;
@@ -49,8 +49,8 @@ use std::collections::BTreeSet;
 use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
-use tracing::warn;
 use tracing::{debug, instrument, Level, Span};
+use tracing::{info, warn};
 
 const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -255,7 +255,7 @@ impl Handler {
             Ok(client) => client,
         };
 
-        let record = self
+        let record = match self
             .auth_code_store
             .validate(ValidationRequest {
                 client_id: &client.client_id,
@@ -263,10 +263,17 @@ impl Handler {
                 validation_time: Local::now(),
             })
             .await
-            .ok_or_else(|| {
+        {
+            Err(AuthCodeValidationError::NotFound) => {
                 debug!(%code, "No authorization code found");
-                Error::InvalidAuthorizationCode
-            })?;
+                return Err(Error::InvalidAuthorizationCode);
+            }
+            Err(e) => {
+                info!(%e, "failed to validate auth code");
+                return Err(Error::AuthenticationFailed);
+            }
+            Ok(v) => v,
+        };
         cid_span.record("user", &record.username);
         span.record("nonce", &record.nonce);
 
@@ -812,7 +819,8 @@ mod tests {
                 nonce: Some("nonce".to_string()),
                 pkce_challenge: None,
             })
-            .await;
+            .await
+            .unwrap();
         let request = Request {
             grant_type: GrantType::AuthorizationCode,
             code: Some(auth_code + "/wrong"),
@@ -844,7 +852,8 @@ mod tests {
                 nonce: Some("nonce".to_string()),
                 pkce_challenge: None,
             })
-            .await;
+            .await
+            .unwrap();
         let request = Request {
             grant_type: GrantType::AuthorizationCode,
             code: Some(auth_code),
@@ -875,7 +884,8 @@ mod tests {
                 nonce: Some("nonce".to_string()),
                 pkce_challenge: None,
             })
-            .await;
+            .await
+            .unwrap();
         let request = Request {
             grant_type: GrantType::AuthorizationCode,
             code: Some(auth_code),
@@ -927,7 +937,8 @@ mod tests {
                 nonce: Some("nonce".to_string()),
                 pkce_challenge: None,
             })
-            .await;
+            .await
+            .unwrap();
         let request = Request {
             grant_type: GrantType::AuthorizationCode,
             code: Some(auth_code),

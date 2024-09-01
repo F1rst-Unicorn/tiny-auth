@@ -18,7 +18,6 @@
 use crate::client::Client;
 use crate::oauth2::ClientType;
 use crate::password::Password;
-use serde::de::StdError;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -26,6 +25,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::error::Error as StdError;
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::debug;

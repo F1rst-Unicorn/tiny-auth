@@ -14,9 +14,187 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use async_trait::async_trait;
+use chrono::{DateTime, Local};
 use sqlx::SqlitePool;
+use tiny_auth_business::pkce::{CodeChallenge, CodeChallengeMethod};
+use tiny_auth_business::store::memory::generate_random_string;
+use tiny_auth_business::store::{
+    AuthCodeError, AuthCodeValidationError, AuthorizationCodeRequest, AuthorizationCodeResponse,
+    AuthorizationCodeStore, ValidationRequest,
+};
+use tiny_auth_business::util::wrap_err;
+use tracing::{debug, Level};
+use tracing::{instrument, warn};
 
 pub struct SqliteStore {
     pub(crate) read_pool: SqlitePool,
     pub(crate) write_pool: SqlitePool,
+}
+
+#[async_trait]
+impl AuthorizationCodeStore for SqliteStore {
+    #[instrument(skip_all, ret(level = Level::DEBUG))]
+    async fn get_authorization_code<'a>(
+        &self,
+        request: AuthorizationCodeRequest<'a>,
+    ) -> Result<String, AuthCodeError> {
+        let mut conn = self.write_pool.acquire().await.map_err(wrap_err)?;
+        let auth_code = generate_random_string(32);
+        let encoded_auth_time = request.authentication_time.to_rfc3339();
+        let encoded_insertion_time = request.insertion_time.to_rfc3339();
+        let nonce = request.nonce.unwrap_or_default();
+        let pkce_challenge = request
+            .pkce_challenge
+            .as_ref()
+            .map(CodeChallenge::code_challenge);
+        let pkce_challenge_method = request
+            .pkce_challenge
+            .as_ref()
+            .map(CodeChallenge::code_challenge_method)
+            .map(|v| format!("{}", v));
+
+        let result = sqlx::query!(
+            r#"
+                insert into authorization_code (
+                    client,
+                    user,
+                    redirect_uri,
+                    scope,
+                    code,
+                    insertion_time,
+                    authentication_time,
+                    nonce,
+                    pkce_challenge,
+                    pkce_challenge_method)
+                select
+                    client.id,
+                    user.id,
+                    redirect_uri.id,
+                    $4,
+                    $5,
+                    $8,
+                    $6,
+                    $7,
+                    $9,
+                    $10
+                from client, user, redirect_uri
+                where client.client_id = $1
+                and user.name = $2
+                and redirect_uri.client = client.id
+                and redirect_uri.redirect_uri = $3
+            "#,
+            request.client_id,
+            request.user,
+            request.redirect_uri,
+            request.scope,
+            auth_code,
+            encoded_auth_time,
+            nonce,
+            encoded_insertion_time,
+            pkce_challenge,
+            pkce_challenge_method,
+        )
+        .execute(&mut *conn)
+        .await
+        .map_err(wrap_err)?;
+
+        if result.rows_affected() != 1 {
+            warn!(
+                rows_affected = result.rows_affected(),
+                "failed to store authorization code"
+            );
+        }
+
+        Ok(auth_code)
+    }
+
+    async fn validate<'a>(
+        &self,
+        request: ValidationRequest<'a>,
+    ) -> Result<AuthorizationCodeResponse, AuthCodeValidationError> {
+        let mut conn = self.write_pool.acquire().await.map_err(wrap_err)?;
+
+        let Some(record) = sqlx::query!(
+            r#"
+                select
+                    c.id,
+                    redirect_uri.redirect_uri,
+                    c.insertion_time,
+                    user.name,
+                    c.scope,
+                    c.authentication_time,
+                    c.nonce,
+                    c.pkce_challenge,
+                    c.pkce_challenge_method
+                from authorization_code c
+                join user on user.id = c.user
+                join redirect_uri on redirect_uri.id = c.redirect_uri
+                where c.code = $1
+                and c.client = (
+                    select client.id
+                    from client
+                    where client.client_id = $2
+                )
+            "#,
+            request.authorization_code,
+            request.client_id,
+        )
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(wrap_err)?
+        else {
+            return Err(AuthCodeValidationError::NotFound);
+        };
+
+        sqlx::query!(
+            r#"
+            delete from authorization_code
+            where id = $1
+        "#,
+            record.id
+        )
+        .execute(&mut *conn)
+        .await
+        .map_err(wrap_err)?;
+
+        let Ok(insertion_time) =
+            DateTime::parse_from_rfc3339(&record.insertion_time).map(|v| v.with_timezone(&Local))
+        else {
+            debug!(value = record.insertion_time, "invalid raw insertion time");
+            return Err(AuthCodeValidationError::NotFound);
+        };
+
+        let Ok(authentication_time) = DateTime::parse_from_rfc3339(&record.authentication_time)
+            .map(|v| v.with_timezone(&Local))
+        else {
+            debug!(
+                value = record.authentication_time,
+                "invalid raw authentication time"
+            );
+            return Err(AuthCodeValidationError::NotFound);
+        };
+
+        let pkce_challenge = record
+            .pkce_challenge
+            .zip(
+                record
+                    .pkce_challenge_method
+                    .as_ref()
+                    .map(CodeChallengeMethod::try_from)
+                    .map(Result::ok)
+                    .flatten(),
+            )
+            .map(|(u, v)| unsafe { CodeChallenge::from_parts(u, v) });
+
+        Ok(AuthorizationCodeResponse {
+            redirect_uri: record.redirect_uri,
+            stored_duration: request.validation_time - (insertion_time),
+            username: record.name,
+            scopes: record.scope,
+            authentication_time,
+            nonce: record.nonce,
+            pkce_challenge,
+        })
+    }
 }

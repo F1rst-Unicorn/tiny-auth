@@ -16,10 +16,11 @@
  */
 
 use crate::pkce::CodeChallenge;
-use crate::store::AuthorizationCodeRequest;
-use crate::store::AuthorizationCodeResponse;
+use crate::store::AuthCodeValidationError::NotFound;
 use crate::store::AuthorizationCodeStore;
 use crate::store::ValidationRequest;
+use crate::store::{AuthCodeError, AuthorizationCodeRequest};
+use crate::store::{AuthCodeValidationError, AuthorizationCodeResponse};
 use async_trait::async_trait;
 use chrono::DateTime;
 use chrono::Duration;
@@ -87,7 +88,10 @@ pub async fn auth_code_clean_job(store: Arc<MemoryAuthorizationCodeStore>) {
 #[async_trait]
 impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
     #[instrument(skip_all, ret(level = Level::DEBUG))]
-    async fn get_authorization_code<'a>(&self, request: AuthorizationCodeRequest<'a>) -> String {
+    async fn get_authorization_code<'a>(
+        &self,
+        request: AuthorizationCodeRequest<'a>,
+    ) -> Result<String, AuthCodeError> {
         debug!("issuing authorization code");
         let mut store = self.store.write().await;
         let mut key = AuthCodeKey {
@@ -112,7 +116,7 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
                         pkce_challenge: request.pkce_challenge,
                     },
                 );
-                break auth_code;
+                break Ok(auth_code);
             }
         }
     }
@@ -120,15 +124,17 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
     async fn validate<'a>(
         &self,
         request: ValidationRequest<'a>,
-    ) -> Option<AuthorizationCodeResponse> {
+    ) -> Result<AuthorizationCodeResponse, AuthCodeValidationError> {
         let mut store = self.store.write().await;
 
-        let value = store.remove(&AuthCodeKey {
-            client_id: request.client_id.to_string(),
-            authorization_code: request.authorization_code.to_string(),
-        })?;
+        let value = store
+            .remove(&AuthCodeKey {
+                client_id: request.client_id.to_string(),
+                authorization_code: request.authorization_code.to_string(),
+            })
+            .ok_or(NotFound)?;
 
-        Some(AuthorizationCodeResponse {
+        Ok(AuthorizationCodeResponse {
             redirect_uri: value.redirect_uri.clone(),
             stored_duration: request
                 .validation_time
@@ -174,7 +180,8 @@ mod tests {
                 nonce: Some("nonce".to_string()),
                 pkce_challenge: None,
             })
-            .await;
+            .await
+            .unwrap();
 
         let output = uut
             .validate(ValidationRequest {
@@ -184,7 +191,7 @@ mod tests {
             })
             .await;
 
-        assert!(output.is_some());
+        assert!(output.is_ok());
         let output = output.unwrap();
         assert_eq!("redirect_uri", &output.redirect_uri);
         assert_eq!("user", &output.username);
@@ -208,7 +215,8 @@ mod tests {
                 nonce: Some("nonce".to_string()),
                 pkce_challenge: None,
             })
-            .await;
+            .await
+            .unwrap();
 
         uut.clear_expired_codes(date + duration + duration, duration)
             .await;
@@ -221,7 +229,7 @@ mod tests {
             })
             .await;
 
-        assert!(output.is_none());
+        assert!(output.is_ok());
     }
 
     #[tokio::test]
@@ -240,7 +248,8 @@ mod tests {
                 nonce: Some("nonce".to_string()),
                 pkce_challenge: None,
             })
-            .await;
+            .await
+            .unwrap();
 
         uut.clear_expired_codes(date + duration, duration).await;
 
@@ -252,7 +261,7 @@ mod tests {
             })
             .await;
 
-        assert!(output.is_some());
+        assert!(output.is_ok());
         let output = output.unwrap();
         assert_eq!("redirect_uri", &output.redirect_uri);
         assert_eq!("user", &output.username);
@@ -276,7 +285,8 @@ mod tests {
                 nonce: Some("nonce".to_string()),
                 pkce_challenge: None,
             })
-            .await;
+            .await
+            .unwrap();
 
         uut.clear_expired_codes(date + duration + Duration::nanoseconds(1), duration)
             .await;
@@ -289,6 +299,6 @@ mod tests {
             })
             .await;
 
-        assert!(output.is_none());
+        assert!(output.is_err());
     }
 }

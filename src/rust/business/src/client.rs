@@ -32,7 +32,7 @@ use serde_json::Value;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 
-use serde::de::StdError;
+use std::error::Error as StdError;
 use thiserror::Error;
 use tracing::warn;
 use tracing::{debug, error};
