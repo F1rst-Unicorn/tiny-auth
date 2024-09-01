@@ -20,10 +20,11 @@ use sqlx::pool::PoolOptions;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::sqlite::SqliteJournalMode::Wal;
 use sqlx::sqlite::SqliteSynchronous::Normal;
-use sqlx::Executor;
+use sqlx::{ConnectOptions, Executor};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use tracing::log::LevelFilter;
 
 pub async fn sqlite_store(url: &str) -> Result<Arc<SqliteStore>, SqliteError> {
     let options = SqliteConnectOptions::from_str(url)?
@@ -35,7 +36,8 @@ pub async fn sqlite_store(url: &str) -> Result<Arc<SqliteStore>, SqliteError> {
         .foreign_keys(true)
         .pragma("temp_store", "memory")
         .analysis_limit(Some(0))
-        .optimize_on_close(true, None);
+        .optimize_on_close(true, None)
+        .log_statements(LevelFilter::Trace);
     let pool_options = PoolOptions::new()
         .min_connections(0)
         .max_lifetime(Some(Duration::from_secs(600)));

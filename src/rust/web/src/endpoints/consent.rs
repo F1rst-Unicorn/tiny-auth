@@ -212,7 +212,7 @@ async fn process_skipping_csrf(
         Err(Error::ClientNotFound) | Err(Error::UserNotFound) => {
             return render_invalid_consent_request(templater);
         }
-        Err(Error::TokenEncodingError) => {
+        Err(Error::TokenEncodingError) | Err(Error::AuthCodeNotGenerated) => {
             return server_error(templater.instantiate_error_page(ServerError))
         }
     };

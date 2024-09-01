@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                insert into authorization_code (\n                    client,\n                    user,\n                    redirect_uri,\n                    scope,\n                    code,\n                    insertion_time,\n                    authentication_time,\n                    nonce,\n                    pkce_challenge,\n                    pkce_challenge_method)\n                select\n                    client.id,\n                    user.id,\n                    redirect_uri.id,\n                    $4,\n                    $5,\n                    $8,\n                    $6,\n                    $7,\n                    $9,\n                    $10\n                from client, user, redirect_uri\n                where client.client_id = $1\n                and user.name = $2\n                and redirect_uri.client = client.id\n                and redirect_uri.redirect_uri = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "dad04cb544094d6e72fe32f7d6e80cbd4b0cc22fc623348ef26669315bf30bb1"
+}
