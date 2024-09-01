@@ -610,4 +610,74 @@
             </sql>
         </rollback>
     </changeSet>
+    <changeSet id="5" author="admin" labels="testdata">
+        <sql endDelimiter=";;">
+            insert into password (algorithm)
+            values ('pbkf2hmacsha256');;
+
+            insert into password_pbkf2hmacsha256 (
+                password,
+                credential,
+                iterations,
+                salt
+            ) values (
+                last_insert_rowid(),
+                unhex('bda453832ebf0a31c8081589bc3d01b7f3dbf95f0d9f33246811f4d2915efea5'),
+                100000,
+                unhex('b594b6e366ae6864100e0ff279f8455a9861753a8c99673260220371147daaf46a6f686e')
+            );;
+
+            insert into "user" (
+                name,
+                password,
+                email,
+                email_verified,
+                phone_number,
+                phone_number_verified)
+            select
+                'john',
+                last_insert_rowid(),
+                'john@test.example',
+                1,
+                '+123456789',
+                1;;
+
+            insert into user_allowed_scopes (user, client, scope)
+            select
+                user.id,
+                client.id,
+                scope.id
+            from user, client, scope
+            where user.name = 'john'
+            and client.client_id = 'tiny-auth-frontend'
+            and scope.name in ('openid', 'profile');;
+        </sql>
+        <rollback>
+            <sql endDelimiter=";;">
+                delete from password_pbkf2hmacsha256
+                where password = (
+                    select password
+                    from user
+                    where name = 'john'
+                );;
+
+                delete from password
+                where id = (
+                    select password
+                    from user
+                    where name = 'john'
+                );;
+
+                delete from user_allowed_scopes
+                where user = (
+                    select id
+                    from user
+                    where name = 'john'
+                );;
+
+                delete from user
+                where name = 'john'
+            </sql>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>
