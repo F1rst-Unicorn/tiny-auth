@@ -19,18 +19,18 @@ use crate::oauth2;
 use crate::oidc;
 use crate::pkce::CodeChallenge;
 use crate::scope::Scope;
-use crate::store::AuthorizationCodeRequest;
 use crate::store::AuthorizationCodeStore;
 use crate::store::ClientStore;
 use crate::store::ScopeStore;
 use crate::store::UserStore;
+use crate::store::{AuthCodeError, AuthorizationCodeRequest};
 use crate::token::{
     Access, EncodedAccessToken, EncodedIdToken, EncodedRefreshToken, Id, TokenCreator,
 };
 use chrono::{DateTime, Duration, Local};
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use tracing::{debug, instrument, Level};
+use tracing::{debug, instrument, warn, Level};
 
 pub struct Request<'a> {
     pub client_id: &'a str,
@@ -55,6 +55,7 @@ pub struct Response {
 pub enum Error {
     UserNotFound,
     ClientNotFound,
+    AuthCodeNotGenerated,
     TokenEncodingError,
 }
 
@@ -120,8 +121,13 @@ impl Handler {
             code: None,
             expiration: None,
         };
-        self.generate_authz_code(&request, &scopes, &mut response)
-            .await;
+        if let Err(e) = self
+            .generate_authz_code(&request, &scopes, &mut response)
+            .await
+        {
+            warn!(%e, "failed to generate auth code");
+            return Err(Error::AuthCodeNotGenerated);
+        };
 
         if request
             .response_types
@@ -217,7 +223,7 @@ impl Handler {
         request: &Request<'_>,
         scopes: &[String],
         response: &mut Response,
-    ) {
+    ) -> Result<(), AuthCodeError> {
         if request
             .response_types
             .contains(&oidc::ResponseType::OAuth2(oauth2::ResponseType::Code))
@@ -234,9 +240,10 @@ impl Handler {
                     nonce: request.nonce.cloned(),
                     pkce_challenge: request.code_challenge.cloned(),
                 })
-                .await;
+                .await?;
             response.code = Some(code);
         }
+        Ok(())
     }
 }
 

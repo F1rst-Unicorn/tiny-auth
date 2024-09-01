@@ -112,4 +112,4 @@ features = ["macos_kqueue"]
 [workspace.dependencies.sqlx]
 version = "0.8"
 default-features = false
-features = ["runtime-tokio", "sqlite"]
+features = ["runtime-tokio", "sqlite", "macros"]
