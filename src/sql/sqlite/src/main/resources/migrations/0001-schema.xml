@@ -29,24 +29,24 @@
                 id integer primary key,
                 name text not null,
                 password integer not null,
-                email text not null,
-                email_verified integer not null,
-                phone_number text not null,
-                phone_number_verified integer not null,
-                address text not null,
-                given_name text not null,
-                middle_name text not null,
-                family_name text not null,
-                nickname text not null,
-                preferred_username text not null,
-                profile text not null,
-                picture blob not null,
-                website text not null,
-                gender text not null,
-                birthday real not null,
-                zoneinfo text not null,
-                locale text not null,
-                updated_at real not null
+                email text not null default '',
+                email_verified integer not null default 0,
+                phone_number text not null default '',
+                phone_number_verified integer not null default 0,
+                address text not null default '',
+                given_name text not null default '',
+                middle_name text not null default '',
+                family_name text not null default '',
+                nickname text not null default '',
+                preferred_username text not null default '',
+                profile text not null default '',
+                picture blob not null default (unhex('')),
+                website text not null default '',
+                gender text not null default '',
+                birthday real not null default 0,
+                zoneinfo text not null default '',
+                locale text not null default '',
+                updated_at real not null default (unixepoch('subsec'))
             ) strict;;
 
             create unique index user_name on user (name);;
@@ -58,7 +58,7 @@
                 scope integer not null
             ) strict;;
 
-            create unique index user_allowed_scopes_user on user_allowed_scopes (user);;
+            create unique index user_allowed_scopes_user on user_allowed_scopes (user, client, scope);;
 
             create table password (
                 id integer primary key,
@@ -596,13 +596,16 @@
                 client integer not null,
                 user integer not null,
                 redirect_uri integer not null,
-                scope integer not null,
+                scope text not null,
                 code text not null,
-                insertion_time real not null,
-                authentication_time real not null,
-                nonce text not null,
-                pkce_challenge text null
+                insertion_time text not null,
+                authentication_time text not null,
+                nonce text null,
+                pkce_challenge text null,
+                pkce_challenge_method text null
             );;
+
+            create unique index authorization_code_code on authorization_code (code, client);;
         </sql>
         <rollback>
             <sql endDelimiter=";;">
