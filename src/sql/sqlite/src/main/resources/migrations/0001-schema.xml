@@ -214,16 +214,10 @@
 
             insert into scope_mapping_plain (scope_mapping, structure, type, "value")
             select
-                id,
+                last_insert_rowid(),
                 '/email_verified',
                 'boolean',
-                'true'
-            from scope_mapping
-            where scope = (
-                select
-                    id
-                from scope
-                where name = 'email');;
+                'true';;
 
             insert into scope (name, pretty_name, description)
             values ('address', 'Address', 'Access to your address');;
@@ -282,16 +276,10 @@
 
             insert into scope_mapping_plain (scope_mapping, structure, type, "value")
             select
-                id,
+                last_insert_rowid(),
                 '/phone_number_verified',
                 'boolean',
-                'true'
-            from scope_mapping
-            where scope = (
-                select
-                    id
-                from scope
-                where name = 'phone');;
+                'true';;
 
             insert into scope (name, pretty_name, description)
             values ('profile', 'Profile Information', 'Access to your name, birthdate, gender and position');;
