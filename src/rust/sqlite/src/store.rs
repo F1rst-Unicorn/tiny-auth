@@ -16,6 +16,7 @@
  */
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
+use sqlx::error::ErrorKind;
 use sqlx::SqlitePool;
 use tiny_auth_business::pkce::{CodeChallenge, CodeChallengeMethod};
 use tiny_auth_business::store::memory::generate_random_string;
@@ -40,7 +41,7 @@ impl AuthorizationCodeStore for SqliteStore {
         request: AuthorizationCodeRequest<'a>,
     ) -> Result<String, AuthCodeError> {
         let mut conn = self.write_pool.acquire().await.map_err(wrap_err)?;
-        let auth_code = generate_random_string(32);
+
         let encoded_auth_time = request.authentication_time.to_rfc3339();
         let encoded_insertion_time = request.insertion_time.to_rfc3339();
         let nonce = request.nonce.unwrap_or_default();
@@ -54,8 +55,11 @@ impl AuthorizationCodeStore for SqliteStore {
             .map(CodeChallenge::code_challenge_method)
             .map(|v| format!("{}", v));
 
-        let result = sqlx::query!(
-            r#"
+        let (result, auth_code) = loop {
+            let auth_code = generate_random_string(32);
+
+            let result = match sqlx::query!(
+                r#"
                 insert into authorization_code (
                     client,
                     user,
@@ -84,20 +88,34 @@ impl AuthorizationCodeStore for SqliteStore {
                 and redirect_uri.client = client.id
                 and redirect_uri.redirect_uri = $3
             "#,
-            request.client_id,
-            request.user,
-            request.redirect_uri,
-            request.scope,
-            auth_code,
-            encoded_auth_time,
-            nonce,
-            encoded_insertion_time,
-            pkce_challenge,
-            pkce_challenge_method,
-        )
-        .execute(&mut *conn)
-        .await
-        .map_err(wrap_err)?;
+                request.client_id,
+                request.user,
+                request.redirect_uri,
+                request.scope,
+                auth_code,
+                encoded_auth_time,
+                nonce,
+                encoded_insertion_time,
+                pkce_challenge,
+                pkce_challenge_method,
+            )
+            .execute(&mut *conn)
+            .await
+            {
+                Ok(v) => break (v, auth_code),
+                Err(sqlx::Error::Database(e)) => {
+                    if e.kind() == ErrorKind::UniqueViolation
+                        && e.message()
+                            .contains("authorization_code.code, authorization_code.client")
+                    {
+                        continue;
+                    } else {
+                        return Err(AuthCodeError::BackendErrorWithContext(wrap_err(e)));
+                    }
+                }
+                Err(e) => return Err(AuthCodeError::BackendErrorWithContext(wrap_err(e))),
+            };
+        };
 
         if result.rows_affected() != 1 {
             warn!(
