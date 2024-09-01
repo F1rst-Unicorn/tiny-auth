@@ -98,6 +98,70 @@ async fn auth_code_can_be_used_only_once() {
     assert!(response.is_err());
 }
 
+#[test(tokio::test)]
+async fn expired_auth_code_is_cleared() {
+    let request = AuthorizationCodeRequest {
+        client_id: "tiny-auth-frontend",
+        user: "john",
+        redirect_uri: "http://localhost:8088/oidc-login-redirect",
+        scope: "openid",
+        insertion_time: Local::now(),
+        authentication_time: Local::now(),
+        nonce: Some("nonce".to_string()),
+        pkce_challenge: Some((&("a".repeat(44))).try_into().unwrap()),
+    };
+    let uut = store().await;
+    let code = uut.get_authorization_code(request.clone()).await.unwrap();
+    let validity = Duration::minutes(1);
+
+    uut.clear_expired_codes(
+        request.insertion_time + validity + Duration::nanoseconds(1),
+        validity,
+    )
+    .await;
+
+    let response = uut
+        .validate(ValidationRequest {
+            client_id: request.client_id,
+            authorization_code: &code,
+            validation_time: request.insertion_time.clone(),
+        })
+        .await;
+    assert!(response.is_err());
+}
+
+#[test(tokio::test)]
+async fn non_expired_auth_code_is_retained() {
+    let request = AuthorizationCodeRequest {
+        client_id: "tiny-auth-frontend",
+        user: "john",
+        redirect_uri: "http://localhost:8088/oidc-login-redirect",
+        scope: "openid",
+        insertion_time: Local::now(),
+        authentication_time: Local::now(),
+        nonce: Some("nonce".to_string()),
+        pkce_challenge: Some((&("a".repeat(44))).try_into().unwrap()),
+    };
+    let uut = store().await;
+    let code = uut.get_authorization_code(request.clone()).await.unwrap();
+    let validity = Duration::minutes(1);
+
+    uut.clear_expired_codes(
+        request.insertion_time + validity - Duration::nanoseconds(1),
+        validity,
+    )
+    .await;
+
+    let response = uut
+        .validate(ValidationRequest {
+            client_id: request.client_id,
+            authorization_code: &code,
+            validation_time: request.insertion_time.clone(),
+        })
+        .await;
+    assert!(response.is_ok());
+}
+
 async fn store() -> Arc<SqliteStore> {
     sqlite_store(&(env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql/sqlite/build/db.sqlite"))
         .await

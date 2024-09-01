@@ -66,14 +66,7 @@ impl Default for MemoryAuthorizationCodeStore {
     }
 }
 
-impl MemoryAuthorizationCodeStore {
-    async fn clear_expired_codes(&self, now: DateTime<Local>, validity: Duration) {
-        let mut store = self.store.write().await;
-        store.retain(|_, v| now.signed_duration_since(v.insertion_time) <= validity);
-    }
-}
-
-pub async fn auth_code_clean_job(store: Arc<MemoryAuthorizationCodeStore>) {
+pub async fn auth_code_clean_job(store: Arc<dyn AuthorizationCodeStore>) {
     let mut clock = time::interval(time::Duration::from_secs(120));
 
     loop {
@@ -145,6 +138,11 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
             nonce: value.nonce,
             pkce_challenge: value.pkce_challenge,
         })
+    }
+
+    async fn clear_expired_codes(&self, now: DateTime<Local>, validity: Duration) {
+        let mut store = self.store.write().await;
+        store.retain(|_, v| now.signed_duration_since(v.insertion_time) <= validity);
     }
 }
 

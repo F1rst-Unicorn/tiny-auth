@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            delete from authorization_code\n            where insertion_time < $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "2ab36812630fb9e9395c0e198125f249bcaa8358a5ffa51e701134a7e7e1cb5b"
+}
