@@ -16,7 +16,7 @@
  */
 use crate::begin_immediate::SqliteConnectionExt;
 use async_trait::async_trait;
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Duration, Local, Utc};
 use sqlx::error::ErrorKind;
 use sqlx::SqlitePool;
 use tiny_auth_business::pkce::{CodeChallenge, CodeChallengeMethod};
@@ -26,7 +26,7 @@ use tiny_auth_business::store::{
     AuthorizationCodeStore, ValidationRequest,
 };
 use tiny_auth_business::util::wrap_err;
-use tracing::{debug, Level};
+use tracing::{debug, error, Level};
 use tracing::{instrument, warn};
 
 pub struct SqliteStore {
@@ -44,8 +44,8 @@ impl AuthorizationCodeStore for SqliteStore {
         let mut conn = self.write_pool.acquire().await.map_err(wrap_err)?;
         let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
 
-        let encoded_auth_time = request.authentication_time.to_rfc3339();
-        let encoded_insertion_time = request.insertion_time.to_rfc3339();
+        let encoded_auth_time = request.authentication_time.with_timezone(&Utc).to_rfc3339();
+        let encoded_insertion_time = request.insertion_time.with_timezone(&Utc).to_rfc3339();
         let nonce = request.nonce.unwrap_or_default();
         let pkce_challenge = request
             .pkce_challenge
@@ -219,5 +219,41 @@ impl AuthorizationCodeStore for SqliteStore {
             nonce: record.nonce,
             pkce_challenge,
         })
+    }
+
+    async fn clear_expired_codes(&self, now: DateTime<Local>, validity: Duration) {
+        let earliest_valid_insertion_time = (now - validity).with_timezone(&Utc).to_rfc3339();
+
+        let mut conn = match self.write_pool.acquire().await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(%e, "failed to open connection to clear expired authorization codes");
+                return;
+            }
+        };
+        let mut transaction = match conn.begin_immediate().await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(%e, "failed to open transaction to clear expired authorization codes");
+                return;
+            }
+        };
+
+        if let Err(e) = sqlx::query!(
+            r#"
+            delete from authorization_code
+            where insertion_time < $1
+        "#,
+            earliest_valid_insertion_time
+        )
+        .execute(&mut *transaction)
+        .await
+        {
+            error!(%e, "failed to clear expired authorization codes");
+        }
+
+        if let Err(e) = transaction.commit().await {
+            error!(%e, "failed to commit to clear expired authorization codes");
+        }
     }
 }

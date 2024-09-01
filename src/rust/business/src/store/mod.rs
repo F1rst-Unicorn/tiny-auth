@@ -247,6 +247,8 @@ pub trait AuthorizationCodeStore: Send + Sync {
         &self,
         request: ValidationRequest<'a>,
     ) -> Result<AuthorizationCodeResponse, AuthCodeValidationError>;
+
+    async fn clear_expired_codes(&self, now: DateTime<Local>, validity: Duration);
 }
 
 pub mod test_fixtures {
@@ -423,6 +425,8 @@ pub mod test_fixtures {
                 pkce_challenge,
             })
         }
+
+        async fn clear_expired_codes(&self, _: DateTime<Local>, _: Duration) {}
     }
 
     pub fn build_test_auth_code_store() -> Arc<impl AuthorizationCodeStore> {
