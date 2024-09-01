@@ -14,6 +14,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use crate::begin_immediate::SqliteConnectionExt;
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use sqlx::error::ErrorKind;
@@ -41,6 +42,7 @@ impl AuthorizationCodeStore for SqliteStore {
         request: AuthorizationCodeRequest<'a>,
     ) -> Result<String, AuthCodeError> {
         let mut conn = self.write_pool.acquire().await.map_err(wrap_err)?;
+        let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
 
         let encoded_auth_time = request.authentication_time.to_rfc3339();
         let encoded_insertion_time = request.insertion_time.to_rfc3339();
@@ -58,7 +60,7 @@ impl AuthorizationCodeStore for SqliteStore {
         let (result, auth_code) = loop {
             let auth_code = generate_random_string(32);
 
-            let result = match sqlx::query!(
+            match sqlx::query!(
                 r#"
                 insert into authorization_code (
                     client,
@@ -99,7 +101,7 @@ impl AuthorizationCodeStore for SqliteStore {
                 pkce_challenge,
                 pkce_challenge_method,
             )
-            .execute(&mut *conn)
+            .execute(&mut *transaction)
             .await
             {
                 Ok(v) => break (v, auth_code),
@@ -124,6 +126,7 @@ impl AuthorizationCodeStore for SqliteStore {
             );
         }
 
+        transaction.commit().await.map_err(wrap_err)?;
         Ok(auth_code)
     }
 
@@ -132,6 +135,7 @@ impl AuthorizationCodeStore for SqliteStore {
         request: ValidationRequest<'a>,
     ) -> Result<AuthorizationCodeResponse, AuthCodeValidationError> {
         let mut conn = self.write_pool.acquire().await.map_err(wrap_err)?;
+        let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
 
         let Some(record) = sqlx::query!(
             r#"
@@ -158,7 +162,7 @@ impl AuthorizationCodeStore for SqliteStore {
             request.authorization_code,
             request.client_id,
         )
-        .fetch_optional(&mut *conn)
+        .fetch_optional(&mut *transaction)
         .await
         .map_err(wrap_err)?
         else {
@@ -172,7 +176,7 @@ impl AuthorizationCodeStore for SqliteStore {
         "#,
             record.id
         )
-        .execute(&mut *conn)
+        .execute(&mut *transaction)
         .await
         .map_err(wrap_err)?;
 
@@ -205,6 +209,7 @@ impl AuthorizationCodeStore for SqliteStore {
             )
             .map(|(u, v)| unsafe { CodeChallenge::from_parts(u, v) });
 
+        transaction.commit().await.map_err(wrap_err)?;
         Ok(AuthorizationCodeResponse {
             redirect_uri: record.redirect_uri,
             stored_duration: request.validation_time - (insertion_time),
