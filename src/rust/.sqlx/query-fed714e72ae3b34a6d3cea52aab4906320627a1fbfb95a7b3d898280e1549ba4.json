@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                select\n                    client.client_id as client,\n                    scope.name as scope\n                from user_allowed_scopes uas\n                join client on uas.client = client.id\n                join scope on uas.scope = scope.id\n                where user = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "client",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "scope",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "fed714e72ae3b34a6d3cea52aab4906320627a1fbfb95a7b3d898280e1549ba4"
+}
