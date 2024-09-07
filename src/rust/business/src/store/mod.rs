@@ -194,6 +194,7 @@ pub struct AuthorizationCodeRequest<'a> {
     pub pkce_challenge: Option<CodeChallenge>,
 }
 
+#[derive(Debug)]
 pub struct AuthorizationCodeResponse {
     pub redirect_uri: String,
 
