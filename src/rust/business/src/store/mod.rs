@@ -135,7 +135,7 @@ pub trait ScopeStore: Send + Sync {
         join_all(keys.iter().map(|v| self.get(v)))
             .await
             .into_iter()
-            .filter_map(|v| v)
+            .flatten()
             .collect()
     }
 
@@ -159,7 +159,7 @@ impl ScopeStore for MergingScopeStore {
         join_all(self.stores.iter().map(|v| v.get(key)))
             .await
             .into_iter()
-            .filter_map(|v| v)
+            .flatten()
             .reduce(Scope::merge)
     }
 
@@ -194,6 +194,7 @@ pub struct AuthorizationCodeRequest<'a> {
     pub pkce_challenge: Option<CodeChallenge>,
 }
 
+#[derive(Debug)]
 pub struct AuthorizationCodeResponse {
     pub redirect_uri: String,
 

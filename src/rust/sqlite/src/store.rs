@@ -204,8 +204,7 @@ impl AuthorizationCodeStore for SqliteStore {
                     .pkce_challenge_method
                     .as_ref()
                     .map(CodeChallengeMethod::try_from)
-                    .map(Result::ok)
-                    .flatten(),
+                    .and_then(Result::ok),
             )
             .map(|(u, v)| unsafe { CodeChallenge::from_parts(u, v) });
 

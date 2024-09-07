@@ -227,7 +227,7 @@ mod tests {
             })
             .await;
 
-        assert!(output.is_ok());
+        assert!(matches!(output, Err(NotFound)));
     }
 
     #[tokio::test]
