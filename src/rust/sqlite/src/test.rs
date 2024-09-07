@@ -17,10 +17,13 @@
 use crate::inject::sqlite_store;
 use crate::store::SqliteStore;
 use chrono::{Duration, Local};
+use serde_json::Value;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use test_log::test;
+use tiny_auth_business::password::Password;
 use tiny_auth_business::store::{
-    AuthorizationCodeRequest, AuthorizationCodeStore, ValidationRequest,
+    AuthorizationCodeRequest, AuthorizationCodeStore, UserStore, ValidationRequest,
 };
 
 #[test(tokio::test)]
@@ -162,8 +165,41 @@ async fn non_expired_auth_code_is_retained() {
     assert!(response.is_ok());
 }
 
+#[test(tokio::test)]
+async fn getting_user_works() {
+    let uut = store().await;
+    let key = "john";
+
+    let mut actual = uut.get(key).await.unwrap();
+
+    assert_eq!(key, &actual.name);
+    assert!(matches!(actual.password, Password::Sqlite { .. }));
+    assert_eq!(
+        BTreeSet::from_iter(vec!["openid".to_string(), "profile".to_string()]),
+        actual
+            .allowed_scopes
+            .remove("tiny-auth-frontend")
+            .unwrap_or_default()
+    );
+    assert_eq!(
+        Some(Value::String(String::from("john@test.example"))),
+        actual.attributes.remove("email")
+    );
+    assert_eq!(
+        Some(Value::Number(1.into())),
+        actual.attributes.remove("email_verified")
+    );
+    assert_eq!(
+        Some(Value::Array(vec![])),
+        actual.attributes.remove("picture")
+    );
+}
+
 async fn store() -> Arc<SqliteStore> {
-    sqlite_store(&(env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql/sqlite/build/db.sqlite"))
-        .await
-        .unwrap()
+    sqlite_store(
+        "sqlite",
+        &(env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql/sqlite/build/db.sqlite"),
+    )
+    .await
+    .unwrap()
 }

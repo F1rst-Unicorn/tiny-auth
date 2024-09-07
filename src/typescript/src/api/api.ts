@@ -20,7 +20,7 @@ import {
   ChangePasswordData,
   ChangePasswordResult,
   HashedPasswordPbkdf2HmacSha256,
-  ManagedPassword,
+  ManagedPassword, SuccessfullyStoredPassword
 } from "../core/changePassword.ts";
 import { TinyAuthApiClient } from "../generated/tiny-auth/tiny-auth.client.ts";
 import { GrpcWebFetchTransport } from "@protobuf-ts/grpcweb-transport";
@@ -65,6 +65,8 @@ export class ApiService {
         );
       } else if (response.response.hashedPassword.oneofKind === "managed") {
         return new ManagedPassword();
+      } else if (response.response.hashedPassword.oneofKind === "stored_successfully") {
+        return new SuccessfullyStoredPassword();
       } else {
         throw new Error(UNKNOWN_PASSWORD_TYPE);
       }

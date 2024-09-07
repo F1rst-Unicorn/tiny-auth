@@ -14,22 +14,30 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::begin_immediate::SqliteConnectionExt;
+use crate::begin_immediate::{SqliteConnectionExt, Transaction};
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Local, Utc};
+use serde_json::Value;
 use sqlx::error::ErrorKind;
+use sqlx::sqlite::SqliteRow;
 use sqlx::SqlitePool;
+use sqlx::{Column, Row, TypeInfo};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use tiny_auth_business::password::Password;
 use tiny_auth_business::pkce::{CodeChallenge, CodeChallengeMethod};
 use tiny_auth_business::store::memory::generate_random_string;
 use tiny_auth_business::store::{
     AuthCodeError, AuthCodeValidationError, AuthorizationCodeRequest, AuthorizationCodeResponse,
-    AuthorizationCodeStore, ValidationRequest,
+    AuthorizationCodeStore, UserStore, ValidationRequest,
 };
+use tiny_auth_business::user::Error as UserError;
+use tiny_auth_business::user::{Error, User};
 use tiny_auth_business::util::wrap_err;
 use tracing::{debug, error, Level};
 use tracing::{instrument, warn};
 
 pub struct SqliteStore {
+    pub(crate) name: String,
     pub(crate) read_pool: SqlitePool,
     pub(crate) write_pool: SqlitePool,
 }
@@ -254,5 +262,96 @@ impl AuthorizationCodeStore for SqliteStore {
         if let Err(e) = transaction.commit().await {
             error!(%e, "failed to commit to clear expired authorization codes");
         }
+    }
+}
+
+#[async_trait]
+impl UserStore for SqliteStore {
+    async fn get(&self, username: &str) -> Result<User, UserError> {
+        let mut conn = self.read_pool.acquire().await.map_err(wrap_err)?;
+        let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
+
+        let user_record = sqlx::query("select * from user where name = $1")
+            .bind(username)
+            .fetch_optional(&mut *transaction)
+            .await
+            .map_err(wrap_err)?
+            .ok_or(Error::NotFound)?;
+
+        let allowed_scopes = Self::load_allowed_scopes(
+            &mut transaction,
+            user_record.try_get("id").map_err(wrap_err)?,
+        )
+        .await?;
+
+        transaction.commit().await.map_err(wrap_err)?;
+        Ok(User {
+            name: String::from(username),
+            password: Password::Sqlite {
+                name: self.name.clone(),
+            },
+            allowed_scopes,
+            attributes: Self::map_attributes(user_record),
+        })
+    }
+}
+
+impl SqliteStore {
+    fn map_attributes(user_record: SqliteRow) -> HashMap<String, Value> {
+        let mut attributes: HashMap<String, Value> = Default::default();
+        for column in user_record.columns() {
+            if column.name() == "id" {
+                continue;
+            }
+            let value = match column.type_info().name().to_lowercase().as_str() {
+                "int" | "integer" => user_record.get::<i32, _>(column.ordinal()).into(),
+                "real" => user_record.get::<f64, _>(column.ordinal()).into(),
+                "text" => user_record.get::<String, _>(column.ordinal()).into(),
+                "blob" => user_record.get::<&[u8], _>(column.ordinal()).into(),
+                v => {
+                    warn!(column_type = %v, column_name = %column.name(), "unsupported");
+                    continue;
+                }
+            };
+            attributes.insert(column.name().to_string(), value);
+        }
+        attributes
+    }
+
+    async fn load_allowed_scopes(
+        transaction: &mut Transaction<'_>,
+        user_id: i32,
+    ) -> Result<BTreeMap<String, BTreeSet<String>>, Error> {
+        let allowed_scopes_records = sqlx::query!(
+            r#"
+                select
+                    client.client_id as client,
+                    scope.name as scope
+                from user_allowed_scopes uas
+                join client on uas.client = client.id
+                join scope on uas.scope = scope.id
+                where user = $1
+            "#,
+            user_id
+        )
+        .fetch_all(&mut **transaction)
+        .await
+        .map_err(wrap_err)?;
+
+        let mut allowed_scopes: BTreeMap<String, BTreeSet<String>> = Default::default();
+        for record in allowed_scopes_records {
+            let record_scope = record.scope.clone();
+            allowed_scopes
+                .entry(record.client)
+                .and_modify(|v| {
+                    v.insert(record_scope);
+                })
+                .or_insert_with(|| {
+                    let mut scopes: BTreeSet<String> = Default::default();
+                    scopes.insert(record.scope);
+                    scopes
+                });
+        }
+        Ok(allowed_scopes)
     }
 }

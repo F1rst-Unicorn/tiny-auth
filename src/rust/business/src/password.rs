@@ -60,6 +60,11 @@ pub enum Password {
     #[serde(alias = "ldap")]
     #[serde(alias = "LDAP")]
     Ldap { name: String },
+
+    #[serde(alias = "sqlite")]
+    #[serde(alias = "SQLite")]
+    #[serde(alias = "SQLITE")]
+    Sqlite { name: String },
 }
 
 impl Password {
@@ -93,7 +98,7 @@ impl DispatchingPasswordStore {
     pub fn construct_password(&self, user: User, password: &str) -> Password {
         debug!("constructing password");
         match user.password {
-            ldap @ Password::Ldap { .. } => ldap,
+            v @ Password::Ldap { .. } | v @ Password::Sqlite { .. } => v,
             Password::Plain(_) | Password::Pbkdf2HmacSha256 { .. } => {
                 self.in_place_store.construct_password(&user.name, password)
             }
@@ -110,7 +115,7 @@ impl PasswordStore for DispatchingPasswordStore {
         password_to_check: &str,
     ) -> Result<bool, Error> {
         match stored_password {
-            Password::Ldap { name } => {
+            Password::Ldap { name } | Password::Sqlite { name } => {
                 let store = self
                     .named_stores
                     .get(name)
@@ -181,7 +186,7 @@ impl PasswordStore for InPlacePasswordStore {
                 )
                 .is_ok())
             }
-            Password::Ldap { name } => {
+            Password::Ldap { name } | Password::Sqlite { name } => {
                 error!(
                     "Password store dispatch bug. Password names {} but this is the in-place store",
                     name

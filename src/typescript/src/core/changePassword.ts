@@ -62,6 +62,8 @@ export class ChangePasswordResult {}
 
 export class ManagedPassword {}
 
+export class SuccessfullyStoredPassword {}
+
 export class HashedPasswordPbkdf2HmacSha256 extends ChangePasswordResult {
   private readonly _credential: string;
   private readonly _iterations: number;

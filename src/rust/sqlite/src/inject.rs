@@ -26,7 +26,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::log::LevelFilter;
 
-pub async fn sqlite_store(url: &str) -> Result<Arc<SqliteStore>, SqliteError> {
+pub async fn sqlite_store(name: &str, url: &str) -> Result<Arc<SqliteStore>, SqliteError> {
     let options = SqliteConnectOptions::from_str(url)?
         .read_only(true)
         .journal_mode(Wal)
@@ -54,6 +54,7 @@ pub async fn sqlite_store(url: &str) -> Result<Arc<SqliteStore>, SqliteError> {
     write_pool.execute("pragma optimize").await?;
 
     Ok(Arc::new(SqliteStore {
+        name: String::from(name),
         read_pool,
         write_pool,
     }))
