@@ -23,15 +23,18 @@ use sqlx::sqlite::SqliteRow;
 use sqlx::SqlitePool;
 use sqlx::{Column, Row, TypeInfo};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use tiny_auth_business::client::Error as ClientError;
+use tiny_auth_business::client::{Client, Error};
+use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::Password;
 use tiny_auth_business::pkce::{CodeChallenge, CodeChallengeMethod};
 use tiny_auth_business::store::memory::generate_random_string;
 use tiny_auth_business::store::{
     AuthCodeError, AuthCodeValidationError, AuthorizationCodeRequest, AuthorizationCodeResponse,
-    AuthorizationCodeStore, UserStore, ValidationRequest,
+    AuthorizationCodeStore, ClientStore, UserStore, ValidationRequest,
 };
 use tiny_auth_business::user::Error as UserError;
-use tiny_auth_business::user::{Error, User};
+use tiny_auth_business::user::User;
 use tiny_auth_business::util::wrap_err;
 use tracing::{debug, error, Level};
 use tracing::{instrument, warn};
@@ -276,9 +279,9 @@ impl UserStore for SqliteStore {
             .fetch_optional(&mut *transaction)
             .await
             .map_err(wrap_err)?
-            .ok_or(Error::NotFound)?;
+            .ok_or(UserError::NotFound)?;
 
-        let allowed_scopes = Self::load_allowed_scopes(
+        let allowed_scopes = Self::load_allowed_user_scopes(
             &mut transaction,
             user_record.try_get("id").map_err(wrap_err)?,
         )
@@ -292,6 +295,34 @@ impl UserStore for SqliteStore {
             },
             allowed_scopes,
             attributes: Self::map_attributes(user_record),
+        })
+    }
+}
+
+#[async_trait]
+impl ClientStore for SqliteStore {
+    async fn get(&self, key: &str) -> Result<Client, ClientError> {
+        let mut conn = self.read_pool.acquire().await.map_err(wrap_err)?;
+        let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
+
+        let client_record = sqlx::query("select * from client where client_id = $1")
+            .bind(key)
+            .fetch_optional(&mut *transaction)
+            .await
+            .map_err(wrap_err)?
+            .ok_or(ClientError::NotFound)?;
+
+        let client_id: i32 = client_record.try_get("id").map_err(wrap_err)?;
+        let redirect_uris = Self::load_redirect_uris(&mut transaction, client_id).await?;
+        let allowed_scopes = Self::load_allowed_client_scopes(&mut transaction, client_id).await?;
+
+        transaction.commit().await.map_err(wrap_err)?;
+        Ok(Client {
+            client_id: key.to_string(),
+            client_type: self.map_client_type(&client_record)?,
+            redirect_uris,
+            allowed_scopes: BTreeSet::from_iter(allowed_scopes),
+            attributes: Self::map_attributes(client_record),
         })
     }
 }
@@ -318,10 +349,10 @@ impl SqliteStore {
         attributes
     }
 
-    async fn load_allowed_scopes(
+    async fn load_allowed_user_scopes(
         transaction: &mut Transaction<'_>,
         user_id: i32,
-    ) -> Result<BTreeMap<String, BTreeSet<String>>, Error> {
+    ) -> Result<BTreeMap<String, BTreeSet<String>>, UserError> {
         let allowed_scopes_records = sqlx::query!(
             r#"
                 select
@@ -353,5 +384,68 @@ impl SqliteStore {
                 });
         }
         Ok(allowed_scopes)
+    }
+
+    async fn load_allowed_client_scopes(
+        transaction: &mut Transaction<'_>,
+        client_id: i32,
+    ) -> Result<Vec<String>, Error> {
+        let allowed_scopes: Vec<String> = sqlx::query_scalar!(
+            r#"
+            select scope.name
+            from client_allowed_scopes
+            join scope on scope.id = client_allowed_scopes.scope
+            where client_allowed_scopes.client = $1
+        "#,
+            client_id
+        )
+        .fetch_all(&mut **transaction)
+        .await
+        .map_err(wrap_err)?;
+        Ok(allowed_scopes)
+    }
+
+    fn map_client_type(&self, client_record: &SqliteRow) -> Result<ClientType, ClientError> {
+        let client_type = match client_record
+            .try_get::<&str, _>("client_type")
+            .map_err(wrap_err)?
+        {
+            "public" => ClientType::Public,
+            "confidential" => {
+                let public_key = client_record
+                    .try_get::<Option<&str>, _>("public_key")
+                    .map_err(wrap_err)?
+                    .map(String::from);
+                ClientType::Confidential {
+                    password: Password::Sqlite {
+                        name: self.name.clone(),
+                    },
+                    public_key,
+                }
+            }
+            v => {
+                warn!(client_type = %v, "unknown value");
+                return Err(ClientError::NotFound);
+            }
+        };
+        Ok(client_type)
+    }
+
+    async fn load_redirect_uris(
+        transaction: &mut Transaction<'_>,
+        client_id: i32,
+    ) -> Result<Vec<String>, Error> {
+        let redirect_uris = sqlx::query_scalar!(
+            r#"
+            select redirect_uri.redirect_uri
+            from redirect_uri
+            where redirect_uri.client = $1
+        "#,
+            client_id
+        )
+        .fetch_all(&mut **transaction)
+        .await
+        .map_err(wrap_err)?;
+        Ok(redirect_uris)
     }
 }

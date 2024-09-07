@@ -21,9 +21,10 @@ use serde_json::Value;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use test_log::test;
+use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::Password;
 use tiny_auth_business::store::{
-    AuthorizationCodeRequest, AuthorizationCodeStore, UserStore, ValidationRequest,
+    AuthorizationCodeRequest, AuthorizationCodeStore, ClientStore, UserStore, ValidationRequest,
 };
 
 #[test(tokio::test)]
@@ -170,7 +171,7 @@ async fn getting_user_works() {
     let uut = store().await;
     let key = "john";
 
-    let mut actual = uut.get(key).await.unwrap();
+    let mut actual = UserStore::get(&*uut, key).await.unwrap();
 
     assert_eq!(key, &actual.name);
     assert!(matches!(actual.password, Password::Sqlite { .. }));
@@ -192,6 +193,34 @@ async fn getting_user_works() {
     assert_eq!(
         Some(Value::Array(vec![])),
         actual.attributes.remove("picture")
+    );
+}
+
+#[test(tokio::test)]
+async fn getting_client_works() {
+    let uut = store().await;
+    let key = "tiny-auth-frontend";
+
+    let actual = ClientStore::get(&*uut, key).await.unwrap();
+
+    assert_eq!(key, &actual.client_id);
+    assert!(matches!(actual.client_type, ClientType::Public));
+    assert_eq!(
+        BTreeSet::from_iter(vec![
+            "address".to_string(),
+            "email".to_string(),
+            "phone".to_string(),
+            "openid".to_string(),
+            "profile".to_string()
+        ]),
+        actual.allowed_scopes
+    );
+    assert_eq!(
+        vec![
+            "http://localhost:8088/oidc-login-redirect".to_string(),
+            "http://localhost:8088/oidc-login-redirect-silent".to_string()
+        ],
+        actual.redirect_uris
     );
 }
 

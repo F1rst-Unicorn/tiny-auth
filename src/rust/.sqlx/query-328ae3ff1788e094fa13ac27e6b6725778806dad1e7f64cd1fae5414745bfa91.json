@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            select redirect_uri.redirect_uri\n            from redirect_uri\n            where redirect_uri.client = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "redirect_uri",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "328ae3ff1788e094fa13ac27e6b6725778806dad1e7f64cd1fae5414745bfa91"
+}
