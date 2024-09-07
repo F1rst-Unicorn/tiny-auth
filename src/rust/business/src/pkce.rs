@@ -84,6 +84,9 @@ impl TryFrom<&String> for CodeChallenge {
 }
 
 impl CodeChallenge {
+    /// # Safety
+    /// Use only to reconstruct an instance that was formerly validated by one of the safe
+    /// constructors, e.g. when reinstantiating it from a persisted form.
     pub unsafe fn from_parts(
         code_challenge: String,
         code_challenge_method: CodeChallengeMethod,
