@@ -27,7 +27,8 @@
         <sql endDelimiter=";;">
             create table password (
                 id integer primary key,
-                algorithm text not null
+                algorithm text not null,
+                check (algorithm in ('pbkf2hmacsha256'))
             ) strict;;
 
             create table "user" (
@@ -53,7 +54,9 @@
                 locale text not null default '',
                 updated_at real not null default (unixepoch('subsec')),
                 foreign key (password) references password(id)
-                    on update cascade on delete restrict deferrable initially deferred
+                    on update cascade on delete restrict deferrable initially deferred,
+                check (email_verified in (0, 1)),
+                check (phone_number_verified in (0, 1))
             ) strict;;
 
             create unique index user_name on user (name);;
@@ -92,7 +95,8 @@
                 password integer null,
                 public_key text null,
                 foreign key (password) references password(id)
-                    on update cascade on delete restrict deferrable initially deferred
+                    on update cascade on delete restrict deferrable initially deferred,
+                check (client_type in ('public', 'confidential'))
             ) strict;;
 
             create unique index client_client_id on client (client_id);;
@@ -132,7 +136,11 @@
                 destination_access_token integer not null default 0,
                 destination_id_token integer not null default 0,
                 foreign key (scope) references scope(id)
-                    on update cascade on delete cascade deferrable initially deferred
+                    on update cascade on delete cascade deferrable initially deferred,
+                check (type in ('plain', 'template', 'user_attribute', 'client_attribute')),
+                check (destination_userinfo in (0, 1)),
+                check (destination_access_token in (0, 1)),
+                check (destination_id_token in (0, 1))
             ) strict;;
 
             create index scope_mapping_scope on scope_mapping (scope);;
@@ -144,7 +152,8 @@
                 type text not null,
                 value text not null,
                 foreign key (scope_mapping) references scope_mapping(id)
-                    on update cascade on delete cascade deferrable initially deferred
+                    on update cascade on delete cascade deferrable initially deferred,
+                check (type in ('boolean', 'integer', 'string', 'null'))
             ) strict;;
 
             create index scope_mapping_plain_scope_mapping on scope_mapping_plain (scope_mapping);;
@@ -622,7 +631,8 @@
                 foreign key ("user") references user(id)
                     on update cascade on delete cascade deferrable initially deferred,
                 foreign key (redirect_uri) references redirect_uri(id)
-                    on update cascade on delete restrict deferrable initially deferred
+                    on update cascade on delete restrict deferrable initially deferred,
+                check (pkce_challenge_method in ('plain', 'S256'))
             );;
 
             create unique index authorization_code_code on authorization_code (code, client);;
