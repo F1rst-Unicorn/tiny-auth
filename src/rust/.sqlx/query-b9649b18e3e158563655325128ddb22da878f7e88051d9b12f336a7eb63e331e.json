@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select password.algorithm\nfrom password\nwhere id = ?1\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "algorithm",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b9649b18e3e158563655325128ddb22da878f7e88051d9b12f336a7eb63e331e"
+}

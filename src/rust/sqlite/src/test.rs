@@ -22,9 +22,10 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use test_log::test;
 use tiny_auth_business::oauth2::ClientType;
-use tiny_auth_business::password::Password;
+use tiny_auth_business::password::{InPlacePasswordStore, Password};
 use tiny_auth_business::store::{
-    AuthorizationCodeRequest, AuthorizationCodeStore, ClientStore, UserStore, ValidationRequest,
+    AuthorizationCodeRequest, AuthorizationCodeStore, ClientStore, PasswordStore, UserStore,
+    ValidationRequest,
 };
 
 #[test(tokio::test)]
@@ -224,10 +225,39 @@ async fn getting_client_works() {
     );
 }
 
+#[test(tokio::test)]
+async fn verifying_password_works() {
+    let uut = store().await;
+    let username = "john";
+    let user = UserStore::get(&*uut, username).await.unwrap();
+
+    let password_correct = PasswordStore::verify(&*uut, username, &user.password, "password")
+        .await
+        .unwrap();
+
+    assert!(password_correct);
+}
+
+#[test(tokio::test)]
+async fn wrong_password_is_rejected() {
+    let uut = store().await;
+    let username = "john";
+    let user = UserStore::get(&*uut, username).await.unwrap();
+
+    let password_correct = PasswordStore::verify(&*uut, username, &user.password, "wrong")
+        .await
+        .unwrap();
+
+    assert!(!password_correct);
+}
+
 async fn store() -> Arc<SqliteStore> {
     sqlite_store(
         "sqlite",
         &(env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql/sqlite/build/db.sqlite"),
+        Arc::new(InPlacePasswordStore {
+            pepper: "x5ePiX0TmUF2HzuraKuab9exzumu2sO54bnlVhgCS5AAXxqyhSSuHbCiUmx0FxmjZH9Gb2obp0ff2imMS6z40Qcc".to_string(),
+        })
     )
     .await
     .unwrap()

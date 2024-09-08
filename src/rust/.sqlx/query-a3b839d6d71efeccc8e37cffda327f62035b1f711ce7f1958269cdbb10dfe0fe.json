@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "select *\nfrom password_pbkf2hmacsha256\nwhere password = ?1\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "password",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "credential",
+        "ordinal": 2,
+        "type_info": "Blob"
+      },
+      {
+        "name": "iterations",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "salt",
+        "ordinal": 4,
+        "type_info": "Blob"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "a3b839d6d71efeccc8e37cffda327f62035b1f711ce7f1958269cdbb10dfe0fe"
+}

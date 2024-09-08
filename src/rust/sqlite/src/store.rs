@@ -16,6 +16,8 @@
  */
 use crate::begin_immediate::{SqliteConnectionExt, Transaction};
 use async_trait::async_trait;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use chrono::{DateTime, Duration, Local, Utc};
 use serde_json::Value;
 use sqlx::error::ErrorKind;
@@ -23,15 +25,19 @@ use sqlx::sqlite::SqliteRow;
 use sqlx::SqlitePool;
 use sqlx::{Column, Row, TypeInfo};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::num::{NonZeroI64, NonZeroU32};
+use std::sync::Arc;
 use tiny_auth_business::client::Error as ClientError;
 use tiny_auth_business::client::{Client, Error};
 use tiny_auth_business::oauth2::ClientType;
-use tiny_auth_business::password::Password;
+use tiny_auth_business::password::{
+    Error as PasswordError, InPlacePasswordStore, Password, HASH_ITERATIONS,
+};
 use tiny_auth_business::pkce::{CodeChallenge, CodeChallengeMethod};
 use tiny_auth_business::store::memory::generate_random_string;
 use tiny_auth_business::store::{
     AuthCodeError, AuthCodeValidationError, AuthorizationCodeRequest, AuthorizationCodeResponse,
-    AuthorizationCodeStore, ClientStore, UserStore, ValidationRequest,
+    AuthorizationCodeStore, ClientStore, PasswordStore, UserStore, ValidationRequest,
 };
 use tiny_auth_business::user::Error as UserError;
 use tiny_auth_business::user::User;
@@ -43,6 +49,7 @@ pub struct SqliteStore {
     pub(crate) name: String,
     pub(crate) read_pool: SqlitePool,
     pub(crate) write_pool: SqlitePool,
+    pub(crate) in_place_password_store: Arc<InPlacePasswordStore>,
 }
 
 #[async_trait]
@@ -235,6 +242,7 @@ impl UserStore for SqliteStore {
             name: String::from(username),
             password: Password::Sqlite {
                 name: self.name.clone(),
+                id: user_record.try_get("password").map_err(wrap_err)?,
             },
             allowed_scopes,
             attributes: Self::map_attributes(user_record),
@@ -267,6 +275,68 @@ impl ClientStore for SqliteStore {
             allowed_scopes: BTreeSet::from_iter(allowed_scopes),
             attributes: Self::map_attributes(client_record),
         })
+    }
+}
+
+#[async_trait]
+impl PasswordStore for SqliteStore {
+    async fn verify(
+        &self,
+        username: &str,
+        stored_password: &Password,
+        password_to_check: &str,
+    ) -> Result<bool, PasswordError> {
+        let id = match stored_password {
+            Password::Sqlite { name, id } => {
+                if name != &self.name {
+                    error!(
+                        my_name = self.name,
+                        password_name = name,
+                        "password store dispatch bug"
+                    );
+                    return Err(PasswordError::BackendError);
+                }
+                id
+            }
+            _ => {
+                error!("password store dispatch bug");
+                return Err(PasswordError::BackendError);
+            }
+        };
+        let mut conn = self.read_pool.acquire().await.map_err(wrap_err)?;
+        let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
+
+        let algorithm = sqlx::query_file_scalar!("queries/get-password.sql", id)
+            .fetch_one(&mut *transaction)
+            .await
+            .map_err(wrap_err)?;
+
+        if let "pbkf2hmacsha256" = algorithm.as_str() {
+            if let Some(record) = sqlx::query_file!("queries/get-password-pbkdf2hmacsha256.sql", id)
+                .fetch_optional(&mut *transaction)
+                .await
+                .map_err(wrap_err)?
+            {
+                let password = Password::Pbkdf2HmacSha256 {
+                    credential: STANDARD.encode(record.credential),
+                    iterations: NonZeroI64::try_from(record.iterations)
+                        .and_then(NonZeroU32::try_from)
+                        .unwrap_or(HASH_ITERATIONS),
+                    salt: STANDARD.encode(record.salt),
+                };
+
+                transaction.commit().await.map_err(wrap_err)?;
+                self.in_place_password_store
+                    .verify(username, &password, password_to_check)
+                    .await
+            } else {
+                error!("password not found");
+                Err(PasswordError::BackendError)
+            }
+        } else {
+            error!("password not found");
+            Err(PasswordError::BackendError)
+        }
     }
 }
 
@@ -344,6 +414,7 @@ impl SqliteStore {
                 ClientType::Confidential {
                     password: Password::Sqlite {
                         name: self.name.clone(),
+                        id: client_record.try_get("password").map_err(wrap_err)?,
                     },
                     public_key,
                 }

@@ -96,6 +96,7 @@ impl PasswordStore for LdapStore {
             }
             _ => {
                 error!("password store dispatch bug");
+                return Err(PasswordError::BackendError);
             }
         }
 

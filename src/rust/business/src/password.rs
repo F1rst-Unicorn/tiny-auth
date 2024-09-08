@@ -32,7 +32,7 @@ use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, error};
 
-const HASH_ITERATIONS: u32 = 100_000;
+pub const HASH_ITERATIONS: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(100_000u32) };
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -64,7 +64,7 @@ pub enum Password {
     #[serde(alias = "sqlite")]
     #[serde(alias = "SQLite")]
     #[serde(alias = "SQLITE")]
-    Sqlite { name: String },
+    Sqlite { name: String, id: i32 },
 }
 
 impl Password {
@@ -73,7 +73,7 @@ impl Password {
         let mut salt_and_pepper = salt.clone();
         salt_and_pepper.extend(pepper.as_bytes());
         let mut credentials = [0u8; digest::SHA256_OUTPUT_LEN];
-        let iterations = NonZeroU32::new(HASH_ITERATIONS).unwrap();
+        let iterations = HASH_ITERATIONS;
         pbkdf2::derive(
             pbkdf2::PBKDF2_HMAC_SHA256,
             iterations,
@@ -115,7 +115,7 @@ impl PasswordStore for DispatchingPasswordStore {
         password_to_check: &str,
     ) -> Result<bool, Error> {
         match stored_password {
-            Password::Ldap { name } | Password::Sqlite { name } => {
+            Password::Ldap { name } | Password::Sqlite { name, .. } => {
                 let store = self
                     .named_stores
                     .get(name)
@@ -134,7 +134,7 @@ impl PasswordStore for DispatchingPasswordStore {
 }
 
 pub struct InPlacePasswordStore {
-    pepper: String,
+    pub pepper: String,
 }
 
 impl InPlacePasswordStore {
@@ -186,7 +186,7 @@ impl PasswordStore for InPlacePasswordStore {
                 )
                 .is_ok())
             }
-            Password::Ldap { name } | Password::Sqlite { name } => {
+            Password::Ldap { name } | Password::Sqlite { name, .. } => {
                 error!(
                     "Password store dispatch bug. Password names {} but this is the in-place store",
                     name
