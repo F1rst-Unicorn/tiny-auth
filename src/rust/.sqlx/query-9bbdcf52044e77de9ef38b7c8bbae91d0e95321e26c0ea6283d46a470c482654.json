@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select scope.name\nfrom client_allowed_scopes\n         join scope on scope.id = client_allowed_scopes.scope\nwhere client_allowed_scopes.client = ?1\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "name",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9bbdcf52044e77de9ef38b7c8bbae91d0e95321e26c0ea6283d46a470c482654"
+}
