@@ -42,6 +42,7 @@ liquibase {
                 "driver" to "org.sqlite.JDBC",
                 "databaseChangelogTableName" to "databasechangelog",
                 "databaseChangelogLockTableName" to "databasechangeloglock",
+                "labels" to project.properties["liquibaseLabels"] as String,
             )
         }
     }

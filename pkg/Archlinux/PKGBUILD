@@ -1,6 +1,6 @@
 # Maintainer: Jan Veen <jan.veen æt posteo.de>
 pkgname=tiny-auth
-pkgver=2.0.0
+pkgver=2.1.0
 pkgrel=1
 pkgdesc="OIDC Provider"
 arch=('x86_64')
@@ -32,6 +32,13 @@ build() {
             --proto_path ../proto \
             ../proto/tiny-auth/tiny-auth.proto
     npm run build
+
+    cd "$srcdir/src/sql"
+    rm sqlite/build/db.sqlite*
+    #./gradlew update -PliquibaseLabels=schema,\!$version
+    ./gradlew updateSql -PliquibaseLabels=schema,$version -PliquibaseOutputFile=sqlite/build/schema-$version.sql
+    ./gradlew update -PliquibaseLabels=schema,$version
+    ./gradlew updateSql -PliquibaseLabels=reference,$version -PliquibaseOutputFile=sqlite/build/reference-$version.sql
 }
 
 check() {
@@ -67,6 +74,10 @@ package() {
     cp -r src/static/templates $pkgdir/usr/share/${pkgname}/static
     rm $pkgdir/usr/share/${pkgname}/static/templates/index.html.j2
     cp -r src/typescript/dist/index.html $pkgdir/usr/share/${pkgname}/static/templates/index.html.j2
+
+    mkdir -p $pkgdir/usr/share/${pkgname}/sql
+    cp src/sql/sqlite/build/schema-$version.sql $pkgdir/usr/share/${pkgname}/sql
+    cp src/sql/sqlite/build/reference-$version.sql $pkgdir/usr/share/${pkgname}/sql
 
     mkdir -p $pkgdir/etc/${pkgname}/store/{users,clients,scopes}
     cp -r pkg/scopes/* $pkgdir/etc/${pkgname}/store/scopes
