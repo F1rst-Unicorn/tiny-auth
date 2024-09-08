@@ -83,7 +83,8 @@
                 iterations integer not null,
                 salt blob not null,
                 foreign key (password) references password(id)
-                    on update cascade on delete cascade deferrable initially deferred
+                    on update cascade on delete cascade deferrable initially deferred,
+                check (0 &lt; iterations and iterations &lt;= 4294967295)
             ) strict;;
 
             create unique index password_pbkf2hmacsha256_password on password_pbkf2hmacsha256 (password);;
@@ -96,7 +97,8 @@
                 public_key text null,
                 foreign key (password) references password(id)
                     on update cascade on delete restrict deferrable initially deferred,
-                check (client_type in ('public', 'confidential'))
+                check (client_type in ('public', 'confidential')),
+                check (client_type != 'confidential' or password is not null)
             ) strict;;
 
             create unique index client_client_id on client (client_id);;

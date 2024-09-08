@@ -24,9 +24,14 @@ use sqlx::{ConnectOptions, Executor};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use tiny_auth_business::password::InPlacePasswordStore;
 use tracing::log::LevelFilter;
 
-pub async fn sqlite_store(name: &str, url: &str) -> Result<Arc<SqliteStore>, SqliteError> {
+pub async fn sqlite_store(
+    name: &str,
+    url: &str,
+    in_place_password_store: Arc<InPlacePasswordStore>,
+) -> Result<Arc<SqliteStore>, SqliteError> {
     let options = SqliteConnectOptions::from_str(url)?
         .read_only(true)
         .journal_mode(Wal)
@@ -57,5 +62,6 @@ pub async fn sqlite_store(name: &str, url: &str) -> Result<Arc<SqliteStore>, Sql
         name: String::from(name),
         read_pool,
         write_pool,
+        in_place_password_store,
     }))
 }
