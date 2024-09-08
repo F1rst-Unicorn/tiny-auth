@@ -35,28 +35,8 @@
                 id integer primary key,
                 name text not null,
                 password integer not null,
-                email text not null default '',
-                email_verified integer not null default 0,
-                phone_number text not null default '',
-                phone_number_verified integer not null default 0,
-                address text not null default '',
-                given_name text not null default '',
-                middle_name text not null default '',
-                family_name text not null default '',
-                nickname text not null default '',
-                preferred_username text not null default '',
-                profile text not null default '',
-                picture blob not null default (unhex('')),
-                website text not null default '',
-                gender text not null default '',
-                birthday real not null default 0,
-                zoneinfo text not null default '',
-                locale text not null default '',
-                updated_at real not null default (unixepoch('subsec')),
                 foreign key (password) references password(id)
-                    on update cascade on delete restrict deferrable initially deferred,
-                check (email_verified in (0, 1)),
-                check (phone_number_verified in (0, 1))
+                    on update cascade on delete restrict deferrable initially deferred
             ) strict;;
 
             create unique index user_name on user (name);;
@@ -192,6 +172,29 @@
             ) strict;;
 
             create index scope_mapping_client_attribute_scope_mapping on scope_mapping_client_attribute (scope_mapping);;
+
+            create table authorization_code (
+                id integer primary key,
+                client integer not null,
+                user integer not null,
+                redirect_uri integer not null,
+                scope text not null,
+                code text not null,
+                insertion_time text not null,
+                authentication_time text not null,
+                nonce text null,
+                pkce_challenge text null,
+                pkce_challenge_method text null,
+                foreign key (client) references client(id)
+                    on update cascade on delete cascade deferrable initially deferred,
+                foreign key ("user") references user(id)
+                    on update cascade on delete cascade deferrable initially deferred,
+                foreign key (redirect_uri) references redirect_uri(id)
+                    on update cascade on delete restrict deferrable initially deferred,
+                check (pkce_challenge_method in ('plain', 'S256'))
+            );;
+
+            create unique index authorization_code_code on authorization_code (code, client);;
         </sql>
         <rollback>
             <sql endDelimiter=";;">
@@ -208,11 +211,31 @@
                 drop table "scope_mapping_template";;
                 drop table "scope_mapping_user_attribute";;
                 drop table "scope_mapping_client_attribute";;
+                drop table authorization_code;;
             </sql>
         </rollback>
     </changeSet>
-    <changeSet id="2" author="admin" labels="data,scope">
+    <changeSet id="2" author="admin" labels="reference">
         <sql endDelimiter=";;">
+            alter table "user" add column email text not null default '';;
+            alter table "user" add column email_verified integer not null default 0 check (email_verified in (0, 1));;
+            alter table "user" add column phone_number text not null default '';;
+            alter table "user" add column phone_number_verified integer not null default 0 check (phone_number_verified in (0, 1));;
+            alter table "user" add column address text not null default '';;
+            alter table "user" add column given_name text not null default '';;
+            alter table "user" add column middle_name text not null default '';;
+            alter table "user" add column family_name text not null default '';;
+            alter table "user" add column nickname text not null default '';;
+            alter table "user" add column preferred_username text not null default '';;
+            alter table "user" add column profile text not null default '';;
+            alter table "user" add column picture blob not null default (unhex(''));;
+            alter table "user" add column website text not null default '';;
+            alter table "user" add column gender text not null default '';;
+            alter table "user" add column birthday real not null default 0;;
+            alter table "user" add column zoneinfo text not null default '';;
+            alter table "user" add column locale text not null default '';;
+            alter table "user" add column updated_at real not null default (unixepoch('subsec'));;
+
             insert into scope (name, pretty_name, description)
             values ('openid', 'Authentication', 'Your username');;
 
@@ -566,10 +589,29 @@
                 delete
                 from scope
                 where name in ('openid', 'address', 'profile', 'email', 'phone');;
+
+                alter table "user" drop column email;;
+                alter table "user" drop column email_verified;;
+                alter table "user" drop column phone_number;;
+                alter table "user" drop column phone_number_verified;;
+                alter table "user" drop column address;;
+                alter table "user" drop column given_name;;
+                alter table "user" drop column middle_name;;
+                alter table "user" drop column family_name;;
+                alter table "user" drop column nickname;;
+                alter table "user" drop column preferred_username;;
+                alter table "user" drop column profile;;
+                alter table "user" drop column picture;;
+                alter table "user" drop column website;;
+                alter table "user" drop column gender;;
+                alter table "user" drop column birthday;;
+                alter table "user" drop column zoneinfo;;
+                alter table "user" drop column locale;;
+                alter table "user" drop column updated_at;;
             </sql>
         </rollback>
     </changeSet>
-    <changeSet id="3" author="admin" labels="data,client">
+    <changeSet id="3" author="admin" labels="reference">
         <sql endDelimiter=";;">
             insert into client (client_id, client_type)
             values ('tiny-auth-frontend', 'public');;
@@ -614,38 +656,7 @@
             </sql>
         </rollback>
     </changeSet>
-    <changeSet id="4" author="admin" labels="schema,authcode">
-        <sql endDelimiter=";;">
-            create table authorization_code (
-                id integer primary key,
-                client integer not null,
-                user integer not null,
-                redirect_uri integer not null,
-                scope text not null,
-                code text not null,
-                insertion_time text not null,
-                authentication_time text not null,
-                nonce text null,
-                pkce_challenge text null,
-                pkce_challenge_method text null,
-                foreign key (client) references client(id)
-                    on update cascade on delete cascade deferrable initially deferred,
-                foreign key ("user") references user(id)
-                    on update cascade on delete cascade deferrable initially deferred,
-                foreign key (redirect_uri) references redirect_uri(id)
-                    on update cascade on delete restrict deferrable initially deferred,
-                check (pkce_challenge_method in ('plain', 'S256'))
-            );;
-
-            create unique index authorization_code_code on authorization_code (code, client);;
-        </sql>
-        <rollback>
-            <sql endDelimiter=";;">
-                drop table authorization_code;;
-            </sql>
-        </rollback>
-    </changeSet>
-    <changeSet id="5" author="admin" labels="testdata">
+    <changeSet id="4" author="admin" labels="testdata">
         <sql endDelimiter=";;">
             insert into password (algorithm)
             values ('pbkf2hmacsha256');;

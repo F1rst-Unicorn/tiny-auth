@@ -1,6 +1,6 @@
 # Maintainer: Jan Veen <jan.veen æt posteo.de>
 pkgname=tiny-auth
-pkgver=2.0.0
+pkgver=2.1.0
 pkgrel=1
 pkgdesc="OIDC Provider"
 arch=('x86_64')
@@ -16,12 +16,22 @@ backup=("etc/${pkgname}/config.yml"
         "etc/${pkgname}/store/scopes/phone.yml"
         "etc/${pkgname}/store/scopes/profile.yml")
 
+versions_with_migrations=(2.1.0)
+
 build() {
     cd "$srcdir"
     chmod u+rw . -R
 
+    cd "$srcdir/src/sql"
+    local db_name=build
+    rm -f sqlite/build/$db_name.sqlite*
+    ./gradlew :sqlite:update                                                   \
+            -PdbName=$db_name                                                  \
+            -PliquibaseLabels=schema,reference,$(echo                          \
+                    ${versions_with_migrations[*]} | sed 's/ /,/g')
     cd "$srcdir/src/rust"
-    cargo build --release
+    DATABASE_URL=sqlite://$srcdir/src/sql/sqlite/build/$db_name.sqlite         \
+            cargo build --release
 
     cd "$srcdir/src/typescript"
     npm install
@@ -32,13 +42,46 @@ build() {
             --proto_path ../proto \
             ../proto/tiny-auth/tiny-auth.proto
     npm run build
+
+    cd "$srcdir/src/sql"
+    local db_name=packaging
+    rm -f sqlite/build/$db_name.sqlite*
+    for v in "${versions_with_migrations[@]}" ; do
+        ./gradlew :sqlite:updateSql                                            \
+                -PdbName=$db_name                                              \
+                -PliquibaseLabels=schema,$v                                    \
+                -PliquibaseOutputFile=sqlite/build/schema-$v.sql
+        ./gradlew :sqlite:update                                               \
+                -PdbName=$db_name                                              \
+                -PliquibaseLabels=schema,$v
+        ./gradlew :sqlite:updateSql                                            \
+                -PdbName=$db_name                                              \
+                -PliquibaseLabels=reference,$v                                 \
+                -PliquibaseOutputFile=sqlite/build/reference-$v.sql
+        ./gradlew :sqlite:update                                               \
+                -PdbName=$db_name                                              \
+                -PliquibaseLabels=reference,$v
+    done
 }
 
 check() {
     cd "$srcdir/src/rust"
-    cargo fmt --all -- --check
-    cargo clippy --release -j 8 -- -D clippy::all
-    cargo test -j 1
+    local db_name=build
+    DATABASE_URL=sqlite://$srcdir/src/sql/sqlite/build/$db_name.sqlite         \
+            cargo fmt --all -- --check
+    DATABASE_URL=sqlite://$srcdir/src/sql/sqlite/build/$db_name.sqlite         \
+            cargo clippy -j 8 -- -D clippy::all
+
+    cd "$srcdir/src/sql"
+    local db_name=unittests
+    rm -f sqlite/build/$db_name.sqlite*
+    ./gradlew :sqlite:update                                                   \
+            -PdbName=$db_name                                                  \
+            -PliquibaseLabels=schema,reference,$(echo                          \
+                    ${versions_with_migrations[*]} | sed 's/ /,/g')
+    cd "$srcdir/src/rust"
+    DATABASE_URL=sqlite://$srcdir/src/sql/sqlite/build/$db_name.sqlite         \
+            cargo test -- --test-threads 1
 
     cd "$srcdir/src/typescript"
     npx prettier . --check
@@ -67,6 +110,10 @@ package() {
     cp -r src/static/templates $pkgdir/usr/share/${pkgname}/static
     rm $pkgdir/usr/share/${pkgname}/static/templates/index.html.j2
     cp -r src/typescript/dist/index.html $pkgdir/usr/share/${pkgname}/static/templates/index.html.j2
+
+    mkdir -p $pkgdir/usr/share/${pkgname}/sql/sqlite
+    cp src/sql/sqlite/build/schema-*.sql $pkgdir/usr/share/${pkgname}/sql/sqlite
+    cp src/sql/sqlite/build/reference-*.sql $pkgdir/usr/share/${pkgname}/sql/sqlite
 
     mkdir -p $pkgdir/etc/${pkgname}/store/{users,clients,scopes}
     cp -r pkg/scopes/* $pkgdir/etc/${pkgname}/store/scopes

@@ -38,10 +38,11 @@ liquibase {
             arguments = mapOf(
                 "searchPath" to "$projectDir",
                 "changelogFile" to "src/main/resources/migrations/master.xml",
-                "url" to "jdbc:sqlite:$projectDir/build/db.sqlite",
+                "url" to "jdbc:sqlite:$projectDir/build/" + project.properties["dbName"] + ".sqlite",
                 "driver" to "org.sqlite.JDBC",
                 "databaseChangelogTableName" to "databasechangelog",
                 "databaseChangelogLockTableName" to "databasechangeloglock",
+                "labels" to project.properties["liquibaseLabels"] as String,
             )
         }
     }
