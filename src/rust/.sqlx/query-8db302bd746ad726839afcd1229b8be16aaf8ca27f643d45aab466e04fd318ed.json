@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n                select\n                    c.id,\n                    redirect_uri.redirect_uri,\n                    c.insertion_time,\n                    user.name,\n                    c.scope,\n                    c.authentication_time,\n                    c.nonce,\n                    c.pkce_challenge,\n                    c.pkce_challenge_method\n                from authorization_code c\n                join user on user.id = c.user\n                join redirect_uri on redirect_uri.id = c.redirect_uri\n                where c.code = $1\n                and c.client = (\n                    select client.id\n                    from client\n                    where client.client_id = $2\n                )\n            ",
+  "query": "select\n    c.id,\n    redirect_uri.redirect_uri,\n    c.insertion_time,\n    user.name,\n    c.scope,\n    c.authentication_time,\n    c.nonce,\n    c.pkce_challenge,\n    c.pkce_challenge_method\nfrom authorization_code c\n         join user on user.id = c.user\n         join redirect_uri on redirect_uri.id = c.redirect_uri\nwhere c.code = ?1\n  and c.client = (\n    select client.id\n    from client\n    where client.client_id = ?2\n    )\n",
   "describe": {
     "columns": [
       {
@@ -64,5 +64,5 @@
       true
     ]
   },
-  "hash": "dc8fddd37c80020b54ed839537d0ebb9314a06f2a6e8ef65e649cb0fc0178b54"
+  "hash": "8db302bd746ad726839afcd1229b8be16aaf8ca27f643d45aab466e04fd318ed"
 }

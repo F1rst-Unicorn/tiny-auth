@@ -71,36 +71,8 @@ impl AuthorizationCodeStore for SqliteStore {
         let (result, auth_code) = loop {
             let auth_code = generate_random_string(32);
 
-            match sqlx::query!(
-                r#"
-                insert into authorization_code (
-                    client,
-                    user,
-                    redirect_uri,
-                    scope,
-                    code,
-                    insertion_time,
-                    authentication_time,
-                    nonce,
-                    pkce_challenge,
-                    pkce_challenge_method)
-                select
-                    client.id,
-                    user.id,
-                    redirect_uri.id,
-                    $4,
-                    $5,
-                    $8,
-                    $6,
-                    $7,
-                    $9,
-                    $10
-                from client, user, redirect_uri
-                where client.client_id = $1
-                and user.name = $2
-                and redirect_uri.client = client.id
-                and redirect_uri.redirect_uri = $3
-            "#,
+            match sqlx::query_file!(
+                "queries/insert-authorization-code.sql",
                 request.client_id,
                 request.user,
                 request.redirect_uri,
@@ -148,28 +120,8 @@ impl AuthorizationCodeStore for SqliteStore {
         let mut conn = self.write_pool.acquire().await.map_err(wrap_err)?;
         let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
 
-        let Some(record) = sqlx::query!(
-            r#"
-                select
-                    c.id,
-                    redirect_uri.redirect_uri,
-                    c.insertion_time,
-                    user.name,
-                    c.scope,
-                    c.authentication_time,
-                    c.nonce,
-                    c.pkce_challenge,
-                    c.pkce_challenge_method
-                from authorization_code c
-                join user on user.id = c.user
-                join redirect_uri on redirect_uri.id = c.redirect_uri
-                where c.code = $1
-                and c.client = (
-                    select client.id
-                    from client
-                    where client.client_id = $2
-                )
-            "#,
+        let Some(record) = sqlx::query_file!(
+            "queries/get-authorization-code.sql",
             request.authorization_code,
             request.client_id,
         )
@@ -180,16 +132,10 @@ impl AuthorizationCodeStore for SqliteStore {
             return Err(AuthCodeValidationError::NotFound);
         };
 
-        sqlx::query!(
-            r#"
-            delete from authorization_code
-            where id = $1
-        "#,
-            record.id
-        )
-        .execute(&mut *transaction)
-        .await
-        .map_err(wrap_err)?;
+        sqlx::query_file!("queries/delete-authorization-code.sql", record.id)
+            .execute(&mut *transaction)
+            .await
+            .map_err(wrap_err)?;
 
         let Ok(insertion_time) =
             DateTime::parse_from_rfc3339(&record.insertion_time).map(|v| v.with_timezone(&Local))
@@ -249,11 +195,8 @@ impl AuthorizationCodeStore for SqliteStore {
             }
         };
 
-        if let Err(e) = sqlx::query!(
-            r#"
-            delete from authorization_code
-            where insertion_time < $1
-        "#,
+        if let Err(e) = sqlx::query_file!(
+            "queries/delete-expired-authorization-codes.sql",
             earliest_valid_insertion_time
         )
         .execute(&mut *transaction)
@@ -353,21 +296,10 @@ impl SqliteStore {
         transaction: &mut Transaction<'_>,
         user_id: i32,
     ) -> Result<BTreeMap<String, BTreeSet<String>>, UserError> {
-        let allowed_scopes_records = sqlx::query!(
-            r#"
-                select
-                    client.client_id as client,
-                    scope.name as scope
-                from user_allowed_scopes uas
-                join client on uas.client = client.id
-                join scope on uas.scope = scope.id
-                where user = $1
-            "#,
-            user_id
-        )
-        .fetch_all(&mut **transaction)
-        .await
-        .map_err(wrap_err)?;
+        let allowed_scopes_records = sqlx::query_file!("queries/get-user-scopes.sql", user_id)
+            .fetch_all(&mut **transaction)
+            .await
+            .map_err(wrap_err)?;
 
         let mut allowed_scopes: BTreeMap<String, BTreeSet<String>> = Default::default();
         for record in allowed_scopes_records {
@@ -390,18 +322,11 @@ impl SqliteStore {
         transaction: &mut Transaction<'_>,
         client_id: i32,
     ) -> Result<Vec<String>, Error> {
-        let allowed_scopes: Vec<String> = sqlx::query_scalar!(
-            r#"
-            select scope.name
-            from client_allowed_scopes
-            join scope on scope.id = client_allowed_scopes.scope
-            where client_allowed_scopes.client = $1
-        "#,
-            client_id
-        )
-        .fetch_all(&mut **transaction)
-        .await
-        .map_err(wrap_err)?;
+        let allowed_scopes: Vec<String> =
+            sqlx::query_file_scalar!("queries/get-client-scopes.sql", client_id)
+                .fetch_all(&mut **transaction)
+                .await
+                .map_err(wrap_err)?;
         Ok(allowed_scopes)
     }
 
@@ -435,17 +360,11 @@ impl SqliteStore {
         transaction: &mut Transaction<'_>,
         client_id: i32,
     ) -> Result<Vec<String>, Error> {
-        let redirect_uris = sqlx::query_scalar!(
-            r#"
-            select redirect_uri.redirect_uri
-            from redirect_uri
-            where redirect_uri.client = $1
-        "#,
-            client_id
-        )
-        .fetch_all(&mut **transaction)
-        .await
-        .map_err(wrap_err)?;
+        let redirect_uris =
+            sqlx::query_file_scalar!("queries/get-client-redirect-uris.sql", client_id)
+                .fetch_all(&mut **transaction)
+                .await
+                .map_err(wrap_err)?;
         Ok(redirect_uris)
     }
 }
