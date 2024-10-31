@@ -339,7 +339,7 @@ impl Handler {
         )
         .await
         .into_iter()
-        .filter_map(|v| v)
+        .flatten()
         .collect();
 
         Ok((
@@ -378,7 +378,7 @@ impl Handler {
         )
         .await
         .into_iter()
-        .filter_map(|v| v)
+        .flatten()
         .collect();
 
         Ok((user, client, scopes, Local::now().timestamp()))
@@ -439,7 +439,7 @@ impl Handler {
         )
         .await
         .into_iter()
-        .filter_map(|v| v)
+        .flatten()
         .collect();
 
         let nonce = Some(refresh_token.nonce);
