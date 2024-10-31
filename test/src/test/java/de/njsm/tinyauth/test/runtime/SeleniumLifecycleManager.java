@@ -17,6 +17,8 @@
 
 package de.njsm.tinyauth.test.runtime;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.extension.*;
 import org.junit.jupiter.api.extension.support.TypeBasedParameterResolver;
 import org.openqa.selenium.firefox.FirefoxOptions;
@@ -31,6 +33,8 @@ import org.testcontainers.lifecycle.Startables;
 import java.io.File;
 
 public class SeleniumLifecycleManager extends TypeBasedParameterResolver<Browser> implements BeforeAllCallback, BeforeEachCallback, ExtensionContext.Store.CloseableResource {
+
+    private static final Logger LOG = LogManager.getLogger(SeleniumLifecycleManager.class);
 
     public static final String REDIRECT_PAGE = "<!doctype html>" +
             "<html>" +
@@ -73,7 +77,8 @@ public class SeleniumLifecycleManager extends TypeBasedParameterResolver<Browser
                 .withNetworkAliases("browser")
                 .withNetwork(uut.network())
                 .withCapabilities(options)
-                .withRecordingMode(BrowserWebDriverContainer.VncRecordingMode.SKIP, null);
+                .withRecordingMode(BrowserWebDriverContainer.VncRecordingMode.SKIP, null)
+                .withLogConsumer(v -> LOG.info(v.getUtf8StringWithoutLineEnding()));
         nginxContainer = new NginxContainer<>()
                 .withCopyToContainer(Transferable.of(REDIRECT_PAGE), "/usr/share/nginx/html/redirect/restricted-scopes.html")
                 .withCopyToContainer(Transferable.of(REDIRECT_PAGE), "/usr/share/nginx/html/redirect/public.html")
@@ -83,7 +88,8 @@ public class SeleniumLifecycleManager extends TypeBasedParameterResolver<Browser
                 .withCopyToContainer(Transferable.of(REDIRECT_PAGE), "/usr/share/nginx/html/redirect/advanced-client-auth.html")
                 .withNetworkAliases("client")
                 .withNetwork(uut.network())
-                .waitingFor(new HttpWaitStrategy().forStatusCode(200));
+                .waitingFor(new HttpWaitStrategy().forStatusCode(200))
+                .withLogConsumer(v -> LOG.info(v.getUtf8StringWithoutLineEnding()));
 
         Startables.deepStart(seleniumContainer, nginxContainer).join();
         driver = new RemoteWebDriver(seleniumContainer.getSeleniumAddress(), options);
