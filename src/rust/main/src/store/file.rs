@@ -30,6 +30,7 @@ use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::ScopeStore;
 use tiny_auth_business::store::UserStore;
 use tiny_auth_business::user::{Error, User};
+use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, instrument, span, trace, warn, Level};
@@ -109,6 +110,9 @@ impl<T: for<'a> Deserialize<'a> + Send + DataExt + 'static> FileStore<T> {
         loop {
             let this = self.clone();
             let reload_event = match hot_reload_receiver.recv().await {
+                Err(RecvError::Closed) => {
+                    break;
+                }
                 Err(e) => {
                     info!(%e, "failed to receive hot reload event");
                     continue;

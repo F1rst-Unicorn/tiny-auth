@@ -21,6 +21,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 * Configuration reloading now also works with vim.
 
+* Disabled configuration reloading doesn't flood the logs any more.
+
 ## [2.0.0]
 
 ### Added
