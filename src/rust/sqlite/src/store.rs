@@ -224,7 +224,8 @@ impl UserStore for SqliteStore {
         let mut conn = self.read_pool.acquire().await.map_err(wrap_err)?;
         let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
 
-        let user_record = sqlx::query("select * from user where name = $1")
+        // Assume unknown columns at runtime, so don't use sqlx static query checking
+        let user_record = sqlx::query("select * from tiny_auth_user where name = $1")
             .bind(username)
             .fetch_optional(&mut *transaction)
             .await
@@ -256,7 +257,8 @@ impl ClientStore for SqliteStore {
         let mut conn = self.read_pool.acquire().await.map_err(wrap_err)?;
         let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
 
-        let client_record = sqlx::query("select * from client where client_id = $1")
+        // Assume unknown columns at runtime, so don't use sqlx static query checking
+        let client_record = sqlx::query("select * from tiny_auth_client where client_id = $1")
             .bind(key)
             .fetch_optional(&mut *transaction)
             .await

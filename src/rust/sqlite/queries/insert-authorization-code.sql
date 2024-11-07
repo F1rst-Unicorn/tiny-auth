@@ -1,4 +1,4 @@
-insert into authorization_code (
+insert into tiny_auth_authorization_code (
     client,
     user,
     redirect_uri,
@@ -10,9 +10,9 @@ insert into authorization_code (
     pkce_challenge,
     pkce_challenge_method)
 select
-    client.id,
-    user.id,
-    redirect_uri.id,
+    tiny_auth_client.id,
+    tiny_auth_user.id,
+    tiny_auth_redirect_uri.id,
     ?4,
     ?5,
     ?8,
@@ -20,8 +20,8 @@ select
     ?7,
     ?9,
     ?10
-from client, user, redirect_uri
-where client.client_id = ?1
-  and user.name = ?2
-  and redirect_uri.client = client.id
-  and redirect_uri.redirect_uri = ?3
+from tiny_auth_client, tiny_auth_user, tiny_auth_redirect_uri
+where tiny_auth_client.client_id = ?1
+  and tiny_auth_user.name = ?2
+  and tiny_auth_redirect_uri.client = tiny_auth_client.id
+  and tiny_auth_redirect_uri.redirect_uri = ?3
