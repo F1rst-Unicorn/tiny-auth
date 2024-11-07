@@ -3,27 +3,18 @@
 Any state used by tiny-auth is held in a store. See here to determine which
 store type serves you best.
 
-|                    | Configuration File | LDAP simple bind | LDAP search bind |
-|--------------------|--------------------|------------------|------------------|
-| Users              | Y                  | N                | Y                |
-| Passwords          | Y (2)              | Y                | Y                |
-| Clients            | Y                  | N                | Y                |
-| Scopes             | Y                  | N                | N                |
-| Auth Codes         | N                  | N                | N                |
-| Persistence        | N (1)              | N (1)            | N (1)            |
-| Multiple Instances | N (1)              | N (1)            | N (1)            |
-
-Feature glossary:
-
-* Persistence: All state is preserved across server restarts
-* Multiple Instances: Allow multiple instances of tiny-auth to collaboratively
-  offer the service
+|             | RAM (1) | Configuration File | LDAP simple bind | LDAP search bind | SQLite |
+|-------------|---------|--------------------|------------------|------------------|--------|
+| Users       | N       | Y                  | N                | Y                | Y      |
+| Passwords   | N       | Y (2)              | Y                | Y                | Y      |
+| Clients     | N       | Y                  | N                | Y                | Y      |
+| Scopes      | N       | Y                  | N                | N                | Y      |
+| Auth Codes  | Y       | N                  | N                | N                | Y      |
+| Rate limits | Y       | N                  | N                | N                | N      |
 
 Notes:
 
-1. Authorization codes issued for the authorization code flow and the
-   authentication rate limit enforcer are invalidated on restart and not shared
-   by different instances.
+1. Not persistent across restarts
 2. To change it, the passwords can be hashed via the Web UI. The hashed password
    must be sent to an administrator off-band. Configuration files are never
    written by tiny-auth.
@@ -183,6 +174,49 @@ file store](store.md#client_type). This field is optional.
 A scope name. See [the file store](store.md#allowed_scopes-1) for semantics.
 This field is optional.
 
+## SQLite
+
+To activate, use the following basic configuration:
+
+```yaml
+---
+store:
+  - sqlite:
+      name: some name
+      base: /etc/tiny-auth/store.sqlite
+      use for:
+        scopes:
+        passwords:
+        auth codes:
+        users:
+        clients:
+```
+
+tiny-auth does not assume ownership of the database. It is perfectly fine if the
+database contains other objects not managed by it. It prefixes all its objects
+with `tiny_auth_`. Do not create own objects named with this prefix. 
+Furthermore, it is allowed to extend the `tiny_auth_user` and `tiny_auth_client`
+table by more columns, again respecting the `tiny_auth_` prefix. Outside of
+that prefix, tiny-auth also owns `tiny_auth_user.id`, `tiny_auth_user.name`,
+`tiny_auth_user.password`, `tiny_auth_client.id`, `tiny_auth_client.client_id`, 
+`tiny_auth_client.client_type`, `tiny_auth_client.password`, 
+and `tiny_auth_client.public_key`. Do not alter these columns.
+
+### name
+
+An arbitrary name to reference this LDAP configuration. See user / client
+password for details.
+
+### base
+
+File path to the database. It must be manually migrated to the correct version.
+On upgrading, migrations to execute will be mentioned in the changelog and
+packaged. The package ships with 2 migration scopes, `schema` and `reference`.
+Migration files are available in `/usr/share/tiny-auth/sql/sqlite`. The schema
+contains all definitions strictly required to run a sqlite store. The reference
+contains scopes, clients and user columns offering features equal to what the
+default store ships in `/etc/tiny-auth/store` and is optional.
+
 ## Configuration File Store
 
 To activate, use the following basic configuration:
@@ -190,9 +224,9 @@ To activate, use the following basic configuration:
 ```yaml
 ---
 store:
-  configuration file:
-    name: some name
-    base: /etc/tiny-auth/store
+  - configuration file:
+      name: some name
+      base: /etc/tiny-auth/store
 ```
 
 Below the base directory defined in the configuration, tiny-auth expects
