@@ -19,8 +19,10 @@ use crate::store::SqliteStore;
 use chrono::{Duration, Local};
 use serde_json::Value;
 use std::collections::BTreeSet;
+use std::ffi::OsStr;
 use std::sync::Arc;
 use test_log::test;
+use tokio::fs::remove_file;
 use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::{InPlacePasswordStore, Password};
 use tiny_auth_business::store::{
@@ -252,9 +254,23 @@ async fn wrong_password_is_rejected() {
 }
 
 async fn store() -> Arc<SqliteStore> {
+    let db_file = env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql/sqlite/build/unittests.sqlite";
+    let _ = remove_file(&db_file).await;
+    let migrator = tokio::process::Command::new("./gradlew")
+        .arg(":sqlite:update")
+        .arg("-PdbName=unittests")
+        .arg("-PliquibaseLabels=!false")
+        .current_dir(env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql")
+        .output()
+        .await
+        .unwrap();
+
+    println!("{}", String::from_utf8(migrator.stdout).unwrap());
+    println!("{}", String::from_utf8(migrator.stderr).unwrap());
+
     sqlite_store(
         "sqlite",
-        &(env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql/sqlite/build/db.sqlite"),
+        &db_file,
         Arc::new(InPlacePasswordStore {
             pepper: "x5ePiX0TmUF2HzuraKuab9exzumu2sO54bnlVhgCS5AAXxqyhSSuHbCiUmx0FxmjZH9Gb2obp0ff2imMS6z40Qcc".to_string(),
         })
