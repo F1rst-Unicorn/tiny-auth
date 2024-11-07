@@ -232,6 +232,7 @@ impl<'a> Constructor<'a> {
         let mut password_stores = BTreeMap::default();
         let (sender, _receiver) = channel(8);
         let mut store_paths = Vec::new();
+        let in_place_password_store = Arc::new(in_place_password_store(&config.crypto.pepper));
 
         for store_config in &config.store {
             match store_config {
@@ -355,12 +356,28 @@ impl<'a> Constructor<'a> {
                     client_stores.push(ldap_store.clone());
                     password_stores.insert(name.clone(), ldap_store);
                 }
+                Store::Sqlite { name, base } => {
+                    let sqlite_store = match tiny_auth_sqlite::inject::sqlite_store(
+                        name.as_str(),
+                        &(String::from("sqlite://") + base),
+                        in_place_password_store.clone(),
+                    ).await {
+                        Err(e) => {
+                            error!(%e, %name, "failed to create sqlite store");
+                            return Err(LoggedBeforeError);
+                        }
+                        Ok(v) => v,
+                    };
+                    user_stores.push(sqlite_store.clone());
+                    client_stores.push(sqlite_store.clone());
+                    password_stores.insert(name.clone(), sqlite_store);
+                }
             }
         }
 
         let password_store = dispatching_password_store(
             password_stores,
-            Arc::new(in_place_password_store(&config.crypto.pepper)),
+            in_place_password_store,
         );
 
         Ok((

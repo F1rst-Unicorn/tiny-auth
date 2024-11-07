@@ -65,6 +65,12 @@ pub enum Store {
         #[serde(default)]
         starttls: bool,
     },
+
+    #[serde(rename = "sqlite")]
+    Sqlite {
+        name: String,
+        base: String,
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]

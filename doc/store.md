@@ -189,6 +189,12 @@ store:
         passwords:
         auth codes:
         users:
+          - location: /user/pets
+            query: |
+              select name, kind 
+              from pet
+              where owner = {{ user.id }}
+               
         clients:
 ```
 
