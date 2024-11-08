@@ -185,27 +185,74 @@ store:
       name: some name
       base: /etc/tiny-auth/store.sqlite
       use for:
-        scopes:
-        passwords:
-        auth codes:
+        scopes: true
+        passwords: true
+        auth codes: true
+        clients: [ ]
         users:
-          - location: /user/pets
+          # 1 to 1
+          - location: /user/desk
+            name: desk
+            multiplicity: to one
             query: |
-              select name, kind 
+              select
+                id as tiny_auth_id, 
+                occupied_by as tiny_auth_assigned_to,
+                position
+              from desk
+              where occupied_by in ({{ assigned_to_ids }})
+
+          # n to 1
+          - location: /user/building
+            name: building
+            multiplicity: to one
+            query: |
+              select
+                building.id as tiny_auth_id, 
+                sits_in.user_id as tiny_auth_assigned_to,
+                building.name
+              from sits_in
+              join building on building.id = sits_in.building_id
+              where sits_in.user_id in ({{ assigned_to_ids }})
+
+          # 1 to n
+          - location: /user/pets
+            name: pets
+            multiplicity: to many
+            query: |
+              select
+                pet.id as tiny_auth_id, 
+                pet.name
               from pet
-              where owner = {{ user.id }}
-               
-        clients:
+              where owned_by in ({{ assigned_to_ids }})
+            assignment: |
+              select
+                pet.id as tiny_auth_id, 
+                pet.owned_by as tiny_auth_assigned_to,
+              where owned_by in ({{ assigned_to_ids }})
+
+          # n to m
+          - location: /building/meeting_rooms
+            name: meeting_rooms
+            multiplicity: to many
+            query: |
+              select
+                meeting_room.id as tiny_auth_id, 
+                meeting_room.building_id as tiny_auth_assigned_to,
+                meeting_room.name
+              from meeting_room
+              join has_access_to on meeting_room.id = has_access_to.meeting_room_id
+              where has_access_to.user_id = {{ user.id }}
 ```
 
 tiny-auth does not assume ownership of the database. It is perfectly fine if the
 database contains other objects not managed by it. It prefixes all its objects
-with `tiny_auth_`. Do not create own objects named with this prefix. 
+with `tiny_auth_`. Do not create own objects named with this prefix.
 Furthermore, it is allowed to extend the `tiny_auth_user` and `tiny_auth_client`
 table by more columns, again respecting the `tiny_auth_` prefix. Outside of
 that prefix, tiny-auth also owns `tiny_auth_user.id`, `tiny_auth_user.name`,
-`tiny_auth_user.password`, `tiny_auth_client.id`, `tiny_auth_client.client_id`, 
-`tiny_auth_client.client_type`, `tiny_auth_client.password`, 
+`tiny_auth_user.password`, `tiny_auth_client.id`, `tiny_auth_client.client_id`,
+`tiny_auth_client.client_type`, `tiny_auth_client.password`,
 and `tiny_auth_client.public_key`. Do not alter these columns.
 
 ### name
@@ -222,6 +269,63 @@ Migration files are available in `/usr/share/tiny-auth/sql/sqlite`. The schema
 contains all definitions strictly required to run a sqlite store. The reference
 contains scopes, clients and user columns offering features equal to what the
 default store ships in `/etc/tiny-auth/store` and is optional.
+
+### use for
+
+Declare what data the store is responsible for. `scopes`, `passwords` and `auth 
+codes` take a boolean to enable or disable them. There are no configuration
+options. For `clients` and `users`, a list of data loaders can be set. A data
+loader allows to add arbitrary data to a user/client context when rendering
+scopes.
+
+#### name
+
+The name of a data loader identifies it when describing, how to assemble the
+context. It must be unique among all data loaders of the same store. Required.
+
+#### location
+
+A [JSON Pointer](https://datatracker.ietf.org/doc/html/rfc6901#section-3) to
+where to put the data. The first element of the pointer must be a `name` of
+a data loader configured _before_ the current data loader in the list, or the
+predefined name `user` or `client`, depending on whether this is a user or
+client data loader. Further elements will describe, how to nest the data inside
+the first element via JSON objects and arrays. Required.
+
+#### multiplicity
+
+One of `to one` or `to many`. Controls whether the loaded data will be nested as
+a JSON object or array. If a `to one` data loader loads more than one row per
+assigned object, only the first row is considered. Defaults to `to many`.
+
+#### query
+
+The SQLite query to load the data. The result set must have an `INT` column
+`tiny_auth_id` which helps tiny-auth to identify the data. It must have an `INT`
+column `tiny_auth_assigned_to` which tells tiny-auth into which object the row
+must be nested to. `tiny_auth_assigned_to` may be omitted, if a separate
+`assignment` query is given, see below. Neither `tiny_auth_id` nor
+`tiny_auth_assigned_to` will be nested into the final object. Any other columns
+returned in the result set will be nested into the final object.
+
+Queries are [tera templates](https://tera.netlify.app/docs/). To filter the
+result set to only the required
+rows, the variable `assigned_to_ids` contains the comma-separated list of all
+IDs tiny-auth will be interested in. Note that this list can be the empty
+string, which still makes SQLite IN-expressions valid syntax.
+Furthermore, the `user` or `client` as well as all data loaded by other loaders
+before the current one in the list are available via their name. Note that the
+name can either contain an object, if the path from the client/user to the name
+consists only of `to one` multiplicities, or an array otherwise. You should
+name your data loaders with the correct pluralisation to reflect this.
+
+#### assignment
+
+An optional query to load assignments from `tiny_auth_id` to
+`tiny_auth_assigned_to` data. The use case for this are queries with many result
+set columns which would introduce a lot of redundant data when merging the
+assignments to the other query. As with `query`, the same templating context
+is provided.
 
 ## Configuration File Store
 
@@ -330,7 +434,8 @@ are allowed.
 
 Confidential clients can register with a public key to support authentication
 via
-the [`private_key_jwt`](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication)
+the [
+`private_key_jwt`](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication)
 method. The public key can be generated in the same way as the keys for
 tiny-auth's [own key material](configuration.md#key-and-public-key).
 
@@ -341,7 +446,8 @@ which must be put as a dictionary inside the `password` field. Mind the
 indentation. Alternatively embed an LDAP reference, see the user password
 section.
 
-The [`client_secret_jwt`](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication)
+The [
+`client_secret_jwt`](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication)
 method is supported by tiny-auth. However, it is NOT RECOMMENDED as it requires
 tiny-auth to store the client secret in plain. Note that if the client is able
 to keep a secret password, it can also keep a secret key, making
