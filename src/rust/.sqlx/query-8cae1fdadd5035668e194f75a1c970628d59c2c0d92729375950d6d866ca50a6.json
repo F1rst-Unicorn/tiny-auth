@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "select redirect_uri.redirect_uri\nfrom redirect_uri\nwhere redirect_uri.client = ?1\n",
+  "query": "select tiny_auth_redirect_uri.redirect_uri\nfrom tiny_auth_redirect_uri\nwhere tiny_auth_redirect_uri.client = ?1\n",
   "describe": {
     "columns": [
       {
@@ -16,5 +16,5 @@
       false
     ]
   },
-  "hash": "fb374ddec5e29a3062ac29d37c29f78606a2601a7c463f64c46e5db8e1be7c75"
+  "hash": "8cae1fdadd5035668e194f75a1c970628d59c2c0d92729375950d6d866ca50a6"
 }

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select scope.name\nfrom tiny_auth_client_allowed_scopes client_allowed_scopes\n         join tiny_auth_scope scope on scope.id = client_allowed_scopes.scope\nwhere client_allowed_scopes.client = ?1\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "name",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "aaa60d3e1b32f24972ee2169f1c7eebac4751ab836db1dba64421ee4b1127e9b"
+}

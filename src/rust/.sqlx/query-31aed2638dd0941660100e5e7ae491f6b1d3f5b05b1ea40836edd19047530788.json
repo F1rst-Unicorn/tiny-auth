@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "select password.algorithm\nfrom password\nwhere id = ?1\n",
+  "query": "select tiny_auth_password.algorithm\nfrom tiny_auth_password\nwhere id = ?1\n",
   "describe": {
     "columns": [
       {
@@ -16,5 +16,5 @@
       false
     ]
   },
-  "hash": "b9649b18e3e158563655325128ddb22da878f7e88051d9b12f336a7eb63e331e"
+  "hash": "31aed2638dd0941660100e5e7ae491f6b1d3f5b05b1ea40836edd19047530788"
 }

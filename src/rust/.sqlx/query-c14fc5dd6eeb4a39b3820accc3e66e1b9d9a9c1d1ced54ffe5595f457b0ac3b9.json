@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "select\n    client.client_id as client,\n    scope.name as scope\nfrom user_allowed_scopes uas\n         join client on uas.client = client.id\n         join scope on uas.scope = scope.id\nwhere user = ?1\n",
+  "query": "select\n    client.client_id as client,\n    scope.name as scope\nfrom tiny_auth_user_allowed_scopes uas\n         join tiny_auth_client client on uas.client = client.id\n         join tiny_auth_scope scope on uas.scope = scope.id\nwhere user = ?1\n",
   "describe": {
     "columns": [
       {
@@ -22,5 +22,5 @@
       false
     ]
   },
-  "hash": "72ee0c657d7e02a8edcf7b8bef3f8373e1cf895c9a4360ef260921147992ddf7"
+  "hash": "c14fc5dd6eeb4a39b3820accc3e66e1b9d9a9c1d1ced54ffe5595f457b0ac3b9"
 }

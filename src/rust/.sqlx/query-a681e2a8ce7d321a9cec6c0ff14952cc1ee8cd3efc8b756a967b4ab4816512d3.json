@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "delete from tiny_auth_authorization_code\nwhere insertion_time < ?1\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "a681e2a8ce7d321a9cec6c0ff14952cc1ee8cd3efc8b756a967b4ab4816512d3"
+}
