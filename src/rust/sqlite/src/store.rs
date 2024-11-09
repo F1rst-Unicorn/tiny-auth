@@ -54,7 +54,7 @@ pub struct SqliteStore {
 
 #[async_trait]
 impl AuthorizationCodeStore for SqliteStore {
-    #[instrument(skip_all, ret(level = Level::DEBUG))]
+    #[instrument(skip_all, fields(store = self.name), ret(level = Level::DEBUG))]
     async fn get_authorization_code<'a>(
         &self,
         request: AuthorizationCodeRequest<'a>,
@@ -220,6 +220,7 @@ impl AuthorizationCodeStore for SqliteStore {
 
 #[async_trait]
 impl UserStore for SqliteStore {
+    #[instrument(skip_all, fields(store = self.name))]
     async fn get(&self, username: &str) -> Result<User, UserError> {
         let mut conn = self.read_pool.acquire().await.map_err(wrap_err)?;
         let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
@@ -253,6 +254,7 @@ impl UserStore for SqliteStore {
 
 #[async_trait]
 impl ClientStore for SqliteStore {
+    #[instrument(skip_all, fields(store = self.name))]
     async fn get(&self, key: &str) -> Result<Client, ClientError> {
         let mut conn = self.read_pool.acquire().await.map_err(wrap_err)?;
         let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
@@ -282,6 +284,7 @@ impl ClientStore for SqliteStore {
 
 #[async_trait]
 impl PasswordStore for SqliteStore {
+    #[instrument(skip_all, fields(store = self.name))]
     async fn verify(
         &self,
         username: &str,

@@ -42,6 +42,7 @@ pub struct LdapStore {
 
 #[async_trait]
 impl UserStore for LdapStore {
+    #[instrument(skip_all, fields(store = self.name))]
     async fn get(&self, username: &str) -> Result<User, UserError> {
         let username = ldap_escape(username).into_owned();
         let user_lookup = self.user_lookup.as_ref().ok_or(UserError::NotFound)?;
@@ -75,7 +76,7 @@ impl UserStore for LdapStore {
 
 #[async_trait]
 impl PasswordStore for LdapStore {
-    #[instrument(name = "verify_password", skip_all)]
+    #[instrument(name = "verify_password", skip_all, fields(store = self.name))]
     async fn verify(
         &self,
         username: &str,
@@ -147,6 +148,7 @@ impl LdapStore {
 
 #[async_trait]
 impl ClientStore for LdapStore {
+    #[instrument(skip_all, fields(store = self.name))]
     async fn get(&self, key: &str) -> Result<Client, ClientError> {
         let client_id = ldap_escape(key).into_owned();
         let client_lookup = self.client_lookup.as_ref().ok_or(ClientError::NotFound)?;

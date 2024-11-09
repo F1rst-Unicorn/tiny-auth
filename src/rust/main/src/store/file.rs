@@ -51,6 +51,7 @@ pub(crate) trait DataExt {
 
 #[async_trait]
 impl UserStore for FileStore<User> {
+    #[instrument(skip_all, fields(store = self.base))]
     async fn get(&self, key: &str) -> Result<User, Error> {
         self.data
             .lock()
@@ -64,6 +65,7 @@ impl UserStore for FileStore<User> {
 
 #[async_trait]
 impl ClientStore for FileStore<Client> {
+    #[instrument(skip_all, fields(store = self.base))]
     async fn get(&self, key: &str) -> Result<Client, client::Error> {
         self.data
             .lock()
@@ -76,10 +78,12 @@ impl ClientStore for FileStore<Client> {
 
 #[async_trait]
 impl ScopeStore for FileStore<Scope> {
+    #[instrument(skip_all, fields(store = self.base))]
     async fn get(&self, key: &str) -> Option<Scope> {
         self.data.lock().await.get(key).cloned()
     }
 
+    #[instrument(skip_all, fields(store = self.base))]
     async fn get_scope_names(&self) -> Vec<String> {
         self.data.lock().await.keys().map(Clone::clone).collect()
     }
