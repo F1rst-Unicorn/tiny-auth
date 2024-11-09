@@ -24,6 +24,7 @@ pub mod consent;
 pub mod cors;
 pub mod health;
 pub mod issuer_configuration;
+pub mod json_pointer;
 pub mod jwk;
 pub mod oauth2;
 pub mod oidc;
