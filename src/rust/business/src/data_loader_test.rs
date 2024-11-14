@@ -15,6 +15,90 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+pub mod loading {
+    use crate::data_loader::Multiplicity::{ToMany, ToOne};
+    use crate::data_loader::*;
+    use lazy_static::lazy_static;
+    use serde_json::{json, Value};
+    use test_log::test;
+
+    lazy_static! {
+        static ref USER: Value = json!({
+            "id": 1,
+            "name": "John",
+        });
+        static ref DESK: Value = json!({
+            "material":"steel",
+        });
+        static ref CAT: Value = json!({
+            "type":"cat",
+        });
+        static ref DOG: Value = json!({
+            "type":"dog",
+        });
+        static ref BUILDING: Value = json!({
+            "street":"Lincoln Street",
+        });
+        static ref LARGE_ROOM: Value = json!({
+            "kind":"large",
+        });
+        static ref SMALL_ROOM: Value = json!({
+            "kind":"small",
+        });
+    }
+
+    #[test]
+    pub fn data_from_documentation_example_works() {
+        let actual = load_user(
+            vec![
+                DataLoader::new("desk".to_string(), "/user/desk".try_into().unwrap(), ToOne),
+                DataLoader::new(
+                    "building".to_string(),
+                    "/user/building".try_into().unwrap(),
+                    ToOne,
+                ),
+                DataLoader::new("pets".to_string(), "/user/pets".try_into().unwrap(), ToMany),
+                DataLoader::new(
+                    "meeting_rooms".to_string(),
+                    "/building/meeting_rooms".try_into().unwrap(),
+                    ToMany,
+                ),
+            ],
+            vec![
+                LoadedData::new([(2, DESK.clone())], [(1, vec![2])]),
+                LoadedData::new([(3, BUILDING.clone())], [(1, vec![3])]),
+                LoadedData::new([(3, CAT.clone()), (4, DOG.clone())], [(1, vec![3, 4])]),
+                LoadedData::new(
+                    [(5, SMALL_ROOM.clone()), (6, LARGE_ROOM.clone())],
+                    [(3, vec![5, 6])],
+                ),
+            ],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "id": 1,
+                "name": "John",
+                "desk": DESK.clone(),
+                "building": {
+                    "street":"Lincoln Street",
+                    "meeting_rooms": [
+                        SMALL_ROOM.clone(),
+                        LARGE_ROOM.clone(),
+                    ],
+                },
+                "pets": [
+                    CAT.clone(),
+                    DOG.clone(),
+                ],
+            }),
+            actual
+        );
+    }
+}
+
 pub mod nesting {
     use crate::data_loader::Multiplicity::{ToMany, ToOne};
     use crate::data_loader::*;
@@ -43,10 +127,7 @@ pub mod nesting {
                 "/user/pet".try_into().unwrap(),
                 ToOne,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             USER.clone(),
             1,
         );
@@ -70,10 +151,7 @@ pub mod nesting {
                 "/user/pets".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             USER.clone(),
             1,
         );
@@ -98,10 +176,8 @@ pub mod nesting {
                 ToMany,
             )],
             vec![LoadedData::new(
-                [(2, CAT.clone()), (3, DOG.clone())].into_iter().collect(),
-                [(1, vec![2, 3].into_iter().collect())]
-                    .into_iter()
-                    .collect(),
+                [(2, CAT.clone()), (3, DOG.clone())],
+                [(1, vec![2, 3])],
             )],
             USER.clone(),
             1,
@@ -127,10 +203,8 @@ pub mod nesting {
                 ToMany,
             )],
             vec![LoadedData::new(
-                [(2, CAT.clone()), (3, DOG.clone())].into_iter().collect(),
-                [(1, vec![3, 2].into_iter().collect())]
-                    .into_iter()
-                    .collect(),
+                [(2, CAT.clone()), (3, DOG.clone())],
+                [(1, vec![3, 2])],
             )],
             USER.clone(),
             1,
@@ -155,10 +229,7 @@ pub mod nesting {
                 "/user/pets/cats".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             USER.clone(),
             1,
         );
@@ -184,10 +255,7 @@ pub mod nesting {
                 "/user/pets/0".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             USER.clone(),
             1,
         );
@@ -213,10 +281,7 @@ pub mod nesting {
                 "/user/pets/0/cats".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             USER.clone(),
             1,
         );
@@ -242,10 +307,7 @@ pub mod nesting {
                 "/user/pets/3/cats".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             USER.clone(),
             1,
         );
@@ -275,10 +337,7 @@ pub mod nesting {
                 "/user/pets/-/cats".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             USER.clone(),
             1,
         );
@@ -305,10 +364,7 @@ pub mod nesting {
                 "/user/id".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             USER.clone(),
             1,
         );
@@ -327,10 +383,7 @@ pub mod nesting {
                 "/user/name".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             root.clone(),
             1,
         );
@@ -349,10 +402,7 @@ pub mod nesting {
                 "/user/name".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             root.clone(),
             1,
         );
@@ -368,10 +418,7 @@ pub mod nesting {
                 "/user/id/unused".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             USER.clone(),
             1,
         );
@@ -387,10 +434,7 @@ pub mod nesting {
                 "/user".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             USER.clone(),
             1,
         );
@@ -406,10 +450,7 @@ pub mod nesting {
                 "/user/some array".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             USER.clone(),
             1,
         );
@@ -428,10 +469,7 @@ pub mod nesting {
                 "/user/some array".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             root.clone(),
             1,
         );
@@ -450,10 +488,7 @@ pub mod nesting {
                 "/user/array/0".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             root.clone(),
             1,
         );
@@ -472,10 +507,7 @@ pub mod nesting {
                 "/user/array/0/1".try_into().unwrap(),
                 ToOne,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             root.clone(),
             1,
         );
@@ -499,10 +531,7 @@ pub mod nesting {
                 "/user/array/-/0".try_into().unwrap(),
                 ToOne,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             root.clone(),
             1,
         );
@@ -526,10 +555,7 @@ pub mod nesting {
                 "/user/array/0/1/0".try_into().unwrap(),
                 ToOne,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             root.clone(),
             1,
         );
@@ -553,10 +579,7 @@ pub mod nesting {
                 "/user/array/-".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             root.clone(),
             1,
         );
@@ -580,10 +603,7 @@ pub mod nesting {
                 "/user/array/key".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             root.clone(),
             1,
         );
@@ -599,10 +619,7 @@ pub mod nesting {
                 "/user/some array/3".try_into().unwrap(),
                 ToMany,
             )],
-            vec![LoadedData::new(
-                [(2, CAT.clone())].into_iter().collect(),
-                [(1, vec![2].into_iter().collect())].into_iter().collect(),
-            )],
+            vec![LoadedData::new([(2, CAT.clone())], [(1, vec![2])])],
             USER.clone(),
             1,
         );

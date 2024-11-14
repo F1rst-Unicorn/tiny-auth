@@ -51,8 +51,14 @@ pub struct LoadedData {
 }
 
 impl LoadedData {
-    pub fn new(data: BTreeMap<i32, Value>, assignments: BTreeMap<i32, Vec<i32>>) -> Self {
-        Self { data, assignments }
+    pub fn new(
+        data: impl IntoIterator<Item = (i32, Value)>,
+        assignments: impl IntoIterator<Item = (i32, Vec<i32>)>,
+    ) -> Self {
+        Self {
+            data: data.into_iter().collect(),
+            assignments: assignments.into_iter().collect(),
+        }
     }
 }
 
@@ -86,10 +92,7 @@ fn load_with_root_data(
         ("/".to_string() + kind).try_into().unwrap(),
         ToOne,
     ));
-    loaded_data.push(LoadedData::new(
-        [(id, client)].into_iter().collect(),
-        Default::default(),
-    ));
+    loaded_data.push(LoadedData::new([(id, client)], []));
     load(data_loaders, loaded_data)
 }
 
@@ -139,11 +142,10 @@ pub fn load(data_loaders: Vec<DataLoader>, loaded_data: Vec<LoadedData>) -> Valu
             } else {
                 let mut value_to_nest = Vec::default();
                 for source_id in assignments {
-                    let _source_id_span = span!(Level::INFO, "", %source_id);
                     if let Some(source_object) = source_objects.data.get(&source_id).cloned() {
                         value_to_nest.push(source_object);
                     } else {
-                        warn!("assignment references unknown id");
+                        warn!(%source_id, "assignment references unknown id");
                     }
                 }
                 value_to_nest.into()
@@ -167,8 +169,6 @@ pub fn load(data_loaders: Vec<DataLoader>, loaded_data: Vec<LoadedData>) -> Valu
 }
 
 fn nest_into(destination: &mut Value, value_to_nest: Value, location: JsonPointer) {
-    dbg!(&destination);
-    dbg!(&location);
     let current_step = location.first();
     *destination = match (destination.take(), current_step) {
         (value @ Value::Bool(_), _)
