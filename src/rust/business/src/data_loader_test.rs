@@ -1,0 +1,619 @@
+/*  tiny-auth: Tiny OIDC Provider
+ *  Copyright (C) 2019 The tiny-auth developers
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, either version 3 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+pub mod nesting {
+    use crate::data_loader::Multiplicity::{ToMany, ToOne};
+    use crate::data_loader::*;
+    use lazy_static::lazy_static;
+    use serde_json::{json, Value};
+    use test_log::test;
+
+    lazy_static! {
+        static ref USER: Value = json!({
+            "id": 1,
+            "name": "John",
+            "some array": [1],
+        });
+        static ref CAT: Value = json!({
+            "type":"cat",
+        });
+        static ref DOG: Value = json!({
+            "type":"dog",
+        });
+    }
+    #[test]
+    pub fn one_object_is_nested() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pet".to_string(),
+                "/user/pet".try_into().unwrap(),
+                ToOne,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "id": 1,
+                "name": "John",
+                "some array": [1],
+                "pet": CAT.clone(),
+            }),
+            actual
+        );
+    }
+
+    #[test]
+    pub fn one_array_is_nested() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/pets".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "id": 1,
+                "name": "John",
+                "some array": [1],
+                "pets": [CAT.clone()]
+            }),
+            actual
+        );
+    }
+
+    #[test]
+    pub fn two_assignments_can_be_made() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/pets".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone()), (3, DOG.clone())].into_iter().collect(),
+                [(1, vec![2, 3].into_iter().collect())]
+                    .into_iter()
+                    .collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "id": 1,
+                "name": "John",
+              "some array": [1],
+                "pets": [CAT.clone(), DOG.clone()]
+            }),
+            actual
+        );
+    }
+
+    #[test]
+    pub fn two_assignments_with_different_order_are_preserved() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/pets".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone()), (3, DOG.clone())].into_iter().collect(),
+                [(1, vec![3, 2].into_iter().collect())]
+                    .into_iter()
+                    .collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "id": 1,
+                "name": "John",
+                "some array": [1],
+                "pets": [DOG.clone(), CAT.clone()]
+            }),
+            actual
+        );
+    }
+
+    #[test]
+    pub fn empty_middle_object_is_nested() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/pets/cats".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "id": 1,
+                "name": "John",
+                "some array": [1],
+                "pets": {
+                    "cats": [CAT.clone()]
+                }
+            }),
+            actual
+        );
+    }
+
+    #[test]
+    pub fn empty_array_is_nested() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/pets/0".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "id": 1,
+                "name": "John",
+                "some array": [1],
+                "pets": [
+                    [CAT.clone()]
+                ]
+            }),
+            actual
+        );
+    }
+
+    #[test]
+    pub fn mixed_empty_json_is_nested() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/pets/0/cats".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "id": 1,
+                "name": "John",
+                "some array": [1],
+                "pets": [{
+                    "cats": [CAT.clone()]
+                }]
+            }),
+            actual
+        );
+    }
+
+    #[test]
+    pub fn missing_array_indices_are_filled_with_nulls() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/pets/3/cats".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "id": 1,
+                "name": "John",
+                "some array": [1],
+                "pets": [
+                    null,
+                    null,
+                    null,
+                    {
+                        "cats": [CAT.clone()]
+                }]
+            }),
+            actual
+        );
+    }
+
+    #[test]
+    pub fn one_past_last_index_works() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/pets/-/cats".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "id": 1,
+                "name": "John",
+                "some array": [1],
+                "pets": [
+                    {
+                        "cats": [CAT.clone()]
+                }]
+            }),
+            actual
+        );
+    }
+
+    #[test]
+    pub fn already_present_number_ignores_data() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/id".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(USER.clone(), actual);
+    }
+
+    #[test]
+    pub fn already_present_bool_value_ignores_data() {
+        let root = json!({
+            "name": true,
+        });
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/name".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            root.clone(),
+            1,
+        );
+
+        assert_eq!(root.clone(), actual);
+    }
+
+    #[test]
+    pub fn already_present_string_value_ignores_data() {
+        let root = json!({
+            "name": "hello",
+        });
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/name".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            root.clone(),
+            1,
+        );
+
+        assert_eq!(root.clone(), actual);
+    }
+
+    #[test]
+    pub fn nesting_behind_primitive_value_ignores_data() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/id/unused".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(USER.clone(), actual);
+    }
+
+    #[test]
+    pub fn nesting_in_present_object_ignores_data() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(USER.clone(), actual);
+    }
+
+    #[test]
+    pub fn nesting_in_present_array_ignores_data() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/some array".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(USER.clone(), actual);
+    }
+
+    #[test]
+    pub fn nesting_in_nested_array_ignores_data() {
+        let root = json!({
+            "some array": [[1]],
+        });
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/some array".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            root.clone(),
+            1,
+        );
+
+        assert_eq!(root.clone(), actual);
+    }
+
+    #[test]
+    pub fn nesting_in_deeply_nested_array_ignores_data() {
+        let root = json!({
+            "array": [[[[1]]]],
+        });
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/array/0".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            root.clone(),
+            1,
+        );
+
+        assert_eq!(root.clone(), actual);
+    }
+
+    #[test]
+    pub fn nesting_in_deeply_nested_array_works() {
+        let root = json!({
+            "array": [[[[true]]]],
+        });
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/array/0/1".try_into().unwrap(),
+                ToOne,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            root.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "array": [[[[true]], CAT.clone()]],
+            }),
+            actual
+        );
+    }
+
+    #[test]
+    pub fn appending_in_deeply_nested_array_works() {
+        let root = json!({
+            "array": [[[[true]]]],
+        });
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/array/-/0".try_into().unwrap(),
+                ToOne,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            root.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "array": [[[[true]]], [CAT.clone()]],
+            }),
+            actual
+        );
+    }
+
+    #[test]
+    pub fn appending_and_nesting_in_deeply_nested_array_works() {
+        let root = json!({
+            "array": [[[[true]]]],
+        });
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/array/0/1/0".try_into().unwrap(),
+                ToOne,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            root.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "array": [[[[true]], [CAT.clone()]]],
+            }),
+            actual
+        );
+    }
+
+    #[test]
+    pub fn appending_in_deeply_nested_array_ignores_data() {
+        let root = json!({
+            "array": [[[[1]]]],
+        });
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/array/-".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            root.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "array": [[[[1]]], [CAT.clone()]],
+            }),
+            actual
+        );
+    }
+
+    #[test]
+    pub fn nesting_in_object_in_deeply_nested_array_ignores_data() {
+        let root = json!({
+            "array": [[[[1]]]],
+        });
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/array/key".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            root.clone(),
+            1,
+        );
+
+        assert_eq!(root.clone(), actual);
+    }
+
+    #[test]
+    pub fn setting_value_in_array_exteds_with_nulls() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "pets".to_string(),
+                "/user/some array/3".try_into().unwrap(),
+                ToMany,
+            )],
+            vec![LoadedData::new(
+                [(2, CAT.clone())].into_iter().collect(),
+                [(1, vec![2].into_iter().collect())].into_iter().collect(),
+            )],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(
+            json!({
+                "id": 1,
+                "name": "John",
+                "some array": [1, null, null, [ CAT.clone() ]],
+            }),
+            actual
+        );
+    }
+}

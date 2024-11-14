@@ -22,6 +22,9 @@ pub mod client;
 pub mod clock;
 pub mod consent;
 pub mod cors;
+pub mod data_loader;
+#[cfg(test)]
+pub mod data_loader_test;
 pub mod health;
 pub mod issuer_configuration;
 pub mod json_pointer;

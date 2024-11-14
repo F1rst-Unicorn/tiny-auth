@@ -49,8 +49,21 @@ impl TryFrom<&str> for PastLastArrayElement {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct JsonPointer {
     tokens: Vec<String>,
+}
+
+impl JsonPointer {
+    pub fn pop_first(&self) -> Self {
+        Self {
+            tokens: self.tokens.clone().into_iter().skip(1).collect(),
+        }
+    }
+
+    pub fn first(&self) -> Option<&str> {
+        self.tokens.first().map(String::as_str)
+    }
 }
 
 impl AsRef<[String]> for JsonPointer {

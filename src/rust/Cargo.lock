@@ -3616,6 +3616,7 @@ dependencies = [
  "futures",
  "futures-util",
  "jsonwebtoken",
+ "lazy_static",
  "pretty_assertions",
  "rand",
  "regex",
