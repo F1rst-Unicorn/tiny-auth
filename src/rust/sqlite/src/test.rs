@@ -14,15 +14,16 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use crate::data_assembler::{DataAssembler, QueryLoader};
 use crate::inject::sqlite_store;
 use crate::store::SqliteStore;
 use chrono::{Duration, Local};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::BTreeSet;
-use std::ffi::OsStr;
 use std::sync::Arc;
 use test_log::test;
-use tokio::fs::remove_file;
+use tiny_auth_business::data_loader::DataLoader;
+use tiny_auth_business::data_loader::Multiplicity::{ToMany, ToOne};
 use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::{InPlacePasswordStore, Password};
 use tiny_auth_business::store::{
@@ -253,27 +254,92 @@ async fn wrong_password_is_rejected() {
     assert!(!password_correct);
 }
 
+#[test(tokio::test)]
+async fn data_from_documentation_example_works() {
+    let uut = store().await;
+    let username = "documentation_example";
+    let user = UserStore::get(&*uut, username).await.unwrap();
+
+    assert_eq!(
+        json!({
+            "name": username,
+            "family_name": "",
+            "gender": "",
+            "given_name": "",
+            "locale": "",
+            "middle_name": "",
+            "nickname": "",
+            "profile": "",
+            "preferred_username": "",
+            "phone_number": "+123456789",
+            "address": "",
+            "password": 2,
+            "picture": [],
+            "birthday": 0.0,
+            "email": "john@test.example",
+            "email_verified": 1,
+            "phone_number_verified": 1,
+            "updated_at": user.attributes["updated_at"],
+            "website": "",
+            "zoneinfo": "",
+            "sits_in": 1,
+            "desk": {
+                "material":"steel",
+            },
+            "building": {
+                "street":"Lincoln Street",
+                "meeting_rooms": [
+                    {
+                        "kind":"small",
+                    },
+                    {
+                        "kind":"large",
+                    },
+                ],
+            },
+            "pets": [
+                {
+                    "type":"cat",
+                },
+                {
+                    "type":"dog",
+                },
+            ],
+        }),
+        serde_json::to_value(user.attributes).unwrap()
+    );
+}
+
 async fn store() -> Arc<SqliteStore> {
-    let db_file = env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql/sqlite/build/unittests.sqlite";
-    let _ = remove_file(&db_file).await;
-    let migrator = tokio::process::Command::new("./gradlew")
-        .arg(":sqlite:update")
-        .arg("-PdbName=unittests")
-        .arg("-PliquibaseLabels=!false")
-        .current_dir(env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql")
-        .output()
-        .await
-        .unwrap();
-
-    println!("{}", String::from_utf8(migrator.stdout).unwrap());
-    println!("{}", String::from_utf8(migrator.stderr).unwrap());
-
     sqlite_store(
         "sqlite",
-        &db_file,
+        &(env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql/sqlite/build/unittests.sqlite"),
         Arc::new(InPlacePasswordStore {
             pepper: "x5ePiX0TmUF2HzuraKuab9exzumu2sO54bnlVhgCS5AAXxqyhSSuHbCiUmx0FxmjZH9Gb2obp0ff2imMS6z40Qcc".to_string(),
-        })
+        }),
+        DataAssembler::new([
+            QueryLoader::new(
+                DataLoader::new("desk".to_string(), "/user/desk".try_into().unwrap(), ToOne),
+                "select id as tiny_auth_id, assigned_to as tiny_auth_assigned_to, material \
+                from test_data_desk".to_string(),
+                String::default()),
+            QueryLoader::new(
+                DataLoader::new("building".to_string(), "/user/building".try_into().unwrap(), ToOne),
+                "select u.sits_in as tiny_auth_id, u.id as tiny_auth_assigned_to, b.street
+                from tiny_auth_user u
+                join test_data_building b on b.id = u.sits_in".to_string(),
+                String::default()),
+            QueryLoader::new(
+                DataLoader::new("pets".to_string(), "/user/pets".try_into().unwrap(), ToMany),
+                "select id as tiny_auth_id, type from test_data_pet".to_string(),
+                "select user as tiny_auth_assigned_to, pet as tiny_auth_id from test_data_pet_likes_user".to_string()),
+            QueryLoader::new(
+                DataLoader::new("meeting_rooms".to_string(), "/building/meeting_rooms".try_into().unwrap(), ToMany,),
+                "select id as tiny_auth_id, contained_in as tiny_auth_assigned_to, kind \
+                from test_data_meeting_room".to_string(),
+                String::default()),
+        ]),
+        Default::default(),
     )
     .await
     .unwrap()

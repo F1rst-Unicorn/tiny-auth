@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::data_assembler::DataAssembler;
 use crate::error::SqliteError;
 use crate::store::SqliteStore;
 use sqlx::pool::PoolOptions;
@@ -32,6 +33,8 @@ pub async fn sqlite_store(
     name: &str,
     url: &str,
     in_place_password_store: Arc<InPlacePasswordStore>,
+    user_data_assembler: DataAssembler,
+    client_data_assembler: DataAssembler,
 ) -> Result<Arc<SqliteStore>, SqliteError> {
     let options = SqliteConnectOptions::from_str(url)?
         .read_only(true)
@@ -64,5 +67,7 @@ pub async fn sqlite_store(
         read_pool,
         write_pool,
         in_place_password_store,
+        user_data_assembler,
+        client_data_assembler,
     }))
 }

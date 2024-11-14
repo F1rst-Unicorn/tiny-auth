@@ -16,8 +16,11 @@
  */
 
 mod begin_immediate;
+mod data_assembler;
 mod error;
 pub mod inject;
 mod store;
 #[cfg(test)]
 pub mod test;
+
+pub use data_assembler::DataAssembler;

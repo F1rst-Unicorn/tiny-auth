@@ -19,6 +19,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum SqliteError {
+    #[error("backend error")]
+    BackendError,
     #[error("{0}")]
     BackendErrorWithContext(#[from] sqlx::Error),
 }

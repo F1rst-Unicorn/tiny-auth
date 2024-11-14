@@ -688,6 +688,36 @@
                 '+123456789',
                 1;;
 
+            insert into tiny_auth_password (algorithm)
+            values ('pbkf2hmacsha256');;
+
+            insert into tiny_auth_password_pbkf2hmacsha256 (
+                password,
+                credential,
+                iterations,
+                salt
+            ) values (
+                last_insert_rowid(),
+                unhex('bda453832ebf0a31c8081589bc3d01b7f3dbf95f0d9f33246811f4d2915efea5'),
+                100000,
+                unhex('b594b6e366ae6864100e0ff279f8455a9861753a8c99673260220371147daaf46a6f686e')
+            );;
+
+            insert into tiny_auth_user (
+                name,
+                password,
+                email,
+                email_verified,
+                phone_number,
+                phone_number_verified)
+            select
+                'documentation_example',
+                last_insert_rowid(),
+                'john@test.example',
+                1,
+                '+123456789',
+                1;;
+
             insert into tiny_auth_user_allowed_scopes (user, client, scope)
             select
                 tiny_auth_user.id,
@@ -697,9 +727,71 @@
             where tiny_auth_user.name = 'john'
             and tiny_auth_client.client_id = 'tiny-auth-frontend'
             and tiny_auth_scope.name in ('openid', 'profile');;
+
+            create table test_data_desk (
+                id integer primary key,
+                material text not null,
+                assigned_to int,
+                foreign key (assigned_to) references tiny_auth_user(id)
+                    on update cascade on delete cascade deferrable initially deferred
+            ) strict;;
+            insert into test_data_desk (material, assigned_to)
+            select 'steel', id
+            from tiny_auth_user;;
+
+            create table test_data_building (
+                id integer primary key,
+                street text not null
+            ) strict;;
+            insert into test_data_building (street)
+            values ('Lincoln Street');;
+
+            alter table tiny_auth_user add column sits_in int not null
+                default 1
+                references test_data_building (id)
+                on update cascade on delete cascade deferrable initially deferred;;
+
+            create table test_data_pet (
+                id integer primary key,
+                type text not null
+            ) strict;;
+            insert into test_data_pet (type)
+            values ('cat'), ('dog');;
+            create table test_data_pet_likes_user (
+                id integer primary key,
+                user int not null,
+                pet int not null,
+                foreign key (user) references tiny_auth_user(id)
+                    on update cascade on delete cascade deferrable initially deferred,
+                foreign key (pet) references test_data_pet(id)
+                    on update cascade on delete cascade deferrable initially deferred
+            ) strict;;
+            insert into test_data_pet_likes_user (user, pet)
+            select u.id, p.id
+            from tiny_auth_user u, test_data_pet p;;
+
+            create table test_data_meeting_room (
+                id integer primary key,
+                kind text not null,
+                contained_in int not null,
+                foreign key (contained_in) references test_data_building(id)
+                    on update cascade on delete cascade deferrable initially deferred
+            ) strict;;
+            insert into test_data_meeting_room (kind, contained_in)
+            select 'small', id
+            from test_data_building;;
+            insert into test_data_meeting_room (kind, contained_in)
+            select 'large', id
+            from test_data_building;;
         </sql>
         <rollback>
             <sql endDelimiter=";;">
+                drop table test_data_desk;;
+                drop table test_data_building;;
+                drop table test_data_pet;;
+                drop table test_data_pet_likes_user;;
+                drop table test_data_meeting_room;;
+
                 delete from tiny_auth_password_pbkf2hmacsha256
                 where password = (
                     select password
@@ -722,7 +814,7 @@
                 );;
 
                 delete from tiny_auth_user
-                where name = 'john'
+                where name = 'john';;
             </sql>
         </rollback>
     </changeSet>

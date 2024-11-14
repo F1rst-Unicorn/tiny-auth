@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 use crate::begin_immediate::{SqliteConnectionExt, Transaction};
+use crate::data_assembler::DataAssembler;
 use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -50,6 +51,8 @@ pub struct SqliteStore {
     pub(crate) read_pool: SqlitePool,
     pub(crate) write_pool: SqlitePool,
     pub(crate) in_place_password_store: Arc<InPlacePasswordStore>,
+    pub(crate) user_data_assembler: DataAssembler,
+    pub(crate) client_data_assembler: DataAssembler,
 }
 
 #[async_trait]
@@ -233,22 +236,26 @@ impl UserStore for SqliteStore {
             .map_err(wrap_err)?
             .ok_or(UserError::NotFound)?;
 
-        let allowed_scopes = Self::load_allowed_user_scopes(
-            &mut transaction,
-            user_record.try_get("id").map_err(wrap_err)?,
-        )
-        .await?;
+        let user_id = user_record.try_get("id").map_err(wrap_err)?;
+        let allowed_scopes = Self::load_allowed_user_scopes(&mut transaction, user_id).await?;
 
-        transaction.commit().await.map_err(wrap_err)?;
-        Ok(User {
+        let mut user = User {
             name: String::from(username),
             password: Password::Sqlite {
                 name: self.name.clone(),
                 id: user_record.try_get("password").map_err(wrap_err)?,
             },
             allowed_scopes,
-            attributes: Self::map_attributes(user_record),
-        })
+            attributes: Self::map_attributes(user_record, &["id"]),
+        };
+        user.attributes = self
+            .user_data_assembler
+            .load(user.attributes, user_id, &mut transaction)
+            .await
+            .map_err(wrap_err)?;
+        transaction.commit().await.map_err(wrap_err)?;
+
+        Ok(user)
     }
 }
 
@@ -271,14 +278,21 @@ impl ClientStore for SqliteStore {
         let redirect_uris = Self::load_redirect_uris(&mut transaction, client_id).await?;
         let allowed_scopes = Self::load_allowed_client_scopes(&mut transaction, client_id).await?;
 
-        transaction.commit().await.map_err(wrap_err)?;
-        Ok(Client {
+        let mut client = Client {
             client_id: key.to_string(),
             client_type: self.map_client_type(&client_record)?,
             redirect_uris,
             allowed_scopes: BTreeSet::from_iter(allowed_scopes),
-            attributes: Self::map_attributes(client_record),
-        })
+            attributes: Self::map_attributes(client_record, &["id"]),
+        };
+        client.attributes = self
+            .client_data_assembler
+            .load(client.attributes, client_id, &mut transaction)
+            .await
+            .map_err(wrap_err)?;
+
+        transaction.commit().await.map_err(wrap_err)?;
+        Ok(client)
     }
 }
 
@@ -346,17 +360,20 @@ impl PasswordStore for SqliteStore {
 }
 
 impl SqliteStore {
-    fn map_attributes(user_record: SqliteRow) -> HashMap<String, Value> {
+    pub(crate) fn map_attributes(
+        record: SqliteRow,
+        ignored_columns: &[&str],
+    ) -> HashMap<String, Value> {
         let mut attributes: HashMap<String, Value> = Default::default();
-        for column in user_record.columns() {
-            if column.name() == "id" {
+        for column in record.columns() {
+            if ignored_columns.contains(&column.name()) {
                 continue;
             }
             let value = match column.type_info().name().to_lowercase().as_str() {
-                "int" | "integer" => user_record.get::<i32, _>(column.ordinal()).into(),
-                "real" => user_record.get::<f64, _>(column.ordinal()).into(),
-                "text" => user_record.get::<String, _>(column.ordinal()).into(),
-                "blob" => user_record.get::<&[u8], _>(column.ordinal()).into(),
+                "int" | "integer" => record.get::<i32, _>(column.ordinal()).into(),
+                "real" => record.get::<f64, _>(column.ordinal()).into(),
+                "text" => record.get::<String, _>(column.ordinal()).into(),
+                "blob" => record.get::<&[u8], _>(column.ordinal()).into(),
                 v => {
                     warn!(column_type = %v, column_name = %column.name(), "unsupported");
                     continue;
