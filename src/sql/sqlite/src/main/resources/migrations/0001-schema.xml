@@ -366,7 +366,7 @@
             insert into tiny_auth_scope_mapping_template (structure, template)
             select
                 '/middle_name',
-                '{{ user.middle_name | default(value='''') }';;
+                '{{ user.middle_name | default(value='''') }}';;
 
             insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select

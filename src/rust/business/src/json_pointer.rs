@@ -77,6 +77,8 @@ impl JsonPointer {
                     let mut result = vec![Value::Null; index + 1];
                     result[index] = nested;
                     result.into()
+                } else if "" == token {
+                    Value::Null
                 } else {
                     let mut result = Map::new();
                     result.insert(token.to_string(), nested);

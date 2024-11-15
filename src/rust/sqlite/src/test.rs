@@ -26,9 +26,10 @@ use tiny_auth_business::data_loader::DataLoader;
 use tiny_auth_business::data_loader::Multiplicity::{ToMany, ToOne};
 use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::{InPlacePasswordStore, Password};
+use tiny_auth_business::scope::{Destination, Mapping, Type};
 use tiny_auth_business::store::{
-    AuthorizationCodeRequest, AuthorizationCodeStore, ClientStore, PasswordStore, UserStore,
-    ValidationRequest,
+    AuthorizationCodeRequest, AuthorizationCodeStore, ClientStore, PasswordStore, ScopeStore,
+    UserStore, ValidationRequest,
 };
 
 #[test(tokio::test)]
@@ -307,6 +308,192 @@ async fn data_from_documentation_example_works() {
             ],
         }),
         serde_json::to_value(user.attributes).unwrap()
+    );
+}
+
+#[test(tokio::test)]
+async fn reference_openid_scope_is_loaded() {
+    let uut = store().await;
+    let scope = ScopeStore::get(&*uut, "openid").await.unwrap();
+
+    assert_eq!("openid", scope.name);
+    assert_eq!("Authentication", scope.pretty_name);
+    assert_eq!("Your username", scope.description);
+    assert!(scope.mappings.is_empty());
+}
+
+#[test(tokio::test)]
+async fn reference_email_scope_is_loaded() {
+    let uut = store().await;
+    let scope = ScopeStore::get(&*uut, "email").await.unwrap();
+
+    assert_eq!("email", scope.name);
+    assert_eq!("Email Address", scope.pretty_name);
+    assert_eq!("Access to your email address", scope.description);
+    assert_eq!(
+        vec![
+            Mapping::new(
+                json!({"email": "{{ user.email }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"email_verified": true}),
+                Type::Plain,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            )
+        ],
+        scope.mappings
+    );
+}
+
+#[test(tokio::test)]
+async fn reference_phone_scope_is_loaded() {
+    let uut = store().await;
+    let scope = ScopeStore::get(&*uut, "phone").await.unwrap();
+
+    assert_eq!("phone", scope.name);
+    assert_eq!("Phone Number", scope.pretty_name);
+    assert_eq!("Access to your phone number", scope.description);
+    assert_eq!(
+        vec![
+            Mapping::new(
+                json!({"phone_number": "{{ user.phone_number }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"phone_number_verified": true}),
+                Type::Plain,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            )
+        ],
+        scope.mappings
+    );
+}
+
+#[test(tokio::test)]
+async fn reference_address_scope_is_loaded() {
+    let uut = store().await;
+    let scope = ScopeStore::get(&*uut, "address").await.unwrap();
+
+    assert_eq!("address", scope.name);
+    assert_eq!("Address", scope.pretty_name);
+    assert_eq!("Access to your address", scope.description);
+    assert_eq!(
+        vec![Mapping::new(
+            json!(null),
+            Type::UserAttribute(json!({"address": null})),
+            true,
+            vec![Destination::UserInfo, Destination::IdToken]
+        ),],
+        scope.mappings
+    );
+}
+
+#[test(tokio::test)]
+async fn reference_profile_scope_is_loaded() {
+    let uut = store().await;
+    let scope = ScopeStore::get(&*uut, "profile").await.unwrap();
+
+    assert_eq!("profile", scope.name);
+    assert_eq!("Profile Information", scope.pretty_name);
+    assert_eq!(
+        "Access to your name, birthdate, gender and position",
+        scope.description
+    );
+    assert_eq!(
+        vec![
+            Mapping::new(
+                json!({"name": "{{ user.given_name }}{% if user.middle_name is defined %} {{ user.middle_name }} {% else %} {% endif %}{{ user.family_name }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"family_name": "{{ user.family_name }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"given_name": "{{ user.given_name }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"middle_name": "{{ user.middle_name | default(value='') }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"nickname": "{{ user.nickname | default(value=user.given_name) }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"preferred_username": "{{ user.preferred_username }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"profile": "{{ user.profile | default(value='') }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"picture": "{{ user.picture | default(value='') }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"website": "{{ user.website | default(value='') }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"gender": "{{ user.gender }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"birthdate": "{{ user.birthdate }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"zoneinfo": "{{ user.zoneinfo }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!({"locale": "{{ user.locale }}"}),
+                Type::Template,
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+            Mapping::new(
+                json!(null),
+                Type::UserAttribute(json!({"updated_at": null})),
+                true,
+                vec![Destination::UserInfo, Destination::IdToken]
+            ),
+        ],
+        scope.mappings
     );
 }
 

@@ -37,11 +37,11 @@ pub struct Scope {
     pub name: String,
 
     #[serde(rename = "pretty name")]
-    pretty_name: String,
+    pub pretty_name: String,
 
-    description: String,
+    pub description: String,
 
-    mappings: Vec<Mapping>,
+    pub mappings: Vec<Mapping>,
 }
 
 impl PartialEq for Scope {
@@ -156,19 +156,19 @@ impl Scope {
     }
 }
 
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug, Eq, PartialEq)]
 pub struct Mapping {
-    structure: Value,
+    pub structure: Value,
 
     #[serde(rename = "type")]
     #[serde(with = "serde_yaml::with::singleton_map")]
-    mapping_type: Type,
+    pub mapping_type: Type,
 
     #[serde(default)]
-    optional: bool,
+    pub optional: bool,
 
     #[serde(default = "default_destination")]
-    destination: BTreeSet<Destination>,
+    pub destination: BTreeSet<Destination>,
 }
 
 fn default_destination() -> BTreeSet<Destination> {
@@ -217,13 +217,13 @@ impl Mapping {
         structure: Value,
         mapping_type: Type,
         optional: bool,
-        destination: BTreeSet<Destination>,
+        destination: impl IntoIterator<Item = Destination>,
     ) -> Self {
         Self {
             structure,
             mapping_type,
             optional,
-            destination,
+            destination: destination.into_iter().collect(),
         }
     }
 
@@ -338,7 +338,7 @@ fn copy_values(value: Value, selector: Value, path: &mut Vec<String>) -> Result<
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum Type {
     #[serde(rename = "plain")]
     Plain,

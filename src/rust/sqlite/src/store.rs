@@ -482,81 +482,89 @@ impl ScopeStore for SqliteStore {
 
                         let (structure, mapping_type) = match mapping.r#type.as_str() {
                             "plain" => {
-                                let plain_mapping = plain_mappings_by_mapping.get(&mapping.mapping_id)
+                                plain_mappings_by_mapping.get(&mapping.mapping_id)
                                     .and_then(|v| v.first())
-                                    .unwrap();
-                                match JsonPointer::try_from(plain_mapping.structure.as_str()) {
-                                    Err(e) => {
-                                        warn!(%e, id = plain_mapping.id, "failed to read plain mapping structure");
-                                        (Value::Null, Type::Plain)
-                                    },
-                                    Ok(pointer) => {
-                                        let mut value = pointer.construct_json();
-                                        *value.pointer_mut(String::from(pointer).as_str()).unwrap() =
-                                            Self::map_value_by_type(plain_mapping.value.as_str(), plain_mapping.r#type.as_str());
-                                        (value, Type::Plain)
-                                    },
-                                }
+                                    .and_then(|plain_mapping| {
+                                        match JsonPointer::try_from(plain_mapping.structure.as_str()) {
+                                            Err(e) => {
+                                                warn!(%e, id = plain_mapping.id, "failed to read plain mapping structure");
+                                                None
+                                            },
+                                            Ok(pointer) => {
+                                                let mut value = pointer.construct_json();
+                                                *value.pointer_mut(String::from(pointer).as_str()).unwrap() =
+                                                    Self::map_value_by_type(plain_mapping.value.as_str(), plain_mapping.r#type.as_str());
+                                                Some((value, Type::Plain))
+                                            },
+                                        }
+                                    })
+                                    .unwrap_or((Value::Null, Type::Plain))
                             },
                             "template" => {
-                                let template_mapping = template_mappings_by_mapping.get(&mapping.mapping_id)
+                                template_mappings_by_mapping.get(&mapping.mapping_id)
                                     .and_then(|v| v.first())
-                                    .unwrap();
-                                match JsonPointer::try_from(template_mapping.structure.as_str()) {
-                                    Err(e) => {
-                                        warn!(%e, id = template_mapping.id, "failed to read template mapping structure");
-                                        (Value::Null, Type::Plain)
-                                    },
-                                    Ok(pointer) => {
-                                        let mut value = pointer.construct_json();
-                                        *value.pointer_mut(String::from(pointer).as_str()).unwrap() = template_mapping.template.clone().into();
-                                        (value, Type::Template)
-                                    },
-                                }
+                                    .and_then(|template_mapping| {
+                                        match JsonPointer::try_from(template_mapping.structure.as_str()) {
+                                            Err(e) => {
+                                                warn!(%e, id = template_mapping.id, "failed to read template mapping structure");
+                                                None
+                                            },
+                                            Ok(pointer) => {
+                                                let mut value = pointer.construct_json();
+                                                *value.pointer_mut(String::from(pointer).as_str()).unwrap() = template_mapping.template.clone().into();
+                                                Some((value, Type::Template))
+                                            },
+                                        }
+                                    })
+                                    .unwrap_or((Value::Null, Type::Plain))
                             }
                             "user_attribute" => {
-                                let user_mapping = user_mappings_by_mapping.get(&mapping.id)
+                                user_mappings_by_mapping.get(&mapping.mapping_id)
                                     .and_then(|v| v.first())
-                                    .unwrap();
-                                match JsonPointer::try_from(user_mapping.structure.as_str()) {
-                                    Err(e) => {
-                                        warn!(%e, id = user_mapping.id, "failed to read user mapping structure");
-                                        (Value::Null, Type::Plain)
-                                    },
-                                    Ok(user_attribute) => {
-                                        match JsonPointer::try_from(user_mapping.user_attribute.as_str()) {
+                                    .and_then(|user_mapping| {
+                                        match JsonPointer::try_from(user_mapping.structure.as_str()) {
                                             Err(e) => {
-                                                warn!(%e, id = user_mapping.id, "failed to read user mapping attribute");
-                                                (Value::Null, Type::Plain)
+                                                warn!(%e, id = user_mapping.id, "failed to read user mapping structure");
+                                                None
                                             },
-                                            Ok(single_structure) => {
-                                                (single_structure.construct_json(), Type::UserAttribute(user_attribute.construct_json()))
+                                            Ok(structure) => {
+                                                match JsonPointer::try_from(user_mapping.user_attribute.as_str()) {
+                                                    Err(e) => {
+                                                        warn!(%e, id = user_mapping.id, "failed to read user mapping attribute");
+                                                        None
+                                                    },
+                                                    Ok(user_attribute) => {
+                                                        Some((structure.construct_json(), Type::UserAttribute(user_attribute.construct_json())))
+                                                    },
+                                                }
                                             },
                                         }
-                                    },
-                                }
+                                    })
+                                    .unwrap_or((Value::Null, Type::Plain))
                             }
                             "client_attribute" => {
-                                let client_mapping = client_mappings_by_mapping.get(&mapping.id)
+                                client_mappings_by_mapping.get(&mapping.mapping_id)
                                     .and_then(|v| v.first())
-                                    .unwrap();
-                                match JsonPointer::try_from(client_mapping.structure.as_str()) {
-                                    Err(e) => {
-                                        warn!(%e, id = client_mapping.id, "failed to read client mapping structure");
-                                        (Value::Null, Type::Plain)
-                                    },
-                                    Ok(client_attribute) => {
-                                        match JsonPointer::try_from(client_mapping.client_attribute.as_str()) {
+                                    .and_then(|client_mapping| {
+                                        match JsonPointer::try_from(client_mapping.structure.as_str()) {
                                             Err(e) => {
-                                                warn!(%e, id = client_mapping.id, "failed to read client mapping attribute");
-                                                (Value::Null, Type::Plain)
+                                                warn!(%e, id = client_mapping.id, "failed to read client mapping structure");
+                                                None
                                             },
-                                            Ok(single_structure) => {
-                                                (single_structure.construct_json(), Type::ClientAttribute(client_attribute.construct_json()))
+                                            Ok(client_attribute) => {
+                                                match JsonPointer::try_from(client_mapping.client_attribute.as_str()) {
+                                                    Err(e) => {
+                                                        warn!(%e, id = client_mapping.id, "failed to read client mapping attribute");
+                                                        None
+                                                    },
+                                                    Ok(single_structure) => {
+                                                        Some((single_structure.construct_json(), Type::ClientAttribute(client_attribute.construct_json())))
+                                                    },
+                                                }
                                             },
                                         }
-                                    },
-                                }
+                                    })
+                                    .unwrap_or((Value::Null, Type::Plain))
                             }
                             _ => {
                                 error!(r#type = %mapping.r#type,
