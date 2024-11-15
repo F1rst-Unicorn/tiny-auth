@@ -104,9 +104,9 @@ pub fn load(data_loaders: Vec<DataLoader>, loaded_data: Vec<LoadedData>) -> Valu
         .collect::<BTreeMap<_, _>>();
 
     for data_loader in data_loaders.iter().rev().skip(1) {
-        let _data_loader_span = span!(Level::INFO, "", source = &data_loader.name);
+        let _data_loader_span = span!(Level::INFO, "", source = %data_loader.name).entered();
         let destination = data_loader.location.first().unwrap();
-        let _destination_span = span!(Level::INFO, "", %destination);
+        let _destination_span = span!(Level::INFO, "", %destination).entered();
         let Some(mut source_objects) = loaded_data.remove(&data_loader.name) else {
             warn!("data loader will be ignored as no data was loaded");
             continue;
@@ -116,7 +116,7 @@ pub fn load(data_loaders: Vec<DataLoader>, loaded_data: Vec<LoadedData>) -> Valu
             continue;
         };
         for (destination_id, destination_object) in destination_data.data.iter_mut() {
-            let _destination_id_span = span!(Level::INFO, "", %destination_id);
+            let _destination_id_span = span!(Level::INFO, "", %destination_id).entered();
             let assignments = source_objects
                 .assignments
                 .remove(destination_id)

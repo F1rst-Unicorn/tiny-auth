@@ -14,7 +14,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::data_assembler::{DataAssembler, QueryLoader};
+use crate::inject;
 use crate::inject::sqlite_store;
 use crate::store::SqliteStore;
 use chrono::{Duration, Local};
@@ -504,23 +504,23 @@ async fn store() -> Arc<SqliteStore> {
         Arc::new(InPlacePasswordStore {
             pepper: "x5ePiX0TmUF2HzuraKuab9exzumu2sO54bnlVhgCS5AAXxqyhSSuHbCiUmx0FxmjZH9Gb2obp0ff2imMS6z40Qcc".to_string(),
         }),
-        DataAssembler::new([
-            QueryLoader::new(
+        inject::data_assembler([
+            inject::query_loader(
                 DataLoader::new("desk".to_string(), "/user/desk".try_into().unwrap(), ToOne),
                 "select id as tiny_auth_id, assigned_to as tiny_auth_assigned_to, material \
                 from test_data_desk".to_string(),
                 String::default()),
-            QueryLoader::new(
+            inject::query_loader(
                 DataLoader::new("building".to_string(), "/user/building".try_into().unwrap(), ToOne),
                 "select u.sits_in as tiny_auth_id, u.id as tiny_auth_assigned_to, b.street
                 from tiny_auth_user u
                 join test_data_building b on b.id = u.sits_in".to_string(),
                 String::default()),
-            QueryLoader::new(
+            inject::query_loader(
                 DataLoader::new("pets".to_string(), "/user/pets".try_into().unwrap(), ToMany),
                 "select id as tiny_auth_id, type from test_data_pet".to_string(),
                 "select user as tiny_auth_assigned_to, pet as tiny_auth_id from test_data_pet_likes_user".to_string()),
-            QueryLoader::new(
+            inject::query_loader(
                 DataLoader::new("meeting_rooms".to_string(), "/building/meeting_rooms".try_into().unwrap(), ToMany,),
                 "select id as tiny_auth_id, contained_in as tiny_auth_assigned_to, kind \
                 from test_data_meeting_room".to_string(),

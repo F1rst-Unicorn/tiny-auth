@@ -280,8 +280,8 @@ impl TokenCreator {
                 client,
                 T::default().into(),
             ) {
-                Err(_) => {
-                    warn!(scope = scope.name, "failed to generate claims. Skipping",);
+                Err(e) => {
+                    warn!(%e, scope = scope.name, "failed to generate claims. Skipping",);
                     continue;
                 }
                 Ok(c) => c,

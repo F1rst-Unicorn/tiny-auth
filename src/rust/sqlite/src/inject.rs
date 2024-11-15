@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::data_assembler::DataAssembler;
+use crate::data_assembler::{DataAssembler, QueryLoader};
 use crate::error::SqliteError;
 use crate::store::SqliteStore;
 use sqlx::pool::PoolOptions;
@@ -26,6 +26,7 @@ use sqlx::{ConnectOptions, Executor};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use tiny_auth_business::data_loader::DataLoader;
 use tiny_auth_business::password::InPlacePasswordStore;
 use tracing::log::LevelFilter;
 
@@ -70,4 +71,22 @@ pub async fn sqlite_store(
         user_data_assembler,
         client_data_assembler,
     }))
+}
+
+pub fn data_assembler(data_loaders: impl IntoIterator<Item = QueryLoader>) -> DataAssembler {
+    DataAssembler {
+        data_loaders: data_loaders.into_iter().collect(),
+    }
+}
+
+pub fn query_loader(
+    data_loader: DataLoader,
+    query: String,
+    assignment_query: String,
+) -> QueryLoader {
+    QueryLoader {
+        data_loader,
+        query,
+        assignment_query,
+    }
 }

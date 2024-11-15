@@ -77,7 +77,7 @@ use tiny_auth_web::endpoints::token::Handler as TokenHandler;
 use tiny_auth_web::endpoints::userinfo::Handler as UserInfoHandler;
 use tiny_auth_web::ApiUrl;
 use tokio::sync::broadcast::{channel, Sender};
-use tracing::error;
+use tracing::{error, span, warn, Level};
 
 pub struct Constructor<'a> {
     config: &'a Config,
@@ -119,8 +119,15 @@ pub struct Constructor<'a> {
 
 impl<'a> Constructor<'a> {
     pub async fn new(config: &'a Config) -> Result<Self, Error> {
-        let (user_store, password_store, client_store, scope_store, reload_sender, store_paths) =
-            Self::build_stores(config).await?;
+        let (
+            user_store,
+            password_store,
+            client_store,
+            scope_store,
+            reload_sender,
+            store_paths,
+            auth_code_store,
+        ) = Self::build_stores(config).await?;
         let tera = Arc::new(Self::build_template_engine(config)?);
         let issuer_url = Self::build_issuer_url(config);
         let (public_keys, private_key) = Self::read_token_keypairs(config)?;
@@ -171,7 +178,8 @@ impl<'a> Constructor<'a> {
             scope_store,
             reload_sender,
             store_paths,
-            authorization_code_store: Self::build_auth_code_store(),
+            authorization_code_store: auth_code_store
+                .unwrap_or_else(|| Self::build_auth_code_store()),
             tera,
             public_keys,
             issuer_configuration,
@@ -223,6 +231,7 @@ impl<'a> Constructor<'a> {
             Arc<dyn ScopeStore>,
             Sender<ReloadEvent>,
             Vec<PathBuf>,
+            Option<Arc<dyn AuthorizationCodeStore>>,
         ),
         Error,
     > {
@@ -233,6 +242,7 @@ impl<'a> Constructor<'a> {
         let (sender, _receiver) = channel(8);
         let mut store_paths = Vec::new();
         let in_place_password_store = Arc::new(in_place_password_store(&config.crypto.pepper));
+        let mut auth_code_store: Option<Arc<dyn AuthorizationCodeStore>> = None;
 
         for store_config in &config.store {
             match store_config {
@@ -356,29 +366,64 @@ impl<'a> Constructor<'a> {
                     client_stores.push(ldap_store.clone());
                     password_stores.insert(name.clone(), ldap_store);
                 }
-                Store::Sqlite { name, base } => {
+                Store::Sqlite {
+                    name,
+                    base,
+                    use_for,
+                } => {
+                    let _store_span = span!(Level::INFO, "", store = %name).entered();
+                    let user_loaders =
+                        tiny_auth_sqlite::inject::data_assembler(use_for.users.iter().filter_map(
+                            |v| v.try_into().map_err(|e| warn!(%e, "invalid location")).ok(),
+                        ));
+                    let client_loaders = tiny_auth_sqlite::inject::data_assembler(
+                        use_for.clients.iter().filter_map(|v| {
+                            v.try_into().map_err(|e| warn!(%e, "invalid location")).ok()
+                        }),
+                    );
+
                     let sqlite_store = match tiny_auth_sqlite::inject::sqlite_store(
                         name.as_str(),
                         &(String::from("sqlite://") + base),
                         in_place_password_store.clone(),
-                    ).await {
+                        user_loaders,
+                        client_loaders,
+                    )
+                    .await
+                    {
                         Err(e) => {
                             error!(%e, %name, "failed to create sqlite store");
                             return Err(LoggedBeforeError);
                         }
                         Ok(v) => v,
                     };
-                    user_stores.push(sqlite_store.clone());
-                    client_stores.push(sqlite_store.clone());
-                    password_stores.insert(name.clone(), sqlite_store);
+
+                    if !use_for.users.is_empty() {
+                        user_stores.push(sqlite_store.clone());
+                    }
+                    if !use_for.clients.is_empty() {
+                        client_stores.push(sqlite_store.clone());
+                    }
+                    if use_for.scopes {
+                        scope_stores.push(sqlite_store.clone());
+                    }
+                    if use_for.passwords {
+                        password_stores.insert(name.clone(), sqlite_store.clone());
+                    }
+                    if use_for.auth_codes {
+                        match auth_code_store {
+                            None => auth_code_store = Some(sqlite_store),
+                            Some(_) => {
+                                error!(%name, "more than one auth code store configured");
+                                return Err(LoggedBeforeError);
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        let password_store = dispatching_password_store(
-            password_stores,
-            in_place_password_store,
-        );
+        let password_store = dispatching_password_store(password_stores, in_place_password_store);
 
         Ok((
             Arc::new(MergingUserStore::from(user_stores)),
@@ -387,6 +432,7 @@ impl<'a> Constructor<'a> {
             Arc::new(MergingScopeStore::from(scope_stores)),
             sender,
             store_paths,
+            auth_code_store,
         ))
     }
 

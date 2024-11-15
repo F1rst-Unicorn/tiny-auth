@@ -32,6 +32,7 @@ use std::num::{NonZeroI64, NonZeroU32};
 use std::sync::Arc;
 use tiny_auth_business::client::Error as ClientError;
 use tiny_auth_business::client::{Client, Error};
+use tiny_auth_business::data_loader::{load_client, load_user};
 use tiny_auth_business::json_pointer::JsonPointer;
 use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::{
@@ -296,7 +297,7 @@ impl UserStore for SqliteStore {
         };
         user.attributes = self
             .user_data_assembler
-            .load(user.attributes, user_id, &mut transaction)
+            .load(user.attributes, user_id, &mut transaction, load_user)
             .await
             .map_err(wrap_err)?;
         transaction.commit().await.map_err(wrap_err)?;
@@ -333,7 +334,7 @@ impl ClientStore for SqliteStore {
         };
         client.attributes = self
             .client_data_assembler
-            .load(client.attributes, client_id, &mut transaction)
+            .load(client.attributes, client_id, &mut transaction, load_client)
             .await
             .map_err(wrap_err)?;
 
@@ -462,13 +463,13 @@ impl ScopeStore for SqliteStore {
             .into_iter()
             .filter_map(|(_, mut v)| v.pop())
             .map(|scope| {
-                let _scope_span = span!(Level::INFO, "", scope = %scope.name);
+                let _scope_span = span!(Level::INFO, "", scope = %scope.name).entered();
                 let mappings = scope_mappings
                     .remove(&scope.id)
                     .unwrap_or_default()
                     .into_iter()
                     .map(|mapping| {
-                        let _mapping_span = span!(Level::INFO, "", mapping = %mapping.id);
+                        let _mapping_span = span!(Level::INFO, "", mapping = %mapping.id).entered();
                         let mut destinations = BTreeSet::new();
                         if mapping.destination_access_token == 1 {
                             destinations.insert(Destination::AccessToken);

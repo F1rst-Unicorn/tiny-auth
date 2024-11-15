@@ -21,26 +21,16 @@ use serde_json::Value;
 use sqlx::sqlite::SqliteRow;
 use sqlx::{Column, Error, Row, TypeInfo};
 use std::collections::{BTreeMap, HashMap};
-use tiny_auth_business::data_loader::{load_user, DataLoader, LoadedData};
+use tiny_auth_business::data_loader::{DataLoader, LoadedData};
 use tracing::{error, instrument, warn};
 
 const ID_COLUMN_NAME: &str = "tiny_auth_id";
 const ASSIGNMENT_COLUMN_NAME: &str = "tiny_auth_assigned_to";
 
 pub struct QueryLoader {
-    data_loader: DataLoader,
-    query: String,
-    assignment_query: String,
-}
-
-impl QueryLoader {
-    pub fn new(data_loader: DataLoader, query: String, assignment_query: String) -> Self {
-        Self {
-            data_loader,
-            query,
-            assignment_query,
-        }
-    }
+    pub(crate) data_loader: DataLoader,
+    pub(crate) query: String,
+    pub(crate) assignment_query: String,
 }
 
 impl QueryLoader {
@@ -137,15 +127,7 @@ impl QueryLoader {
 
 #[derive(Default)]
 pub struct DataAssembler {
-    data_loaders: Vec<QueryLoader>,
-}
-
-impl DataAssembler {
-    pub fn new(data_loaders: impl IntoIterator<Item = QueryLoader>) -> Self {
-        Self {
-            data_loaders: data_loaders.into_iter().collect(),
-        }
-    }
+    pub(crate) data_loaders: Vec<QueryLoader>,
 }
 
 impl DataAssembler {
@@ -154,6 +136,7 @@ impl DataAssembler {
         mut attributes: HashMap<String, Value>,
         user_id: i32,
         transaction: &mut Transaction<'_>,
+        loader: fn(Vec<DataLoader>, Vec<LoadedData>, Value, i32) -> Value,
     ) -> Result<HashMap<String, Value>, SqliteError> {
         let mut loaded_data = Vec::new();
         for data_loader in &self.data_loaders {
@@ -177,7 +160,7 @@ impl DataAssembler {
 
         let loaded_data = loaded_data.into_iter().map(|v| v.1.unwrap()).collect();
 
-        let data = load_user(
+        let data = loader(
             self.data_loaders
                 .iter()
                 .map(|v| v.data_loader.clone())

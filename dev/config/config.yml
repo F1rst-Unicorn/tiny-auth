@@ -44,6 +44,48 @@ store:
                 password: userPassword
                 public key: displayName
                 allowed scopes: description
+  - sqlite:
+      name: sqlite
+      base: src/sql/sqlite/build/dev.sqlite
+      use for:
+        scopes: true
+        passwords: true
+        auth_codes: true
+        clients:
+          - name: desk
+            location: /client/desk
+            multiplicity: to one
+            query: |
+              select id as tiny_auth_id, assigned_to as tiny_auth_assigned_to, material
+              from test_data_desk
+        users:
+          - name: desk
+            location: /user/desk
+            multiplicity: to one
+            query: |
+              select id as tiny_auth_id, assigned_to as tiny_auth_assigned_to, material
+              from test_data_desk
+          - name: building
+            location: /user/building
+            multiplicity: to one
+            query: |
+              select u.sits_in as tiny_auth_id, u.id as tiny_auth_assigned_to, b.street
+              from tiny_auth_user u
+              join test_data_building b on b.id = u.sits_in
+          - name: pets
+            location: /user/pets
+            multiplicity: to many
+            query: select id as tiny_auth_id, type from test_data_pet
+            assignment: |
+              select user as tiny_auth_assigned_to, pet as tiny_auth_id 
+              from test_data_pet_likes_user
+          - name: meeting_rooms
+            location: /building/meeting_rooms
+            multiplicity: to many
+            query: |
+              select id as tiny_auth_id, contained_in as tiny_auth_assigned_to, kind
+              from test_data_meeting_room
+
 
 rate limit:
   events: 3

@@ -19,7 +19,6 @@ use crate::template::scope::ScopeContext;
 use crate::template::{TemplateError, Templater};
 use crate::token::{Access, Id, TokenType, Userinfo};
 use crate::user::User;
-use serde::de::StdError;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Map;

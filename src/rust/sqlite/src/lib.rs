@@ -24,3 +24,4 @@ mod store;
 pub mod test;
 
 pub use data_assembler::DataAssembler;
+pub use data_assembler::QueryLoader;

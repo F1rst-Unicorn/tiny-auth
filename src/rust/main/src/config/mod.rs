@@ -21,6 +21,7 @@ use actix_web::cookie::SameSite;
 use chrono::Duration;
 use serde_derive::Deserialize;
 use std::convert::From;
+use tiny_auth_business::data_loader::DataLoader;
 use url::Url;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -70,7 +71,9 @@ pub enum Store {
     Sqlite {
         name: String,
         base: String,
-    }
+        #[serde(rename = "use for")]
+        use_for: SqliteUseFor,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -149,6 +152,63 @@ pub struct ClientAttributes {
     #[serde(default)]
     #[serde(rename = "allowed scopes")]
     pub allowed_scopes: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct SqliteUseFor {
+    #[serde(default)]
+    pub scopes: bool,
+    #[serde(default)]
+    pub passwords: bool,
+    #[serde(default)]
+    #[serde(rename = "auth codes")]
+    pub auth_codes: bool,
+    #[serde(default)]
+    pub clients: Vec<QueryLoader>,
+    #[serde(default)]
+    pub users: Vec<QueryLoader>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+pub struct QueryLoader {
+    pub location: String,
+    pub name: String,
+    pub multiplicity: Multiplicity,
+    pub query: String,
+    #[serde(default)]
+    pub assignment: String,
+}
+
+impl TryFrom<&QueryLoader> for tiny_auth_sqlite::QueryLoader {
+    type Error = &'static str;
+    fn try_from(v: &QueryLoader) -> Result<Self, &'static str> {
+        Ok(tiny_auth_sqlite::inject::query_loader(
+            DataLoader::new(
+                v.name.clone(),
+                v.location.clone().try_into()?,
+                v.multiplicity.into(),
+            ),
+            v.query.clone(),
+            v.assignment.clone(),
+        ))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+pub enum Multiplicity {
+    #[serde(rename = "to one")]
+    ToOne,
+    #[serde(rename = "to many")]
+    ToMany,
+}
+
+impl From<Multiplicity> for tiny_auth_business::data_loader::Multiplicity {
+    fn from(value: Multiplicity) -> Self {
+        match value {
+            Multiplicity::ToOne => Self::ToOne,
+            Multiplicity::ToMany => Self::ToMany,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
