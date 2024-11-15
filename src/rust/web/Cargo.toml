@@ -32,3 +32,6 @@ rustls.workspace = true
 rustls-pemfile.workspace = true
 thiserror.workspace = true
 tracing-actix-web.workspace = true
+
+[lints]
+workspace = true

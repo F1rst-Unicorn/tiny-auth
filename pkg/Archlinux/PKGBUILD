@@ -70,7 +70,7 @@ check() {
     DATABASE_URL=sqlite://$srcdir/src/sql/sqlite/build/$db_name.sqlite         \
             cargo fmt --all -- --check
     DATABASE_URL=sqlite://$srcdir/src/sql/sqlite/build/$db_name.sqlite         \
-            cargo clippy -j 8 -- -D clippy::all
+            cargo clippy --all-targets
 
     cd "$srcdir/src/sql"
     local db_name=unittests

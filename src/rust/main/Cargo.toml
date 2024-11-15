@@ -60,3 +60,6 @@ systemd.workspace = true
 
 [build-dependencies]
 vergen.workspace = true
+
+[lints]
+workspace = true

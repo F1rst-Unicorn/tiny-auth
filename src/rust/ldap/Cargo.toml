@@ -28,3 +28,6 @@ tiny_auth_template = { path = "../template" }
 testcontainers.workspace = true
 pretty_assertions.workspace = true
 rstest.workspace = true
+
+[lints]
+workspace = true
