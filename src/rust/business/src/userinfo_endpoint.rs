@@ -14,7 +14,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::store::{ClientStore, ScopeStore, UserStore};
+use crate::store::{ClientStore, ScopeStore, ScopeStoreError, UserStore};
 use crate::token::{Access, EncodedAccessToken, Token, TokenCreator, TokenValidator, Userinfo};
 use crate::{client, user};
 use std::sync::Arc;
@@ -33,6 +33,8 @@ pub enum Error {
     UserError(#[from] user::Error),
     #[error("client lookup error")]
     ClientError(#[from] client::Error),
+    #[error("scope lookup error")]
+    ScopeError(#[from] ScopeStoreError),
 }
 
 pub struct Handler {
@@ -58,7 +60,7 @@ impl Handler {
 
         let user = self.user_store.get(&token.subject).await?;
         let client = self.client_store.get(&token.authorized_party).await?;
-        let scopes = self.scope_store.get_all(&token.scopes).await;
+        let scopes = self.scope_store.get_all(&token.scopes).await?;
 
         Ok(self.token_creator.build_token(&user, &client, &scopes, 0))
     }

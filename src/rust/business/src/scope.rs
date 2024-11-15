@@ -19,6 +19,7 @@ use crate::template::scope::ScopeContext;
 use crate::template::{TemplateError, Templater};
 use crate::token::{Access, Id, TokenType, Userinfo};
 use crate::user::User;
+use serde::de::StdError;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Map;
@@ -111,6 +112,20 @@ impl Scope {
         }
     }
 
+    pub fn from_attributes(
+        name: &str,
+        pretty_name: &str,
+        description: &str,
+        mappings: Vec<Mapping>,
+    ) -> Self {
+        Self {
+            name: name.to_string(),
+            pretty_name: pretty_name.to_string(),
+            description: description.to_string(),
+            mappings,
+        }
+    }
+
     pub fn merge(mut self, other: Self) -> Self {
         self.mappings.extend(other.mappings);
         self
@@ -142,7 +157,7 @@ impl Scope {
 }
 
 #[derive(Clone, Deserialize, Debug)]
-struct Mapping {
+pub struct Mapping {
     structure: Value,
 
     #[serde(rename = "type")]
@@ -198,6 +213,20 @@ impl<T: TokenType + 'static> From<T> for Destination {
 }
 
 impl Mapping {
+    pub fn new(
+        structure: Value,
+        mapping_type: Type,
+        optional: bool,
+        destination: BTreeSet<Destination>,
+    ) -> Self {
+        Self {
+            structure,
+            mapping_type,
+            optional,
+            destination,
+        }
+    }
+
     fn generate_claims<'a>(
         &self,
         templater: Arc<dyn Templater<ScopeContext<'a>>>,
@@ -310,7 +339,7 @@ fn copy_values(value: Value, selector: Value, path: &mut Vec<String>) -> Result<
 }
 
 #[derive(Deserialize, Debug, Clone)]
-enum Type {
+pub enum Type {
     #[serde(rename = "plain")]
     Plain,
 

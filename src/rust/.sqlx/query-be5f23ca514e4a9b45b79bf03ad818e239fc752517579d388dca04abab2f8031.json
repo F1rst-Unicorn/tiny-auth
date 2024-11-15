@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "select name\nfrom tiny_auth_scope\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "name",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "be5f23ca514e4a9b45b79bf03ad818e239fc752517579d388dca04abab2f8031"
+}

@@ -20,6 +20,8 @@ mappings: [ ]
 The file has to carry the name stated inside the file with the `.yml`
 extension.
 
+For SQLite stores, this corresponds to the table `tiny_auth_scope`.
+
 ### Scope Mappings
 
 A scope mapping defines how existing information is transformed into a JWT
@@ -39,10 +41,14 @@ destination:
   - access token
 ```
 
+For SQLite stores, this corresponds to the table `tiny_auth_scope_mapping`.
+
 This will map the plain YAML object below `structure` into the token. Every
 mapping has a `structure` which defines the structure of the object put into
-the token. The compulsory `type` defines the behaviour of the mapping (see
-below for all types).
+the token. For SQLite stores, see in the types sections below.
+
+The compulsory `type` defines the behaviour of the mapping (see below for all
+types).
 
 `destination` controls, where the mapping should be visible. It takes a list of
 any of these values: `access token`, `id token`, `userinfo`. The default is to
@@ -50,6 +56,8 @@ include it in all destinations. Most claims should only have destination
 `userinfo`. Tokens are used for authentication via HTTP headers for which most
 servers have size limitations. To avoid having tokens rejected because of their
 size, only the minimal needed information should be included in the tokens.
+For SQLite stores, these correspond to the three boolean `destination_*`
+flags.
 
 `optional` is an optional flag defaulting to `false`. Since claim generation
 may fail due to configuration errors, there are two behaviours: Claims coming
@@ -68,6 +76,16 @@ Below you find the description of the mapping types.
 
 A `plain` mapping hardcodes whatever claims it finds below the `structure`
 field into all tokens.
+
+For SQLite stores, put the settings specific to `plain` into a
+`tiny_auth_scope_mapping_plain` row.
+The `structure` is
+a [JSON Pointer](https://datatracker.ietf.org/doc/html/rfc6901#section-3),
+describing where to put the value.
+As the value will be put into a JSON object (user or client) at least one token
+must be given and will be interpreted as an object field.
+The `type` is one of `null`, `string`, `number`, `boolean` describing how the
+`value` will be mapped to JSON.
 
 #### Template
 
@@ -118,6 +136,11 @@ mappings:
     structure:
       building_access: null
 ```
+
+Analogously in a SQLite store, the `user_attribute` or `client_attribute` is a
+[JSON Pointer](https://datatracker.ietf.org/doc/html/rfc6901#section-3) to the
+attribute to select. In the example `/access`.
+Similarly, the `structure` pointer is `/building_access`.
 
 The ID Token will then contain the following claim:
 

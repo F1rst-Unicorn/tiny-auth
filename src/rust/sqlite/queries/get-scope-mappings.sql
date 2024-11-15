@@ -1,0 +1,3 @@
+select *
+from tiny_auth_scope_mapping
+where scope in (?, ?, ?, ?, ?, ?, ?, ?)

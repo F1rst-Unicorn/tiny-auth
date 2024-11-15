@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "select *\nfrom tiny_auth_scope_mapping\nwhere scope in (?, ?, ?, ?, ?, ?, ?, ?)\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "scope",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "mapping_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "type",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "optional",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "destination_userinfo",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "destination_access_token",
+        "ordinal": 6,
+        "type_info": "Integer"
+      },
+      {
+        "name": "destination_id_token",
+        "ordinal": 7,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "aa9e2501eb5a8be2392ea699f5de279ca3f6e03dfed68ff03bd653830475e0b8"
+}

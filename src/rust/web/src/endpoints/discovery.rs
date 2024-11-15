@@ -25,7 +25,7 @@ use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::jwk::Jwks;
 use tiny_auth_business::store::ScopeStore;
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 #[derive(Serialize, Default)]
 struct Response {
@@ -144,13 +144,22 @@ pub async fn get(request: HttpRequest, handler: Data<Handler>) -> HttpResponse {
 
 impl Handler {
     async fn handle(&self, request: HttpRequest) -> HttpResponse {
+        let scopes = self
+            .scope_store
+            .get_scope_names()
+            .await
+            .unwrap_or_else(|e| {
+                warn!(%e, "failed to load scopes");
+                Vec::default()
+            });
+
         let response = Response {
             issuer: self.issuer_configuration.issuer_url.clone(),
             authorization_endpoint: self.issuer_configuration.issuer_url.clone() + "/authorize",
             token_endpoint: self.issuer_configuration.issuer_url.clone() + "/token",
             userinfo_endpoint: self.issuer_configuration.issuer_url.clone() + "/userinfo",
             jwks_uri: self.issuer_configuration.issuer_url.clone() + "/jwks",
-            scopes_supported: self.scope_store.get_scope_names().await,
+            scopes_supported: scopes,
             response_types_supported: vec![
                 "code".to_string(),
                 "token".to_string(),

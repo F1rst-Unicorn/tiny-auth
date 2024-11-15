@@ -127,19 +127,27 @@ pub trait PasswordStore: Send + Sync {
     ) -> Result<bool, PasswordError>;
 }
 
+#[derive(Error, Debug, Clone)]
+pub enum ScopeStoreError {
+    #[error("not found")]
+    NotFound,
+    #[error("backend error")]
+    BackendError,
+    #[error("backend error: {0}")]
+    BackendErrorWithContext(#[from] Arc<dyn StdError + Send + Sync>),
+}
+
 #[async_trait]
 pub trait ScopeStore: Send + Sync {
-    async fn get(&self, key: &str) -> Option<Scope>;
-
-    async fn get_all(&self, keys: &[String]) -> Vec<Scope> {
-        join_all(keys.iter().map(|v| self.get(v)))
+    async fn get(&self, key: &str) -> Result<Scope, ScopeStoreError> {
+        self.get_all(&[key.to_string()])
             .await
-            .into_iter()
-            .flatten()
-            .collect()
+            .and_then(|mut v| v.pop().ok_or(ScopeStoreError::NotFound))
     }
 
-    async fn get_scope_names(&self) -> Vec<String>;
+    async fn get_all(&self, keys: &[String]) -> Result<Vec<Scope>, ScopeStoreError>;
+
+    async fn get_scope_names(&self) -> Result<Vec<String>, ScopeStoreError>;
 }
 
 pub struct MergingScopeStore {
@@ -155,20 +163,29 @@ impl From<Vec<Arc<dyn ScopeStore>>> for MergingScopeStore {
 #[async_trait]
 impl ScopeStore for MergingScopeStore {
     #[instrument(level = Level::DEBUG, name = "get_scope", skip_all)]
-    async fn get(&self, key: &str) -> Option<Scope> {
-        join_all(self.stores.iter().map(|v| v.get(key)))
-            .await
-            .into_iter()
-            .flatten()
-            .reduce(Scope::merge)
+    async fn get_all(&self, keys: &[String]) -> Result<Vec<Scope>, ScopeStoreError> {
+        join_all(keys.iter().map(|key| async {
+            join_all(self.stores.iter().map(|v| v.get(key.as_str())))
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .and_then(|v| {
+                    v.into_iter()
+                        .reduce(Scope::merge)
+                        .ok_or(ScopeStoreError::NotFound)
+                })
+        }))
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
     }
 
-    async fn get_scope_names(&self) -> Vec<String> {
+    async fn get_scope_names(&self) -> Result<Vec<String>, ScopeStoreError> {
         join_all(self.stores.iter().map(|v| v.get_scope_names()))
             .await
             .into_iter()
-            .flatten()
-            .collect()
+            .collect::<Result<Vec<_>, ScopeStoreError>>()
+            .map(|v| v.into_iter().flatten().collect())
     }
 }
 
@@ -340,11 +357,14 @@ pub mod test_fixtures {
 
     #[async_trait]
     impl ScopeStore for TestScopeStore {
-        async fn get(&self, key: &str) -> Option<Scope> {
-            Some(Scope::new(key, key, key))
+        async fn get_all(&self, keys: &[String]) -> Result<Vec<Scope>, ScopeStoreError> {
+            Ok(keys
+                .iter()
+                .map(|v| Scope::new(v.as_str(), v.as_str(), v.as_str()))
+                .collect())
         }
-        async fn get_scope_names(&self) -> Vec<String> {
-            Vec::new()
+        async fn get_scope_names(&self) -> Result<Vec<String>, ScopeStoreError> {
+            Ok(Vec::new())
         }
     }
 

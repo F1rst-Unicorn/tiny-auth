@@ -14,6 +14,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use serde_json::{Map, Value};
 
 const ENCODED_TILDE: &str = "~0";
 const ENCODED_SLASH: &str = "~1";
@@ -63,6 +64,26 @@ impl JsonPointer {
 
     pub fn first(&self) -> Option<&str> {
         self.tokens.first().map(String::as_str)
+    }
+
+    pub fn construct_json(&self) -> Value {
+        match self.first() {
+            None => Value::Null,
+            Some(token) => {
+                let nested = self.pop_first().construct_json();
+                if PastLastArrayElement::try_from(token).is_ok() {
+                    vec![nested].into()
+                } else if let Ok(ArrayAccess(index)) = ArrayAccess::try_from(token) {
+                    let mut result = vec![Value::Null; index + 1];
+                    result[index] = nested;
+                    result.into()
+                } else {
+                    let mut result = Map::new();
+                    result.insert(token.to_string(), nested);
+                    result.into()
+                }
+            }
+        }
     }
 }
 

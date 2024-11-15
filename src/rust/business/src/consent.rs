@@ -56,6 +56,7 @@ pub enum Error {
     UserNotFound,
     ClientNotFound,
     AuthCodeNotGenerated,
+    ScopesNotFound,
     TokenEncodingError,
 }
 
@@ -94,7 +95,7 @@ impl Handler {
     }
 
     pub async fn get_scope(&self, key: &str) -> Option<Scope> {
-        self.scope_store.get(key).await
+        self.scope_store.get(key).await.ok()
     }
 
     #[instrument(level = Level::DEBUG, skip_all, fields(
@@ -152,7 +153,13 @@ impl Handler {
                 Ok(client) => client,
             };
 
-            let all_scopes = self.scope_store.get_all(&scopes).await;
+            let all_scopes = match self.scope_store.get_all(&scopes).await {
+                Err(e) => {
+                    warn!(%e, "failed to load scopes");
+                    return Err(Error::ScopesNotFound);
+                }
+                Ok(v) => v,
+            };
 
             if request
                 .response_types

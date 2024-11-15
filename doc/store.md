@@ -10,7 +10,6 @@ store type serves you best.
 | Clients     | N       | Y                  | N                | Y                | Y      |
 | Scopes      | N       | Y                  | N                | N                | Y      |
 | Auth Codes  | Y       | N                  | N                | N                | Y      |
-| Rate limits | Y       | N                  | N                | N                | N      |
 
 Notes:
 
@@ -237,7 +236,7 @@ store:
             multiplicity: to many
             query: |
               select
-                meeting_room.id as tiny_auth_id, 
+                meeting_room.id as tiny_auth_id,
                 meeting_room.building_id as tiny_auth_assigned_to,
                 meeting_room.name
               from meeting_room
@@ -257,7 +256,7 @@ and `tiny_auth_client.public_key`. Do not alter these columns.
 
 ### name
 
-An arbitrary name to reference this LDAP configuration. See user / client
+An arbitrary name to reference this database. See user / client
 password for details.
 
 ### base

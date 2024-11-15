@@ -26,13 +26,13 @@
     <changeSet id="1" author="admin" labels="schema">
         <sql endDelimiter=";;">
             create table tiny_auth_password (
-                id integer primary key,
+                id integer primary key not null,
                 algorithm text not null,
                 check (algorithm in ('pbkf2hmacsha256'))
             ) strict;;
 
             create table tiny_auth_user (
-                id integer primary key,
+                id integer primary key not null,
                 name text not null,
                 password integer not null,
                 foreign key (password) references tiny_auth_password(id)
@@ -42,7 +42,7 @@
             create unique index tiny_auth_user_name on tiny_auth_user (name);;
 
             create table tiny_auth_user_allowed_scopes (
-                id integer primary key,
+                id integer primary key not null,
                 user integer not null,
                 client integer not null,
                 scope integer not null,
@@ -57,7 +57,7 @@
             create unique index tiny_auth_user_allowed_scopes_user on tiny_auth_user_allowed_scopes (user, client, scope);;
 
             create table tiny_auth_password_pbkf2hmacsha256 (
-                id integer primary key,
+                id integer primary key not null,
                 password integer not null,
                 credential blob not null,
                 iterations integer not null,
@@ -70,7 +70,7 @@
             create unique index tiny_auth_password_pbkf2hmacsha256_password on tiny_auth_password_pbkf2hmacsha256 (password);;
 
             create table tiny_auth_client (
-                id integer primary key,
+                id integer primary key not null,
                 client_id text not null,
                 client_type text not null,
                 password integer null,
@@ -84,7 +84,7 @@
             create unique index tiny_auth_client_client_id on tiny_auth_client (client_id);;
 
             create table tiny_auth_redirect_uri (
-                id integer primary key,
+                id integer primary key not null,
                 redirect_uri text not null,
                 client integer not null,
                 foreign key (client) references tiny_auth_client(id)
@@ -94,7 +94,7 @@
             create index tiny_auth_redirect_uri_client on tiny_auth_redirect_uri (client);;
 
             create table tiny_auth_client_allowed_scopes (
-                id integer primary key,
+                id integer primary key not null,
                 client integer not null,
                 scope integer not null,
                 foreign key (scope) references tiny_auth_scope(id)
@@ -104,77 +104,61 @@
             create index tiny_auth_client_allowed_scopes_client on tiny_auth_client_allowed_scopes (client);;
 
             create table tiny_auth_scope (
-                id integer primary key,
+                id integer primary key not null,
                 name text not null,
                 pretty_name text not null,
                 description text not null
             ) strict;;
 
             create table tiny_auth_scope_mapping (
-                id integer primary key,
+                id integer primary key not null,
                 scope integer not null,
+                mapping_id integer not null,
                 type text not null,
+                optional integer not null default 0,
                 destination_userinfo integer not null default 0,
                 destination_access_token integer not null default 0,
                 destination_id_token integer not null default 0,
                 foreign key (scope) references tiny_auth_scope(id)
                     on update cascade on delete cascade deferrable initially deferred,
                 check (type in ('plain', 'template', 'user_attribute', 'client_attribute')),
+                check (optional in (0, 1)),
                 check (destination_userinfo in (0, 1)),
                 check (destination_access_token in (0, 1)),
                 check (destination_id_token in (0, 1))
             ) strict;;
 
             create index tiny_auth_scope_mapping_scope on tiny_auth_scope_mapping (scope);;
+            create index tiny_auth_scope_mapping_mapping_id on tiny_auth_scope_mapping (mapping_id);;
 
             create table tiny_auth_scope_mapping_plain (
-                id integer primary key,
-                scope_mapping integer not null,
+                id integer primary key not null,
                 structure text not null,
                 type text not null,
                 value text not null,
-                foreign key (scope_mapping) references scope_mapping(id)
-                    on update cascade on delete cascade deferrable initially deferred,
-                check (type in ('boolean', 'integer', 'string', 'null'))
+                check (type in ('boolean', 'number', 'string', 'null'))
             ) strict;;
-
-            create index tiny_auth_scope_mapping_plain_scope_mapping on tiny_auth_scope_mapping_plain (scope_mapping);;
 
             create table tiny_auth_scope_mapping_template (
-                id integer primary key,
-                scope_mapping integer not null,
+                id integer primary key not null,
                 structure text not null,
-                template text not null,
-                foreign key (scope_mapping) references tiny_auth_scope_mapping(id)
-                    on update cascade on delete cascade deferrable initially deferred
+                template text not null
             ) strict;;
-
-            create index tiny_auth_scope_mapping_template_scope_mapping on tiny_auth_scope_mapping_template (scope_mapping);;
 
             create table tiny_auth_scope_mapping_user_attribute (
-                id integer primary key,
-                scope_mapping integer not null,
+                id integer primary key not null,
                 structure text not null,
-                user_attribute text not null,
-                foreign key (scope_mapping) references tiny_auth_scope_mapping(id)
-                    on update cascade on delete cascade deferrable initially deferred
+                user_attribute text not null
             ) strict;;
-
-            create index tiny_auth_scope_mapping_user_attribute_scope_mapping on tiny_auth_scope_mapping_user_attribute (scope_mapping);;
 
             create table tiny_auth_scope_mapping_client_attribute (
-                id integer primary key,
-                scope_mapping integer not null,
+                id integer primary key not null,
                 structure text not null,
-                client_attribute text not null,
-                foreign key (scope_mapping) references tiny_auth_scope_mapping(id)
-                    on update cascade on delete cascade deferrable initially deferred
+                client_attribute text not null
             ) strict;;
 
-            create index tiny_auth_scope_mapping_client_attribute_scope_mapping on tiny_auth_scope_mapping_client_attribute (scope_mapping);;
-
             create table tiny_auth_authorization_code (
-                id integer primary key,
+                id integer primary key not null,
                 client integer not null,
                 user integer not null,
                 redirect_uri integer not null,
@@ -242,299 +226,326 @@
             insert into tiny_auth_scope (name, pretty_name, description)
             values ('email', 'Email Address', 'Access to your email address');;
 
-            insert into tiny_auth_scope_mapping (scope, type, destination_userinfo, destination_id_token)
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            values ('/email', '{{ user.email }}');;
+
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
                 'template',
-                1,
-                1
-            from tiny_auth_scope
-            where name = 'email';;
-
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
-            select
-                id,
-                '/email',
-                '{{ user.email }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'email');;
-
-            insert into tiny_auth_scope_mapping (scope, type, destination_userinfo, destination_id_token)
-            select
-                id,
-                'plain',
-                1,
-                1
-            from tiny_auth_scope
-            where name = 'email';;
-
-            insert into tiny_auth_scope_mapping_plain (scope_mapping, structure, type, "value")
-            select
                 last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'email';;
+
+            insert into tiny_auth_scope_mapping_plain (structure, type, "value")
+            select
                 '/email_verified',
                 'boolean',
                 'true';;
 
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
+            select
+                id,
+                'plain',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'email';;
+
             insert into tiny_auth_scope (name, pretty_name, description)
             values ('address', 'Address', 'Access to your address');;
 
-            insert into tiny_auth_scope_mapping (scope, type, destination_userinfo)
+            insert into tiny_auth_scope_mapping_user_attribute (structure, user_attribute)
+            select
+                '/',
+                '/address';;
+
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
                 'user_attribute',
+                last_insert_rowid(),
+                1,
+                1,
                 1
             from tiny_auth_scope
             where name = 'address';;
 
-            insert into tiny_auth_scope_mapping_user_attribute (scope_mapping, structure, user_attribute)
-            select
-                id,
-                '/',
-                '/address'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'email');;
-
             insert into tiny_auth_scope (name, pretty_name, description)
             values ('phone', 'Phone Number', 'Access to your phone number');;
 
-            insert into tiny_auth_scope_mapping (scope, type, destination_userinfo)
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            select
+                '/phone_number',
+                '{{ user.phone_number }}';;
+
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
                 'template',
-                1
-            from tiny_auth_scope
-            where name = 'phone';;
-
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
-            select
-                id,
-                '/phone_number',
-                '{{ user.phone_number }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'phone');;
-
-            insert into tiny_auth_scope_mapping (scope, type, destination_userinfo, destination_id_token)
-            select
-                id,
-                'plain',
+                last_insert_rowid(),
+                1,
                 1,
                 1
             from tiny_auth_scope
             where name = 'phone';;
 
-            insert into tiny_auth_scope_mapping_plain (scope_mapping, structure, type, "value")
+            insert into tiny_auth_scope_mapping_plain (structure, type, "value")
             select
-                last_insert_rowid(),
                 '/phone_number_verified',
                 'boolean',
                 'true';;
 
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
+            select
+                id,
+                'plain',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'phone';;
+
             insert into tiny_auth_scope (name, pretty_name, description)
             values ('profile', 'Profile Information', 'Access to your name, birthdate, gender and position');;
 
-            insert into tiny_auth_scope_mapping (scope, type, destination_userinfo)
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            select
+                '/name',
+                '{{ user.given_name }}{% if user.middle_name is defined %} {{ user.middle_name }} {% else %} {% endif %}{{ user.family_name }}';;
+
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
                 'template',
+                last_insert_rowid(),
+                1,
+                1,
                 1
             from tiny_auth_scope
             where name = 'profile';;
 
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
+            insert into tiny_auth_scope_mapping_template (structure, template)
             select
-                id,
-                '/name',
-                '{{ user.given_name }}{% if user.middle_name is defined %} {{ user.middle_name }} {% else %} {% endif %}{{ user.family_name }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
-
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
-            select
-                id,
                 '/family_name',
-                '{{ user.family_name }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
+                '{{ user.family_name }}';;
 
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
+                'template',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'profile';;
+
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            select
                 '/given_name',
-                '{{ user.given_name }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
+                '{{ user.given_name }}';;
 
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
+                'template',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'profile';;
+
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            select
                 '/middle_name',
-                '{{ user.middle_name | default(value='''') }'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
+                '{{ user.middle_name | default(value='''') }';;
 
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
+                'template',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'profile';;
+
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            select
                 '/nickname',
-                '{{ user.nickname | default(value=user.given_name) }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
+                '{{ user.nickname | default(value=user.given_name) }}';;
 
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
+                'template',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'profile';;
+
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            select
                 '/preferred_username',
-                '{{ user.preferred_username }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
+                '{{ user.preferred_username }}';;
 
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
+                'template',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'profile';;
+
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            select
                 '/profile',
-                '{{ user.profile | default(value='''') }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
+                '{{ user.profile | default(value='''') }}';;
 
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
+                'template',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'profile';;
+
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            select
                 '/picture',
-                '{{ user.picture | default(value='''') }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
+                '{{ user.picture | default(value='''') }}';;
 
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
+                'template',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'profile';;
+
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            select
                 '/website',
-                '{{ user.website | default(value='''') }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
+                '{{ user.website | default(value='''') }}';;
 
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
+                'template',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'profile';;
+
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            select
                 '/gender',
-                '{{ user.gender }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
+                '{{ user.gender }}';;
 
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
+                'template',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'profile';;
+
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            select
                 '/birthdate',
-                '{{ user.birthdate }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
+                '{{ user.birthdate }}';;
 
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
+                'template',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'profile';;
+
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            select
                 '/zoneinfo',
-                '{{ user.zoneinfo }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
+                '{{ user.zoneinfo }}';;
 
-            insert into tiny_auth_scope_mapping_template (scope_mapping, structure, template)
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
-                '/locale',
-                '{{ user.locale }}'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
+                'template',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'profile';;
 
-            insert into tiny_auth_scope_mapping (scope, type, destination_userinfo)
+            insert into tiny_auth_scope_mapping_template (structure, template)
+            select
+                '/locale',
+                '{{ user.locale }}';;
+
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
+            select
+                id,
+                'template',
+                last_insert_rowid(),
+                1,
+                1,
+                1
+            from tiny_auth_scope
+            where name = 'profile';;
+
+            insert into tiny_auth_scope_mapping_user_attribute (structure, user_attribute)
+            select
+                '/',
+                '/updated_at';;
+
+            insert into tiny_auth_scope_mapping (scope, type, mapping_id, optional, destination_userinfo, destination_id_token)
             select
                 id,
                 'user_attribute',
+                last_insert_rowid(),
+                1,
+                1,
                 1
             from tiny_auth_scope
             where name = 'profile';;
-
-            insert into tiny_auth_scope_mapping_user_attribute (scope_mapping, structure, user_attribute)
-            select
-                id,
-                '/',
-                '/updated_at'
-            from tiny_auth_scope_mapping
-            where scope = (
-                select
-                    id
-                from tiny_auth_scope
-                where name = 'profile');;
         </sql>
         <rollback>
             <sql endDelimiter=";;">
                 delete
                 from tiny_auth_scope_mapping_plain
-                where scope_mapping in (
+                where id in (
                     select
-                        id
+                        mapping_id
                     from tiny_auth_scope_mapping
                     where scope in (
                         select
@@ -544,9 +555,9 @@
 
                 delete
                 from tiny_auth_scope_mapping_template
-                where scope_mapping in (
+                where id in (
                     select
-                        id
+                        mapping_id
                     from tiny_auth_scope_mapping
                     where scope in (
                         select
@@ -556,9 +567,9 @@
 
                 delete
                 from tiny_auth_scope_mapping_user_attribute
-                where scope_mapping in (
+                where id in (
                     select
-                        id
+                        mapping_id
                     from tiny_auth_scope_mapping
                     where scope in (
                         select
@@ -568,9 +579,9 @@
 
                 delete
                 from tiny_auth_scope_mapping_client_attribute
-                where scope_mapping in (
+                where id in (
                     select
-                        id
+                        mapping_id
                     from tiny_auth_scope_mapping
                     where scope in (
                         select
@@ -729,7 +740,7 @@
             and tiny_auth_scope.name in ('openid', 'profile');;
 
             create table test_data_desk (
-                id integer primary key,
+                id integer primary key not null,
                 material text not null,
                 assigned_to int,
                 foreign key (assigned_to) references tiny_auth_user(id)
@@ -740,7 +751,7 @@
             from tiny_auth_user;;
 
             create table test_data_building (
-                id integer primary key,
+                id integer primary key not null,
                 street text not null
             ) strict;;
             insert into test_data_building (street)
@@ -752,13 +763,13 @@
                 on update cascade on delete cascade deferrable initially deferred;;
 
             create table test_data_pet (
-                id integer primary key,
+                id integer primary key not null,
                 type text not null
             ) strict;;
             insert into test_data_pet (type)
             values ('cat'), ('dog');;
             create table test_data_pet_likes_user (
-                id integer primary key,
+                id integer primary key not null,
                 user int not null,
                 pet int not null,
                 foreign key (user) references tiny_auth_user(id)
@@ -771,7 +782,7 @@
             from tiny_auth_user u, test_data_pet p;;
 
             create table test_data_meeting_room (
-                id integer primary key,
+                id integer primary key not null,
                 kind text not null,
                 contained_in int not null,
                 foreign key (contained_in) references test_data_building(id)

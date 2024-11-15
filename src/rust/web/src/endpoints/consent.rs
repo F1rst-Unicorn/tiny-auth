@@ -209,7 +209,7 @@ async fn process_skipping_csrf(
         .await
     {
         Ok(v) => v,
-        Err(Error::ClientNotFound) | Err(Error::UserNotFound) => {
+        Err(Error::ClientNotFound) | Err(Error::UserNotFound) | Err(Error::ScopesNotFound) => {
             return render_invalid_consent_request(templater);
         }
         Err(Error::TokenEncodingError) | Err(Error::AuthCodeNotGenerated) => {

@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "select *\nfrom tiny_auth_scope\nwhere name in (?, ?, ?, ?, ?, ?, ?, ?)\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "pretty_name",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 3,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e88949b387f52c5ef229305155e874cf31bbbf927ad98cd2523dc1037f7126d7"
+}

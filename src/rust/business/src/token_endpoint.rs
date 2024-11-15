@@ -315,7 +315,8 @@ impl Handler {
         let scopes = self
             .scope_store
             .get_all(&parse_scope_names(&record.scopes))
-            .await;
+            .await
+            .map_err(|_| Error::AuthenticationFailed)?;
 
         Ok((
             user,

@@ -26,18 +26,18 @@ use std::sync::Arc;
 use tiny_auth_business::client;
 use tiny_auth_business::client::Client;
 use tiny_auth_business::scope::Scope;
-use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::ScopeStore;
 use tiny_auth_business::store::UserStore;
+use tiny_auth_business::store::{ClientStore, ScopeStoreError};
 use tiny_auth_business::user::{Error, User};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tracing::{debug, error, info, instrument, span, trace, warn, Level};
 
 pub struct FileStore<T> {
     base: PathBuf,
-    data: Mutex<BTreeMap<String, T>>,
+    data: RwLock<BTreeMap<String, T>>,
 }
 
 pub(crate) trait DataExt {
@@ -51,10 +51,10 @@ pub(crate) trait DataExt {
 
 #[async_trait]
 impl UserStore for FileStore<User> {
-    #[instrument(skip_all, fields(store = self.base))]
+    #[instrument(skip_all, fields(store = ?self.base))]
     async fn get(&self, key: &str) -> Result<User, Error> {
         self.data
-            .lock()
+            .read()
             .await
             .get(key)
             .cloned()
@@ -65,10 +65,10 @@ impl UserStore for FileStore<User> {
 
 #[async_trait]
 impl ClientStore for FileStore<Client> {
-    #[instrument(skip_all, fields(store = self.base))]
+    #[instrument(skip_all, fields(store = ?self.base))]
     async fn get(&self, key: &str) -> Result<Client, client::Error> {
         self.data
-            .lock()
+            .read()
             .await
             .get(key)
             .cloned()
@@ -78,18 +78,21 @@ impl ClientStore for FileStore<Client> {
 
 #[async_trait]
 impl ScopeStore for FileStore<Scope> {
-    #[instrument(skip_all, fields(store = self.base))]
-    async fn get(&self, key: &str) -> Option<Scope> {
-        self.data.lock().await.get(key).cloned()
+    #[instrument(skip_all, fields(store = ?self.base))]
+    async fn get_all(&self, keys: &[String]) -> Result<Vec<Scope>, ScopeStoreError> {
+        let data = self.data.read().await;
+        keys.iter()
+            .map(|v| data.get(v).cloned().ok_or(ScopeStoreError::NotFound))
+            .collect()
     }
 
-    #[instrument(skip_all, fields(store = self.base))]
-    async fn get_scope_names(&self) -> Vec<String> {
-        self.data.lock().await.keys().map(Clone::clone).collect()
+    #[instrument(skip_all, fields(store = ?self.base))]
+    async fn get_scope_names(&self) -> Result<Vec<String>, ScopeStoreError> {
+        Ok(self.data.read().await.keys().map(Clone::clone).collect())
     }
 }
 
-impl<T: for<'a> Deserialize<'a> + Send + DataExt + 'static> FileStore<T> {
+impl<T: for<'a> Deserialize<'a> + Send + DataExt + 'static + Sync> FileStore<T> {
     pub async fn new(
         base: &Path,
         sub_path: &str,
@@ -99,7 +102,7 @@ impl<T: for<'a> Deserialize<'a> + Send + DataExt + 'static> FileStore<T> {
         base.push(sub_path);
         let result = Self {
             base: base.clone(),
-            data: Mutex::default(),
+            data: RwLock::default(),
         };
         let result = Arc::new(result);
         result.clone().refresh_all(base.as_path()).await;
@@ -173,7 +176,7 @@ impl<T: for<'a> Deserialize<'a> + Send + DataExt + 'static> FileStore<T> {
         };
         let name = data_item.name().clone();
         self.data
-            .lock()
+            .write()
             .await
             .insert(data_item.name().clone(), data_item);
 
@@ -187,7 +190,7 @@ impl<T: for<'a> Deserialize<'a> + Send + DataExt + 'static> FileStore<T> {
         }
 
         let username = path.file_stem().unwrap().to_string_lossy().to_string();
-        self.data.lock().await.remove(&username);
+        self.data.write().await.remove(&username);
 
         T::log_single_remove(&username)
     }
@@ -198,7 +201,7 @@ impl<T: for<'a> Deserialize<'a> + Send + DataExt + 'static> FileStore<T> {
             return None;
         }
         let read_users = read_object(self.base.to_string_lossy().as_ref(), T::validate)?;
-        let mut users = self.data.lock().await;
+        let mut users = self.data.write().await;
         users.clear();
         read_users
             .into_iter()

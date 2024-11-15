@@ -100,11 +100,11 @@ async fn main() {
         )
         .await
     {
-        None => {
-            error!("scope not found");
+        Err(e) => {
+            error!(%e, "scope not found");
             return;
         }
-        Some(v) => v,
+        Ok(v) => v,
     };
 
     match args.get_one::<Destination>(FLAG_DESTINATION).unwrap() {
