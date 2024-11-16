@@ -30,12 +30,6 @@ impl ReferenceToken for ArrayAccess {}
 pub struct PastLastArrayElement;
 impl ReferenceToken for PastLastArrayElement {}
 
-impl From<&str> for Key {
-    fn from(value: &str) -> Self {
-        Self(String::from(value))
-    }
-}
-
 impl TryFrom<&str> for ArrayAccess {
     type Error = ();
     fn try_from(value: &str) -> Result<Self, Self::Error> {
@@ -139,6 +133,7 @@ impl From<JsonPointer> for String {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     pub fn decoding_matches_encoding() {
@@ -153,6 +148,13 @@ pub mod tests {
         assert_identity("/~0~1");
         assert_identity("/~01");
         assert_identity("/~10");
+    }
+
+    fn assert_identity(json_pointer: &str) {
+        assert_eq!(
+            json_pointer,
+            String::from(JsonPointer::try_from(json_pointer).unwrap())
+        );
     }
 
     #[test]
@@ -197,10 +199,31 @@ pub mod tests {
         assert!(uut.is_err());
     }
 
-    fn assert_identity(json_pointer: &str) {
-        assert_eq!(
-            json_pointer,
-            String::from(JsonPointer::try_from(json_pointer).unwrap())
-        );
+    #[test]
+    pub fn slash_creates_null() {
+        let uut = JsonPointer::try_from("/").unwrap();
+
+        assert_eq!(json!(null), uut.construct_json());
+    }
+
+    #[test]
+    pub fn past_last_index_creates_array_of_null() {
+        let uut = JsonPointer::try_from("/-").unwrap();
+
+        assert_eq!(json!([null]), uut.construct_json());
+    }
+
+    #[test]
+    pub fn array_index_creates_array_of_nulls() {
+        let uut = JsonPointer::try_from("/3").unwrap();
+
+        assert_eq!(json!([null, null, null, null]), uut.construct_json());
+    }
+
+    #[test]
+    pub fn object_key_creates_object_with_null_value() {
+        let uut = JsonPointer::try_from("/key").unwrap();
+
+        assert_eq!(json!({"key": null}), uut.construct_json());
     }
 }
