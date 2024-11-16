@@ -26,9 +26,10 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 use test_log::test;
-use testcontainers::clients::Cli;
 use testcontainers::core::WaitFor;
-use testcontainers::GenericImage;
+use testcontainers::core::{IntoContainerPort, Mount};
+use testcontainers::runners::AsyncRunner;
+use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::{Error, Password};
 use tiny_auth_business::store::ClientStore;
@@ -40,13 +41,12 @@ use url::Url;
 #[rstest]
 #[test(tokio::test)]
 pub async fn successful_authentication_works(
-    image: GenericImage,
+    #[future] container: ContainerAsync<GenericImage>,
     name: String,
     password: Password,
 ) {
-    let cli = Cli::default();
-    let container = cli.run(image);
-    let uut = simple_bind_uut(name, container.get_host_port_ipv4(1389));
+    let container = container.await;
+    let uut = simple_bind_uut(name, container.get_host_port_ipv4(1389).await.unwrap());
 
     let actual = uut.verify("user01", &password, "password").await;
 
@@ -55,10 +55,13 @@ pub async fn successful_authentication_works(
 
 #[rstest]
 #[test(tokio::test)]
-pub async fn failing_authentication_works(image: GenericImage, name: String, password: Password) {
-    let cli = Cli::default();
-    let container = cli.run(image);
-    let uut = simple_bind_uut(name, container.get_host_port_ipv4(1389));
+pub async fn failing_authentication_works(
+    #[future] container: ContainerAsync<GenericImage>,
+    name: String,
+    password: Password,
+) {
+    let container = container.await;
+    let uut = simple_bind_uut(name, container.get_host_port_ipv4(1389).await.unwrap());
 
     let actual = uut.verify("user01", &password, "wrong").await;
 
@@ -68,13 +71,12 @@ pub async fn failing_authentication_works(image: GenericImage, name: String, pas
 #[rstest]
 #[test(tokio::test)]
 pub async fn successful_search_authentication_works(
-    image: GenericImage,
+    #[future] container: ContainerAsync<GenericImage>,
     name: String,
     password: Password,
 ) {
-    let cli = Cli::default();
-    let container = cli.run(image);
-    let uut = search_bind_uut(name, container.get_host_port_ipv4(1389));
+    let container = container.await;
+    let uut = search_bind_uut(name, container.get_host_port_ipv4(1389).await.unwrap());
 
     let actual = uut.verify("user01", &password, "password").await;
 
@@ -84,13 +86,12 @@ pub async fn successful_search_authentication_works(
 #[rstest]
 #[test(tokio::test)]
 pub async fn failing_search_authentication_works(
-    image: GenericImage,
+    #[future] container: ContainerAsync<GenericImage>,
     name: String,
     password: Password,
 ) {
-    let cli = Cli::default();
-    let container = cli.run(image);
-    let uut = search_bind_uut(name, container.get_host_port_ipv4(1389));
+    let container = container.await;
+    let uut = search_bind_uut(name, container.get_host_port_ipv4(1389).await.unwrap());
 
     let actual = uut.verify("user01", &password, "wrong").await;
 
@@ -100,13 +101,12 @@ pub async fn failing_search_authentication_works(
 #[rstest]
 #[test(tokio::test)]
 pub async fn successful_search_anonymous_authentication_works(
-    image: GenericImage,
+    #[future] container: ContainerAsync<GenericImage>,
     name: String,
     password: Password,
 ) {
-    let cli = Cli::default();
-    let container = cli.run(image);
-    let uut = search_bind_anonymous_uut(name, container.get_host_port_ipv4(1389));
+    let container = container.await;
+    let uut = search_bind_anonymous_uut(name, container.get_host_port_ipv4(1389).await.unwrap());
 
     let actual = uut.verify("user01", &password, "password").await;
 
@@ -116,13 +116,12 @@ pub async fn successful_search_anonymous_authentication_works(
 #[rstest]
 #[test(tokio::test)]
 pub async fn failing_search_anonymous_authentication_works(
-    image: GenericImage,
+    #[future] container: ContainerAsync<GenericImage>,
     name: String,
     password: Password,
 ) {
-    let cli = Cli::default();
-    let container = cli.run(image);
-    let uut = search_bind_anonymous_uut(name, container.get_host_port_ipv4(1389));
+    let container = container.await;
+    let uut = search_bind_anonymous_uut(name, container.get_host_port_ipv4(1389).await.unwrap());
 
     let actual = uut.verify("user01", &password, "wrong").await;
 
@@ -131,10 +130,9 @@ pub async fn failing_search_anonymous_authentication_works(
 
 #[rstest]
 #[test(tokio::test)]
-pub async fn getting_user_works(image: GenericImage, name: String) {
-    let cli = Cli::default();
-    let container = cli.run(image);
-    let uut = search_bind_uut(name, container.get_host_port_ipv4(1389));
+pub async fn getting_user_works(#[future] container: ContainerAsync<GenericImage>, name: String) {
+    let container = container.await;
+    let uut = search_bind_uut(name, container.get_host_port_ipv4(1389).await.unwrap());
     let input = "user01";
 
     let actual = UserStore::get(uut.as_ref(), input).await;
@@ -163,10 +161,9 @@ pub async fn getting_user_works(image: GenericImage, name: String) {
 
 #[rstest]
 #[test(tokio::test)]
-pub async fn getting_client_works(image: GenericImage, name: String) {
-    let cli = Cli::default();
-    let container = cli.run(image);
-    let uut = search_bind_uut(name, container.get_host_port_ipv4(1389));
+pub async fn getting_client_works(#[future] container: ContainerAsync<GenericImage>, name: String) {
+    let container = container.await;
+    let uut = search_bind_uut(name, container.get_host_port_ipv4(1389).await.unwrap());
     let input = "unit-test-client";
 
     let actual = ClientStore::get(uut.as_ref(), input).await;
@@ -236,17 +233,17 @@ pub async fn invalid_connection_is_reported(name: String, password: Password) {
 }
 
 #[fixture]
-fn image() -> GenericImage {
-    let image = GenericImage::new("docker.io/bitnami/openldap", "latest")
-        .with_exposed_port(1389)
-        .with_volume(
+async fn container() -> ContainerAsync<GenericImage> {
+    GenericImage::new("docker.io/bitnami/openldap", "latest")
+        .with_exposed_port(1389.tcp())
+        .with_wait_for(WaitFor::message_on_stderr("slapd starting"))
+        .with_mount(Mount::bind_mount(
             env!("CARGO_MANIFEST_DIR").to_string() + "/../../../dev/ldif",
             "/ldifs",
-        )
-        .with_wait_for(WaitFor::StdErrMessage {
-            message: "slapd starting".to_string(),
-        });
-    image
+        ))
+        .start()
+        .await
+        .unwrap()
 }
 
 fn simple_bind_uut(name: String, port: u16) -> Arc<dyn PasswordStore> {

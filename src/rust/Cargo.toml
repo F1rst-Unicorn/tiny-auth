@@ -50,7 +50,7 @@ prost = "0.12"
 tonic-build = "0.10.2"
 thiserror = "1.0.40"
 ldap3 = { version = "0.11.3", default-features = false, features = ["sync", "tls-rustls"] }
-testcontainers = "0.15.0"
+testcontainers = "0.23.1"
 pretty_assertions = "1.4.0"
 rstest = "0.19.0"
 enum_dispatch = "0.3.13"

@@ -2,6 +2,7 @@
 src/rust/target
 src/rust/licenses.html
 src/typescript/src/generated
+*profraw
 
 build
 .gradle
