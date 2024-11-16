@@ -44,7 +44,7 @@ impl DataLoader {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct LoadedData {
     data: BTreeMap<i32, Value>,
     assignments: BTreeMap<i32, Vec<i32>>,

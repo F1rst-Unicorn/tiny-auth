@@ -179,3 +179,136 @@ impl DataAssembler {
         Ok(attributes)
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use crate::begin_immediate::SqliteConnectionExt;
+    use rstest::{fixture, rstest};
+    use sqlx::pool::PoolOptions;
+    use sqlx::sqlite::SqliteConnectOptions;
+    use sqlx::sqlite::SqliteJournalMode::Wal;
+    use sqlx::sqlite::SqliteSynchronous::Normal;
+    use sqlx::ConnectOptions;
+    use sqlx::{Pool, Sqlite};
+    use std::str::FromStr;
+    use std::time::Duration;
+    use test_log::test;
+    use tiny_auth_business::data_loader::{load_user, Multiplicity};
+    use tracing::log::LevelFilter;
+
+    #[rstest]
+    #[test(tokio::test)]
+    async fn missing_id_column_is_ignored(#[future] db: Pool<Sqlite>) {
+        let db = db.await;
+        let mut conn = db.acquire().await.unwrap();
+        let mut transaction = conn.begin_immediate().await.unwrap();
+        let uut = QueryLoader {
+            data_loader: DataLoader {
+                name: "desk".to_string(),
+                location: "/user/desk".try_into().unwrap(),
+                multiplicity: Multiplicity::ToOne,
+            },
+            query: "select * from test_data_desk".to_string(),
+            assignment_query: "".to_string(),
+        };
+
+        let actual = uut.load_data(&mut transaction).await;
+
+        assert!(actual.is_ok());
+        assert_eq!(actual.unwrap(), LoadedData::default());
+    }
+
+    #[rstest]
+    #[test(tokio::test)]
+    async fn id_column_of_wrong_type_is_ignored(#[future] db: Pool<Sqlite>) {
+        let db = db.await;
+        let mut conn = db.acquire().await.unwrap();
+        let mut transaction = conn.begin_immediate().await.unwrap();
+        let uut = QueryLoader {
+            data_loader: DataLoader {
+                name: "desk".to_string(),
+                location: "/user/desk".try_into().unwrap(),
+                multiplicity: Multiplicity::ToOne,
+            },
+            query: "select material as tiny_auth_id from test_data_desk".to_string(),
+            assignment_query: "".to_string(),
+        };
+
+        let actual = uut.load_data(&mut transaction).await;
+
+        assert!(actual.is_ok());
+        assert_eq!(actual.unwrap(), LoadedData::default());
+    }
+
+    #[rstest]
+    #[test(tokio::test)]
+    async fn db_error_is_propagated(#[future] db: Pool<Sqlite>) {
+        let db = db.await;
+        let mut conn = db.acquire().await.unwrap();
+        let mut transaction = conn.begin_immediate().await.unwrap();
+        let uut = DataAssembler {
+            data_loaders: vec![QueryLoader {
+                data_loader: DataLoader {
+                    name: "desk".to_string(),
+                    location: "/user/desk".try_into().unwrap(),
+                    multiplicity: Multiplicity::ToOne,
+                },
+                query: "select * from non_existing_table".to_string(),
+                assignment_query: "".to_string(),
+            }],
+        };
+
+        let actual = uut
+            .load(Default::default(), 1, &mut transaction, load_user)
+            .await;
+
+        assert!(actual.is_err());
+    }
+
+    #[rstest]
+    #[test(tokio::test)]
+    async fn loader_returning_non_object_gives_empty_attributes(#[future] db: Pool<Sqlite>) {
+        let db = db.await;
+        let mut conn = db.acquire().await.unwrap();
+        let mut transaction = conn.begin_immediate().await.unwrap();
+        let uut = DataAssembler {
+            data_loaders: vec![],
+        };
+
+        let actual = uut
+            .load(Default::default(), 1, &mut transaction, null_loader)
+            .await;
+
+        assert!(actual.is_ok());
+        assert_eq!(actual.unwrap(), Default::default());
+    }
+
+    fn null_loader(_: Vec<DataLoader>, _: Vec<LoadedData>, _: Value, _: i32) -> Value {
+        Value::Null
+    }
+
+    #[fixture]
+    async fn db() -> Pool<Sqlite> {
+        let options = SqliteConnectOptions::from_str(
+            &(env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql/sqlite/build/unittests.sqlite"),
+        )
+        .unwrap()
+        .read_only(false)
+        .journal_mode(Wal)
+        .busy_timeout(Duration::from_secs(5))
+        .synchronous(Normal)
+        .pragma("cache_size", "1000000000")
+        .foreign_keys(true)
+        .pragma("temp_store", "memory")
+        .analysis_limit(Some(0))
+        .optimize_on_close(true, None)
+        .log_statements(LevelFilter::Trace);
+        let pool_options = PoolOptions::new()
+            .min_connections(0)
+            .max_lifetime(Some(Duration::from_secs(600)));
+
+        let write_pool_options = pool_options.max_connections(1);
+        write_pool_options.connect_lazy_with(options)
+    }
+}
