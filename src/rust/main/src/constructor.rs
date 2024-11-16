@@ -372,14 +372,19 @@ impl<'a> Constructor<'a> {
                     use_for,
                 } => {
                     let _store_span = span!(Level::INFO, "", store = %name).entered();
-                    let user_loaders =
-                        tiny_auth_sqlite::inject::data_assembler(use_for.users.iter().filter_map(
-                            |v| v.try_into().map_err(|e| warn!(%e, "invalid location")).ok(),
-                        ));
-                    let client_loaders = tiny_auth_sqlite::inject::data_assembler(
-                        use_for.clients.iter().filter_map(|v| {
+                    let user_loaders = tiny_auth_sqlite::inject::data_assembler(
+                        use_for.users.iter().flat_map(|v| v.iter()).filter_map(|v| {
                             v.try_into().map_err(|e| warn!(%e, "invalid location")).ok()
                         }),
+                    );
+                    let client_loaders = tiny_auth_sqlite::inject::data_assembler(
+                        use_for
+                            .clients
+                            .iter()
+                            .flat_map(|v| v.iter())
+                            .filter_map(|v| {
+                                v.try_into().map_err(|e| warn!(%e, "invalid location")).ok()
+                            }),
                     );
 
                     let sqlite_store = match tiny_auth_sqlite::inject::sqlite_store(
@@ -398,10 +403,10 @@ impl<'a> Constructor<'a> {
                         Ok(v) => v,
                     };
 
-                    if !use_for.users.is_empty() {
+                    if use_for.users.is_some() {
                         user_stores.push(sqlite_store.clone());
                     }
-                    if !use_for.clients.is_empty() {
+                    if use_for.clients.is_some() {
                         client_stores.push(sqlite_store.clone());
                     }
                     if use_for.scopes {

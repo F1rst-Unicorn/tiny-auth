@@ -51,13 +51,7 @@ store:
         scopes: true
         passwords: true
         auth_codes: true
-        clients:
-          - name: desk
-            location: /client/desk
-            multiplicity: to one
-            query: |
-              select id as tiny_auth_id, assigned_to as tiny_auth_assigned_to, material
-              from test_data_desk
+        clients: []
         users:
           - name: desk
             location: /user/desk

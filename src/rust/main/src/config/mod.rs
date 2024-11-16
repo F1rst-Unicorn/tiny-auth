@@ -164,9 +164,9 @@ pub struct SqliteUseFor {
     #[serde(rename = "auth codes")]
     pub auth_codes: bool,
     #[serde(default)]
-    pub clients: Vec<QueryLoader>,
+    pub clients: Option<Vec<QueryLoader>>,
     #[serde(default)]
-    pub users: Vec<QueryLoader>,
+    pub users: Option<Vec<QueryLoader>>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]

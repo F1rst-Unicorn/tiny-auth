@@ -275,7 +275,8 @@ Declare what data the store is responsible for. `scopes`, `passwords` and `auth
 codes` take a boolean to enable or disable them. There are no configuration
 options. For `clients` and `users`, a list of data loaders can be set. A data
 loader allows to add arbitrary data to a user/client context when rendering
-scopes.
+scopes, see below. An empty list activates the store for users or clients
+without any data loaders: `users: []`.
 
 #### name
 
