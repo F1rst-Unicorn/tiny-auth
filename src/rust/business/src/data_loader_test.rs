@@ -97,6 +97,69 @@ pub mod loading {
             actual
         );
     }
+
+    #[test]
+    pub fn missing_loaded_data_gives_null() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "desk".to_string(),
+                "/user/desk".try_into().unwrap(),
+                ToOne,
+            )],
+            vec![],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(Value::Null, actual);
+    }
+
+    #[test]
+    pub fn non_unique_data_loader_names_give_null() {
+        let actual = load_user(
+            vec![
+                DataLoader::new("desk".to_string(), "/user/desk".try_into().unwrap(), ToOne),
+                DataLoader::new("desk".to_string(), "/user/other".try_into().unwrap(), ToOne),
+            ],
+            vec![LoadedData::new([], []), LoadedData::new([], [])],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(Value::Null, actual);
+    }
+
+    #[test]
+    pub fn unknown_destination_is_skipped() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "desk".to_string(),
+                "/unknown/desk".try_into().unwrap(),
+                ToOne,
+            )],
+            vec![LoadedData::new([], [])],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(USER.clone(), actual);
+    }
+
+    #[test]
+    pub fn json_pointer_without_destination_is_skipped() {
+        let actual = load_user(
+            vec![DataLoader::new(
+                "desk".to_string(),
+                "/".try_into().unwrap(),
+                ToOne,
+            )],
+            vec![LoadedData::new([], [])],
+            USER.clone(),
+            1,
+        );
+
+        assert_eq!(USER.clone(), actual);
+    }
 }
 
 pub mod nesting {

@@ -18,7 +18,7 @@ use crate::data_loader::Multiplicity::ToOne;
 use crate::json_pointer::{ArrayAccess, JsonPointer, PastLastArrayElement};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
-use tracing::{debug, Level};
+use tracing::{debug, error, instrument, Level};
 use tracing::{span, warn};
 
 #[derive(PartialEq, Eq, Clone)]
@@ -97,65 +97,48 @@ fn load_with_root_data(
 }
 
 pub fn load(data_loaders: Vec<DataLoader>, loaded_data: Vec<LoadedData>) -> Value {
+    if data_loaders.len() != loaded_data.len() {
+        error!(data_loaders = %data_loaders.len(),
+            loaded_data = %loaded_data.len(),
+            "length of data loaders and loaded_data don't match! Please report a bug");
+        return Value::Null;
+    }
+
     let mut loaded_data: BTreeMap<String, LoadedData> = loaded_data
         .into_iter()
         .enumerate()
         .map(|(index, data)| (data_loaders[index].name.clone(), data))
         .collect::<BTreeMap<_, _>>();
 
+    if data_loaders.len() != loaded_data.len() {
+        warn!(data_loaders = %data_loaders.len(),
+            loaded_data = %loaded_data.len(),
+            "data loaders have no unique names");
+        return Value::Null;
+    }
+
     for data_loader in data_loaders.iter().rev().skip(1) {
         let _data_loader_span = span!(Level::INFO, "", source = %data_loader.name).entered();
-        let destination = data_loader.location.first().unwrap();
+        let Some(destination) = data_loader.location.first() else {
+            warn!("data loader location has no first element so it cannot be nested");
+            continue;
+        };
         let _destination_span = span!(Level::INFO, "", %destination).entered();
         let Some(mut source_objects) = loaded_data.remove(&data_loader.name) else {
             warn!("data loader will be ignored as no data was loaded");
             continue;
         };
-        let Some(destination_data) = loaded_data.get_mut(destination) else {
+        let Some(destination_objects) = loaded_data.get_mut(destination) else {
             warn!("data loader will be ignored as destination is not known");
             continue;
         };
-        for (destination_id, destination_object) in destination_data.data.iter_mut() {
-            let _destination_id_span = span!(Level::INFO, "", %destination_id).entered();
-            let assignments = source_objects
-                .assignments
-                .remove(destination_id)
-                .unwrap_or_default();
-
-            let value_to_nest: Value = if data_loader.multiplicity == ToOne {
-                if assignments.len() > 1 {
-                    warn!(
-                        source_ids = assignments.iter().map(ToString::to_string).collect::<Vec<_>>().join(", "),
-                        "'to one' data loader assigns more than one object. Only the first is assigned");
-                }
-                if let Some(source_id) = assignments.first() {
-                    if let Some(source_object) = source_objects.data.get(source_id).cloned() {
-                        source_object
-                    } else {
-                        warn!(%source_id, "assignment references unknown id");
-                        Value::Null
-                    }
-                } else {
-                    debug!("destination has no source value");
-                    Value::Null
-                }
-            } else {
-                let mut value_to_nest = Vec::default();
-                for source_id in assignments {
-                    if let Some(source_object) = source_objects.data.get(&source_id).cloned() {
-                        value_to_nest.push(source_object);
-                    } else {
-                        warn!(%source_id, "assignment references unknown id");
-                    }
-                }
-                value_to_nest.into()
-            };
-
-            nest_into(
+        for (destination_id, destination_object) in destination_objects.data.iter_mut() {
+            nest_data_into_destinations(
+                data_loader,
+                &mut source_objects,
+                destination_id,
                 destination_object,
-                value_to_nest,
-                data_loader.location.pop_first(),
-            )
+            );
         }
     }
 
@@ -166,6 +149,59 @@ pub fn load(data_loaders: Vec<DataLoader>, loaded_data: Vec<LoadedData>) -> Valu
         .and_then(|v| v.data.pop_first())
         .map(|(_, v)| v)
         .unwrap()
+}
+
+#[instrument(skip_all, fields(%destination_id))]
+fn nest_data_into_destinations(
+    data_loader: &DataLoader,
+    source_objects: &mut LoadedData,
+    destination_id: &i32,
+    destination_object: &mut Value,
+) {
+    let assignments = source_objects
+        .assignments
+        .remove(destination_id)
+        .unwrap_or_default();
+
+    let value_to_nest = if data_loader.multiplicity == ToOne {
+        if assignments.len() > 1 {
+            warn!(
+                source_ids = assignments
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                "'to one' data loader assigns more than one object. Only the first is assigned"
+            );
+        }
+        if let Some(source_id) = assignments.first() {
+            if let Some(source_object) = source_objects.data.get(source_id).cloned() {
+                source_object
+            } else {
+                warn!(%source_id, "assignment references unknown id");
+                Value::Null
+            }
+        } else {
+            debug!("destination has no source value");
+            Value::Null
+        }
+    } else {
+        let mut value_to_nest = Vec::default();
+        for source_id in assignments {
+            if let Some(source_object) = source_objects.data.get(&source_id).cloned() {
+                value_to_nest.push(source_object);
+            } else {
+                warn!(%source_id, "assignment references unknown id");
+            }
+        }
+        value_to_nest.into()
+    };
+
+    nest_into(
+        destination_object,
+        value_to_nest,
+        data_loader.location.pop_first(),
+    )
 }
 
 fn nest_into(destination: &mut Value, value_to_nest: Value, location: JsonPointer) {
