@@ -173,6 +173,7 @@ pub struct SqliteUseFor {
 pub struct QueryLoader {
     pub location: String,
     pub name: String,
+    #[serde(default)]
     pub multiplicity: Multiplicity,
     pub query: String,
     #[serde(default)]
@@ -200,6 +201,12 @@ pub enum Multiplicity {
     ToOne,
     #[serde(rename = "to many")]
     ToMany,
+}
+
+impl Default for Multiplicity {
+    fn default() -> Self {
+        Self::ToMany
+    }
 }
 
 impl From<Multiplicity> for tiny_auth_business::data_loader::Multiplicity {
