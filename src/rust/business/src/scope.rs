@@ -432,19 +432,23 @@ pub enum MergeError {
     UnmergableTypes,
 }
 
+#[instrument(level = "debug", fields(%left, %right))]
 pub fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
     match left {
-        Value::Array(mut left) => match right {
+        Value::Array(mut inner_left) => match right {
             Value::Array(right) => {
-                left.extend(right);
-                Ok(Value::Array(left))
+                inner_left.extend(right);
+                Ok(Value::Array(inner_left))
             }
-            _ => Err(MergeError::TypeMismatch),
+            _ => {
+                debug!(left = %<serde_json::Value as From<Vec<_>>>::from(inner_left), %right);
+                Err(MergeError::TypeMismatch)
+            }
         },
-        Value::Object(left) => match right {
+        Value::Object(inner_left) => match right {
             Value::Object(mut right) => {
                 let mut result = Map::new();
-                for (k, v) in left.into_iter() {
+                for (k, v) in inner_left.into_iter() {
                     if right.contains_key(&k) {
                         let right_value = right.remove(&k).unwrap();
                         result.insert(k, merge(v, right_value)?);
@@ -457,9 +461,15 @@ pub fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
                 }
                 Ok(Value::Object(result))
             }
-            _ => Err(MergeError::TypeMismatch),
+            _ => {
+                debug!(left = %<serde_json::Value as From<Map<_, _>>>::from(inner_left), %right);
+                Err(MergeError::TypeMismatch)
+            }
         },
-        _ => Err(MergeError::UnmergableTypes),
+        _ => {
+            debug!(%left, %right);
+            Err(MergeError::UnmergableTypes)
+        }
     }
 }
 

@@ -168,6 +168,7 @@ impl ScopeStore for MergingScopeStore {
             join_all(self.stores.iter().map(|v| v.get(key.as_str())))
                 .await
                 .into_iter()
+                .filter(|v| !matches!(v, Err(ScopeStoreError::NotFound)))
                 .collect::<Result<Vec<_>, _>>()
                 .and_then(|v| {
                     v.into_iter()

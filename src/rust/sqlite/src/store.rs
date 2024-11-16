@@ -408,6 +408,7 @@ impl PasswordStore for SqliteStore {
 
 #[async_trait]
 impl ScopeStore for SqliteStore {
+    #[instrument(skip_all, fields(store = self.name, scopes = keys.join(" ")))]
     async fn get_all(&self, keys: &[String]) -> Result<Vec<Scope>, ScopeStoreError> {
         let mut conn = self.read_pool.acquire().await.map_err(wrap_err)?;
         let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
@@ -587,6 +588,7 @@ impl ScopeStore for SqliteStore {
             .collect())
     }
 
+    #[instrument(skip_all, fields(store = self.name))]
     async fn get_scope_names(&self) -> Result<Vec<String>, ScopeStoreError> {
         let mut conn = self.read_pool.acquire().await.map_err(wrap_err)?;
         let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
