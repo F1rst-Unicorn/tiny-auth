@@ -16,11 +16,13 @@
  */
 use std::error::Error;
 use tera::{Context, Tera};
+use tiny_auth_business::template::data_loader::DataLoaderContext;
 use tiny_auth_business::template::ldap_search::LdapSearchContext;
 use tiny_auth_business::template::scope::ScopeContext;
 use tiny_auth_business::template::{
     bind_dn::BindDnContext, InstantiatedTemplate, Template, TemplateError, Templater,
 };
+use tracing::error;
 
 pub(crate) struct BindDnTemplater(pub(crate) Template);
 
@@ -70,6 +72,39 @@ impl<'a> Templater<ScopeContext<'a>> for ScopeTemplater {
         _context: ScopeContext<'a>,
     ) -> Result<InstantiatedTemplate, TemplateError> {
         Ok(InstantiatedTemplate(String::default()))
+    }
+}
+
+pub(crate) struct DataLoaderTemplater;
+
+impl Templater<DataLoaderContext> for DataLoaderTemplater {
+    fn instantiate_by_name(
+        &self,
+        context: DataLoaderContext,
+        name: &str,
+        content: &str,
+    ) -> Result<InstantiatedTemplate, TemplateError> {
+        let mut tera = Tera::default();
+        tera.add_raw_template(name, content).map_err(map_err)?;
+        let mut tera_context = Context::new();
+        tera_context.insert(context.root_type.as_ref(), &context.root);
+        tera_context.insert(
+            "tiny_auth_assigned_to",
+            &context
+                .assigned_to
+                .iter()
+                .map(|v| format!("{}", v))
+                .collect::<Vec<String>>()
+                .join(", "),
+        );
+        tera_context.extend(Context::from_serialize(context.loaded_data).unwrap());
+        let result = tera.render(name, &tera_context).map_err(map_err)?;
+        Ok(InstantiatedTemplate(result))
+    }
+
+    fn instantiate(&self, _: DataLoaderContext) -> Result<InstantiatedTemplate, TemplateError> {
+        error!("no call expected");
+        Ok(InstantiatedTemplate("".to_string()))
     }
 }
 

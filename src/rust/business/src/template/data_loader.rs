@@ -14,13 +14,26 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use serde_json::Value;
+use std::collections::BTreeMap;
 
-pub mod bind_dn;
-pub mod common;
-pub mod data_loader;
-pub mod ldap_search;
-pub mod scope;
-pub mod test_fixtures;
-pub mod web;
+pub struct DataLoaderContext {
+    pub assigned_to: Vec<i32>,
+    pub root_type: Root,
+    pub root: Value,
+    pub loaded_data: BTreeMap<String, Value>,
+}
 
-pub use common::*;
+pub enum Root {
+    User,
+    Client,
+}
+
+impl AsRef<str> for Root {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::User => "user",
+            Self::Client => "client",
+        }
+    }
+}
