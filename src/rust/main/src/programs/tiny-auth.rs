@@ -27,8 +27,7 @@ use tracing::info;
 
 fn main() {
     let arguments = cli_parser::parse_arguments();
-    let verbosity_level = arguments.get_count(FLAG_VERBOSE);
-    let handles = initialise_from_verbosity(verbosity_level);
+    let handles = initialise_from_verbosity(arguments.get_count(FLAG_VERBOSE));
 
     info!("starting up");
 

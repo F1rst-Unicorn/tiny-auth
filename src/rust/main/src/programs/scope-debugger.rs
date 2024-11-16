@@ -24,6 +24,7 @@ use tiny_auth_business::scope::Destination;
 use tiny_auth_business::token::{Access, Id, Userinfo};
 use tiny_auth_main::config::parser::parse_config;
 use tiny_auth_main::constructor::Constructor;
+use tiny_auth_main::logging;
 use tiny_auth_main::logging::initialise_from_verbosity;
 use tracing::debug;
 use tracing::error;
@@ -37,12 +38,12 @@ pub const FLAG_DESTINATION: &str = "destination";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    let args = parse_arguments();
-    initialise_from_verbosity(args.get_count(FLAG_VERBOSE));
+    let arguments = parse_arguments();
+    let handles = initialise_from_verbosity(arguments.get_count(FLAG_VERBOSE));
 
     debug!("starting up");
 
-    let config_path = args
+    let config_path = arguments
         .get_one::<String>(FLAG_CONFIG)
         .map(String::as_str)
         .unwrap_or(tiny_auth_main::cli_parser::FLAG_CONFIG_DEFAULT);
@@ -50,6 +51,7 @@ async fn main() {
 
     debug!("parsing config");
     let config = parse_config(config_path);
+    logging::reload_with_config(&config.log, &handles);
 
     let di = match Constructor::new(&config).await {
         Err(e) => {
@@ -62,7 +64,8 @@ async fn main() {
     let store = di.user_store();
     let user = match store
         .get(
-            args.get_one::<String>(FLAG_USER)
+            arguments
+                .get_one::<String>(FLAG_USER)
                 .map(String::as_str)
                 .unwrap(),
         )
@@ -78,7 +81,8 @@ async fn main() {
     let store = di.get_client_store();
     let client = match store
         .get(
-            args.get_one::<String>(FLAG_CLIENT)
+            arguments
+                .get_one::<String>(FLAG_CLIENT)
                 .map(String::as_str)
                 .unwrap(),
         )
@@ -94,7 +98,8 @@ async fn main() {
     let store = di.get_scope_store();
     let scope = match store
         .get(
-            args.get_one::<String>(FLAG_SCOPE)
+            arguments
+                .get_one::<String>(FLAG_SCOPE)
                 .map(String::as_str)
                 .unwrap(),
         )
@@ -107,7 +112,7 @@ async fn main() {
         Ok(v) => v,
     };
 
-    match args.get_one::<Destination>(FLAG_DESTINATION).unwrap() {
+    match arguments.get_one::<Destination>(FLAG_DESTINATION).unwrap() {
         Destination::AccessToken => {
             let token = di
                 .build_token_creator()

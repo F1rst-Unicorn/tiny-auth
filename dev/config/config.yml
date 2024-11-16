@@ -161,6 +161,7 @@ log:
     - tiny_auth_template=trace
     - tiny_auth_template::web=debug
     - tiny_auth_web=trace
+    - log=info
     - sqlx::query=trace
     - "[cid]=debug"
 

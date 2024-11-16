@@ -1,3 +1,16 @@
-export RUST_LOG=tiny_auth_main=trace,tiny_auth_web=trace,tiny_auth_business=trace,tiny_auth_api=trace,tiny_auth_ldap=trace,tiny_auth_sqlite=trace,sqlx::query=trace
+export RUST_LOG=$(echo 'warn,
+    tiny_auth_main=trace,
+    tiny_auth_web=trace,
+    tiny_auth_business=trace,
+    tiny_auth_api=trace,
+    tiny_auth_ldap=trace,
+    tiny_auth=trace,
+    [cid]=trace,
+    tiny_auth_main::config::parser=debug,
+    tiny_auth_main::systemd::linux=debug,
+    tiny_auth_business::store::memory=debug,
+    tiny_auth_sqlite=trace,
+    log=info,
+    sqlx::query=trace' | sed -z "s/\n//g; s/, */,/g")
 export RUST_BACKTRACE=1
-export DATABASE_URL=sqlite:///workspace/src/sql/sqlite/build/db.sqlite
+export DATABASE_URL=sqlite:///workspace/src/sql/sqlite/build/dev.sqlite

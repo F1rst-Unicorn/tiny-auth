@@ -85,3 +85,4 @@ log:
     - tiny_auth_business::store::memory=debug
     - tiny_auth_template::web=debug
     - sqlx::query=trace
+    - log=info

@@ -22,6 +22,7 @@ use clap::Command;
 use serde::Serialize;
 use tiny_auth_business::password::Password;
 use tiny_auth_main::config::parser::parse_config;
+use tiny_auth_main::logging;
 use tiny_auth_main::logging::initialise_from_verbosity;
 use tracing::debug;
 use tracing::error;
@@ -32,12 +33,12 @@ pub const FLAG_PASSWORD: &str = "password";
 pub const FLAG_CONFIG: &str = "config";
 
 fn main() {
-    let args = parse_arguments();
-    initialise_from_verbosity(args.get_count(FLAG_VERBOSE));
+    let arguments = parse_arguments();
+    let handles = initialise_from_verbosity(arguments.get_count(FLAG_VERBOSE));
 
     debug!("starting up");
 
-    let config_path = args
+    let config_path = arguments
         .get_one::<String>(FLAG_CONFIG)
         .map(String::as_str)
         .unwrap_or(tiny_auth_main::cli_parser::FLAG_CONFIG_DEFAULT);
@@ -45,13 +46,16 @@ fn main() {
 
     debug!("parsing config");
     let config = parse_config(config_path);
+    logging::reload_with_config(&config.log, &handles);
 
     let password = PasswordWrapper {
         password: Password::new(
-            args.get_one::<String>(FLAG_USERNAME)
+            arguments
+                .get_one::<String>(FLAG_USERNAME)
                 .map(String::as_str)
                 .unwrap(),
-            args.get_one::<String>(FLAG_PASSWORD)
+            arguments
+                .get_one::<String>(FLAG_PASSWORD)
                 .map(String::as_str)
                 .unwrap(),
             &config.crypto.pepper,
