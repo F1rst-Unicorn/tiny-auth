@@ -77,17 +77,16 @@ impl<'a> Templater<ScopeContext<'a>> for ScopeTemplater {
 
 pub(crate) struct DataLoaderTemplater;
 
-impl Templater<DataLoaderContext> for DataLoaderTemplater {
+impl<'a> Templater<DataLoaderContext<'a>> for DataLoaderTemplater {
     fn instantiate_by_name(
         &self,
-        context: DataLoaderContext,
+        context: DataLoaderContext<'a>,
         name: &str,
         content: &str,
     ) -> Result<InstantiatedTemplate, TemplateError> {
         let mut tera = Tera::default();
         tera.add_raw_template(name, content).map_err(map_err)?;
         let mut tera_context = Context::new();
-        tera_context.insert(context.root_type.as_ref(), &context.root);
         tera_context.insert(
             "tiny_auth_assigned_to",
             &context

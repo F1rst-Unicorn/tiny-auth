@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 use crate::begin_immediate::{SqliteConnectionExt, Transaction};
-use crate::data_assembler::DataAssembler;
+use crate::data_assembler::{DataAssembler, Root};
 use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -32,7 +32,6 @@ use std::num::{NonZeroI64, NonZeroU32};
 use std::sync::Arc;
 use tiny_auth_business::client::Error as ClientError;
 use tiny_auth_business::client::{Client, Error};
-use tiny_auth_business::data_loader::{load_client, load_user};
 use tiny_auth_business::json_pointer::JsonPointer;
 use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::{
@@ -295,9 +294,14 @@ impl UserStore for SqliteStore {
             allowed_scopes,
             attributes: Self::map_attributes(user_record, &["id"]),
         };
+        let mut user_as_value = user.clone();
+        user_as_value
+            .attributes
+            .insert(String::from("id"), user_id.into());
+        let user_as_value = serde_json::to_value(user_as_value).unwrap();
         user.attributes = self
             .user_data_assembler
-            .load(user.attributes, user_id, &mut transaction, load_user)
+            .load(user_as_value, user_id, &mut transaction, Root::User)
             .await
             .map_err(wrap_err)?;
         transaction.commit().await.map_err(wrap_err)?;
@@ -332,9 +336,14 @@ impl ClientStore for SqliteStore {
             allowed_scopes: BTreeSet::from_iter(allowed_scopes),
             attributes: Self::map_attributes(client_record, &["id"]),
         };
+        let mut client_as_value = client.clone();
+        client_as_value
+            .attributes
+            .insert(String::from("id"), client_id.into());
+        let client_as_value = serde_json::to_value(client_as_value).unwrap();
         client.attributes = self
             .client_data_assembler
-            .load(client.attributes, client_id, &mut transaction, load_client)
+            .load(client_as_value, client_id, &mut transaction, Root::Client)
             .await
             .map_err(wrap_err)?;
 

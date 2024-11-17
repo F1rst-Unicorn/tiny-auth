@@ -19,9 +19,14 @@ use crate::error::SqliteError;
 use crate::store::SqliteStore;
 use serde_json::Value;
 use sqlx::sqlite::SqliteRow;
-use sqlx::{Column, Error, Row, TypeInfo};
+use sqlx::{Column, Row, TypeInfo};
 use std::collections::{BTreeMap, HashMap};
-use tiny_auth_business::data_loader::{DataLoader, LoadedData};
+use std::sync::Arc;
+use tiny_auth_business::data_loader::{
+    load_client, load_user, DataLoader, LoadedData, Multiplicity,
+};
+use tiny_auth_business::template::data_loader::DataLoaderContext;
+use tiny_auth_business::template::Templater;
 use tracing::{error, instrument, warn};
 
 const ID_COLUMN_NAME: &str = "tiny_auth_id";
@@ -34,9 +39,19 @@ pub struct QueryLoader {
 }
 
 impl QueryLoader {
-    #[instrument(skip_all, fields(data_loader = self.data_loader.name))]
-    pub async fn load_data(&self, transaction: &mut Transaction<'_>) -> Result<LoadedData, Error> {
-        let data = sqlx::query(self.query.as_str())
+    pub(crate) async fn load_data<'a>(
+        &self,
+        transaction: &mut Transaction<'_>,
+        templater: Arc<dyn Templater<DataLoaderContext<'a>>>,
+        context: DataLoaderContext<'a>,
+    ) -> Result<LoadedData, SqliteError> {
+        let query = templater.instantiate_by_name(
+            context,
+            self.data_loader.name.as_str(),
+            self.query.as_str(),
+        )?;
+
+        let data = sqlx::query(query.as_ref())
             .fetch_all(&mut **transaction)
             .await?;
 
@@ -71,7 +86,12 @@ impl QueryLoader {
         }
 
         if !assignment_is_embedded {
-            let assignment_data = sqlx::query(self.assignment_query.as_str())
+            let assignment_query = templater.instantiate_by_name(
+                context,
+                self.data_loader.name.as_str(),
+                self.assignment_query.as_str(),
+            )?;
+            let assignment_data = sqlx::query(assignment_query.as_ref())
                 .fetch_all(&mut **transaction)
                 .await?;
 
@@ -125,40 +145,69 @@ impl QueryLoader {
     }
 }
 
-#[derive(Default)]
 pub struct DataAssembler {
     pub(crate) data_loaders: Vec<QueryLoader>,
+    pub(crate) templater: Arc<dyn for<'a> Templater<DataLoaderContext<'a>>>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum Root {
+    User,
+    Client,
+}
+
+impl AsRef<str> for Root {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::User => "user",
+            Self::Client => "client",
+        }
+    }
 }
 
 impl DataAssembler {
     pub(crate) async fn load(
         &self,
-        mut attributes: HashMap<String, Value>,
-        user_id: i32,
+        root: Value,
+        id: i32,
         transaction: &mut Transaction<'_>,
-        loader: fn(Vec<DataLoader>, Vec<LoadedData>, Value, i32) -> Value,
+        root_type: Root,
     ) -> Result<HashMap<String, Value>, SqliteError> {
         let mut loaded_data = Vec::new();
+        let mut ids: BTreeMap<&str, Vec<i32>> = BTreeMap::default();
+        let mut already_loaded_data: BTreeMap<String, Value> = BTreeMap::default();
+        let mut transitive_multiplicity = BTreeMap::default();
+        ids.insert(root_type.as_ref(), vec![id]);
+        already_loaded_data.insert(root_type.as_ref().to_string(), root.clone());
+        transitive_multiplicity.insert(root_type.as_ref(), Multiplicity::ToOne);
+
         for data_loader in &self.data_loaders {
-            loaded_data.push((data_loader, data_loader.load_data(transaction).await))
+            if self
+                .load_from_single(
+                    data_loader,
+                    &mut loaded_data,
+                    &mut ids,
+                    &mut already_loaded_data,
+                    &mut transitive_multiplicity,
+                    transaction,
+                )
+                .await
+            {
+                continue;
+            }
         }
+        drop(ids);
+        drop(transitive_multiplicity);
+        drop(already_loaded_data);
 
-        let (loaded_data, errors): (Vec<_>, Vec<_>) =
-            loaded_data.into_iter().partition(|(_, data)| data.is_ok());
-
-        let any_errors = !errors.is_empty();
-        errors
-            .into_iter()
-            .map(|(data_loader, e)| (data_loader, e.unwrap_err()))
-            .for_each(
-                |(data_loader, e)| warn!(%e, data_loader = data_loader.data_loader.name, "failed to load data"),
-            );
-
-        if any_errors {
+        if loaded_data.len() != self.data_loaders.len() {
             return Err(SqliteError::BackendError);
         }
 
-        let loaded_data = loaded_data.into_iter().map(|v| v.1.unwrap()).collect();
+        let loader = match root_type {
+            Root::User => load_user,
+            Root::Client => load_client,
+        };
 
         let data = loader(
             self.data_loaders
@@ -166,17 +215,95 @@ impl DataAssembler {
                 .map(|v| v.data_loader.clone())
                 .collect(),
             loaded_data,
-            attributes.into_iter().collect(),
-            user_id,
+            root,
+            id,
         );
 
-        if let Value::Object(map) = data {
-            attributes = map.into_iter().collect();
+        let attributes = if let Value::Object(map) = data {
+            map.into_iter().collect()
         } else {
-            attributes = HashMap::default();
-        }
+            HashMap::default()
+        };
 
         Ok(attributes)
+    }
+
+    #[instrument(skip_all, fields(data_loader = %data_loader.data_loader.name))]
+    async fn load_from_single<'a>(
+        &self,
+        data_loader: &'a QueryLoader,
+        loaded_data: &mut Vec<LoadedData>,
+        ids: &mut BTreeMap<&'a str, Vec<i32>>,
+        already_loaded_data: &mut BTreeMap<String, Value>,
+        transitive_multiplicity: &mut BTreeMap<&'a str, Multiplicity>,
+        transaction: &mut Transaction<'_>,
+    ) -> bool {
+        let Some(destination) = data_loader.data_loader.location.first() else {
+            warn!("location has no first element so it cannot be nested");
+            return true;
+        };
+        let Some(destination_ids) = ids.get(destination) else {
+            warn!(%destination,
+                "data loader will be ignored as destination is not known. \
+                Maybe the order is wrong."
+            );
+            return true;
+        };
+        let context = DataLoaderContext {
+            assigned_to: destination_ids,
+            loaded_data: already_loaded_data,
+        };
+
+        let single_loaded_data = data_loader
+            .load_data(transaction, self.templater.clone(), context)
+            .await;
+        let single_loaded_data = match single_loaded_data {
+            Err(e) => {
+                warn!(%e, "failed to load data");
+                return true;
+            }
+            Ok(v) => v,
+        };
+
+        loaded_data.push(single_loaded_data);
+        let single_loaded_data = loaded_data.last().unwrap();
+        ids.insert(
+            data_loader.data_loader.name.as_str(),
+            single_loaded_data.data.keys().cloned().collect(),
+        );
+        let current_transitive_multiplicity = match (
+            transitive_multiplicity
+                .get(destination)
+                .cloned()
+                .unwrap_or(Multiplicity::ToMany),
+            data_loader.data_loader.multiplicity,
+        ) {
+            (Multiplicity::ToMany, _) => Multiplicity::ToMany,
+            (Multiplicity::ToOne, v) => v,
+        };
+        transitive_multiplicity.insert(
+            data_loader.data_loader.name.as_str(),
+            current_transitive_multiplicity,
+        );
+        match current_transitive_multiplicity {
+            Multiplicity::ToOne => {
+                already_loaded_data.insert(
+                    data_loader.data_loader.name.clone(),
+                    single_loaded_data
+                        .data
+                        .first_key_value()
+                        .map(|(_, v)| v.clone())
+                        .unwrap_or(Value::Null),
+                );
+            }
+            Multiplicity::ToMany => {
+                already_loaded_data.insert(
+                    data_loader.data_loader.name.clone(),
+                    single_loaded_data.data.values().cloned().collect::<Value>(),
+                );
+            }
+        }
+        false
     }
 }
 
@@ -194,7 +321,8 @@ pub mod tests {
     use std::str::FromStr;
     use std::time::Duration;
     use test_log::test;
-    use tiny_auth_business::data_loader::{load_user, Multiplicity};
+    use tiny_auth_business::data_loader::Multiplicity;
+    use tiny_auth_business::template::test_fixtures::TestTemplater;
     use tracing::log::LevelFilter;
 
     #[rstest]
@@ -212,8 +340,18 @@ pub mod tests {
             query: "select * from test_data_desk".to_string(),
             assignment_query: "".to_string(),
         };
+        let data_loader_context = DataLoaderContext {
+            assigned_to: &[],
+            loaded_data: &BTreeMap::default(),
+        };
 
-        let actual = uut.load_data(&mut transaction).await;
+        let actual = uut
+            .load_data(
+                &mut transaction,
+                Arc::new(TestTemplater::default()),
+                data_loader_context,
+            )
+            .await;
 
         assert!(actual.is_ok());
         assert_eq!(actual.unwrap(), LoadedData::default());
@@ -234,8 +372,18 @@ pub mod tests {
             query: "select material as tiny_auth_id from test_data_desk".to_string(),
             assignment_query: "".to_string(),
         };
+        let data_loader_context = DataLoaderContext {
+            assigned_to: &[],
+            loaded_data: &BTreeMap::default(),
+        };
 
-        let actual = uut.load_data(&mut transaction).await;
+        let actual = uut
+            .load_data(
+                &mut transaction,
+                Arc::new(TestTemplater::default()),
+                data_loader_context,
+            )
+            .await;
 
         assert!(actual.is_ok());
         assert_eq!(actual.unwrap(), LoadedData::default());
@@ -257,35 +405,14 @@ pub mod tests {
                 query: "select * from non_existing_table".to_string(),
                 assignment_query: "".to_string(),
             }],
+            templater: Arc::new(TestTemplater),
         };
 
         let actual = uut
-            .load(Default::default(), 1, &mut transaction, load_user)
+            .load(Default::default(), 1, &mut transaction, Root::User)
             .await;
 
         assert!(actual.is_err());
-    }
-
-    #[rstest]
-    #[test(tokio::test)]
-    async fn loader_returning_non_object_gives_empty_attributes(#[future] db: Pool<Sqlite>) {
-        let db = db.await;
-        let mut conn = db.acquire().await.unwrap();
-        let mut transaction = conn.begin_immediate().await.unwrap();
-        let uut = DataAssembler {
-            data_loaders: vec![],
-        };
-
-        let actual = uut
-            .load(Default::default(), 1, &mut transaction, null_loader)
-            .await;
-
-        assert!(actual.is_ok());
-        assert_eq!(actual.unwrap(), Default::default());
-    }
-
-    fn null_loader(_: Vec<DataLoader>, _: Vec<LoadedData>, _: Value, _: i32) -> Value {
-        Value::Null
     }
 
     #[fixture]

@@ -17,23 +17,8 @@
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-pub struct DataLoaderContext {
-    pub assigned_to: Vec<i32>,
-    pub root_type: Root,
-    pub root: Value,
-    pub loaded_data: BTreeMap<String, Value>,
-}
-
-pub enum Root {
-    User,
-    Client,
-}
-
-impl AsRef<str> for Root {
-    fn as_ref(&self) -> &str {
-        match self {
-            Self::User => "user",
-            Self::Client => "client",
-        }
-    }
+#[derive(Clone, Copy)]
+pub struct DataLoaderContext<'a> {
+    pub assigned_to: &'a [i32],
+    pub loaded_data: &'a BTreeMap<String, Value>,
 }

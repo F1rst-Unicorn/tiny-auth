@@ -28,6 +28,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tiny_auth_business::data_loader::DataLoader;
 use tiny_auth_business::password::InPlacePasswordStore;
+use tiny_auth_business::template::data_loader::DataLoaderContext;
+use tiny_auth_business::template::Templater;
 use tracing::log::LevelFilter;
 
 pub async fn sqlite_store(
@@ -73,9 +75,13 @@ pub async fn sqlite_store(
     }))
 }
 
-pub fn data_assembler(data_loaders: impl IntoIterator<Item = QueryLoader>) -> DataAssembler {
+pub fn data_assembler(
+    data_loaders: impl IntoIterator<Item = QueryLoader>,
+    templater: Arc<dyn for<'a> Templater<DataLoaderContext<'a>>>,
+) -> DataAssembler {
     DataAssembler {
         data_loaders: data_loaders.into_iter().collect(),
+        templater,
     }
 }
 

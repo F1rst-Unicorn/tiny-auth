@@ -68,7 +68,9 @@ use tiny_auth_business::userinfo_endpoint;
 use tiny_auth_ldap::inject::{
     connector, search_bind_check, simple_bind_check, ClientConfig, UserConfig,
 };
-use tiny_auth_template::inject::{bind_dn_templater, ldap_search_templater, scope_templater};
+use tiny_auth_template::inject::{
+    bind_dn_templater, data_loader_templater, ldap_search_templater, scope_templater,
+};
 use tiny_auth_template::web::load_template_engine;
 use tiny_auth_web::cors::CorsChecker;
 use tiny_auth_web::endpoints::cert::TokenCertificate;
@@ -372,10 +374,12 @@ impl<'a> Constructor<'a> {
                     use_for,
                 } => {
                     let _store_span = span!(Level::INFO, "", store = %name).entered();
+                    let templater = data_loader_templater();
                     let user_loaders = tiny_auth_sqlite::inject::data_assembler(
                         use_for.users.iter().flat_map(|v| v.iter()).filter_map(|v| {
                             v.try_into().map_err(|e| warn!(%e, "invalid location")).ok()
                         }),
+                        templater.clone(),
                     );
                     let client_loaders = tiny_auth_sqlite::inject::data_assembler(
                         use_for
@@ -385,6 +389,7 @@ impl<'a> Constructor<'a> {
                             .filter_map(|v| {
                                 v.try_into().map_err(|e| warn!(%e, "invalid location")).ok()
                             }),
+                        templater.clone(),
                     );
 
                     let sqlite_store = match tiny_auth_sqlite::inject::sqlite_store(

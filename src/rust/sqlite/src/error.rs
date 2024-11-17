@@ -16,9 +16,12 @@
  */
 
 use thiserror::Error;
+use tiny_auth_business::template::TemplateError;
 
 #[derive(Error, Debug)]
 pub enum SqliteError {
+    #[error("{0}")]
+    TemplateError(#[from] TemplateError),
     #[error("backend error")]
     BackendError,
     #[error("{0}")]

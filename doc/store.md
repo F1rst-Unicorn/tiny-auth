@@ -199,7 +199,7 @@ store:
                 occupied_by as tiny_auth_assigned_to,
                 position
               from desk
-              where occupied_by in ({{ assigned_to_ids }})
+              where occupied_by in ({{ tiny_auth_assigned_to }})
 
           # n to 1
           - location: /user/building
@@ -212,7 +212,7 @@ store:
                 building.name
               from sits_in
               join building on building.id = sits_in.building_id
-              where sits_in.user_id in ({{ assigned_to_ids }})
+              where sits_in.user_id in ({{ tiny_auth_assigned_to }})
 
           # 1 to n
           - location: /user/pets
@@ -223,12 +223,12 @@ store:
                 pet.id as tiny_auth_id, 
                 pet.name
               from pet
-              where owned_by in ({{ assigned_to_ids }})
+              where owned_by in ({{ tiny_auth_assigned_to }})
             assignment: |
               select
                 pet.id as tiny_auth_id, 
                 pet.owned_by as tiny_auth_assigned_to,
-              where owned_by in ({{ assigned_to_ids }})
+              where owned_by in ({{ tiny_auth_assigned_to }})
 
           # n to m
           - location: /building/meeting_rooms
@@ -310,7 +310,7 @@ returned in the result set will be nested into the final object.
 
 Queries are [tera templates](https://tera.netlify.app/docs/). To filter the
 result set to only the required
-rows, the variable `assigned_to_ids` contains the comma-separated list of all
+rows, the variable `tiny_auth_assigned_to` contains the comma-separated list of all
 IDs tiny-auth will be interested in. Note that this list can be the empty
 string, which still makes SQLite IN-expressions valid syntax.
 Furthermore, the `user` or `client` as well as all data loaded by other loaders

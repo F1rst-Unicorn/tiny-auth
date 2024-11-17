@@ -31,6 +31,7 @@ use tiny_auth_business::store::{
     AuthorizationCodeRequest, AuthorizationCodeStore, ClientStore, PasswordStore, ScopeStore,
     UserStore, ValidationRequest,
 };
+use tiny_auth_business::template::test_fixtures::TestTemplater;
 
 #[test(tokio::test)]
 async fn connecting_works() {
@@ -525,8 +526,10 @@ async fn store() -> Arc<SqliteStore> {
                 "select id as tiny_auth_id, contained_in as tiny_auth_assigned_to, kind \
                 from test_data_meeting_room".to_string(),
                 String::default()),
-        ]),
-        Default::default(),
+        ],
+            Arc::new(TestTemplater)
+        ),
+        inject::data_assembler([], Arc::new(TestTemplater)),
     )
     .await
     .unwrap()

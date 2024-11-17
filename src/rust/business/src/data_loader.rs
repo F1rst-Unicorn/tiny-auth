@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 use tracing::{debug, error, instrument, Level};
 use tracing::{span, warn};
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Multiplicity {
     ToOne,
     ToMany,
@@ -46,7 +46,7 @@ impl DataLoader {
 
 #[derive(Default, Debug, PartialEq, Eq)]
 pub struct LoadedData {
-    data: BTreeMap<i32, Value>,
+    pub data: BTreeMap<i32, Value>,
     assignments: BTreeMap<i32, Vec<i32>>,
 }
 
@@ -83,7 +83,7 @@ pub fn load_user(
 fn load_with_root_data(
     mut data_loaders: Vec<DataLoader>,
     mut loaded_data: Vec<LoadedData>,
-    client: Value,
+    root: Value,
     id: i32,
     kind: &str,
 ) -> Value {
@@ -92,7 +92,7 @@ fn load_with_root_data(
         ("/".to_string() + kind).try_into().unwrap(),
         ToOne,
     ));
-    loaded_data.push(LoadedData::new([(id, client)], []));
+    loaded_data.push(LoadedData::new([(id, root)], []));
     load(data_loaders, loaded_data)
 }
 

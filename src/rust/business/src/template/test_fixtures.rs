@@ -17,6 +17,7 @@
 use crate::template::web::{ErrorPage, WebTemplater};
 use crate::template::{InstantiatedTemplate, TemplateError, Templater};
 
+#[derive(Default)]
 pub struct TestTemplater;
 
 impl<T: Send + Sync> Templater<T> for TestTemplater {
