@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "select *\nfrom tiny_auth_password_pbkf2hmacsha256\nwhere password = ?1\n",
+  "query": "select *\nfrom tiny_auth_password_pbkdf2hmacsha256\nwhere password = ?1\n",
   "describe": {
     "columns": [
       {
@@ -40,5 +40,5 @@
       false
     ]
   },
-  "hash": "b9d5bd5254a9b188896e09c52eabafe21eea751217120130d0f887e97ebba548"
+  "hash": "255a48834194aaee5f32350787639d07905d99841efc066387f158e18931cfcc"
 }

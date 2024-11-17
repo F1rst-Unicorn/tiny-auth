@@ -386,7 +386,7 @@ impl PasswordStore for SqliteStore {
             .await
             .map_err(wrap_err)?;
 
-        if let "pbkf2hmacsha256" = algorithm.as_str() {
+        if let "pbkdf2hmacsha256" = algorithm.as_str() {
             if let Some(record) = sqlx::query_file!("queries/get-password-pbkdf2hmacsha256.sql", id)
                 .fetch_optional(&mut *transaction)
                 .await

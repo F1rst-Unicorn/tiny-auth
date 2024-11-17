@@ -28,7 +28,7 @@
             create table tiny_auth_password (
                 id integer primary key not null,
                 algorithm text not null,
-                check (algorithm in ('pbkf2hmacsha256'))
+                check (algorithm in ('pbkdf2hmacsha256', 'ldap'))
             ) strict;;
 
             create table tiny_auth_user (
@@ -56,7 +56,7 @@
 
             create unique index tiny_auth_user_allowed_scopes_user on tiny_auth_user_allowed_scopes (user, client, scope);;
 
-            create table tiny_auth_password_pbkf2hmacsha256 (
+            create table tiny_auth_password_pbkdf2hmacsha256 (
                 id integer primary key not null,
                 password integer not null,
                 credential blob not null,
@@ -67,7 +67,17 @@
                 check (0 &lt; iterations and iterations &lt;= 4294967295)
             ) strict;;
 
-            create unique index tiny_auth_password_pbkf2hmacsha256_password on tiny_auth_password_pbkf2hmacsha256 (password);;
+            create unique index tiny_auth_password_pbkdf2hmacsha256_password on tiny_auth_password_pbkdf2hmacsha256 (password);;
+
+            create table tiny_auth_password_ldap (
+                id integer primary key not null,
+                password integer not null,
+                store_name text not null,
+                foreign key (password) references tiny_auth_password(id)
+                    on update cascade on delete cascade deferrable initially deferred
+            ) strict;;
+
+            create unique index tiny_auth_password_ldap_password on tiny_auth_password_ldap (password);;
 
             create table tiny_auth_client (
                 id integer primary key not null,
@@ -185,7 +195,7 @@
                 drop table tiny_auth_user;;
                 drop table tiny_auth_user_allowed_scopes;;
                 drop table tiny_auth_password;;
-                drop table tiny_auth_password_pbkf2hmacsha256;;
+                drop table tiny_auth_password_pbkdf2hmacsha256;;
                 drop table tiny_auth_client;;
                 drop table tiny_auth_redirect_uri;;
                 drop table tiny_auth_client_allowed_scopes;;
@@ -670,9 +680,9 @@
     <changeSet id="4" author="admin" labels="testdata">
         <sql endDelimiter=";;">
             insert into tiny_auth_password (algorithm)
-            values ('pbkf2hmacsha256');;
+            values ('pbkdf2hmacsha256');;
 
-            insert into tiny_auth_password_pbkf2hmacsha256 (
+            insert into tiny_auth_password_pbkdf2hmacsha256 (
                 password,
                 credential,
                 iterations,
@@ -700,9 +710,9 @@
                 1;;
 
             insert into tiny_auth_password (algorithm)
-            values ('pbkf2hmacsha256');;
+            values ('pbkdf2hmacsha256');;
 
-            insert into tiny_auth_password_pbkf2hmacsha256 (
+            insert into tiny_auth_password_pbkdf2hmacsha256 (
                 password,
                 credential,
                 iterations,
@@ -803,7 +813,7 @@
                 drop table test_data_pet_likes_user;;
                 drop table test_data_meeting_room;;
 
-                delete from tiny_auth_password_pbkf2hmacsha256
+                delete from tiny_auth_password_pbkdf2hmacsha256
                 where password = (
                     select password
                     from tiny_auth_user
