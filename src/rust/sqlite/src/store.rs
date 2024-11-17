@@ -16,6 +16,7 @@
  */
 use crate::begin_immediate::{SqliteConnectionExt, Transaction};
 use crate::data_assembler::{DataAssembler, Root};
+use crate::error::SqliteError;
 use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -30,8 +31,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::iter::repeat;
 use std::num::{NonZeroI64, NonZeroU32};
 use std::sync::Arc;
+use tiny_auth_business::client::Client;
 use tiny_auth_business::client::Error as ClientError;
-use tiny_auth_business::client::{Client, Error};
 use tiny_auth_business::json_pointer::JsonPointer;
 use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::{
@@ -287,10 +288,13 @@ impl UserStore for SqliteStore {
 
         let mut user = User {
             name: String::from(username),
-            password: Password::Sqlite {
-                name: self.name.clone(),
-                id: user_record.try_get("password").map_err(wrap_err)?,
-            },
+            password: self
+                .load_password(
+                    user_record.try_get("password").map_err(wrap_err)?,
+                    &mut transaction,
+                )
+                .await
+                .map_err(wrap_err)?,
             allowed_scopes,
             attributes: Self::map_attributes(user_record, &["id"]),
         };
@@ -331,7 +335,9 @@ impl ClientStore for SqliteStore {
 
         let mut client = Client {
             client_id: key.to_string(),
-            client_type: self.map_client_type(&client_record)?,
+            client_type: self
+                .map_client_type(&client_record, &mut transaction)
+                .await?,
             redirect_uris,
             allowed_scopes: BTreeSet::from_iter(allowed_scopes),
             attributes: Self::map_attributes(client_record, &["id"]),
@@ -381,36 +387,42 @@ impl PasswordStore for SqliteStore {
         let mut conn = self.read_pool.acquire().await.map_err(wrap_err)?;
         let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
 
-        let algorithm = sqlx::query_file_scalar!("queries/get-password.sql", id)
+        let password = query_file!("queries/get-password.sql", id)
             .fetch_one(&mut *transaction)
             .await
             .map_err(wrap_err)?;
 
-        if let "pbkdf2hmacsha256" = algorithm.as_str() {
-            if let Some(record) = sqlx::query_file!("queries/get-password-pbkdf2hmacsha256.sql", id)
+        match password.algorithm.as_str() {
+            "pbkdf2hmacsha256" => {
+                if let Some(record) = query_file!(
+                    "queries/get-password-pbkdf2hmacsha256.sql",
+                    password.password_id
+                )
                 .fetch_optional(&mut *transaction)
                 .await
                 .map_err(wrap_err)?
-            {
-                let password = Password::Pbkdf2HmacSha256 {
-                    credential: STANDARD.encode(record.credential),
-                    iterations: NonZeroI64::try_from(record.iterations)
-                        .and_then(NonZeroU32::try_from)
-                        .unwrap_or(HASH_ITERATIONS),
-                    salt: STANDARD.encode(record.salt),
-                };
+                {
+                    let password = Password::Pbkdf2HmacSha256 {
+                        credential: STANDARD.encode(record.credential),
+                        iterations: NonZeroI64::try_from(record.iterations)
+                            .and_then(NonZeroU32::try_from)
+                            .unwrap_or(HASH_ITERATIONS),
+                        salt: STANDARD.encode(record.salt),
+                    };
 
-                transaction.commit().await.map_err(wrap_err)?;
-                self.in_place_password_store
-                    .verify(username, &password, password_to_check)
-                    .await
-            } else {
-                error!("password not found");
+                    transaction.commit().await.map_err(wrap_err)?;
+                    self.in_place_password_store
+                        .verify(username, &password, password_to_check)
+                        .await
+                } else {
+                    error!("password not found");
+                    Err(PasswordError::BackendError)
+                }
+            }
+            algorithm => {
+                error!(%algorithm, "unknown password algorithm. Don't drop DB constraints!");
                 Err(PasswordError::BackendError)
             }
-        } else {
-            error!("password not found");
-            Err(PasswordError::BackendError)
         }
     }
 }
@@ -500,17 +512,17 @@ impl ScopeStore for SqliteStore {
                                             Err(e) => {
                                                 warn!(%e, id = plain_mapping.id, "failed to read plain mapping structure");
                                                 None
-                                            },
+                                            }
                                             Ok(pointer) => {
                                                 let mut value = pointer.construct_json();
                                                 *value.pointer_mut(String::from(pointer).as_str()).unwrap() =
                                                     Self::map_value_by_type(plain_mapping.value.as_str(), plain_mapping.r#type.as_str());
                                                 Some((value, Type::Plain))
-                                            },
+                                            }
                                         }
                                     })
                                     .unwrap_or((Value::Null, Type::Plain))
-                            },
+                            }
                             "template" => {
                                 template_mappings_by_mapping.get(&mapping.mapping_id)
                                     .and_then(|v| v.first())
@@ -519,12 +531,12 @@ impl ScopeStore for SqliteStore {
                                             Err(e) => {
                                                 warn!(%e, id = template_mapping.id, "failed to read template mapping structure");
                                                 None
-                                            },
+                                            }
                                             Ok(pointer) => {
                                                 let mut value = pointer.construct_json();
                                                 *value.pointer_mut(String::from(pointer).as_str()).unwrap() = template_mapping.template.clone().into();
                                                 Some((value, Type::Template))
-                                            },
+                                            }
                                         }
                                     })
                                     .unwrap_or((Value::Null, Type::Plain))
@@ -537,18 +549,18 @@ impl ScopeStore for SqliteStore {
                                             Err(e) => {
                                                 warn!(%e, id = user_mapping.id, "failed to read user mapping structure");
                                                 None
-                                            },
+                                            }
                                             Ok(structure) => {
                                                 match JsonPointer::try_from(user_mapping.user_attribute.as_str()) {
                                                     Err(e) => {
                                                         warn!(%e, id = user_mapping.id, "failed to read user mapping attribute");
                                                         None
-                                                    },
+                                                    }
                                                     Ok(user_attribute) => {
                                                         Some((structure.construct_json(), Type::UserAttribute(user_attribute.construct_json())))
-                                                    },
+                                                    }
                                                 }
-                                            },
+                                            }
                                         }
                                     })
                                     .unwrap_or((Value::Null, Type::Plain))
@@ -561,18 +573,18 @@ impl ScopeStore for SqliteStore {
                                             Err(e) => {
                                                 warn!(%e, id = client_mapping.id, "failed to read client mapping structure");
                                                 None
-                                            },
+                                            }
                                             Ok(client_attribute) => {
                                                 match JsonPointer::try_from(client_mapping.client_attribute.as_str()) {
                                                     Err(e) => {
                                                         warn!(%e, id = client_mapping.id, "failed to read client mapping attribute");
                                                         None
-                                                    },
+                                                    }
                                                     Ok(single_structure) => {
                                                         Some((single_structure.construct_json(), Type::ClientAttribute(client_attribute.construct_json())))
-                                                    },
+                                                    }
                                                 }
-                                            },
+                                            }
                                         }
                                     })
                                     .unwrap_or((Value::Null, Type::Plain))
@@ -666,7 +678,7 @@ impl SqliteStore {
     async fn load_allowed_client_scopes(
         transaction: &mut Transaction<'_>,
         client_id: i32,
-    ) -> Result<Vec<String>, Error> {
+    ) -> Result<Vec<String>, ClientError> {
         let allowed_scopes: Vec<String> =
             sqlx::query_file_scalar!("queries/get-client-scopes.sql", client_id)
                 .fetch_all(&mut **transaction)
@@ -675,7 +687,11 @@ impl SqliteStore {
         Ok(allowed_scopes)
     }
 
-    fn map_client_type(&self, client_record: &SqliteRow) -> Result<ClientType, ClientError> {
+    async fn map_client_type(
+        &self,
+        client_record: &SqliteRow,
+        transaction: &mut Transaction<'_>,
+    ) -> Result<ClientType, ClientError> {
         let client_type = match client_record
             .try_get::<&str, _>("client_type")
             .map_err(wrap_err)?
@@ -687,10 +703,13 @@ impl SqliteStore {
                     .map_err(wrap_err)?
                     .map(String::from);
                 ClientType::Confidential {
-                    password: Password::Sqlite {
-                        name: self.name.clone(),
-                        id: client_record.try_get("password").map_err(wrap_err)?,
-                    },
+                    password: self
+                        .load_password(
+                            client_record.try_get("password").map_err(wrap_err)?,
+                            transaction,
+                        )
+                        .await
+                        .map_err(wrap_err)?,
                     public_key,
                 }
             }
@@ -705,13 +724,47 @@ impl SqliteStore {
     async fn load_redirect_uris(
         transaction: &mut Transaction<'_>,
         client_id: i32,
-    ) -> Result<Vec<String>, Error> {
+    ) -> Result<Vec<String>, ClientError> {
         let redirect_uris =
             sqlx::query_file_scalar!("queries/get-client-redirect-uris.sql", client_id)
                 .fetch_all(&mut **transaction)
                 .await
                 .map_err(wrap_err)?;
         Ok(redirect_uris)
+    }
+
+    async fn load_password(
+        &self,
+        id: i32,
+        transaction: &mut Transaction<'_>,
+    ) -> Result<Password, SqliteError> {
+        let password = query_file!("queries/get-password.sql", id)
+            .fetch_one(&mut **transaction)
+            .await?;
+        match password.algorithm.as_str() {
+            "pbkdf2hmacsha256" => Ok(Password::Sqlite {
+                name: self.name.clone(),
+                id,
+            }),
+            "ldap" => {
+                if let Some(record) =
+                    query_file!("queries/get-password-ldap.sql", password.password_id)
+                        .fetch_optional(&mut **transaction)
+                        .await?
+                {
+                    Ok(Password::Ldap {
+                        name: record.store_name,
+                    })
+                } else {
+                    error!("password not found");
+                    Err(SqliteError::BackendError)
+                }
+            }
+            algorithm => {
+                error!(%algorithm, "unknown password algorithm. Don't drop DB constraints!");
+                Err(SqliteError::BackendError)
+            }
+        }
     }
 
     fn map_value_by_type(value: &str, value_type: &str) -> Value {

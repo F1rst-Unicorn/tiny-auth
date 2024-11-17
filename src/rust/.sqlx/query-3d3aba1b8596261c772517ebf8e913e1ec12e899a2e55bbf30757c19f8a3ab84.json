@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "select *\nfrom tiny_auth_password\nwhere id = ?1\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "algorithm",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "password_id",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3d3aba1b8596261c772517ebf8e913e1ec12e899a2e55bbf30757c19f8a3ab84"
+}

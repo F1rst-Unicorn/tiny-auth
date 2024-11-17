@@ -1,3 +1,3 @@
-select tiny_auth_password.algorithm
+select *
 from tiny_auth_password
 where id = ?1

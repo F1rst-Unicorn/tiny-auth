@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "select *\nfrom tiny_auth_password_pbkdf2hmacsha256\nwhere password = ?1\n",
+  "query": "select *\nfrom tiny_auth_password_pbkdf2hmacsha256\nwhere id = ?1\n",
   "describe": {
     "columns": [
       {
@@ -9,23 +9,18 @@
         "type_info": "Integer"
       },
       {
-        "name": "password",
-        "ordinal": 1,
-        "type_info": "Integer"
-      },
-      {
         "name": "credential",
-        "ordinal": 2,
+        "ordinal": 1,
         "type_info": "Blob"
       },
       {
         "name": "iterations",
-        "ordinal": 3,
+        "ordinal": 2,
         "type_info": "Integer"
       },
       {
         "name": "salt",
-        "ordinal": 4,
+        "ordinal": 3,
         "type_info": "Blob"
       }
     ],
@@ -36,9 +31,8 @@
       false,
       false,
       false,
-      false,
       false
     ]
   },
-  "hash": "255a48834194aaee5f32350787639d07905d99841efc066387f158e18931cfcc"
+  "hash": "7bec5a3dc3ae2f2f0ac55352a5cc2ed02cec75d9e8f1fb18ef6105efe813739d"
 }

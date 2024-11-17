@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "select *\nfrom tiny_auth_password_ldap\nwhere id = ?1\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "store_name",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "0b6f4704b8b2324d1b7497104e9c9a9a4db24062417e4b46eaa4998d6f1e02f3"
+}

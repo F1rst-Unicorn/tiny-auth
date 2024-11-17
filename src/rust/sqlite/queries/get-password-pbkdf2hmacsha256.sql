@@ -1,3 +1,3 @@
 select *
 from tiny_auth_password_pbkdf2hmacsha256
-where password = ?1
+where id = ?1

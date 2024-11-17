@@ -264,6 +264,8 @@ async fn data_from_documentation_example_works() {
 
     assert_eq!(
         json!({
+            "id": 2,
+            "allowed_scopes": {},
             "name": username,
             "family_name": "",
             "gender": "",

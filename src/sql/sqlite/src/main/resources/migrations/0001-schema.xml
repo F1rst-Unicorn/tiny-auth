@@ -28,6 +28,7 @@
             create table tiny_auth_password (
                 id integer primary key not null,
                 algorithm text not null,
+                password_id integer not null,
                 check (algorithm in ('pbkdf2hmacsha256', 'ldap'))
             ) strict;;
 
@@ -58,26 +59,16 @@
 
             create table tiny_auth_password_pbkdf2hmacsha256 (
                 id integer primary key not null,
-                password integer not null,
                 credential blob not null,
                 iterations integer not null,
                 salt blob not null,
-                foreign key (password) references tiny_auth_password(id)
-                    on update cascade on delete cascade deferrable initially deferred,
                 check (0 &lt; iterations and iterations &lt;= 4294967295)
             ) strict;;
 
-            create unique index tiny_auth_password_pbkdf2hmacsha256_password on tiny_auth_password_pbkdf2hmacsha256 (password);;
-
             create table tiny_auth_password_ldap (
                 id integer primary key not null,
-                password integer not null,
-                store_name text not null,
-                foreign key (password) references tiny_auth_password(id)
-                    on update cascade on delete cascade deferrable initially deferred
+                store_name text not null
             ) strict;;
-
-            create unique index tiny_auth_password_ldap_password on tiny_auth_password_ldap (password);;
 
             create table tiny_auth_client (
                 id integer primary key not null,
@@ -679,20 +670,18 @@
     </changeSet>
     <changeSet id="4" author="admin" labels="testdata">
         <sql endDelimiter=";;">
-            insert into tiny_auth_password (algorithm)
-            values ('pbkdf2hmacsha256');;
-
             insert into tiny_auth_password_pbkdf2hmacsha256 (
-                password,
                 credential,
                 iterations,
                 salt
             ) values (
-                last_insert_rowid(),
                 unhex('bda453832ebf0a31c8081589bc3d01b7f3dbf95f0d9f33246811f4d2915efea5'),
                 100000,
                 unhex('b594b6e366ae6864100e0ff279f8455a9861753a8c99673260220371147daaf46a6f686e')
             );;
+
+            insert into tiny_auth_password (algorithm, password_id)
+            values ('pbkdf2hmacsha256', last_insert_rowid());;
 
             insert into tiny_auth_user (
                 name,
@@ -709,20 +698,18 @@
                 '+123456789',
                 1;;
 
-            insert into tiny_auth_password (algorithm)
-            values ('pbkdf2hmacsha256');;
-
             insert into tiny_auth_password_pbkdf2hmacsha256 (
-                password,
                 credential,
                 iterations,
                 salt
             ) values (
-                last_insert_rowid(),
                 unhex('bda453832ebf0a31c8081589bc3d01b7f3dbf95f0d9f33246811f4d2915efea5'),
                 100000,
                 unhex('b594b6e366ae6864100e0ff279f8455a9861753a8c99673260220371147daaf46a6f686e')
             );;
+
+            insert into tiny_auth_password (algorithm, password_id)
+            values ('pbkdf2hmacsha256', last_insert_rowid());;
 
             insert into tiny_auth_user (
                 name,
