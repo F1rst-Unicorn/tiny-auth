@@ -125,6 +125,8 @@ pub trait PasswordStore: Send + Sync {
         stored_password: &Password,
         password_to_check: &str,
     ) -> Result<bool, PasswordError>;
+
+    async fn construct_password(&self, user: User, password: &str) -> Password;
 }
 
 #[derive(Error, Debug, Clone)]

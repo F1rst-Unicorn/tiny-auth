@@ -94,18 +94,6 @@ pub struct DispatchingPasswordStore {
     in_place_store: Arc<InPlacePasswordStore>,
 }
 
-impl DispatchingPasswordStore {
-    pub fn construct_password(&self, user: User, password: &str) -> Password {
-        debug!("constructing password");
-        match user.password {
-            v @ Password::Ldap { .. } | v @ Password::Sqlite { .. } => v,
-            Password::Plain(_) | Password::Pbkdf2HmacSha256 { .. } => {
-                self.in_place_store.construct_password(&user.name, password)
-            }
-        }
-    }
-}
-
 #[async_trait]
 impl PasswordStore for DispatchingPasswordStore {
     async fn verify(
@@ -131,16 +119,20 @@ impl PasswordStore for DispatchingPasswordStore {
             }
         }
     }
+
+    async fn construct_password(&self, user: User, password: &str) -> Password {
+        debug!("constructing password");
+        match user.password {
+            v @ Password::Ldap { .. } | v @ Password::Sqlite { .. } => v,
+            Password::Plain(_) | Password::Pbkdf2HmacSha256 { .. } => {
+                self.in_place_store.construct_password(user, password).await
+            }
+        }
+    }
 }
 
 pub struct InPlacePasswordStore {
     pub pepper: String,
-}
-
-impl InPlacePasswordStore {
-    pub fn construct_password(&self, username: &str, password: &str) -> Password {
-        Password::new(username, password, &self.pepper)
-    }
 }
 
 #[async_trait]
@@ -194,6 +186,10 @@ impl PasswordStore for InPlacePasswordStore {
                 Err(Error::BackendError)
             }
         }
+    }
+
+    async fn construct_password(&self, user: User, password: &str) -> Password {
+        Password::new(&user.name, password, &self.pepper)
     }
 }
 

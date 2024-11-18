@@ -49,7 +49,7 @@ use tiny_auth_business::store::{
 use tiny_auth_business::user::Error as UserError;
 use tiny_auth_business::user::User;
 use tiny_auth_business::util::wrap_err;
-use tracing::{debug, error, span, Level};
+use tracing::{debug, error, info, span, Level};
 use tracing::{instrument, warn};
 
 pub struct SqliteStore {
@@ -422,6 +422,69 @@ impl PasswordStore for SqliteStore {
             algorithm => {
                 error!(%algorithm, "unknown password algorithm. Don't drop DB constraints!");
                 Err(PasswordError::BackendError)
+            }
+        }
+    }
+
+    #[instrument(skip_all, fields(store = self.name))]
+    async fn construct_password(&self, user: User, password: &str) -> Password {
+        let existing_password_id = match &user.password {
+            Password::Pbkdf2HmacSha256 { .. } => {
+                info!("password is moved into the DB");
+                None
+            }
+            Password::Plain(_) => {
+                info!("password is upgraded into an encrypted one");
+                None
+            }
+            Password::Ldap { .. } => {
+                warn!("LDAP passwords cannot be changed");
+                return user.password;
+            }
+            Password::Sqlite { name, id } => {
+                if self.name.ne(name) {
+                    error!(
+                        my_name = self.name,
+                        password_name = name,
+                        "password store dispatch bug"
+                    );
+                    return user.password;
+                }
+                Some(id)
+            }
+        };
+
+        let password = self
+            .in_place_password_store
+            .construct_password(user, password)
+            .await;
+
+        match password {
+            Password::Pbkdf2HmacSha256 {
+                credential,
+                iterations,
+                salt,
+            } => {
+                let mut conn = self.write_pool.acquire().await.map_err(wrap_err)?;
+                let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
+                if let Some(id) = existing_password_id {
+                    query_file!(
+                        "queries/update-password-pbkdf2hmacsha256.sql",
+                        credential,
+                        iterations,
+                        salt,
+                        id
+                    )
+                    .execute(&mut *transaction)
+                    .await
+                } else {
+                }
+            }
+            v @ Password::Ldap { .. } => v,
+            v @ Password::Sqlite { .. } => v,
+            Password::Plain(_) => {
+                error!("plain text passwords are not stored in the DB");
+                password
             }
         }
     }

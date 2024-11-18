@@ -120,6 +120,11 @@ impl PasswordStore for LdapStore {
             .authenticate(&mut ldap, user, password_to_check)
             .await
     }
+
+    async fn construct_password(&self, user: User, _: &str) -> Password {
+        warn!("LDAP passwords cannot be changed");
+        user.password
+    }
 }
 
 impl LdapStore {

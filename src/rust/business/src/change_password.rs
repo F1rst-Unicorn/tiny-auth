@@ -58,7 +58,10 @@ impl Handler {
             .authenticate_user(&token.subject, current_password)
             .instrument(cid_span.clone())
             .await?;
-        let _guard = cid_span.enter();
-        Ok(self.authenticator.construct_password(user, new_password))
+        Ok(self
+            .authenticator
+            .construct_password(user, new_password)
+            .instrument(cid_span)
+            .await)
     }
 }

@@ -100,8 +100,8 @@ impl Authenticator {
             .await?)
     }
 
-    pub fn construct_password(&self, user: User, password: &str) -> Password {
-        self.password_store.construct_password(user, password)
+    pub async fn construct_password(&self, user: User, password: &str) -> Password {
+        self.password_store.construct_password(user, password).await
     }
 }
 
