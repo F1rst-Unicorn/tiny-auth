@@ -198,34 +198,54 @@ pub async fn post(
         .await;
 
     let _flow_guard = flow.enter();
-    if auth_result.is_ok() {
-        session.remove(TRIES_LEFT_SESSION_KEY);
-        session.remove(ERROR_CODE_SESSION_KEY);
-        if let Err(e) = session.insert(SESSION_KEY, &username) {
-            error!(%e, "failed to serialise session");
-            return server_error(templater.instantiate_error_page(ServerError));
+    match auth_result {
+        Ok(_) => {
+            session.remove(TRIES_LEFT_SESSION_KEY);
+            session.remove(ERROR_CODE_SESSION_KEY);
+            if let Err(e) = session.insert(SESSION_KEY, &username) {
+                error!(%e, "failed to serialise session");
+                return server_error(templater.instantiate_error_page(ServerError));
+            }
+            if let Err(e) = session.insert(AUTH_TIME_SESSION_KEY, Local::now().timestamp()) {
+                error!(%e, "failed to serialise auth_time");
+                return server_error(templater.instantiate_error_page(ServerError));
+            }
+            redirect_successfully()
         }
-        if let Err(e) = session.insert(AUTH_TIME_SESSION_KEY, Local::now().timestamp()) {
-            error!(%e, "failed to serialise auth_time");
-            return server_error(templater.instantiate_error_page(ServerError));
+        Err(Error::RateLimited) => {
+            render_invalid_login_attempt_error(RateLimit, templater, &session, None)
         }
-        redirect_successfully()
-    } else if let Err(Error::RateLimited) = auth_result {
-        render_invalid_login_attempt_error(RateLimit, templater, &session, None)
-    } else if tries_left > 0 {
-        debug!(tries_left);
-        render_invalid_login_attempt_error(WrongCredentials, templater, &session, Some(tries_left))
-    } else {
-        debug!("no tries left");
-        session.remove(TRIES_LEFT_SESSION_KEY);
-        session.remove(ERROR_CODE_SESSION_KEY);
-        render_redirect_error(
-            session,
-            templater,
-            oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
-            "user failed to authenticate",
-            first_request.encode_redirect_to_fragment,
-        )
+        Err(Error::WrongCredentials) if tries_left > 0 => {
+            debug!(tries_left);
+            render_invalid_login_attempt_error(
+                WrongCredentials,
+                templater,
+                &session,
+                Some(tries_left),
+            )
+        }
+        Err(Error::WrongCredentials) => {
+            debug!("no tries left");
+            session.remove(TRIES_LEFT_SESSION_KEY);
+            session.remove(ERROR_CODE_SESSION_KEY);
+            render_redirect_error(
+                session,
+                templater,
+                oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied),
+                "user failed to authenticate",
+                first_request.encode_redirect_to_fragment,
+            )
+        }
+        Err(e) => {
+            warn!(%e, "backend error");
+            render_redirect_error(
+                session,
+                templater,
+                oidc::ProtocolError::OAuth2(oauth2::ProtocolError::ServerError),
+                "backend error",
+                first_request.encode_redirect_to_fragment,
+            )
+        }
     }
 }
 

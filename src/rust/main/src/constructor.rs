@@ -428,8 +428,8 @@ impl<'a> Constructor<'a> {
                         Ok(v) => v,
                     };
 
-                    let name = "sqlite ".to_owned() + name;
-                    health_checks.push(health_check(name.as_str(), Arc::new(check)));
+                    let health_check_name = "sqlite ".to_owned() + name;
+                    health_checks.push(health_check(health_check_name.as_str(), Arc::new(check)));
                     if use_for.users.is_some() {
                         user_stores.push(sqlite_store.clone());
                     }
