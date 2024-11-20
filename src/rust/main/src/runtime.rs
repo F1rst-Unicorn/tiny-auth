@@ -157,60 +157,42 @@ async fn config_refresher(
         match res {
             Err(e) => warn!(%e, "failed to get new config file info"),
             Ok(event) => {
-                if event.paths.iter().any(|v| v.ends_with(config_path.clone())) {
-                    match event.kind {
-                        EventKind::Any | EventKind::Modify(_) | EventKind::Other => {
-                            let new_config =
-                                match config::parser::parse_config_fallibly(&config_path) {
-                                    Err(e) => {
-                                        trace!(%e, "ignoring invalid config");
-                                        continue;
-                                    }
-                                    Ok(v) => v,
-                                };
-                            if new_config.log != config.log {
-                                logging::reload_with_config(&new_config.log, &handles);
-                            }
-                            config = new_config;
+                if event.paths.iter().any(|v| v.ends_with(config_path.clone()))
+                    && matches!(
+                        event.kind,
+                        EventKind::Any | EventKind::Modify(_) | EventKind::Other
+                    )
+                {
+                    let new_config = match config::parser::parse_config_fallibly(&config_path) {
+                        Err(e) => {
+                            trace!(%e, "ignoring invalid config");
+                            continue;
                         }
-                        _ => {}
+                        Ok(v) => v,
+                    };
+                    if new_config.log != config.log {
+                        logging::reload_with_config(&new_config.log, &handles);
                     }
+                    config = new_config;
                 } else {
-                    if event.need_rescan() {
-                        event.paths.iter().for_each(|v| {
-                            if let Err(e) =
-                                reload_sender.send(ReloadEvent::DirectoryChange(v.to_owned()))
-                            {
-                                warn!(%e, ?event.kind, "failed to apply file reload");
+                    let event_to_send = if event.need_rescan() {
+                        ReloadEvent::DirectoryChange
+                    } else {
+                        match event.kind {
+                            EventKind::Create(_) => ReloadEvent::Add,
+                            EventKind::Modify(_) => ReloadEvent::Modify,
+                            EventKind::Remove(_) => ReloadEvent::Delete,
+                            EventKind::Any | EventKind::Other => ReloadEvent::DirectoryChange,
+                            EventKind::Access(_) => {
+                                continue;
                             }
-                        });
-                        continue;
-                    }
-                    match event.kind {
-                        EventKind::Create(_) => event.paths.iter().for_each(|v| {
-                            if let Err(e) = reload_sender.send(ReloadEvent::Add(v.to_owned())) {
-                                warn!(%e, ?event.kind, "failed to apply file reload");
-                            }
-                        }),
-                        EventKind::Modify(_) => event.paths.iter().for_each(|v| {
-                            if let Err(e) = reload_sender.send(ReloadEvent::Modify(v.to_owned())) {
-                                warn!(%e, ?event.kind, "failed to apply file reload");
-                            }
-                        }),
-                        EventKind::Remove(_) => event.paths.iter().for_each(|v| {
-                            if let Err(e) = reload_sender.send(ReloadEvent::Delete(v.to_owned())) {
-                                warn!(%e, ?event.kind, "failed to apply file reload");
-                            }
-                        }),
-                        EventKind::Any | EventKind::Other => event.paths.iter().for_each(|v| {
-                            if let Err(e) =
-                                reload_sender.send(ReloadEvent::DirectoryChange(v.to_owned()))
-                            {
-                                warn!(%e, ?event.kind, "failed to apply file reload");
-                            }
-                        }),
-                        EventKind::Access(_) => {}
-                    }
+                        }
+                    };
+                    event.paths.iter().for_each(|v| {
+                        if let Err(e) = reload_sender.send(event_to_send(v.to_owned())) {
+                            warn!(%e, ?event.kind, "failed to apply file reload");
+                        }
+                    })
                 }
             }
         }
