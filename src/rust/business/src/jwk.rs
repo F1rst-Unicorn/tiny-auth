@@ -43,16 +43,16 @@ pub struct Jwk {
     pub key_id: String,
 
     #[serde(rename = "kty")]
-    key_type: String,
+    key_type: &'static str,
 
     #[serde(rename = "use")]
-    usage: String,
+    usage: &'static str,
 
     #[serde(rename = "x5u")]
     url: String,
 
     #[serde(rename = "key_ops")]
-    key_operations: Vec<String>,
+    key_operations: Vec<&'static str>,
 
     #[serde(flatten)]
     key: Key,
@@ -62,10 +62,10 @@ impl Jwk {
     pub fn new_rsa(id: String, url: String, n: String, e: String) -> Self {
         Self {
             key_id: id,
-            key_type: "RSA".to_string(),
-            usage: "sig".to_string(),
+            key_type: "RSA",
+            usage: "sig",
             url,
-            key_operations: vec!["sign".to_string(), "verify".to_string()],
+            key_operations: vec!["sign", "verify"],
             key: Key::Rsa { n, e },
         }
     }
@@ -73,10 +73,10 @@ impl Jwk {
     pub fn new_ecdsa(id: String, url: String, crv: String, x: String, y: String) -> Self {
         Self {
             key_id: id,
-            key_type: "EC".to_string(),
-            usage: "sig".to_string(),
+            key_type: "EC",
+            usage: "sig",
             url,
-            key_operations: vec!["sign".to_string(), "verify".to_string()],
+            key_operations: vec!["sign", "verify"],
             key: Key::Ecdsa { crv, x, y },
         }
     }

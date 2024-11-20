@@ -18,11 +18,10 @@
 mod authenticate;
 mod connect;
 mod error;
+mod health;
 pub mod inject;
 mod lookup;
 mod store;
-
-mod health;
 #[cfg(test)]
 pub mod test;
 

@@ -140,7 +140,7 @@ pub async fn handle(
 ) -> HttpResponse {
     let query = query.into_inner();
     let encode_redirect_to_fragment = query.encode_redirect_to_fragment();
-    return match handler
+    match handler
         .handle(
             tiny_auth_business::authorize_endpoint::Request {
                 scope: query.scope,
@@ -211,7 +211,7 @@ pub async fn handle(
         Ok(_) => HttpResponse::SeeOther()
             .insert_header(("Location", "authenticate"))
             .finish(),
-    };
+    }
 }
 
 fn render_invalid_client_id_error(templater: Data<dyn WebTemplater<()>>) -> HttpResponse {

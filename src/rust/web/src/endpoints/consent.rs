@@ -86,7 +86,7 @@ pub async fn get(
             if first_request.prompts.contains(&oidc::Prompt::Consent) {
                 debug!("user gave consent to all scopes but client requires explicit consent");
             } else {
-                debug!("user gave consent to all scopes, skipping consent screen",);
+                debug!("user gave consent to all scopes, skipping consent screen");
                 return process_skipping_csrf(
                     first_request.scopes.iter().map(Clone::clone).collect(),
                     session,

@@ -20,6 +20,7 @@ use crate::authenticate::AuthenticatorDispatcher;
 use crate::connect::Connector;
 use async_trait::async_trait;
 use tiny_auth_business::health::HealthCheckCommand;
+use tracing::warn;
 
 pub struct LdapHealth {
     pub(crate) connector: Connector,
@@ -30,7 +31,10 @@ pub struct LdapHealth {
 impl HealthCheckCommand for LdapHealth {
     async fn check(&self) -> bool {
         match self.connector.connect().await {
-            Err(_) => false,
+            Err(e) => {
+                warn!(%e, "ldap health check failed");
+                false
+            }
             Ok(mut ldap) => self.authenticator.check(&mut ldap).await,
         }
     }

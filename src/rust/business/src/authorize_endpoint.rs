@@ -208,9 +208,9 @@ impl Handler {
 
     fn match_requested_scopes_with_client(
         client: &Client,
-        scopes: Option<String>,
+        requested_scopes: Option<String>,
     ) -> Result<Vec<String>, ()> {
-        let scopes = match scopes {
+        let requested_scopes = match requested_scopes {
             None => {
                 debug!("missing scope");
                 return Err(());
@@ -218,13 +218,14 @@ impl Handler {
             Some(scopes) => scopes,
         };
 
-        let scopes: BTreeSet<String> = parse_scope_names(&scopes).into_iter().collect();
+        let requested_scopes: BTreeSet<String> =
+            parse_scope_names(&requested_scopes).into_iter().collect();
 
         if enabled!(Level::DEBUG) {
-            Self::log_removed_scopes(&client, &scopes);
+            Self::log_removed_scopes(&client, &requested_scopes);
         }
 
-        Ok(scopes
+        Ok(requested_scopes
             .intersection(&client.allowed_scopes)
             .map(Clone::clone)
             .collect::<Vec<String>>())
