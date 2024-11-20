@@ -224,7 +224,13 @@ async fn getting_client_works() {
     assert_eq!(
         vec![
             "http://localhost:8088/oidc-login-redirect".to_string(),
-            "http://localhost:8088/oidc-login-redirect-silent".to_string()
+            "http://localhost:8088/oidc-login-redirect-silent".to_string(),
+            "http://localhost:5173/oidc-login-redirect".to_string(),
+            "http://localhost:5173/oidc-login-redirect-silent".to_string(),
+            "http://localhost:34344/oidc/oidc-login-redirect".to_string(),
+            "http://localhost:34344/oidc/oidc-login-redirect-silent".to_string(),
+            "https://localhost:34344/oidc/oidc-login-redirect".to_string(),
+            "https://localhost:34344/oidc/oidc-login-redirect-silent".to_string(),
         ],
         actual.redirect_uris
     );

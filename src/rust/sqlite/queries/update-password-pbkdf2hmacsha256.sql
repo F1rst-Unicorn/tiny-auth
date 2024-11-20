@@ -1,4 +1,4 @@
-update tiny_auth_password_pbkdf2hmacsha256 (credential, iterations, salt)
+update tiny_auth_password_pbkdf2hmacsha256
 set credential = ?1,
     iterations = ?2,
     salt = ?3

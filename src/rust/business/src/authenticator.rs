@@ -18,7 +18,7 @@
 use crate::client::Client;
 use crate::password::{DispatchingPasswordStore, Password};
 use crate::rate_limiter::RateLimiter;
-use crate::store::{PasswordStore, UserStore};
+use crate::store::{PasswordConstructionError, PasswordStore, UserStore};
 use crate::user::User;
 use chrono::Local;
 use std::sync::Arc;
@@ -100,7 +100,11 @@ impl Authenticator {
             .await?)
     }
 
-    pub async fn construct_password(&self, user: User, password: &str) -> Password {
+    pub async fn construct_password(
+        &self,
+        user: User,
+        password: &str,
+    ) -> Result<Password, PasswordConstructionError> {
         self.password_store.construct_password(user, password).await
     }
 }

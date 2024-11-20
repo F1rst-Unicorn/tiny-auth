@@ -15,13 +15,18 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+mod auth_code_store;
 mod begin_immediate;
+mod client_store;
 mod data_assembler;
 mod error;
 pub mod inject;
+mod password_store;
+mod scope_store;
 mod store;
 #[cfg(test)]
 pub mod test;
+mod user_store;
 
 pub use data_assembler::DataAssembler;
 pub use data_assembler::QueryLoader;

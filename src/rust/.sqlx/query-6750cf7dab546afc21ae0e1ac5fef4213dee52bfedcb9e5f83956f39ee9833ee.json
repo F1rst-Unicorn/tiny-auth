@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "insert into tiny_auth_password (algorithm, password_id)\nvalues (?1, ?2)\nreturning id\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6750cf7dab546afc21ae0e1ac5fef4213dee52bfedcb9e5f83956f39ee9833ee"
+}

@@ -65,7 +65,7 @@ export class ApiService {
         );
       } else if (response.response.hashedPassword.oneofKind === "managed") {
         return new ManagedPassword();
-      } else if (response.response.hashedPassword.oneofKind === "stored_successfully") {
+      } else if (response.response.hashedPassword.oneofKind === "storedSuccessfully") {
         return new SuccessfullyStoredPassword();
       } else {
         throw new Error(UNKNOWN_PASSWORD_TYPE);

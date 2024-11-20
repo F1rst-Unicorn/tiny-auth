@@ -670,6 +670,48 @@
     </changeSet>
     <changeSet id="4" author="admin" labels="testdata">
         <sql endDelimiter=";;">
+            insert into tiny_auth_redirect_uri (redirect_uri, client)
+            select
+                'http://localhost:5173/oidc-login-redirect',
+                id
+            from tiny_auth_client
+            where client_id = 'tiny-auth-frontend';;
+
+            insert into tiny_auth_redirect_uri (redirect_uri, client)
+            select
+                'http://localhost:5173/oidc-login-redirect-silent',
+                id
+            from tiny_auth_client
+            where client_id = 'tiny-auth-frontend';;
+
+            insert into tiny_auth_redirect_uri (redirect_uri, client)
+            select
+                'http://localhost:34344/oidc/oidc-login-redirect',
+                id
+            from tiny_auth_client
+            where client_id = 'tiny-auth-frontend';;
+
+            insert into tiny_auth_redirect_uri (redirect_uri, client)
+            select
+                'http://localhost:34344/oidc/oidc-login-redirect-silent',
+                id
+            from tiny_auth_client
+            where client_id = 'tiny-auth-frontend';;
+
+            insert into tiny_auth_redirect_uri (redirect_uri, client)
+            select
+                'https://localhost:34344/oidc/oidc-login-redirect',
+                id
+            from tiny_auth_client
+            where client_id = 'tiny-auth-frontend';;
+
+            insert into tiny_auth_redirect_uri (redirect_uri, client)
+            select
+                'https://localhost:34344/oidc/oidc-login-redirect-silent',
+                id
+            from tiny_auth_client
+            where client_id = 'tiny-auth-frontend';;
+
             insert into tiny_auth_password_pbkdf2hmacsha256 (
                 credential,
                 iterations,

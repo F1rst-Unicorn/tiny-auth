@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "insert into tiny_auth_password_pbkdf2hmacsha256 (credential, iterations, salt)\nvalues (?1, ?2, ?3)\nreturning id",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6ec3eb33d2b3bf708b3163e66fd4c06e0c031932541e72fbd86ab9b3fa0fb8de"
+}

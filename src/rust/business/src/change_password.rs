@@ -28,8 +28,10 @@ pub struct Handler {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("password authentication")]
+    #[error("password authentication: {0}")]
     PasswordAuthentication(#[from] crate::authenticator::Error),
+    #[error("password construction: {0}")]
+    PasswordConstruction(#[from] crate::store::PasswordConstructionError),
     #[error("token authentication")]
     TokenAuthentication,
 }
@@ -62,6 +64,6 @@ impl Handler {
             .authenticator
             .construct_password(user, new_password)
             .instrument(cid_span)
-            .await)
+            .await?)
     }
 }

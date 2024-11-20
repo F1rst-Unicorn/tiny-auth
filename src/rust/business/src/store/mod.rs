@@ -117,6 +117,18 @@ impl ClientStore for MergingClientStore {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum PasswordConstructionError {
+    #[error("unchanged")]
+    PasswordUnchanged(Password),
+    #[error("Unknown password store '{0}'")]
+    UnmatchedBackendName(String),
+    #[error("backend error")]
+    BackendError,
+    #[error("backend error: {0}")]
+    BackendErrorWithContext(#[from] Arc<dyn StdError + Send + Sync>),
+}
+
 #[async_trait]
 pub trait PasswordStore: Send + Sync {
     async fn verify(
@@ -126,7 +138,11 @@ pub trait PasswordStore: Send + Sync {
         password_to_check: &str,
     ) -> Result<bool, PasswordError>;
 
-    async fn construct_password(&self, user: User, password: &str) -> Password;
+    async fn construct_password(
+        &self,
+        user: User,
+        password: &str,
+    ) -> Result<Password, PasswordConstructionError>;
 }
 
 #[derive(Error, Debug, Clone)]

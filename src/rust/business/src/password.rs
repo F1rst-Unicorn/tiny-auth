@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::store::PasswordStore;
+use crate::store::{PasswordConstructionError, PasswordStore};
 use crate::user::User;
 use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD;
@@ -44,7 +44,7 @@ pub enum Error {
     BackendErrorWithContext(#[from] Arc<dyn StdError + Send + Sync>),
 }
 
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum Password {
     Pbkdf2HmacSha256 {
         credential: String,
@@ -64,7 +64,7 @@ pub enum Password {
     #[serde(alias = "sqlite")]
     #[serde(alias = "SQLite")]
     #[serde(alias = "SQLITE")]
-    Sqlite { name: String, id: i32 },
+    Sqlite { name: String, id: i64 },
 }
 
 impl Password {
@@ -120,10 +120,19 @@ impl PasswordStore for DispatchingPasswordStore {
         }
     }
 
-    async fn construct_password(&self, user: User, password: &str) -> Password {
+    async fn construct_password(
+        &self,
+        user: User,
+        password: &str,
+    ) -> Result<Password, PasswordConstructionError> {
         debug!("constructing password");
-        match user.password {
-            v @ Password::Ldap { .. } | v @ Password::Sqlite { .. } => v,
+        match &user.password {
+            Password::Ldap { name } | Password::Sqlite { name, .. } => {
+                let store = self.named_stores.get(name).ok_or(
+                    PasswordConstructionError::UnmatchedBackendName(name.clone()),
+                )?;
+                store.construct_password(user, password).await
+            }
             Password::Plain(_) | Password::Pbkdf2HmacSha256 { .. } => {
                 self.in_place_store.construct_password(user, password).await
             }
@@ -188,8 +197,12 @@ impl PasswordStore for InPlacePasswordStore {
         }
     }
 
-    async fn construct_password(&self, user: User, password: &str) -> Password {
-        Password::new(&user.name, password, &self.pepper)
+    async fn construct_password(
+        &self,
+        user: User,
+        password: &str,
+    ) -> Result<Password, PasswordConstructionError> {
+        Ok(Password::new(&user.name, password, &self.pepper))
     }
 }
 

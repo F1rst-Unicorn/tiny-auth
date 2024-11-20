@@ -21,7 +21,9 @@ use crate::tiny_auth_proto::tiny_auth_api_server::TinyAuthApi;
 use crate::tiny_auth_proto::{HashedPasswordPbkdf2HmacSha256, PasswordChangeRequest};
 use crate::tiny_auth_proto::{Managed, PasswordChangeResponse, StoredSuccessfully};
 use async_trait::async_trait;
+use tiny_auth_business::change_password::Error;
 use tiny_auth_business::password::Password;
+use tiny_auth_business::store::PasswordConstructionError;
 use tonic::Request;
 use tonic::Response;
 use tracing::error;
@@ -54,10 +56,6 @@ impl TinyAuthApi for TinyAuthApiImpl {
             )
             .await
         {
-            Err(e) => {
-                debug!(%e, "failed");
-                Err(tonic::Status::permission_denied("permission denied"))
-            }
             Ok(Password::Pbkdf2HmacSha256 {
                 credential,
                 iterations,
@@ -74,7 +72,8 @@ impl TinyAuthApi for TinyAuthApiImpl {
                 };
                 Ok(Response::new(response))
             }
-            Ok(Password::Ldap { .. }) => {
+            Err(Error::PasswordConstruction(PasswordConstructionError::PasswordUnchanged(_)))
+            | Ok(Password::Ldap { .. }) => {
                 let response = PasswordChangeResponse {
                     hashed_password: Some(HashedPassword::Managed(Managed {})),
                 };
@@ -91,6 +90,10 @@ impl TinyAuthApi for TinyAuthApiImpl {
             Ok(Password::Plain(_)) => {
                 error!("changing password to plain is prohibited.");
                 Err(tonic::Status::internal("internal error"))
+            }
+            Err(e) => {
+                debug!(%e, "failed");
+                Err(tonic::Status::permission_denied("permission denied"))
             }
         }
     }
