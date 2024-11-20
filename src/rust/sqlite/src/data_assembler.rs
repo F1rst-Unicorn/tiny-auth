@@ -146,7 +146,7 @@ impl QueryLoader {
 }
 
 pub struct DataAssembler {
-    pub(crate) data_loaders: Vec<QueryLoader>,
+    pub(crate) query_loaders: Vec<QueryLoader>,
     pub(crate) templater: Arc<dyn for<'a> Templater<DataLoaderContext<'a>>>,
 }
 
@@ -181,10 +181,10 @@ impl DataAssembler {
         already_loaded_data.insert(root_type.as_ref().to_string(), root.clone());
         transitive_multiplicity.insert(root_type.as_ref(), Multiplicity::ToOne);
 
-        for data_loader in &self.data_loaders {
+        for query_loader in &self.query_loaders {
             if self
                 .load_from_single(
-                    data_loader,
+                    query_loader,
                     &mut loaded_data,
                     &mut ids,
                     &mut already_loaded_data,
@@ -200,7 +200,7 @@ impl DataAssembler {
         drop(transitive_multiplicity);
         drop(already_loaded_data);
 
-        if loaded_data.len() != self.data_loaders.len() {
+        if loaded_data.len() != self.query_loaders.len() {
             return Err(SqliteError::BackendError);
         }
 
@@ -210,7 +210,7 @@ impl DataAssembler {
         };
 
         let data = loader(
-            self.data_loaders
+            self.query_loaders
                 .iter()
                 .map(|v| v.data_loader.clone())
                 .collect(),
@@ -231,14 +231,14 @@ impl DataAssembler {
     #[instrument(skip_all, fields(data_loader = %data_loader.data_loader.name))]
     async fn load_from_single<'a>(
         &self,
-        data_loader: &'a QueryLoader,
+        query_loader: &'a QueryLoader,
         loaded_data: &mut Vec<LoadedData>,
         ids: &mut BTreeMap<&'a str, Vec<i32>>,
         already_loaded_data: &mut BTreeMap<String, Value>,
         transitive_multiplicity: &mut BTreeMap<&'a str, Multiplicity>,
         transaction: &mut Transaction<'_>,
     ) -> bool {
-        let Some(destination) = data_loader.data_loader.location.first() else {
+        let Some(destination) = query_loader.data_loader.location.first() else {
             warn!("location has no first element so it cannot be nested");
             return true;
         };
@@ -254,7 +254,7 @@ impl DataAssembler {
             loaded_data: already_loaded_data,
         };
 
-        let single_loaded_data = data_loader
+        let single_loaded_data = query_loader
             .load_data(transaction, self.templater.clone(), context)
             .await;
         let single_loaded_data = match single_loaded_data {
@@ -268,7 +268,7 @@ impl DataAssembler {
         loaded_data.push(single_loaded_data);
         let single_loaded_data = loaded_data.last().unwrap();
         ids.insert(
-            data_loader.data_loader.name.as_str(),
+            query_loader.data_loader.name.as_str(),
             single_loaded_data.data.keys().cloned().collect(),
         );
         let current_transitive_multiplicity = match (
@@ -276,19 +276,19 @@ impl DataAssembler {
                 .get(destination)
                 .cloned()
                 .unwrap_or(Multiplicity::ToMany),
-            data_loader.data_loader.multiplicity,
+            query_loader.data_loader.multiplicity,
         ) {
             (Multiplicity::ToMany, _) => Multiplicity::ToMany,
             (Multiplicity::ToOne, v) => v,
         };
         transitive_multiplicity.insert(
-            data_loader.data_loader.name.as_str(),
+            query_loader.data_loader.name.as_str(),
             current_transitive_multiplicity,
         );
         match current_transitive_multiplicity {
             Multiplicity::ToOne => {
                 already_loaded_data.insert(
-                    data_loader.data_loader.name.clone(),
+                    query_loader.data_loader.name.clone(),
                     single_loaded_data
                         .data
                         .first_key_value()
@@ -298,7 +298,7 @@ impl DataAssembler {
             }
             Multiplicity::ToMany => {
                 already_loaded_data.insert(
-                    data_loader.data_loader.name.clone(),
+                    query_loader.data_loader.name.clone(),
                     single_loaded_data.data.values().cloned().collect::<Value>(),
                 );
             }
@@ -396,7 +396,7 @@ pub mod tests {
         let mut conn = db.acquire().await.unwrap();
         let mut transaction = conn.begin_immediate().await.unwrap();
         let uut = DataAssembler {
-            data_loaders: vec![QueryLoader {
+            query_loaders: vec![QueryLoader {
                 data_loader: DataLoader {
                     name: "desk".to_string(),
                     location: "/user/desk".try_into().unwrap(),
