@@ -19,16 +19,8 @@ use serde_json::{Map, Value};
 const ENCODED_TILDE: &str = "~0";
 const ENCODED_SLASH: &str = "~1";
 
-pub trait ReferenceToken {}
-
-pub struct Key(pub String);
-impl ReferenceToken for Key {}
-
 pub struct ArrayAccess(pub usize);
-impl ReferenceToken for ArrayAccess {}
-
 pub struct PastLastArrayElement;
-impl ReferenceToken for PastLastArrayElement {}
 
 impl TryFrom<&str> for ArrayAccess {
     type Error = ();
