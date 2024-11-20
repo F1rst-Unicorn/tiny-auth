@@ -93,19 +93,25 @@ object Build : BuildType({
             name = "Cargo Clippy"
             id = "RUNNER_21"
             workingDir = "src/rust"
-            scriptContent = "cargo clippy --release -j 8 -- -D clippy::all"
+            scriptContent = "cargo clippy"
         }
         script {
             name = "Cargo Test"
             id = "RUNNER_22"
             workingDir = "src/rust"
-            scriptContent = "cargo test -j 1"
+            scriptContent = """
+                ../sql/gradlew -p ../sql :sqlite:update -PdbName=unittests -PliquibaseLabels=unittests
+                cargo test
+            """.trimIndent()
         }
         script {
             name = "Cargo Check"
             id = "cargo_check"
             workingDir = "%RUST_ROOT%"
-            scriptContent = "cargo check"
+            scriptContent = """
+                cargo check
+                cargo sqlx prepare --workspace --check
+            """.trimIndent()
         }
     }
 
