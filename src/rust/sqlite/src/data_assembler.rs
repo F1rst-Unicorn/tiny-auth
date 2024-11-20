@@ -182,19 +182,15 @@ impl DataAssembler {
         transitive_multiplicity.insert(root_type.as_ref(), Multiplicity::ToOne);
 
         for query_loader in &self.query_loaders {
-            if self
-                .load_from_single(
-                    query_loader,
-                    &mut loaded_data,
-                    &mut ids,
-                    &mut already_loaded_data,
-                    &mut transitive_multiplicity,
-                    transaction,
-                )
-                .await
-            {
-                continue;
-            }
+            self.load_from_single(
+                query_loader,
+                &mut loaded_data,
+                &mut ids,
+                &mut already_loaded_data,
+                &mut transitive_multiplicity,
+                transaction,
+            )
+            .await;
         }
         drop(ids);
         drop(transitive_multiplicity);
@@ -237,36 +233,34 @@ impl DataAssembler {
         already_loaded_data: &mut BTreeMap<String, Value>,
         transitive_multiplicity: &mut BTreeMap<&'a str, Multiplicity>,
         transaction: &mut Transaction<'_>,
-    ) -> bool {
+    ) {
         let Some(destination) = query_loader.data_loader.location.first() else {
             warn!("location has no first element so it cannot be nested");
-            return true;
+            return;
         };
         let Some(destination_ids) = ids.get(destination) else {
             warn!(%destination,
                 "data loader will be ignored as destination is not known. \
                 Maybe the order is wrong."
             );
-            return true;
+            return;
         };
         let context = DataLoaderContext {
             assigned_to: destination_ids,
             loaded_data: already_loaded_data,
         };
 
-        let single_loaded_data = query_loader
+        let single_loaded_data = match query_loader
             .load_data(transaction, self.templater.clone(), context)
-            .await;
-        let single_loaded_data = match single_loaded_data {
+            .await
+        {
             Err(e) => {
                 warn!(%e, "failed to load data");
-                return true;
+                return;
             }
             Ok(v) => v,
         };
 
-        loaded_data.push(single_loaded_data);
-        let single_loaded_data = loaded_data.last().unwrap();
         ids.insert(
             query_loader.data_loader.name.as_str(),
             single_loaded_data.data.keys().cloned().collect(),
@@ -303,7 +297,7 @@ impl DataAssembler {
                 );
             }
         }
-        false
+        loaded_data.push(single_loaded_data);
     }
 }
 
