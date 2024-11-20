@@ -27,8 +27,7 @@ build() {
     rm -f sqlite/build/$db_name.sqlite*
     ./gradlew :sqlite:update                                                   \
             -PdbName=$db_name                                                  \
-            -PliquibaseLabels=schema,reference,$(echo                          \
-                    ${versions_with_migrations[*]} | sed 's/ /,/g')
+            -PliquibaseLabels=$db_name
     cd "$srcdir/src/rust"
     DATABASE_URL=sqlite://$srcdir/src/sql/sqlite/build/$db_name.sqlite         \
             cargo build --release

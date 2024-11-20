@@ -23,7 +23,7 @@
             http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd"
         context="production">
 
-    <changeSet id="1" author="admin" labels="schema">
+    <changeSet id="1" author="admin" labels="schema,dev,unittests,build">
         <sql endDelimiter=";;">
             create table tiny_auth_password (
                 id integer primary key not null,
@@ -200,7 +200,7 @@
             </sql>
         </rollback>
     </changeSet>
-    <changeSet id="2" author="admin" labels="reference">
+    <changeSet id="2" author="admin" labels="reference,dev,unittests,build">
         <sql endDelimiter=";;">
             alter table tiny_auth_user add column email text not null default '';;
             alter table tiny_auth_user add column email_verified integer not null default 0 check (email_verified in (0, 1));;
@@ -623,7 +623,7 @@
             </sql>
         </rollback>
     </changeSet>
-    <changeSet id="3" author="admin" labels="reference">
+    <changeSet id="3" author="admin" labels="reference,dev,unittests,build">
         <sql endDelimiter=";;">
             insert into tiny_auth_client (client_id, client_type)
             values ('tiny-auth-frontend', 'public');;
@@ -668,7 +668,7 @@
             </sql>
         </rollback>
     </changeSet>
-    <changeSet id="4" author="admin" labels="testdata">
+    <changeSet id="4" author="admin" labels="testdata,dev,unittests,build">
         <sql endDelimiter=";;">
             insert into tiny_auth_redirect_uri (redirect_uri, client)
             select

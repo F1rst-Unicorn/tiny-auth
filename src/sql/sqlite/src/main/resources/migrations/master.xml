@@ -22,5 +22,5 @@
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
 
-    <include file="0001-schema.xml" relativeToChangelogFile="true" labels="2.1.0"/>
+    <include file="0001-schema.xml" relativeToChangelogFile="true" labels="2.1.0,dev,unittests,build"/>
 </databaseChangeLog>
