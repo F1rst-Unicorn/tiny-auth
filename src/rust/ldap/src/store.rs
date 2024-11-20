@@ -26,7 +26,9 @@ use tiny_auth_business::client::Client;
 use tiny_auth_business::client::Error as ClientError;
 use tiny_auth_business::password::Error as PasswordError;
 use tiny_auth_business::password::Password;
-use tiny_auth_business::store::{ClientStore, PasswordConstructionError, PasswordStore, UserStore};
+use tiny_auth_business::store::{
+    ClientStore, PasswordConstructionError, PasswordStore, PasswordUnchangedReason, UserStore,
+};
 use tiny_auth_business::user::Error as UserError;
 use tiny_auth_business::user::User;
 use tiny_auth_business::util::wrap_err;
@@ -127,7 +129,10 @@ impl PasswordStore for LdapStore {
         _: &str,
     ) -> Result<Password, PasswordConstructionError> {
         warn!("LDAP passwords cannot be changed");
-        Err(PasswordConstructionError::PasswordUnchanged(user.password))
+        Err(PasswordConstructionError::PasswordUnchanged(
+            user.password,
+            PasswordUnchangedReason::Managed,
+        ))
     }
 }
 

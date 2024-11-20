@@ -23,7 +23,9 @@ use sqlx::{query_file, query_file_scalar};
 use std::num::{NonZeroI64, NonZeroU32};
 use tiny_auth_business::password::{Error as PasswordError, Password, HASH_ITERATIONS};
 use tiny_auth_business::store::PasswordConstructionError::BackendError;
-use tiny_auth_business::store::{PasswordConstructionError, PasswordStore};
+use tiny_auth_business::store::{
+    PasswordConstructionError, PasswordStore, PasswordUnchangedReason,
+};
 use tiny_auth_business::user::User;
 use tiny_auth_business::util::wrap_err;
 use tracing::{error, info};
@@ -105,16 +107,19 @@ impl PasswordStore for SqliteStore {
     ) -> Result<Password, PasswordConstructionError> {
         let existing_password_id = match &user.password {
             Password::Pbkdf2HmacSha256 { .. } => {
-                info!("password is moved into the DB");
+                info!("password will be moved into the DB");
                 None
             }
             Password::Plain(_) => {
-                info!("password is upgraded into an encrypted one");
+                info!("password will be upgraded into an encrypted one");
                 None
             }
             Password::Ldap { .. } => {
                 warn!("LDAP passwords cannot be changed");
-                return Err(PasswordConstructionError::PasswordUnchanged(user.password));
+                return Err(PasswordConstructionError::PasswordUnchanged(
+                    user.password,
+                    PasswordUnchangedReason::Managed,
+                ));
             }
             Password::Sqlite { name, id } => {
                 if self.name.ne(name) {
@@ -129,12 +134,12 @@ impl PasswordStore for SqliteStore {
             }
         };
 
-        let password = self
+        let new_password = self
             .in_place_password_store
             .construct_password(user, password)
             .await?;
 
-        match password {
+        match new_password {
             Password::Pbkdf2HmacSha256 {
                 credential,
                 iterations,
@@ -150,7 +155,7 @@ impl PasswordStore for SqliteStore {
                     error!(%salt, "no valid base64 string");
                     BackendError
                 })?;
-                if let Some(id) = existing_password_id {
+                let id = if let Some(id) = existing_password_id {
                     query_file!(
                         "queries/update-password-pbkdf2hmacsha256.sql",
                         credential,
@@ -161,17 +166,9 @@ impl PasswordStore for SqliteStore {
                     .execute(&mut *transaction)
                     .await
                     .map_err(wrap_err)?;
-
-                    transaction.commit().await.map_err(wrap_err)?;
-                    Ok(Password::Sqlite {
-                        name: self.name.clone(),
-                        id,
-                    })
+                    id
                 } else {
-                    let mut conn = self.write_pool.acquire().await.map_err(wrap_err)?;
-                    let mut transaction = conn.begin_immediate().await.map_err(wrap_err)?;
-
-                    let id = match query_file_scalar!(
+                    let specialisation_id = match query_file_scalar!(
                         "queries/insert-password-pbkdf2hmacsha256.sql",
                         credential,
                         iterations,
@@ -186,30 +183,36 @@ impl PasswordStore for SqliteStore {
                             return Err(BackendError);
                         }
                     };
-                    match query_file_scalar!("queries/insert-password.sql", "pbkdf2hmacsha256", id)
-                        .fetch_one(&mut *transaction)
-                        .await
+                    match query_file_scalar!(
+                        "queries/insert-password.sql",
+                        "pbkdf2hmacsha256",
+                        specialisation_id
+                    )
+                    .fetch_one(&mut *transaction)
+                    .await
                     {
-                        Ok(v) => {
-                            transaction.commit().await.map_err(wrap_err)?;
-                            Ok(Password::Sqlite {
-                                name: self.name.clone(),
-                                id: v,
-                            })
-                        }
+                        Ok(v) => v,
                         Err(e) => {
                             warn!(%e, "failed to store password");
                             return Err(BackendError);
                         }
                     }
-                }
+                };
+                transaction.commit().await.map_err(wrap_err)?;
+                Ok(Password::Sqlite {
+                    name: self.name.clone(),
+                    id,
+                })
             }
-            v @ Password::Ldap { .. } | v @ Password::Sqlite { .. } => {
-                Err(PasswordConstructionError::PasswordUnchanged(v))
-            }
+            v @ Password::Ldap { .. } | v @ Password::Sqlite { .. } => Err(
+                PasswordConstructionError::PasswordUnchanged(v, PasswordUnchangedReason::Managed),
+            ),
             Password::Plain(_) => {
                 error!("plain text passwords are not stored in the DB");
-                Err(PasswordConstructionError::PasswordUnchanged(password))
+                Err(PasswordConstructionError::PasswordUnchanged(
+                    new_password,
+                    PasswordUnchangedReason::Insecure,
+                ))
             }
         }
     }

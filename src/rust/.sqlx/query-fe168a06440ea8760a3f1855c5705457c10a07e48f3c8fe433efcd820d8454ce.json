@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "update tiny_auth_password_pbkdf2hmacsha256\nset credential = ?1,\n    iterations = ?2,\n    salt = ?3\nwhere id = (\n    select password_id\n    from tiny_auth_password\n    where id = ?4\n)\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "fe168a06440ea8760a3f1855c5705457c10a07e48f3c8fe433efcd820d8454ce"
+}

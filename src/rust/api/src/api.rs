@@ -72,7 +72,7 @@ impl TinyAuthApi for TinyAuthApiImpl {
                 };
                 Ok(Response::new(response))
             }
-            Err(Error::PasswordConstruction(PasswordConstructionError::PasswordUnchanged(_)))
+            Err(Error::PasswordConstruction(PasswordConstructionError::PasswordUnchanged(..)))
             | Ok(Password::Ldap { .. }) => {
                 let response = PasswordChangeResponse {
                     hashed_password: Some(HashedPassword::Managed(Managed {})),

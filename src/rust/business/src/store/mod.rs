@@ -120,13 +120,19 @@ impl ClientStore for MergingClientStore {
 #[derive(Error, Debug)]
 pub enum PasswordConstructionError {
     #[error("unchanged")]
-    PasswordUnchanged(Password),
+    PasswordUnchanged(Password, PasswordUnchangedReason),
     #[error("Unknown password store '{0}'")]
     UnmatchedBackendName(String),
     #[error("backend error")]
     BackendError,
     #[error("backend error: {0}")]
     BackendErrorWithContext(#[from] Arc<dyn StdError + Send + Sync>),
+}
+
+#[derive(Debug)]
+pub enum PasswordUnchangedReason {
+    Managed,
+    Insecure,
 }
 
 #[async_trait]
