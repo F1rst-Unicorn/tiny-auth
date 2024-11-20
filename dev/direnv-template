@@ -1,3 +1,6 @@
+#!/bin/bash
+
+# used for tests
 export RUST_LOG=$(echo 'warn,
     tiny_auth_main=trace,
     tiny_auth_web=trace,
@@ -13,4 +16,8 @@ export RUST_LOG=$(echo 'warn,
     log=info,
     sqlx::query=trace' | sed -z "s/\n//g; s/, */,/g")
 export RUST_BACKTRACE=1
+# no span events by default, see https://github.com/d-e-s-o/test-log?tab=readme-ov-file#logging-configuration
+export RUST_LOG_SPAN_EVENTS=
+
+# sqlx
 export DATABASE_URL=sqlite:///workspace/src/sql/sqlite/build/dev.sqlite
