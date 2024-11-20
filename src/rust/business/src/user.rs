@@ -17,7 +17,8 @@
 
 use crate::client::Client;
 use crate::oauth2::ClientType;
-use crate::password::Password;
+use crate::password::{pick_password_by_priority, Password};
+use crate::scope::merge_attributes;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -28,7 +29,7 @@ use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::debug;
+use tracing::{debug, warn};
 
 #[derive(Error, Debug, Clone)]
 pub enum Error {
@@ -63,31 +64,26 @@ impl User {
     }
 
     pub fn merge(mut self, other: User) -> User {
-        if let Password::Plain(_) = self.password {
-            self.password = other.password;
-        };
+        self.password = pick_password_by_priority(self.password, other.password);
 
         for (client_id, mut other_scopes) in other.allowed_scopes {
-            match self.allowed_scopes.get_mut(&client_id) {
-                None => {
-                    self.allowed_scopes.insert(client_id, other_scopes);
-                }
-                Some(scopes) => {
-                    scopes.append(&mut other_scopes);
-                }
-            }
+            self.allowed_scopes
+                .entry(client_id)
+                .and_modify(|scopes| scopes.append(&mut other_scopes))
+                .or_insert(other_scopes);
         }
 
-        for (name, value) in other.attributes {
-            match self.attributes.get_mut(&name) {
-                None => {
-                    self.attributes.insert(name, value);
-                }
-                _ => {
-                    debug!(attribute = %name, "Ignoring duplicate");
-                }
+        self.attributes = match merge_attributes(self.attributes, other.attributes) {
+            Err(e) => {
+                warn!(%e, "clearing user attributes");
+                HashMap::default()
             }
-        }
+            Ok(Value::Object(attributes)) => attributes.into_iter().collect(),
+            Ok(_) => {
+                warn!("clearing user attributes because merging returned no object");
+                HashMap::default()
+            }
+        };
         self
     }
 }

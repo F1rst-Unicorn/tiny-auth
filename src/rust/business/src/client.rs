@@ -16,26 +16,21 @@
  */
 
 use crate::oauth2::ClientType;
-use crate::password::Password;
-
-use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::sync::Arc;
-
-use url::Url;
-
-use serde::Deserialize;
-use serde::Serialize;
-
-use serde_json::Value;
-
+use crate::password::{pick_password_by_priority, Password};
+use crate::scope::merge_attributes;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
-
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::Value;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::error::Error as StdError;
+use std::sync::Arc;
 use thiserror::Error;
+use tracing::error;
 use tracing::warn;
-use tracing::{debug, error};
+use url::Url;
 
 #[derive(Error, Debug, Clone)]
 pub enum Error {
@@ -103,16 +98,17 @@ impl Client {
         self.allowed_scopes.append(&mut other.allowed_scopes);
         self.redirect_uris.append(&mut other.redirect_uris);
 
-        for (name, value) in other.attributes {
-            match self.attributes.get_mut(&name) {
-                None => {
-                    self.attributes.insert(name, value);
-                }
-                _ => {
-                    debug!(attribute = name, "ignoring duplicate");
-                }
+        self.attributes = match merge_attributes(self.attributes, other.attributes) {
+            Err(e) => {
+                warn!(%e, "clearing client attributes");
+                HashMap::default()
             }
-        }
+            Ok(Value::Object(attributes)) => attributes.into_iter().collect(),
+            Ok(_) => {
+                warn!("clearing client attributes because merging returned no object");
+                HashMap::default()
+            }
+        };
         self
     }
 
@@ -203,18 +199,6 @@ impl Client {
                 None
             }
         }
-    }
-}
-
-fn pick_password_by_priority(first: Password, second: Password) -> Password {
-    match (first, second) {
-        (first @ Password::Pbkdf2HmacSha256 { .. }, Password::Pbkdf2HmacSha256 { .. }) => first,
-        (Password::Pbkdf2HmacSha256 { .. }, second) => second,
-        (first, Password::Pbkdf2HmacSha256 { .. }) => first,
-        (first @ Password::Ldap { .. }, Password::Ldap { .. }) => first,
-        (Password::Ldap { .. }, second) => second,
-        (first, Password::Ldap { .. }) => first,
-        (first, _) => first,
     }
 }
 

@@ -89,6 +89,19 @@ impl Password {
     }
 }
 
+/// Pbkdf2HmacSha256 < Sqlite < Ldap < Plain
+pub fn pick_password_by_priority(first: Password, second: Password) -> Password {
+    match (first, second) {
+        (first, Password::Pbkdf2HmacSha256 { .. }) => first,
+        (Password::Pbkdf2HmacSha256 { .. }, second) => second,
+        (first, Password::Sqlite { .. }) => first,
+        (Password::Sqlite { .. }, second) => second,
+        (first, Password::Ldap { .. }) => first,
+        (Password::Ldap { .. }, second) => second,
+        (first, _) => first,
+    }
+}
+
 pub struct DispatchingPasswordStore {
     named_stores: BTreeMap<String, Arc<dyn PasswordStore>>,
     in_place_store: Arc<InPlacePasswordStore>,

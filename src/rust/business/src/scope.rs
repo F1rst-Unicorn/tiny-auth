@@ -25,7 +25,7 @@ use serde_json::Map;
 use serde_json::Value;
 use std::any::{type_name, TypeId};
 use std::cmp::Ord;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, warn};
@@ -432,41 +432,39 @@ pub enum MergeError {
     UnmergableTypes,
 }
 
+pub fn merge_attributes(
+    left: HashMap<String, Value>,
+    right: HashMap<String, Value>,
+) -> Result<Value, MergeError> {
+    merge(
+        Value::Object(left.into_iter().collect()),
+        Value::Object(right.into_iter().collect()),
+    )
+}
+
 #[instrument(level = "debug", fields(%left, %right))]
 pub fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
-    match left {
-        Value::Array(mut inner_left) => match right {
-            Value::Array(right) => {
-                inner_left.extend(right);
-                Ok(Value::Array(inner_left))
-            }
-            _ => {
-                debug!(left = %<serde_json::Value as From<Vec<_>>>::from(inner_left), %right);
-                Err(MergeError::TypeMismatch)
-            }
-        },
-        Value::Object(inner_left) => match right {
-            Value::Object(mut right) => {
-                let mut result = Map::new();
-                for (k, v) in inner_left.into_iter() {
-                    if right.contains_key(&k) {
-                        let right_value = right.remove(&k).unwrap();
-                        result.insert(k, merge(v, right_value)?);
-                    } else {
-                        result.insert(k, v);
-                    }
-                }
-                for (k, v) in right {
+    match (left, right) {
+        (Value::Array(mut inner_left), Value::Array(right)) => {
+            inner_left.extend(right);
+            Ok(Value::Array(inner_left))
+        }
+        (Value::Object(inner_left), Value::Object(mut right)) => {
+            let mut result = Map::new();
+            for (k, v) in inner_left.into_iter() {
+                if right.contains_key(&k) {
+                    let right_value = right.remove(&k).unwrap();
+                    result.insert(k, merge(v, right_value)?);
+                } else {
                     result.insert(k, v);
                 }
-                Ok(Value::Object(result))
             }
-            _ => {
-                debug!(left = %<serde_json::Value as From<Map<_, _>>>::from(inner_left), %right);
-                Err(MergeError::TypeMismatch)
+            for (k, v) in right {
+                result.insert(k, v);
             }
-        },
-        _ => {
+            Ok(Value::Object(result))
+        }
+        (left, right) => {
             debug!(%left, %right);
             Err(MergeError::UnmergableTypes)
         }
@@ -696,7 +694,7 @@ mod tests {
 
         assert!(result.is_err());
         let result = result.unwrap_err();
-        assert_eq!(result, MergeError::TypeMismatch);
+        assert_eq!(result, MergeError::UnmergableTypes);
     }
 
     #[test]
@@ -707,7 +705,7 @@ mod tests {
 
         assert!(result.is_err());
         let result = result.unwrap_err();
-        assert_eq!(result, MergeError::TypeMismatch);
+        assert_eq!(result, MergeError::UnmergableTypes);
     }
 
     #[test]

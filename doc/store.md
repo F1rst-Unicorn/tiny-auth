@@ -476,3 +476,25 @@ least contain the `openid` scope.
 ### Scope Configuration
 
 See the [Scopes](scopes.md) document for details.
+
+## Merging
+
+It is possible to have objects split into multiple stores. E.g. user "jane" can
+have some attributes stored in LDAP and others in SQLite. Objects with the same
+`name` (users, scopes) or `client_id` (clients) are considered to belong to the
+same object. The order of stores in the config file matters in different ways
+described below, with stores listed first being stronger.
+
+Allowed scopes and redirect URIs are formed by the union of all scopes the user
+or client has listed in any store.
+
+Scope names and descriptions are determined by the first store containing them.
+Scope mappings are merged. However, you must pay attention to not have two
+mappings collide on the same primitive attribute (int, string, bool, null).
+Arrays and objects are merged recursively.
+
+### Passwords
+
+Password types are ordered as follows: Configuration File < SQLite < LDAP.
+The greatest password according to that order is picked. Ties are resolved by
+store order.
