@@ -20,6 +20,7 @@ mod begin_immediate;
 mod client_store;
 mod data_assembler;
 mod error;
+mod health;
 pub mod inject;
 mod password_store;
 mod scope_store;

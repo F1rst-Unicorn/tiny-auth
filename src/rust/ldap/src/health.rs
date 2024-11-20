@@ -22,7 +22,7 @@ use async_trait::async_trait;
 use tiny_auth_business::health::HealthCheckCommand;
 use tracing::warn;
 
-pub struct LdapHealth {
+pub(crate) struct LdapHealth {
     pub(crate) connector: Connector,
     pub(crate) authenticator: AuthenticatorDispatcher,
 }

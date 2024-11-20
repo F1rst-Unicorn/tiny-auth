@@ -228,7 +228,7 @@ impl DataAssembler {
         Ok(attributes)
     }
 
-    #[instrument(skip_all, fields(data_loader = %data_loader.data_loader.name))]
+    #[instrument(skip_all, fields(data_loader = %query_loader.data_loader.name))]
     async fn load_from_single<'a>(
         &self,
         query_loader: &'a QueryLoader,

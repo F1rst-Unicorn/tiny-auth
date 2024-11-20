@@ -50,7 +50,7 @@ use tiny_auth_business::consent::Handler as ConsentHandler;
 use tiny_auth_business::cors::inject::cors_lister;
 use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::health::inject::health_check;
-use tiny_auth_business::health::{HealthCheckCommand, HealthChecker};
+use tiny_auth_business::health::{HealthCheck, HealthCheckCommand, HealthChecker};
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::jwk::Jwk;
 use tiny_auth_business::jwk::Jwks;
@@ -96,6 +96,8 @@ pub struct Constructor<'a> {
 
     authorization_code_store: Arc<dyn AuthorizationCodeStore>,
 
+    health_checks: Vec<HealthCheck>,
+
     tera: Arc<Tera>,
 
     public_keys: Vec<String>,
@@ -129,6 +131,7 @@ impl<'a> Constructor<'a> {
             reload_sender,
             store_paths,
             auth_code_store,
+            health_checks,
         ) = Self::build_stores(config).await?;
         let tera = Arc::new(Self::build_template_engine(config)?);
         let issuer_url = Self::build_issuer_url(config);
@@ -182,6 +185,7 @@ impl<'a> Constructor<'a> {
             store_paths,
             authorization_code_store: auth_code_store
                 .unwrap_or_else(|| Self::build_auth_code_store()),
+            health_checks,
             tera,
             public_keys,
             issuer_configuration,
@@ -234,6 +238,7 @@ impl<'a> Constructor<'a> {
             Sender<ReloadEvent>,
             Vec<PathBuf>,
             Option<Arc<dyn AuthorizationCodeStore>>,
+            Vec<HealthCheck>,
         ),
         Error,
     > {
@@ -243,6 +248,7 @@ impl<'a> Constructor<'a> {
         let mut password_stores = BTreeMap::default();
         let (sender, _receiver) = channel(8);
         let mut store_paths = Vec::new();
+        let mut health_checks = Vec::new();
         let in_place_password_store = Arc::new(in_place_password_store(&config.crypto.pepper));
         let mut auth_code_store: Option<Arc<dyn AuthorizationCodeStore>> = None;
 
@@ -274,16 +280,21 @@ impl<'a> Constructor<'a> {
                         .iter()
                         .map(|v| bind_dn_templater(v))
                         .collect();
+                    let name = "ldap ".to_string() + name;
+                    let connector = connector(
+                        urls,
+                        std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
+                        *starttls,
+                    );
+                    let check: Arc<dyn HealthCheckCommand> =
+                        Arc::new(simple_bind_check(connector.clone()));
+                    health_checks.push(health_check(&name, check));
                     password_stores.insert(
                         name.clone(),
                         tiny_auth_ldap::inject::simple_bind_store(
                             name.as_str(),
                             templaters.as_slice(),
-                            connector(
-                                urls.as_slice(),
-                                std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
-                                *starttls,
-                            ),
+                            connector,
                         ),
                     );
                 }
@@ -351,19 +362,28 @@ impl<'a> Constructor<'a> {
                         .into(),
                     };
 
+                    let name = "ldap ".to_string() + name;
+                    let connector = connector(
+                        urls,
+                        std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
+                        *starttls,
+                    );
+                    let check: Arc<dyn HealthCheckCommand> = Arc::new(search_bind_check(
+                        connector.clone(),
+                        bind_dn,
+                        bind_dn_password,
+                    ));
+
                     let ldap_store = tiny_auth_ldap::inject::search_bind_store(
                         name.as_str(),
-                        connector(
-                            urls.as_slice(),
-                            std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
-                            *starttls,
-                        ),
+                        connector,
                         bind_dn,
                         bind_dn_password,
                         searches,
                         user_config,
                         client_config,
                     );
+                    health_checks.push(health_check(&name, check));
                     user_stores.push(ldap_store.clone());
                     client_stores.push(ldap_store.clone());
                     password_stores.insert(name.clone(), ldap_store);
@@ -392,7 +412,7 @@ impl<'a> Constructor<'a> {
                         templater.clone(),
                     );
 
-                    let sqlite_store = match tiny_auth_sqlite::inject::sqlite_store(
+                    let (sqlite_store, check) = match tiny_auth_sqlite::inject::sqlite_store(
                         name.as_str(),
                         &(String::from("sqlite://") + base),
                         in_place_password_store.clone(),
@@ -408,6 +428,8 @@ impl<'a> Constructor<'a> {
                         Ok(v) => v,
                     };
 
+                    let name = "sqlite ".to_owned() + name;
+                    health_checks.push(health_check(name.as_str(), Arc::new(check)));
                     if use_for.users.is_some() {
                         user_stores.push(sqlite_store.clone());
                     }
@@ -443,6 +465,7 @@ impl<'a> Constructor<'a> {
             sender,
             store_paths,
             auth_code_store,
+            health_checks,
         ))
     }
 
@@ -867,36 +890,7 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
     }
 
     fn health_checker(&self) -> Arc<HealthChecker> {
-        let mut checks = Vec::default();
-
-        for store in &self.config.store {
-            if let Store::Ldap {
-                name,
-                mode,
-                urls,
-                connect_timeout_in_seconds,
-                starttls,
-            } = store
-            {
-                let name = "ldap ".to_string() + name;
-                let connector = connector(
-                    urls,
-                    std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
-                    *starttls,
-                );
-                let check: Arc<dyn HealthCheckCommand> = match mode {
-                    LdapMode::SimpleBind { .. } => Arc::new(simple_bind_check(connector)),
-                    LdapMode::SearchBind {
-                        bind_dn,
-                        bind_dn_password,
-                        ..
-                    } => Arc::new(search_bind_check(connector, bind_dn, bind_dn_password)),
-                };
-                checks.push(health_check(&name, check));
-            }
-        }
-
-        Arc::new(HealthChecker(checks))
+        Arc::new(HealthChecker(self.health_checks.clone()))
     }
 
     fn webapp_template(&self) -> Arc<dyn WebTemplater<WebappRootContext>> {

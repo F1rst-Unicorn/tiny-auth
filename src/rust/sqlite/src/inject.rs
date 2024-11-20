@@ -17,6 +17,7 @@
 
 use crate::data_assembler::{DataAssembler, QueryLoader};
 use crate::error::SqliteError;
+use crate::health::SqliteHealth;
 use crate::store::SqliteStore;
 use sqlx::pool::PoolOptions;
 use sqlx::sqlite::SqliteConnectOptions;
@@ -27,6 +28,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tiny_auth_business::data_loader::DataLoader;
+use tiny_auth_business::health::HealthCheckCommand;
 use tiny_auth_business::password::InPlacePasswordStore;
 use tiny_auth_business::template::data_loader::DataLoaderContext;
 use tiny_auth_business::template::Templater;
@@ -38,7 +40,7 @@ pub async fn sqlite_store(
     in_place_password_store: Arc<InPlacePasswordStore>,
     user_data_assembler: DataAssembler,
     client_data_assembler: DataAssembler,
-) -> Result<Arc<SqliteStore>, SqliteError> {
+) -> Result<(Arc<SqliteStore>, impl HealthCheckCommand), SqliteError> {
     let options = SqliteConnectOptions::from_str(url)?
         .read_only(true)
         .journal_mode(Wal)
@@ -65,14 +67,17 @@ pub async fn sqlite_store(
     write_pool.execute("analyze").await?;
     write_pool.execute("pragma optimize").await?;
 
-    Ok(Arc::new(SqliteStore {
-        name: String::from(name),
-        read_pool,
-        write_pool,
-        in_place_password_store,
-        user_data_assembler,
-        client_data_assembler,
-    }))
+    Ok((
+        Arc::new(SqliteStore {
+            name: String::from(name),
+            read_pool: read_pool.clone(),
+            write_pool,
+            in_place_password_store,
+            user_data_assembler,
+            client_data_assembler,
+        }),
+        SqliteHealth { read_pool },
+    ))
 }
 
 pub fn data_assembler(

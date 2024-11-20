@@ -17,6 +17,7 @@
 
 use async_trait::async_trait;
 use std::sync::Arc;
+use tracing::instrument;
 
 pub struct HealthChecker(pub Vec<HealthCheck>);
 
@@ -30,12 +31,14 @@ impl HealthChecker {
     }
 }
 
+#[derive(Clone)]
 pub struct HealthCheck {
     name: String,
     command: Arc<dyn HealthCheckCommand>,
 }
 
 impl HealthCheck {
+    #[instrument(skip_all, fields(name = self.name))]
     pub async fn execute(&self) -> HealthStatement {
         HealthStatement {
             name: self.name.clone(),

@@ -20,6 +20,7 @@ use std::time::Duration;
 use tracing::{debug, warn};
 use url::Url;
 
+#[derive(Clone)]
 pub struct Connector {
     pub(crate) urls: Vec<Url>,
     pub(crate) connect_timeout: Duration,

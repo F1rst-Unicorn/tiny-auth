@@ -24,6 +24,7 @@ use std::sync::Arc;
 use test_log::test;
 use tiny_auth_business::data_loader::DataLoader;
 use tiny_auth_business::data_loader::Multiplicity::{ToMany, ToOne};
+use tiny_auth_business::health::HealthCheckCommand;
 use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::{InPlacePasswordStore, Password};
 use tiny_auth_business::scope::{Destination, Mapping, Type};
@@ -506,7 +507,22 @@ async fn reference_profile_scope_is_loaded() {
     );
 }
 
+#[test(tokio::test)]
+async fn health_check_works() {
+    let uut = health_check().await;
+
+    assert!(uut.check().await);
+}
+
 async fn store() -> Arc<SqliteStore> {
+    store_and_health_check().await.0
+}
+
+async fn health_check() -> impl HealthCheckCommand {
+    store_and_health_check().await.1
+}
+
+async fn store_and_health_check() -> (Arc<SqliteStore>, impl HealthCheckCommand + Sized) {
     sqlite_store(
         "sqlite",
         &(env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql/sqlite/build/unittests.sqlite"),
