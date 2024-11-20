@@ -189,10 +189,10 @@ impl<T: for<'a> Deserialize<'a> + Send + DataExt + 'static + Sync> FileStore<T> 
             return;
         }
 
-        let username = path.file_stem().unwrap().to_string_lossy().to_string();
-        self.data.write().await.remove(&username);
+        let name = path.file_stem().unwrap().to_string_lossy().to_string();
+        self.data.write().await.remove(&name);
 
-        T::log_single_remove(&username)
+        T::log_single_remove(&name)
     }
 
     pub async fn refresh_all(self: Arc<Self>, path: &Path) -> Option<()> {
@@ -200,14 +200,14 @@ impl<T: for<'a> Deserialize<'a> + Send + DataExt + 'static + Sync> FileStore<T> 
             trace!(path = %path.display(), own_path = %&self.base.display(), "path doesn't match");
             return None;
         }
-        let read_users = read_object(self.base.to_string_lossy().as_ref(), T::validate)?;
-        let mut users = self.data.write().await;
-        users.clear();
-        read_users
+        let read_objects = read_object(self.base.to_string_lossy().as_ref(), T::validate)?;
+        let mut objects = self.data.write().await;
+        objects.clear();
+        read_objects
             .into_iter()
             .map(|v| (v.name().clone(), v))
             .for_each(|v| {
-                users.insert(v.0, v.1);
+                objects.insert(v.0, v.1);
             });
         info!("data refreshed");
         Some(())
@@ -266,11 +266,11 @@ impl DataExt for Client {
     }
 
     fn log_single_refresh(name: &str) {
-        info!(name, "client refreshed");
+        info!(client = name, "client refreshed");
     }
 
     fn log_single_remove(name: &str) {
-        info!(name, "client removed");
+        info!(client = name, "client removed");
     }
 }
 
@@ -298,11 +298,11 @@ impl DataExt for Scope {
     }
 
     fn log_single_refresh(name: &str) {
-        info!(name, "scope refreshed");
+        info!(scope = name, "scope refreshed");
     }
 
     fn log_single_remove(name: &str) {
-        info!(name, "scope removed");
+        info!(scope = name, "scope removed");
     }
 }
 
