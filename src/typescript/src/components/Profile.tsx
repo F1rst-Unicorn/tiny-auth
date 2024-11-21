@@ -31,7 +31,8 @@ import { useFetcher } from "react-router-dom";
 import { useState } from "react";
 import {
   HashedPasswordPbkdf2HmacSha256,
-  ManagedPassword, SuccessfullyStoredPassword
+  ManagedPassword,
+  SuccessfullyStoredPassword,
 } from "../core/changePassword.ts";
 import { CURRENT, NEW } from "./actions/changePassword.ts";
 import { buildUserName } from "../core/auth.ts";
