@@ -100,6 +100,7 @@ object Build : BuildType({
             id = "RUNNER_22"
             workingDir = "src/rust"
             scriptContent = """
+                set -e
                 ../sql/gradlew -p ../sql :sqlite:update -PdbName=unittests -PliquibaseLabels=unittests
                 cargo test
             """.trimIndent()
@@ -109,6 +110,7 @@ object Build : BuildType({
             id = "cargo_check"
             workingDir = "%RUST_ROOT%"
             scriptContent = """
+                set -e
                 cargo check
                 cargo sqlx prepare --workspace --check
             """.trimIndent()

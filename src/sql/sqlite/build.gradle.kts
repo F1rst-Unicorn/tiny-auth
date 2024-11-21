@@ -32,6 +32,12 @@ dependencies {
     liquibaseRuntime(libs.sqlite)
 }
 
+val createBuildDir = tasks.register("createBuildDir") {
+    doFirst {
+        layout.buildDirectory.get().asFile.mkdir()
+    }
+}
+
 liquibase {
     activities {
         register("main") {
@@ -46,4 +52,9 @@ liquibase {
             )
         }
     }
+}
+
+tasks.filter { it.group == "Liquibase" }
+    .forEach {
+        it.dependsOn(createBuildDir)
 }
