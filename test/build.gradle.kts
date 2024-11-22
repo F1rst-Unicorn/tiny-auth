@@ -68,6 +68,5 @@ tasks.withType<Test> {
     systemProperty("javax.net.ssl.trustStorePassword", "password")
     systemProperty("javax.net.ssl.trustStoreType", "JKS")
 
-    environment("DOCKER_HOST", "unix://${System.getenv("XDG_RUNTIME_DIR")}/podman/podman.sock")
     environment("TESTCONTAINERS_RYUK_DISABLED", "true")
 }
