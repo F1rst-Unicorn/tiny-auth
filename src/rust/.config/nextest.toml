@@ -17,6 +17,9 @@ command = '../sql/gradlew -p ../sql :sqlite:clean :sqlite:update -PdbName=unitte
 capture-stdout = true
 capture-stderr = true
 
+[script.env]
+command = 'bash .config/test-env.sh'
+
 [[profile.default.overrides]]
 filter = """package(tiny_auth_sqlite)
     & (
@@ -68,6 +71,10 @@ filter = """package(tiny_auth_sqlite)
     )
 """
 setup = 'sqlite-liquibase-setup'
+
+[[profile.default.scripts]]
+filter = 'all()'
+setup = 'env'
 
 [[profile.default.overrides]]
 filter = """package(tiny_auth_ldap)
