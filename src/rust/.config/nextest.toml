@@ -1,0 +1,85 @@
+experimental = ["setup-scripts"]
+
+[profile.default]
+fail-fast = false
+
+[profile.default.junit]
+path = "junit.xml"
+store-success-output = true
+store-failure-output = true
+
+[test-groups]
+sqlite-db = { max-threads = 1 }
+docker = { max-threads = 3 }
+
+[script.sqlite-liquibase-setup]
+command = '../sql/gradlew -p ../sql :sqlite:clean :sqlite:update -PdbName=unittests -PliquibaseLabels=unittests'
+capture-stdout = true
+capture-stderr = true
+
+[[profile.default.overrides]]
+filter = """package(tiny_auth_sqlite)
+    & (
+        test(data_assembler::tests::db_error_is_propagated)
+        | test(data_assembler::tests::id_column_of_wrong_type_is_ignored)
+        | test(data_assembler::tests::missing_id_column_is_ignored)
+        | test(test::connecting_works)
+        | test(test::auth_code_storing_works)
+        | test(test::auth_code_can_be_used_only_once)
+        | test(test::expired_auth_code_is_cleared)
+        | test(test::non_expired_auth_code_is_retained)
+        | test(test::getting_user_works)
+        | test(test::getting_client_works)
+        | test(test::verifying_password_works)
+        | test(test::wrong_password_is_rejected)
+        | test(test::data_from_documentation_example_works)
+        | test(test::reference_openid_scope_is_loaded)
+        | test(test::reference_email_scope_is_loaded)
+        | test(test::reference_phone_scope_is_loaded)
+        | test(test::reference_address_scope_is_loaded)
+        | test(test::reference_profile_scope_is_loaded)
+        | test(test::health_check_works)
+    )
+"""
+test-group = 'sqlite-db'
+
+[[profile.default.scripts]]
+filter = """package(tiny_auth_sqlite)
+    & (
+        test(data_assembler::tests::db_error_is_propagated)
+        | test(data_assembler::tests::id_column_of_wrong_type_is_ignored)
+        | test(data_assembler::tests::missing_id_column_is_ignored)
+        | test(test::connecting_works)
+        | test(test::auth_code_storing_works)
+        | test(test::auth_code_can_be_used_only_once)
+        | test(test::expired_auth_code_is_cleared)
+        | test(test::non_expired_auth_code_is_retained)
+        | test(test::getting_user_works)
+        | test(test::getting_client_works)
+        | test(test::verifying_password_works)
+        | test(test::wrong_password_is_rejected)
+        | test(test::data_from_documentation_example_works)
+        | test(test::reference_openid_scope_is_loaded)
+        | test(test::reference_email_scope_is_loaded)
+        | test(test::reference_phone_scope_is_loaded)
+        | test(test::reference_address_scope_is_loaded)
+        | test(test::reference_profile_scope_is_loaded)
+        | test(test::health_check_works)
+    )
+"""
+setup = 'sqlite-liquibase-setup'
+
+[[profile.default.overrides]]
+filter = """package(tiny_auth_ldap)
+    & (
+        test(test::successful_authentication_works)
+        | test(test::failing_authentication_works)
+        | test(test::successful_search_authentication_works)
+        | test(test::failing_search_authentication_works)
+        | test(test::successful_search_anonymous_authentication_works)
+        | test(test::failing_search_anonymous_authentication_works)
+        | test(test::getting_user_works)
+        | test(test::getting_client_works)
+    )
+"""
+test-group = 'docker'

@@ -32,6 +32,10 @@ dependencies {
     liquibaseRuntime(libs.sqlite)
 }
 
+tasks.register("clean") {
+    delete(layout.buildDirectory)
+}
+
 val createBuildDir = tasks.register("createBuildDir") {
     doFirst {
         layout.buildDirectory.get().asFile.mkdir()

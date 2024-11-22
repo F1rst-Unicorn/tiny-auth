@@ -1,5 +1,7 @@
 import jetbrains.buildServer.configs.kotlin.*
+import jetbrains.buildServer.configs.kotlin.buildFeatures.XmlReport
 import jetbrains.buildServer.configs.kotlin.buildFeatures.commitStatusPublisher
+import jetbrains.buildServer.configs.kotlin.buildFeatures.xmlReport
 import jetbrains.buildServer.configs.kotlin.buildSteps.gradle
 import jetbrains.buildServer.configs.kotlin.buildSteps.script
 import jetbrains.buildServer.configs.kotlin.triggers.ScheduleTrigger
@@ -31,7 +33,6 @@ To debug in IntelliJ Idea, open the 'Maven Projects' tool window (View
 version = "2024.03"
 
 project {
-
     buildType(Build)
 }
 
@@ -101,8 +102,7 @@ object Build : BuildType({
             workingDir = "src/rust"
             scriptContent = """
                 set -e
-                ../sql/gradlew -p ../sql :sqlite:update -PdbName=unittests -PliquibaseLabels=unittests
-                cargo test
+                cargo nextest run
             """.trimIndent()
         }
         script {
@@ -134,6 +134,10 @@ object Build : BuildType({
     }
 
     features {
+        xmlReport {
+            reportType = XmlReport.XmlReportType.JUNIT
+            rules = "src/rust/target/nextest/default/junit.xml"
+        }
         commitStatusPublisher {
             id = "BUILD_EXT_1"
             vcsRootExtId = "${DslContext.settingsRoot.id}"
