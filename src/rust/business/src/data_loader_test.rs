@@ -19,6 +19,7 @@ pub mod loading {
     use crate::data_loader::Multiplicity::{ToMany, ToOne};
     use crate::data_loader::*;
     use lazy_static::lazy_static;
+    use pretty_assertions::assert_eq;
     use serde_json::{json, Value};
     use test_log::test;
 
@@ -166,6 +167,7 @@ pub mod nesting {
     use crate::data_loader::Multiplicity::{ToMany, ToOne};
     use crate::data_loader::*;
     use lazy_static::lazy_static;
+    use pretty_assertions::assert_eq;
     use serde_json::{json, Value};
     use test_log::test;
 

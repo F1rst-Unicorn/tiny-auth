@@ -309,6 +309,7 @@ mod tests {
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
     use actix_web::web::Form;
+    use pretty_assertions::assert_eq;
     use test_log::test;
     use tiny_auth_business::authenticator::test_fixtures::authenticator;
     use tiny_auth_business::cors::test_fixtures::cors_lister;
@@ -321,7 +322,6 @@ mod tests {
     use tiny_auth_business::test_fixtures::build_test_issuer_config;
     use tiny_auth_business::test_fixtures::build_test_token_creator;
     use tiny_auth_business::test_fixtures::build_test_token_validator;
-
     #[test(actix_rt::test)]
     async fn missing_grant_type_is_rejected() {
         let req = TestRequest::post().to_http_request();

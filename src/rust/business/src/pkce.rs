@@ -133,6 +133,7 @@ impl<'a> TryFrom<&'a str> for CodeVerifier<'a> {
 #[cfg(test)]
 pub mod tests {
     use crate::pkce::CodeChallenge;
+    use pretty_assertions::assert_eq;
     use std::borrow::Cow;
     use test_log::test;
 

@@ -125,6 +125,7 @@ impl From<JsonPointer> for String {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
     use serde_json::json;
     use test_log::test;
 

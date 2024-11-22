@@ -18,6 +18,7 @@ use crate::inject;
 use crate::inject::sqlite_store;
 use crate::store::SqliteStore;
 use chrono::{Duration, Local};
+use pretty_assertions::assert_eq;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use std::sync::Arc;

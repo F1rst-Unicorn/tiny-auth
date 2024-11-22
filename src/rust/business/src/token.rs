@@ -455,6 +455,7 @@ mod tests {
         build_test_algorithm, build_test_decoding_key, build_test_token_creator,
         build_test_token_issuer,
     };
+    use pretty_assertions::assert_eq;
     use serde_json::from_str;
     use test_log::test;
 

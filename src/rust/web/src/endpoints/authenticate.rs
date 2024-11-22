@@ -392,6 +392,7 @@ mod tests {
     use actix_web::http;
     use actix_web::test::TestRequest;
     use actix_web::web::Form;
+    use pretty_assertions::assert_eq;
     use std::sync::Arc;
     use test_log::test;
     use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;

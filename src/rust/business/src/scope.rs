@@ -477,6 +477,7 @@ mod tests {
     use crate::client::tests::get_test_client;
     use crate::template::test_fixtures::TestTemplater;
     use crate::user::tests::get_test_user;
+    use pretty_assertions::assert_eq;
     use serde_json::json;
     use test_log::test;
 

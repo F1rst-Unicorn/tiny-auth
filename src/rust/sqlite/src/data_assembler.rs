@@ -305,6 +305,7 @@ impl DataAssembler {
 pub mod tests {
     use super::*;
     use crate::begin_immediate::SqliteConnectionExt;
+    use pretty_assertions::assert_eq;
     use rstest::{fixture, rstest};
     use sqlx::pool::PoolOptions;
     use sqlx::sqlite::SqliteConnectOptions;

@@ -271,6 +271,7 @@ mod tests {
     use actix_web::web::BytesMut;
     use actix_web::web::Data;
     use actix_web::HttpResponse;
+    use pretty_assertions::assert_eq;
     use serde::de::DeserializeOwned;
     use serde_derive::Deserialize;
     use test_log::test;

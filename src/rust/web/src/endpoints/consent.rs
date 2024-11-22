@@ -327,6 +327,7 @@ mod tests {
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
     use actix_web::web::Form;
+    use pretty_assertions::assert_eq;
     use std::collections::HashMap;
     use std::sync::Arc;
     use test_log::test;

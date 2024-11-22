@@ -737,6 +737,7 @@ mod tests {
     use crate::test_fixtures::build_test_token_creator;
     use crate::test_fixtures::build_test_token_validator;
     use crate::token::test_fixtures::refresh_token;
+    use pretty_assertions::assert_eq;
     use test_log::test;
 
     #[test(tokio::test)]

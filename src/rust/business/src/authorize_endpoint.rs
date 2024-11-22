@@ -373,6 +373,7 @@ pub mod tests {
     use crate::oauth2::ResponseType::*;
     use crate::oidc::OidcResponseType::IdToken;
     use crate::oidc::ResponseType::*;
+    use pretty_assertions::assert_eq;
     use test_log::test;
 
     #[test(tokio::test)]

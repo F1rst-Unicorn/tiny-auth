@@ -59,6 +59,7 @@ systemd.workspace = true
 [dev-dependencies]
 test-log.workspace = true
 env_logger.workspace = true
+pretty_assertions.workspace = true
 
 [build-dependencies]
 vergen.workspace = true
