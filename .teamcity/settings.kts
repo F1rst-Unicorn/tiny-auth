@@ -40,7 +40,10 @@ object Build : BuildType({
     templates(AbsoluteId("Projects_Alerter_RustProject"))
     name = "Build"
 
-    artifactRules = "test/build/reports/"
+    artifactRules = """
+        test/build/reports/ => system-tests
+        src/rust/target/llvm-cov/html => coverage
+    """.trimIndent()
 
     params {
         param("RUST_ROOT", "src/rust")
@@ -103,6 +106,7 @@ object Build : BuildType({
             scriptContent = """
                 set -e
                 cargo nextest run
+                cargo llvm-cov --no-clean --html nextest
             """.trimIndent()
         }
         script {
