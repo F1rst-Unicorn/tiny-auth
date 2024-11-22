@@ -16,6 +16,7 @@
  */
 
 use crate::inject::{bind_dn_templater, ldap_search_templater};
+use test_log::test;
 use tiny_auth_business::template::bind_dn::BindDnContext;
 use tiny_auth_business::template::ldap_search::LdapSearchContext;
 

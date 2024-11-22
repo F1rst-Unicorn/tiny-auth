@@ -249,12 +249,12 @@ fn return_error(
 mod tests {
     use super::*;
     use crate::endpoints::parse_first_request;
-    use std::sync::Arc;
-
     use actix_session::SessionExt;
-    use actix_web::test;
+    use actix_web::test::TestRequest;
     use actix_web::web::Data;
     use actix_web::web::Query;
+    use std::sync::Arc;
+    use test_log::test;
     use tiny_auth_business::authorize_endpoint::test_fixtures::handler;
     use tiny_auth_business::store::test_fixtures::build_test_client_store;
     use tiny_auth_business::store::test_fixtures::CONFIDENTIAL_CLIENT;
@@ -263,9 +263,9 @@ mod tests {
     use tiny_auth_business::template::test_fixtures::TestTemplater;
     use url::Url;
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn missing_client_id_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let query = Query(Request {
             ..Request::default()
@@ -276,9 +276,9 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn missing_redirect_uri_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let query = Query(Request {
             client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
@@ -290,9 +290,9 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn unknown_client_id_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let query = Query(Request {
             client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
@@ -304,9 +304,9 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn unregistered_redirect_uri_is_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let query = Query(Request {
             client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
@@ -319,9 +319,9 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn missing_scope_is_redirected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let client_store = build_test_client_store();
         let redirect_uri = client_store
@@ -365,9 +365,9 @@ mod tests {
             .any(|param| param == ("error".to_string(), expected_error.to_string())));
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn contradicting_prompts_are_rejected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let client_store = build_test_client_store();
         let redirect_uri = client_store
@@ -413,9 +413,9 @@ mod tests {
             .any(|param| param == ("error".to_string(), expected_error.to_string())));
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn missing_response_type_is_redirected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let client_store = build_test_client_store();
         let redirect_uri = client_store
@@ -459,9 +459,9 @@ mod tests {
             .any(|param| param == ("error".to_string(), expected_error.to_string())));
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn disallowed_scope_is_dropped() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let client_store = build_test_client_store();
         let session = req.get_session();
         let redirect_uri = client_store
@@ -493,9 +493,9 @@ mod tests {
         assert_eq!(vec!["email".to_string()], first_request.scopes);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn successful_authorization_is_redirected() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let client_store = build_test_client_store();
         let session = req.get_session();
         let redirect_uri = client_store

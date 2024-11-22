@@ -475,11 +475,10 @@ pub fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
 mod tests {
     use super::*;
     use crate::client::tests::get_test_client;
-    use crate::user::tests::get_test_user;
-
     use crate::template::test_fixtures::TestTemplater;
-
+    use crate::user::tests::get_test_user;
     use serde_json::json;
+    use test_log::test;
 
     #[test]
     pub fn valid_inserting_works() {

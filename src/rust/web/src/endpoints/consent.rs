@@ -324,11 +324,12 @@ mod tests {
     use super::*;
     use actix_session::SessionExt;
     use actix_web::http;
-    use actix_web::test;
+    use actix_web::test::TestRequest;
     use actix_web::web::Data;
     use actix_web::web::Form;
     use std::collections::HashMap;
     use std::sync::Arc;
+    use test_log::test;
     use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
     use tiny_auth_business::consent::test_fixtures::handler;
     use tiny_auth_business::oidc::ResponseType;
@@ -337,9 +338,9 @@ mod tests {
     use tiny_auth_business::template::test_fixtures::TestTemplater;
     use url::Url;
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn empty_session_gives_error() {
-        let req = test::TestRequest::get().to_http_request();
+        let req = TestRequest::get().to_http_request();
         let session = req.get_session();
 
         let resp = get(build_test_templater(), session, Data::new(handler())).await;
@@ -347,9 +348,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn missing_authentication_gives_error() {
-        let req = test::TestRequest::get().to_http_request();
+        let req = TestRequest::get().to_http_request();
         let session = req.get_session();
         session
             .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
@@ -360,9 +361,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn valid_request_is_rendered() {
-        let req = test::TestRequest::get().to_http_request();
+        let req = TestRequest::get().to_http_request();
         let session = req.get_session();
         let first_request = authorize::Request {
             client_id: Some(PUBLIC_CLIENT.to_string()),
@@ -393,9 +394,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn wrong_csrf_gives_error() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
@@ -415,9 +416,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn posting_empty_session_gives_error() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
@@ -437,9 +438,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn posting_missing_authentication_gives_error() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
             .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
@@ -465,9 +466,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn successful_request_is_forwarded() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let first_request = authorize::Request {
             client_id: Some(PUBLIC_CLIENT.to_string()),
@@ -530,9 +531,9 @@ mod tests {
             .any(|param| param.0 == "code".to_string() && !param.1.is_empty()));
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn successful_request_with_id_token_is_forwarded() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let first_request = authorize::Request {
             client_id: Some(PUBLIC_CLIENT.to_string()),

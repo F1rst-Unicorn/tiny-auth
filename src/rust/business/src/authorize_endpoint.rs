@@ -373,9 +373,9 @@ pub mod tests {
     use crate::oauth2::ResponseType::*;
     use crate::oidc::OidcResponseType::IdToken;
     use crate::oidc::ResponseType::*;
-    use tokio::test;
+    use test_log::test;
 
-    #[test]
+    #[test(tokio::test)]
     async fn single_response_types_are_parsed() {
         assert_eq!(
             Some(vec![OAuth2(Code)]),
@@ -391,7 +391,7 @@ pub mod tests {
         );
     }
 
-    #[test]
+    #[test(tokio::test)]
     async fn composite_response_types_are_parsed() {
         assert_eq!(
             Some(vec![OAuth2(Code), Oidc(IdToken)]),
@@ -407,7 +407,7 @@ pub mod tests {
         );
     }
 
-    #[test]
+    #[test(tokio::test)]
     async fn errors_are_reported() {
         assert_eq!(None, Handler::parse_response_type("code id_token invalid"));
     }

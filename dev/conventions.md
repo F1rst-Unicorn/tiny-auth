@@ -1,3 +1,9 @@
+# Tests
+
+Always use `test_log`. Nest tokio or actix if needed. Add `rstest` if needed
+
+# Logging rules
+
 CID = client identifying information
 This includes
 * user name

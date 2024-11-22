@@ -126,6 +126,7 @@ impl From<JsonPointer> for String {
 pub mod tests {
     use super::*;
     use serde_json::json;
+    use test_log::test;
 
     #[test]
     pub fn decoding_matches_encoding() {

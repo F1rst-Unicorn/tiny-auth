@@ -4024,6 +4024,7 @@ dependencies = [
  "pretty_assertions",
  "rstest",
  "tera",
+ "test-log",
  "tiny_auth_business",
  "tracing",
 ]

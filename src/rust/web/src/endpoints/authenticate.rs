@@ -388,12 +388,12 @@ mod tests {
     use super::*;
     use crate::endpoints::authorize;
     use crate::endpoints::tests::build_test_authenticator;
-
     use actix_session::SessionExt;
     use actix_web::http;
-    use actix_web::test;
+    use actix_web::test::TestRequest;
     use actix_web::web::Form;
     use std::sync::Arc;
+    use test_log::test;
     use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
     use tiny_auth_business::oidc::ResponseType;
     use tiny_auth_business::store::test_fixtures::UNKNOWN_USER;
@@ -401,9 +401,9 @@ mod tests {
     use tiny_auth_business::template::test_fixtures::TestTemplater;
     use url::Url;
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn empty_session_gives_error() {
-        let req = test::TestRequest::get().to_http_request();
+        let req = TestRequest::get().to_http_request();
         let session = req.get_session();
 
         let resp = get(session, build_test_templater()).await;
@@ -411,9 +411,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn authorization_in_session_gives_login_form() {
-        let req = test::TestRequest::get().to_http_request();
+        let req = TestRequest::get().to_http_request();
         let session = req.get_session();
         session
             .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
@@ -424,9 +424,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn recognising_user_redirects_to_consent() {
-        let req = test::TestRequest::get().to_http_request();
+        let req = TestRequest::get().to_http_request();
         let session = req.get_session();
         session
             .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
@@ -438,9 +438,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn recognising_user_but_login_demanded_gives_form() {
-        let req = test::TestRequest::get().to_http_request();
+        let req = TestRequest::get().to_http_request();
         let session = req.get_session();
         session
             .insert(
@@ -458,9 +458,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn recognising_user_but_account_selection_demanded_gives_form() {
-        let req = test::TestRequest::get().to_http_request();
+        let req = TestRequest::get().to_http_request();
         let session = req.get_session();
         session
             .insert(
@@ -478,9 +478,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn no_user_recognised_but_no_prompt_demanded_gives_error() {
-        let req = test::TestRequest::get().to_http_request();
+        let req = TestRequest::get().to_http_request();
         let session = req.get_session();
         session
             .insert(
@@ -499,9 +499,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::FOUND);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn user_recognised_but_login_too_old_gives_login_form() {
-        let req = test::TestRequest::get().to_http_request();
+        let req = TestRequest::get().to_http_request();
         let session = req.get_session();
         session
             .insert(
@@ -522,9 +522,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::OK);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn missing_csrf_gives_error() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let form = Form(Request {
             username: Some("user".to_string()),
@@ -543,9 +543,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn emtpy_session_login_gives_error() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
@@ -566,9 +566,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn missing_username_gives_error() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
             .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
@@ -600,9 +600,9 @@ mod tests {
         );
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn missing_password_gives_error() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
             .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
@@ -634,9 +634,9 @@ mod tests {
         );
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn unknown_user_gives_error() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
             .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
@@ -668,9 +668,9 @@ mod tests {
         );
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn wrong_password_gives_error() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
             .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
@@ -702,9 +702,9 @@ mod tests {
         );
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn correct_login_is_reported() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
             .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
@@ -734,9 +734,9 @@ mod tests {
         assert_eq!(session.get::<String>(SESSION_KEY).unwrap().unwrap(), USER);
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn default_try_count_is_two() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
             .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
@@ -772,9 +772,9 @@ mod tests {
         );
     }
 
-    #[test_log::test(actix_web::test)]
+    #[test(actix_web::test)]
     async fn no_tries_left_will_redirect_to_client() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
             .insert(

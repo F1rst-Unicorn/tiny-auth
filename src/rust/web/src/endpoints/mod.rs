@@ -267,12 +267,13 @@ mod tests {
     use super::*;
     use actix_session::SessionExt;
     use actix_web::body::to_bytes;
-    use actix_web::test;
+    use actix_web::test::TestRequest;
     use actix_web::web::BytesMut;
     use actix_web::web::Data;
     use actix_web::HttpResponse;
     use serde::de::DeserializeOwned;
     use serde_derive::Deserialize;
+    use test_log::test;
     use tiny_auth_business::authenticator::Authenticator;
     use tiny_auth_business::serde::deserialise_empty_as_none;
 
@@ -283,7 +284,7 @@ mod tests {
         pub value: Option<String>,
     }
 
-    #[test]
+    #[test(actix_web::test)]
     async fn plus_is_encoded() {
         let input = Test {
             value: Some("AI4qNF5I6XA+HH8b0KFobQ".to_string()),
@@ -292,30 +293,30 @@ mod tests {
         assert_eq!("value=AI4qNF5I6XA%2BHH8b0KFobQ", result);
     }
 
-    #[test]
+    #[test(actix_web::test)]
     async fn empty_string_is_mapped_to_none() {
         let input = r#"value="#;
         let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
         assert_eq!(None, result.value);
     }
 
-    #[test]
+    #[test(actix_web::test)]
     async fn missing_value_is_none() {
         let input = r#""#;
         let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
         assert_eq!(None, result.value);
     }
 
-    #[test]
+    #[test(actix_web::test)]
     async fn value_is_some() {
         let input = r#"value=value"#;
         let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
         assert_eq!(Some("value".to_string()), result.value);
     }
 
-    #[test]
+    #[test(actix_web::test)]
     async fn verify_wrong_csrf_verification() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let token = "token".to_string();
         assert!(!is_csrf_valid(&None, &session));
@@ -325,9 +326,9 @@ mod tests {
         assert!(!is_csrf_valid(&Some(token.clone() + "wrong"), &session));
     }
 
-    #[test]
+    #[test(actix_web::test)]
     async fn verify_csrf_verification() {
-        let req = test::TestRequest::post().to_http_request();
+        let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let token = "token".to_string();
         assert!(!is_csrf_valid(&None, &session));

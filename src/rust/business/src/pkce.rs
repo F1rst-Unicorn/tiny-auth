@@ -134,6 +134,7 @@ impl<'a> TryFrom<&'a str> for CodeVerifier<'a> {
 pub mod tests {
     use crate::pkce::CodeChallenge;
     use std::borrow::Cow;
+    use test_log::test;
 
     #[test]
     pub fn learning_test_cow_eq() {
