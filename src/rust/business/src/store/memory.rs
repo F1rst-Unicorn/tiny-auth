@@ -161,8 +161,10 @@ pub fn generate_random_string(length: u32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
+    use test_log::test;
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn successful_validation_works() {
         let uut = MemoryAuthorizationCodeStore::default();
         let date = Local::now();
@@ -197,7 +199,7 @@ mod tests {
         assert_eq!("", output.scopes);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn expired_code_is_deleted() {
         let uut = MemoryAuthorizationCodeStore::default();
         let date = Local::now();
@@ -230,7 +232,7 @@ mod tests {
         assert!(matches!(output, Err(NotFound)));
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn code_still_works_at_sharp_expiration_time() {
         let uut = MemoryAuthorizationCodeStore::default();
         let date = Local::now();
@@ -267,7 +269,7 @@ mod tests {
         assert_eq!("", output.scopes);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn code_past_expiration_date_doesnt_work_anymore() {
         let uut = MemoryAuthorizationCodeStore::default();
         let date = Local::now();

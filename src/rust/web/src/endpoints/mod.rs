@@ -339,25 +339,25 @@ mod tests {
         assert!(is_csrf_valid(&Some(token), &session));
     }
 
-    #[test(actix_rt::test)]
+    #[test(actix_web::test)]
     async fn unknown_authorization_is_rejected() {
         let actual = parse_basic_authorization(&HeaderValue::from_str("Invalid").unwrap());
         assert_eq!(None, actual);
     }
 
-    #[test(actix_rt::test)]
+    #[test(actix_web::test)]
     async fn invalid_base64_password_is_rejected() {
         let actual = parse_basic_authorization(&HeaderValue::from_str("Basic invalid").unwrap());
         assert_eq!(None, actual);
     }
 
-    #[test(actix_rt::test)]
+    #[test(actix_web::test)]
     async fn invalid_utf8_password_is_rejected() {
         let actual = parse_basic_authorization(&HeaderValue::from_str("Basic changeme").unwrap());
         assert_eq!(None, actual);
     }
 
-    #[test(actix_rt::test)]
+    #[test(actix_web::test)]
     async fn missing_password_is_rejected() {
         let actual = parse_basic_authorization(
             &HeaderValue::from_str(

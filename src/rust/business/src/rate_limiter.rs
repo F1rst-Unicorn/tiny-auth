@@ -92,8 +92,9 @@ impl RateLimiter {
 mod tests {
     use super::*;
     use std::convert::TryInto;
+    use test_log::test;
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn empty_rate_is_ok() {
         let duration = Duration::seconds(1);
         let events = 5;
@@ -105,7 +106,7 @@ mod tests {
         assert!(!uut.is_rate_above_maximum(rate_name, now).await);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn recording_max_events_is_still_ok() {
         let duration = Duration::seconds(1);
         let events = 5;
@@ -126,7 +127,7 @@ mod tests {
         assert!(!uut.is_rate_above_maximum(rate_name, now).await);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn recording_one_more_than_max_events_is_not_ok() {
         let duration = Duration::seconds(1);
         let events = 5;
@@ -150,7 +151,7 @@ mod tests {
         assert!(uut.is_rate_above_maximum(rate_name, now).await);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn removing_works() {
         let duration = Duration::seconds(1);
         let events = 5;

@@ -166,7 +166,8 @@ mod tests {
     use super::*;
     use crate::endpoints::tests::read_response;
     use actix_web::http;
-    use actix_web::test;
+    use actix_web::test::TestRequest;
+    use test_log::test;
     use tiny_auth_business::cors::test_fixtures::cors_lister;
     use tiny_auth_business::store::test_fixtures::build_test_client_store;
     use tiny_auth_business::store::test_fixtures::build_test_user_store;
@@ -178,9 +179,9 @@ mod tests {
     use tiny_auth_business::token::Token;
     use tiny_auth_business::userinfo_endpoint::test_fixtures::build_test_userinfo_handler;
 
-    #[tokio::test]
+    #[test(tokio::test)]
     pub async fn missing_header_is_rejected() {
-        let request = test::TestRequest::post().to_http_request();
+        let request = TestRequest::post().to_http_request();
         let query = Form(Request { access_token: None });
 
         let resp = post(query, request, build_test_handler()).await;
@@ -188,9 +189,9 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     pub async fn invalid_header_is_rejected() {
-        let request = test::TestRequest::post()
+        let request = TestRequest::post()
             .insert_header(("authorization", "invalid"))
             .to_http_request();
         let query = Form(Request { access_token: None });
@@ -200,14 +201,14 @@ mod tests {
         assert_eq!(resp.status(), http::StatusCode::UNAUTHORIZED);
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     pub async fn valid_token_is_returned() {
         let creator = build_test_token_creator();
         let user = build_test_user_store().get(USER).await.unwrap();
         let client = build_test_client_store().get(PUBLIC_CLIENT).await.unwrap();
         let token = creator.build_token(&user, &client, &Vec::new(), 0);
         let expected_userinfo = creator.build_token(&user, &client, &Vec::new(), 0);
-        let request = test::TestRequest::post()
+        let request = TestRequest::post()
             .insert_header((
                 "authorization",
                 <&str as Into<String>>::into("Bearer ")

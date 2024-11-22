@@ -13,7 +13,10 @@ sqlite-db = { max-threads = 1 }
 docker = { max-threads = 3 }
 
 [script.sqlite-liquibase-setup]
-command = '../sql/gradlew -p ../sql :sqlite:clean :sqlite:update -PdbName=unittests -PliquibaseLabels=unittests'
+command = """bash -c '
+    ../sql/gradlew -p ../sql :sqlite:clean :sqlite:update -PdbName=unittests -PliquibaseLabels=unittests ;
+    ../sql/gradlew -p ../sql :sqlite:update -PdbName=dev -PliquibaseLabels=dev'
+"""
 capture-stdout = true
 capture-stderr = true
 

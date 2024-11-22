@@ -322,7 +322,7 @@ mod tests {
     use tiny_auth_business::test_fixtures::build_test_issuer_config;
     use tiny_auth_business::test_fixtures::build_test_token_creator;
     use tiny_auth_business::test_fixtures::build_test_token_validator;
-    #[test(actix_rt::test)]
+    #[test(actix_web::test)]
     async fn missing_grant_type_is_rejected() {
         let req = TestRequest::post().to_http_request();
         let form = Form(Request {
