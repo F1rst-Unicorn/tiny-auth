@@ -128,7 +128,7 @@ impl AttributeMapping<Client> for ClientTypeMapping {
                 );
                 return entity;
             }
-            let client_type = attributes.first().cloned().unwrap();
+            let client_type = attributes.first().cloned().unwrap_or_default();
             if client_type == "public" {
                 entity.client_type = ClientType::Public;
             } else if client_type != "confidential" {
@@ -196,7 +196,7 @@ impl AttributeMapping<Client> for ClientPasswordMapping {
                 ref mut password, ..
             } = &mut entity.client_type
             {
-                *password = Password::Plain(attributes.first().cloned().unwrap());
+                *password = Password::Plain(attributes.first().cloned().unwrap_or_default());
             } else {
                 error!(
                     attribute = self.attribute,
@@ -224,7 +224,7 @@ impl AttributeMapping<Client> for ClientPublicKeyMapping {
                 ref mut public_key, ..
             } = &mut entity.client_type
             {
-                *public_key = Some(attributes.first().cloned().unwrap());
+                *public_key = Some(attributes.first().cloned().unwrap_or_default());
             } else {
                 error!(
                     attribute = self.attribute,

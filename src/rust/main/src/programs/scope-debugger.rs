@@ -67,7 +67,7 @@ async fn main() {
             arguments
                 .get_one::<String>(FLAG_USER)
                 .map(String::as_str)
-                .unwrap(),
+                .unwrap_or_default(),
         )
         .await
     {
@@ -84,7 +84,7 @@ async fn main() {
             arguments
                 .get_one::<String>(FLAG_CLIENT)
                 .map(String::as_str)
-                .unwrap(),
+                .unwrap_or_default(),
         )
         .await
     {
@@ -101,7 +101,7 @@ async fn main() {
             arguments
                 .get_one::<String>(FLAG_SCOPE)
                 .map(String::as_str)
-                .unwrap(),
+                .unwrap_or_default(),
         )
         .await
     {
@@ -112,7 +112,11 @@ async fn main() {
         Ok(v) => v,
     };
 
-    match arguments.get_one::<Destination>(FLAG_DESTINATION).unwrap() {
+    match arguments
+        .get_one::<Destination>(FLAG_DESTINATION)
+        .cloned()
+        .unwrap_or(Destination::UserInfo)
+    {
         Destination::AccessToken => {
             let token = di
                 .build_token_creator()

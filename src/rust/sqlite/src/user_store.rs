@@ -60,7 +60,7 @@ impl UserStore for SqliteStore {
         user_as_value
             .attributes
             .insert(String::from("id"), user_id.into());
-        let user_as_value = serde_json::to_value(user_as_value).unwrap();
+        let user_as_value = serde_json::to_value(user_as_value).map_err(wrap_err)?;
         user.attributes = self
             .user_data_assembler
             .load(user_as_value, user_id, &mut transaction, Root::User)

@@ -72,8 +72,10 @@ pub fn deserialise_empty_as_none<'de, D: Deserializer<'de>>(
         })
         .ok()
         .flatten();
-    if result.is_some() && result.as_ref().unwrap().is_empty() {
-        result = None;
+    if let Some(ref content) = result {
+        if content.is_empty() {
+            result = None;
+        }
     }
     Ok(result)
 }

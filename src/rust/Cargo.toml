@@ -117,7 +117,8 @@ default-features = false
 features = ["runtime-tokio", "sqlite", "macros"]
 
 [workspace.lints.clippy]
-#expect_used = "deny"
-#unwrap_used = "deny"
-#panic = "deny"
+expect_used = "deny"
+unwrap_used = "deny"
+panic = "deny"
+unreachable = "deny"
 all = "deny"

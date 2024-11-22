@@ -135,26 +135,27 @@ impl<'a> Constructor<'a> {
         ) = Self::build_stores(config).await?;
         let tera = Arc::new(Self::build_template_engine(config)?);
         let issuer_url = Self::build_issuer_url(config);
-        let (public_keys, private_key) = Self::read_token_keypairs(config)?;
+        let (public_key, public_keys, private_key) = Self::read_token_keypairs(config)?;
         let (encoding_key, algorithm) = Self::build_encoding_key(&private_key)?;
         let issuer_configuration = Self::build_issuer_config(issuer_url.clone(), algorithm);
         let jwks = Jwks::with_keys(
+            Self::build_jwk(public_key.as_str(), &issuer_url, 0)?,
             public_keys
                 .iter()
                 .enumerate()
-                .map(|(i, k)| Self::build_jwk(k, &issuer_url, i))
+                .map(|(i, k)| Self::build_jwk(k, &issuer_url, i + 1))
                 .try_fold(vec![], |mut v, i| {
                     v.push(i?);
                     Ok::<Vec<Jwk>, Error>(v)
                 })?,
         );
         let token_validator: Arc<TokenValidator> = Arc::new(Self::build_token_validator(
-            public_keys.first().unwrap(),
+            public_key.as_str(),
             algorithm,
             &issuer_url,
         )?);
         let own_token_validator: Arc<TokenValidator> = Arc::new(Self::build_own_token_validator(
-            public_keys.first().unwrap(),
+            public_key.as_str(),
             algorithm,
             &issuer_url,
         )?);
@@ -497,7 +498,7 @@ impl<'a> Constructor<'a> {
     fn build_template_engine(config: &'a Config) -> Result<Tera, Error> {
         Ok(load_template_engine(
             &config.web.static_files,
-            config.web.path.as_ref().unwrap(),
+            config.web.path.as_deref().unwrap_or(""),
         )?)
     }
 
@@ -536,28 +537,28 @@ impl<'a> Constructor<'a> {
         token_issuer
     }
 
-    fn read_token_keypairs(config: &'a Config) -> Result<(Vec<String>, String), Error> {
-        if config.crypto.keys.is_empty() {
-            error!("at least one crypto.keys entry must be given");
-            return Err(LoggedBeforeError);
-        }
+    fn read_token_keypairs(config: &'a Config) -> Result<(String, Vec<String>, String), Error> {
+        let first_key = match config.crypto.keys.first() {
+            None => {
+                error!("at least one crypto.keys entry must be given");
+                return Err(LoggedBeforeError);
+            }
+            Some(v) => v,
+        };
+        let private_key = read_file(&first_key.key)?;
+        let public_key = read_file(&first_key.public_key)?;
         let public_keys = config
             .crypto
             .keys
             .iter()
+            .skip(1)
             .map(|k| read_file(&k.public_key))
             .try_fold(vec![], |mut v, i| {
                 v.push(i?);
                 Ok::<Vec<String>, Error>(v)
             })?;
-        let private_key = config
-            .crypto
-            .keys
-            .first()
-            .map(|k| read_file(&k.key))
-            .expect("presence of at least one key was verified above")?;
 
-        Ok((public_keys, private_key))
+        Ok((public_key, public_keys, private_key))
     }
 
     fn build_encoding_key(private_key: &str) -> Result<(EncodingKey, Algorithm), Error> {
@@ -578,19 +579,14 @@ impl<'a> Constructor<'a> {
         TokenCreator::new(
             self.encoding_key.clone(),
             self.issuer_configuration.clone(),
-            self.jwks.keys.first().unwrap().clone(),
+            self.jwks.first_key.clone(),
             Arc::new(tiny_auth_business::clock::inject::clock()),
-            Duration::seconds(
-                self.config
-                    .web
-                    .token_timeout_in_seconds
-                    .expect("no default given"),
-            ),
+            Duration::seconds(self.config.web.token_timeout_in_seconds.unwrap_or_default()),
             Duration::seconds(
                 self.config
                     .web
                     .refresh_token_timeout_in_seconds
-                    .expect("no default given"),
+                    .unwrap_or_default(),
             ),
             scope_templater(),
         )
@@ -703,7 +699,7 @@ impl<'a> tiny_auth_api::Constructor<'a> for Constructor<'a> {
     }
 
     fn path(&self) -> &'a str {
-        self.config.api.path.as_deref().expect("no default set")
+        self.config.api.path.as_deref().unwrap_or_default()
     }
 
     fn tls_key(&self) -> Option<String> {
@@ -784,7 +780,7 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
     }
 
     fn web_path(&self) -> String {
-        self.config.web.path.clone().expect("no default given")
+        self.config.web.path.clone().unwrap_or_default()
     }
 
     fn static_files(&self) -> String {
@@ -795,7 +791,7 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
         self.config
             .web
             .session_timeout_in_seconds
-            .expect("no default given")
+            .unwrap_or_default()
     }
 
     fn session_same_site_policy(&self) -> SameSite {
@@ -880,12 +876,7 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
                     .as_ref()
                     .map(|v| ":".to_string() + v)
                     .unwrap_or("".to_string())
-                + self
-                    .config
-                    .api
-                    .public_path
-                    .as_deref()
-                    .expect("no default given"),
+                + self.config.api.public_path.as_deref().unwrap_or_default(),
         )
     }
 

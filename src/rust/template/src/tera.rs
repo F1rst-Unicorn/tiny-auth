@@ -96,7 +96,7 @@ impl<'a> Templater<DataLoaderContext<'a>> for DataLoaderTemplater {
                 .collect::<Vec<String>>()
                 .join(", "),
         );
-        tera_context.extend(Context::from_serialize(context.loaded_data).unwrap());
+        tera_context.extend(Context::from_serialize(context.loaded_data).map_err(map_err)?);
         let result = tera.render(name, &tera_context).map_err(map_err)?;
         Ok(InstantiatedTemplate(result))
     }

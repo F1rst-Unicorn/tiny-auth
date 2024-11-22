@@ -351,7 +351,10 @@ impl Handler {
         .collect();
 
         Ok((
-            client.clone().try_into().unwrap(),
+            client
+                .clone()
+                .try_into()
+                .map_err(|_| Error::UnsupportedGrantType)?,
             client,
             scopes,
             Local::now().timestamp(),

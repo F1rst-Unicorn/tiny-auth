@@ -275,11 +275,13 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
         server.bind(&bind)
     };
 
-    if let Err(e) = server {
-        warn!(%e, "failed to create server");
-        return Err(e.into());
-    }
-    let mut server = server.unwrap();
+    let mut server = match server {
+        Err(e) => {
+            warn!(%e, "failed to create server");
+            return Err(e.into());
+        }
+        Ok(v) => v,
+    };
 
     if let Some(workers) = workers {
         server = server.workers(workers);
@@ -291,16 +293,19 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
 
 fn configure_tls<'a>(constructor: &impl Constructor<'a>) -> Result<ServerConfig, Error> {
     let client_cert_verifier = build_client_verifier(constructor)?;
-    let server_certificate_chain = certs(&mut BufReader::new(
-        constructor.tls_cert().expect("checked before").as_bytes(),
-    ))?
-    .into_iter()
-    .map(CertificateDer::from)
-    .collect();
+    let server_certificate_chain = constructor
+        .tls_cert()
+        .ok_or(LoggedBeforeError)
+        .and_then(|v| Ok(certs(&mut BufReader::new(v.as_bytes()))?))?
+        .into_iter()
+        .map(CertificateDer::from)
+        .collect();
 
-    let key = match pkcs8_private_keys(&mut BufReader::new(
-        constructor.tls_key().expect("checked before").as_bytes(),
-    )) {
+    let key = match constructor
+        .tls_key()
+        .ok_or(LoggedBeforeError)
+        .and_then(|v| Ok(pkcs8_private_keys(&mut BufReader::new(v.as_bytes()))?))
+    {
         Err(_) => {
             error!("could not read tls key file");
             return Err(LoggedBeforeError);
@@ -337,9 +342,9 @@ fn build_client_verifier<'a>(
             .map(CertificateDer::from)
             .map(|cert| ca_store.add(cert))
             .enumerate()
-            .filter(|(_, result)| result.is_err())
+            .filter_map(|(v, result)| result.err().map(|e| (v, e)))
             .for_each(|(index, error)| {
-                error!(e = %error.unwrap_err(),
+                error!(e = %error,
                     index,
                     "ignoring client ca certificate",
                 )

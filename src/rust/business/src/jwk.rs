@@ -17,18 +17,19 @@
 
 use serde_derive::Serialize;
 
-#[derive(Serialize, Clone)]
+#[derive(Clone)]
 pub struct Jwks {
+    pub first_key: Jwk,
     pub keys: Vec<Jwk>,
 }
 
 impl Jwks {
-    pub fn with_keys(keys: Vec<Jwk>) -> Self {
-        Self { keys }
+    pub fn with_keys(first_key: Jwk, keys: Vec<Jwk>) -> Self {
+        Self { first_key, keys }
     }
 
     pub fn get(&self, kid: &str) -> Option<Jwk> {
-        for key in &self.keys {
+        for key in [&self.first_key].into_iter().chain(self.keys.iter()) {
             if key.key_id == kid {
                 return Some(key.clone());
             }

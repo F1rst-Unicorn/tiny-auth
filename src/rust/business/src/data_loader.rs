@@ -87,11 +87,14 @@ fn load_with_root_data(
     id: i32,
     kind: &str,
 ) -> Value {
-    data_loaders.push(DataLoader::new(
-        kind.to_string(),
-        ("/".to_string() + kind).try_into().unwrap(),
-        ToOne,
-    ));
+    let pointer = match ("/".to_string() + kind).try_into() {
+        Ok(v) => v,
+        Err(e) => {
+            error!(%e, "static json pointer is not valid. Please report a bug");
+            return Value::Null;
+        }
+    };
+    data_loaders.push(DataLoader::new(kind.to_string(), pointer, ToOne));
     loaded_data.push(LoadedData::new([(id, root)], []));
     load(data_loaders, loaded_data)
 }
@@ -148,7 +151,10 @@ pub fn load(data_loaders: Vec<DataLoader>, loaded_data: Vec<LoadedData>) -> Valu
         .and_then(|v| loaded_data.get_mut(v))
         .and_then(|v| v.data.pop_first())
         .map(|(_, v)| v)
-        .unwrap()
+        .unwrap_or_else(|| {
+            error!("final value not found. Please report a bug");
+            Value::Null
+        })
 }
 
 #[instrument(skip_all, fields(%destination_id))]
@@ -216,29 +222,20 @@ fn nest_into(destination: &mut Value, value_to_nest: Value, location: JsonPointe
         (Value::Null, None) => value_to_nest,
         (Value::Null, Some(current_step)) => {
             if PastLastArrayElement::try_from(current_step).is_ok() {
-                let mut array = vec![Value::Null];
-                nest_into(
-                    array.first_mut().unwrap(),
-                    value_to_nest,
-                    location.pop_first(),
-                );
-                array.into()
+                let mut target = Value::Null;
+                nest_into(&mut target, value_to_nest, location.pop_first());
+                vec![target].into()
             } else if let Ok(ArrayAccess(index)) = ArrayAccess::try_from(current_step) {
-                let mut array = vec![Value::Null; index + 1];
-                nest_into(
-                    array.last_mut().unwrap(),
-                    value_to_nest,
-                    location.pop_first(),
-                );
+                let mut target = Value::Null;
+                nest_into(&mut target, value_to_nest, location.pop_first());
+                let mut array = vec![Value::Null; index];
+                array.push(target);
                 array.into()
             } else {
+                let mut target = Value::Null;
+                nest_into(&mut target, value_to_nest, location.pop_first());
                 let mut object = Map::new();
-                object.insert(current_step.to_string(), Value::Null);
-                nest_into(
-                    object.get_mut(current_step).unwrap(),
-                    value_to_nest,
-                    location.pop_first(),
-                );
+                object.insert(current_step.to_string(), target);
                 object.into()
             }
         }
@@ -263,25 +260,20 @@ fn nest_into(destination: &mut Value, value_to_nest: Value, location: JsonPointe
         }
         (Value::Array(mut array), Some(current_step)) => {
             if PastLastArrayElement::try_from(current_step).is_ok() {
-                array.push(Value::Null);
-                nest_into(
-                    array.last_mut().unwrap(),
-                    value_to_nest,
-                    location.pop_first(),
-                );
+                let mut target = Value::Null;
+                nest_into(&mut target, value_to_nest, location.pop_first());
+                array.push(target);
                 array.into()
             } else if let Ok(ArrayAccess(index)) = ArrayAccess::try_from(current_step) {
                 if let Some(element) = array.get_mut(index) {
                     nest_into(element, value_to_nest, location.pop_first());
                 } else {
-                    while array.len() < index + 1 {
+                    let mut target = Value::Null;
+                    nest_into(&mut target, value_to_nest, location.pop_first());
+                    while array.len() < index {
                         array.push(Value::Null);
                     }
-                    nest_into(
-                        array.last_mut().unwrap(),
-                        value_to_nest,
-                        location.pop_first(),
-                    );
+                    array.push(target);
                 }
                 array.into()
             } else {

@@ -40,7 +40,7 @@ use tiny_auth_business::scope::ScopeDescription;
 use tiny_auth_business::serde::deserialise_empty_as_none;
 use tiny_auth_business::template::web::ErrorPage::ServerError;
 use tiny_auth_business::template::web::{ConsentContext, ErrorPage, WebTemplater};
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument};
 use tracing::{span, warn, Instrument, Level};
 use url::Url;
 use web::Data;
@@ -190,8 +190,13 @@ async fn process_skipping_csrf(
         .single()
         .unwrap_or(Local::now());
 
-    let mut url = Url::parse(&first_request.redirect_uri)
-        .expect("should have been validated upon registration");
+    let mut url = match Url::parse(&first_request.redirect_uri) {
+        Err(e) => {
+            error!(%e, "should have been validated upon registration");
+            return render_invalid_consent_request(templater);
+        }
+        Ok(v) => v,
+    };
     let mut response_parameters = HashMap::new();
 
     let response = match handler
@@ -241,8 +246,10 @@ async fn process_skipping_csrf(
         .and_then(|v| response_parameters.insert("state", v.to_string()));
 
     if first_request.encode_redirect_to_fragment {
-        let fragment =
-            serde_urlencoded::to_string(response_parameters).expect("failed to serialize");
+        let fragment = serde_urlencoded::to_string(response_parameters).unwrap_or_else(|e| {
+            error!(%e, "failed to serialize response parameters");
+            String::new()
+        });
         url.set_fragment(Some(&fragment));
     } else {
         url.query_pairs_mut().extend_pairs(response_parameters);

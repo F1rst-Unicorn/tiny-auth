@@ -46,8 +46,8 @@ use tiny_auth_business::oauth2::ProtocolError as OAuthError;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::store::memory::generate_random_string;
 use tiny_auth_business::template::{InstantiatedTemplate, TemplateError};
-use tracing::warn;
 use tracing::{debug, instrument, Level};
+use tracing::{error, warn};
 use url::Url;
 
 const CSRF_SESSION_KEY: &str = "c";
@@ -140,7 +140,13 @@ fn render_redirect_error_with_base(
     state: &Option<String>,
     encode_to_fragment: bool,
 ) -> HttpResponse {
-    let mut url = Url::parse(redirect_uri).expect("should have been validated upon registration");
+    let mut url = match Url::parse(redirect_uri) {
+        Err(e) => {
+            error!(%e, "should have been validated upon registration");
+            return base_response.finish();
+        }
+        Ok(v) => v,
+    };
 
     let mut response_parameters = BTreeMap::new();
     response_parameters.insert("error", format!("{}", error));
@@ -150,8 +156,10 @@ fn render_redirect_error_with_base(
         .map(|v| response_parameters.insert("state", v));
 
     if encode_to_fragment {
-        let fragment =
-            serde_urlencoded::to_string(response_parameters).expect("failed to serialize");
+        let fragment = serde_urlencoded::to_string(response_parameters).unwrap_or_else(|e| {
+            error!(%e, "failed to serialize response parameters");
+            String::new()
+        });
         url.set_fragment(Some(&fragment));
     } else {
         url.query_pairs_mut().extend_pairs(response_parameters);

@@ -189,7 +189,11 @@ impl<T: for<'a> Deserialize<'a> + Send + DataExt + 'static + Sync> FileStore<T> 
             return;
         }
 
-        let name = path.file_stem().unwrap().to_string_lossy().to_string();
+        let name = path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         self.data.write().await.remove(&name);
 
         T::log_single_remove(&name)
@@ -220,7 +224,7 @@ impl DataExt for User {
     }
 
     fn validate(user: User, file: &Path) -> Option<User> {
-        if PathBuf::from(user.name.clone() + ".yml") != file.file_name().unwrap() {
+        if PathBuf::from(user.name.clone() + ".yml") != file.file_name()? {
             let cid_span = span!(Level::DEBUG, "cid", user = user.name,
                 expected_filename = user.name.clone() + ".yml",
                 actual_filename = ?file);
@@ -250,7 +254,7 @@ impl DataExt for Client {
     }
 
     fn validate(client: Client, file: &Path) -> Option<Client> {
-        if PathBuf::from(client.client_id.clone() + ".yml") != file.file_name().unwrap() {
+        if PathBuf::from(client.client_id.clone() + ".yml") != file.file_name()? {
             error!(client = client.client_id,
                 expected_filename = client.client_id.clone() + ".yml",
                 actual_filename = ?file,
@@ -280,13 +284,18 @@ impl DataExt for Scope {
     }
 
     fn validate(scope: Scope, file: &Path) -> Option<Scope> {
-        let pattern = Regex::new(r"^[\x21\x23-\x5B\x5D-\x7E]+$").unwrap();
+        let pattern = Regex::new(r"^[\x21\x23-\x5B\x5D-\x7E]+$")
+            .map_err(|e| {
+                error!(%e, "scope validation regex is invalid. Please report a bug");
+                e
+            })
+            .ok()?;
         if !pattern.is_match(&scope.name) {
             error!(name = scope.name, "Invalid scope");
             return None;
         }
 
-        if PathBuf::from(scope.name.clone() + ".yml") != file.file_name().unwrap() {
+        if PathBuf::from(scope.name.clone() + ".yml") != file.file_name()? {
             error!(scope = scope.name,
                 expected_filename = scope.name.clone() + ".yml",
                 actual_filename = ?file,

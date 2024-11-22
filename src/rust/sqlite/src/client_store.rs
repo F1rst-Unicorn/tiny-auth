@@ -61,7 +61,7 @@ impl ClientStore for SqliteStore {
         client_as_value
             .attributes
             .insert(String::from("id"), client_id.into());
-        let client_as_value = serde_json::to_value(client_as_value).unwrap();
+        let client_as_value = serde_json::to_value(client_as_value).map_err(wrap_err)?;
         client.attributes = self
             .client_data_assembler
             .load(client_as_value, client_id, &mut transaction, Root::Client)

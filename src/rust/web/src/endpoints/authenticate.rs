@@ -177,23 +177,25 @@ pub async fn post(
         Ok(Some(tries)) => tries - 1,
     };
 
-    let username = if query.username.is_none() {
-        debug!("missing username");
-        return render_invalid_login_attempt_error(MissingUsername, templater, &session, None);
-    } else {
-        query.username.clone().unwrap()
+    let username = match &query.username {
+        None => {
+            debug!("missing username");
+            return render_invalid_login_attempt_error(MissingUsername, templater, &session, None);
+        }
+        Some(v) => v,
     };
 
-    let password = if query.password.is_none() {
-        debug!("missing password");
-        return render_invalid_login_attempt_error(MissingPassword, templater, &session, None);
-    } else {
-        query.password.clone().unwrap()
+    let password = match &query.password {
+        None => {
+            debug!("missing password");
+            return render_invalid_login_attempt_error(MissingPassword, templater, &session, None);
+        }
+        Some(v) => v,
     };
 
     drop(flow_guard);
     let auth_result = authenticator
-        .authenticate_user_and_forget(&username, &password)
+        .authenticate_user_and_forget(username, password)
         .instrument(flow.clone())
         .await;
 
@@ -202,7 +204,7 @@ pub async fn post(
         Ok(_) => {
             session.remove(TRIES_LEFT_SESSION_KEY);
             session.remove(ERROR_CODE_SESSION_KEY);
-            if let Err(e) = session.insert(SESSION_KEY, &username) {
+            if let Err(e) = session.insert(SESSION_KEY, username) {
                 error!(%e, "failed to serialise session");
                 return server_error(templater.instantiate_error_page(ServerError));
             }

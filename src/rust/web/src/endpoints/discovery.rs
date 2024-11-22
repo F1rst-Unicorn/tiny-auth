@@ -23,7 +23,7 @@ use serde_derive::Serialize;
 use std::sync::Arc;
 use tiny_auth_business::cors::CorsLister;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
-use tiny_auth_business::jwk::Jwks;
+use tiny_auth_business::jwk::{Jwk, Jwks};
 use tiny_auth_business::store::ScopeStore;
 use tracing::{instrument, warn};
 
@@ -243,11 +243,28 @@ pub mod inject {
     }
 }
 
+#[derive(Serialize)]
+pub struct JwksWebView<'a> {
+    pub keys: Vec<&'a Jwk>,
+}
+
+impl<'a> From<&'a Jwks> for JwksWebView<'a> {
+    fn from(value: &'a Jwks) -> Self {
+        let mut keys = vec![&value.first_key];
+        keys.extend(value.keys.iter());
+        Self { keys }
+    }
+}
+
 #[instrument(skip_all)]
 pub async fn jwks(
     jwks: Data<Jwks>,
     cors_lister: Data<Arc<dyn CorsLister>>,
     request: HttpRequest,
 ) -> HttpResponse {
-    render_cors_result(cors_lister.get_ref().clone(), &request, jwks.get_ref())
+    render_cors_result(
+        cors_lister.get_ref().clone(),
+        &request,
+        JwksWebView::from(jwks.as_ref()),
+    )
 }

@@ -276,7 +276,11 @@ fn insert_value(structure: Value, value: Value) -> Result<Value, Error> {
                 error!("Exactly one attribute is allowed in selectors. Use 'null' to terminate your selector");
                 return Err(Error::AttributeSelectionError);
             }
-            let key = map.keys().next().unwrap().clone();
+            let key = map
+                .keys()
+                .next()
+                .ok_or(Error::AttributeSelectionError)?
+                .clone();
             match map.remove(&key) {
                 Some(Value::Null) => {
                     map.insert(key, value);
@@ -287,7 +291,10 @@ fn insert_value(structure: Value, value: Value) -> Result<Value, Error> {
                     map.insert(key, result);
                     Ok(Value::Object(map))
                 }
-                None => unreachable!("checked before"),
+                None => {
+                    error!("map presence checked before. Please report a bug");
+                    Err(Error::AttributeSelectionError)
+                }
             }
         }
         _ => {
@@ -299,13 +306,15 @@ fn insert_value(structure: Value, value: Value) -> Result<Value, Error> {
 
 fn copy_values(value: Value, selector: Value, path: &mut Vec<String>) -> Result<Value, Error> {
     match (value, selector) {
-        (Value::Object(mut value), Value::Object(mut map)) => {
+        (Value::Object(mut value), Value::Object(map)) => {
             if map.len() != 1 {
                 error!("Exactly one attribute is allowed in selectors. Use 'null' to terminate your selector");
                 return Err(Error::AttributeSelectionError);
             }
-            let k = map.keys().next().unwrap().clone();
-            let v = map.remove(&k).unwrap();
+            let (k, v) = map
+                .into_iter()
+                .next()
+                .ok_or(Error::AttributeSelectionError)?;
             let current_value = match value.remove(&k) {
                 None => {
                     path.push(k);
@@ -452,8 +461,7 @@ pub fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
         (Value::Object(inner_left), Value::Object(mut right)) => {
             let mut result = Map::new();
             for (k, v) in inner_left.into_iter() {
-                if right.contains_key(&k) {
-                    let right_value = right.remove(&k).unwrap();
+                if let Some(right_value) = right.remove(&k) {
                     result.insert(k, merge(v, right_value)?);
                 } else {
                     result.insert(k, v);
@@ -515,10 +523,7 @@ mod tests {
         let result = insert_value(json!({}), json!(null));
 
         assert!(result.is_err());
-        if let Error::AttributeSelectionError = result.unwrap_err() {
-        } else {
-            unreachable!();
-        }
+        assert!(matches!(result, Err(Error::AttributeSelectionError)));
     }
 
     #[test]
@@ -557,10 +562,7 @@ mod tests {
         let result = copy_values(value, selector, &mut Vec::new());
 
         assert!(result.is_err());
-        if let Error::AttributeSelectionError = result.unwrap_err() {
-        } else {
-            unreachable!();
-        }
+        assert!(matches!(result, Err(Error::AttributeSelectionError)));
     }
 
     #[test]
@@ -579,10 +581,7 @@ mod tests {
         let result = copy_values(value, selector, &mut Vec::new());
 
         assert!(result.is_err());
-        if let Error::AttributeSelectionError = result.unwrap_err() {
-        } else {
-            unreachable!();
-        }
+        assert!(matches!(result, Err(Error::AttributeSelectionError)));
     }
 
     #[test]
@@ -603,10 +602,7 @@ mod tests {
         let result = copy_values(value, selector, &mut Vec::new());
 
         assert!(result.is_err());
-        if let Error::AttributeSelectionError = result.unwrap_err() {
-        } else {
-            unreachable!();
-        }
+        assert!(matches!(result, Err(Error::AttributeSelectionError)));
     }
 
     #[test]
@@ -614,10 +610,7 @@ mod tests {
         let result = copy_values(json!(false), json!(false), &mut Vec::new());
 
         assert!(result.is_err());
-        if let Error::AttributeSelectionError = result.unwrap_err() {
-        } else {
-            unreachable!();
-        }
+        assert!(matches!(result, Err(Error::AttributeSelectionError)));
     }
 
     #[test]

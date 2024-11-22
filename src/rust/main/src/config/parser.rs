@@ -77,7 +77,9 @@ fn traverse_directory(path: &str) -> Result<Vec<String>, ParseError> {
     for entry in content {
         let entry = entry?;
         let entry_path = entry.path();
-        let entry_path_string = entry_path.to_str().unwrap();
+        let Some(entry_path_string) = entry_path.to_str() else {
+            continue;
+        };
         let content = read_config(entry_path_string)?;
 
         result.extend(content);

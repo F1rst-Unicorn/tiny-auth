@@ -63,18 +63,13 @@ pub fn run(
     config: Config,
     handles: (FilterHandle, FormatHandle),
 ) -> Result<(), Error> {
-    let actor_system = actix_rt::System::with_tokio_rt(|| {
-        tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(4)
-            .enable_all()
-            .thread_name(env!("CARGO_PKG_NAME"))
-            .build()
-            .map_err(|e| {
-                error!(%e, "failed to start tokio runtime");
-                e
-            })
-            .unwrap()
-    });
+    let tokio = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .thread_name(env!("CARGO_PKG_NAME"))
+        .build()?;
+
+    let actor_system = actix_rt::System::with_tokio_rt(|| tokio);
     actor_system.block_on(async move {
         let constructor = crate::constructor::Constructor::new(&config).await?;
 
@@ -138,10 +133,12 @@ async fn config_refresher(
         Ok(v) => v,
     };
 
-    if let Err(e) = watcher.watch(
-        PathBuf::from(config_path.clone()).parent().unwrap(),
-        RecursiveMode::Recursive,
-    ) {
+    let config_path_buf = PathBuf::from(config_path.clone());
+    let config_parent = match config_path_buf.parent() {
+        None => return,
+        Some(v) => v,
+    };
+    if let Err(e) = watcher.watch(config_parent, RecursiveMode::Recursive) {
         warn!(%e, "watching config file failed");
         return;
     }

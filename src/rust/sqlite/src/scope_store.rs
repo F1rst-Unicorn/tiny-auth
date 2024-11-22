@@ -158,8 +158,11 @@ impl ScopeStore for SqliteStore {
                                             }
                                             Ok(pointer) => {
                                                 let mut value = pointer.construct_json();
-                                                *value.pointer_mut(String::from(pointer).as_str()).unwrap() =
-                                                    map_value_by_type(plain_mapping.value.as_str(), plain_mapping.r#type.as_str());
+                                                if let Some(v) = value.pointer_mut(String::from(pointer).as_str()) {
+                                                *v = map_value_by_type(
+                                                    plain_mapping.value.as_str(),
+                                                    plain_mapping.r#type.as_str());
+                                                }
                                                 Some((value, Type::Plain))
                                             }
                                         }
@@ -177,7 +180,9 @@ impl ScopeStore for SqliteStore {
                                             }
                                             Ok(pointer) => {
                                                 let mut value = pointer.construct_json();
-                                                *value.pointer_mut(String::from(pointer).as_str()).unwrap() = template_mapping.template.clone().into();
+                                                if let Some(v) = value.pointer_mut(String::from(pointer).as_str()) {
+                                                    *v = template_mapping.template.clone().into();
+                                                }
                                                 Some((value, Type::Template))
                                             }
                                         }

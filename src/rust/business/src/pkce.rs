@@ -69,6 +69,7 @@ const PATTERN: &str = "^[-a-zA-Z0-9._~]+$";
 impl TryFrom<&String> for CodeChallenge {
     type Error = Error;
     fn try_from(value: &String) -> Result<Self, Self::Error> {
+        #[allow(clippy::unwrap_used)]
         let pattern = Regex::new(PATTERN).unwrap();
         if value.len() < 43 || value.len() > 128 {
             Err(Error::InvalidLength)
@@ -119,6 +120,7 @@ pub struct CodeVerifier<'a>(Cow<'a, str>);
 impl<'a> TryFrom<&'a str> for CodeVerifier<'a> {
     type Error = Error;
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        #[allow(clippy::unwrap_used)]
         let pattern = Regex::new(PATTERN).unwrap();
         if value.len() < 43 || value.len() > 128 {
             Err(Error::InvalidLength)

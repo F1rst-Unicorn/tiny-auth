@@ -53,11 +53,11 @@ fn main() {
             arguments
                 .get_one::<String>(FLAG_USERNAME)
                 .map(String::as_str)
-                .unwrap(),
+                .unwrap_or_default(),
             arguments
                 .get_one::<String>(FLAG_PASSWORD)
                 .map(String::as_str)
-                .unwrap(),
+                .unwrap_or_default(),
             &config.crypto.pepper,
         ),
     };

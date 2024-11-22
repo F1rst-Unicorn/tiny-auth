@@ -48,6 +48,7 @@ use tracing::{error, instrument, trace};
 pub(crate) mod tiny_auth_proto {
     // https://github.com/hyperium/tonic/issues/1056
     #![allow(clippy::derive_partial_eq_without_eq)]
+    #![allow(clippy::unwrap_used)]
     tonic::include_proto!("api");
 
     pub(crate) const FILE_DESCRIPTOR_SET: &[u8] =
@@ -56,10 +57,12 @@ pub(crate) mod tiny_auth_proto {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("io error")]
+    #[error("io error: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("grpc api error")]
+    #[error("grpc api error: {0}")]
     TonicError(#[from] tonic::transport::Error),
+    #[error("grpc reflection error: {0}")]
+    TonicReflectionError(#[from] tonic_reflection::server::Error),
 }
 
 pub trait Constructor<'a> {
@@ -107,12 +110,11 @@ pub async fn start(
 
     let path_prefix = constructor.path().to_string();
 
-    let join_handle = tokio::spawn(async move {
-        let reflection_service = tonic_reflection::server::Builder::configure()
-            .register_encoded_file_descriptor_set(tiny_auth_proto::FILE_DESCRIPTOR_SET)
-            .build()
-            .unwrap();
+    let reflection_service = tonic_reflection::server::Builder::configure()
+        .register_encoded_file_descriptor_set(tiny_auth_proto::FILE_DESCRIPTOR_SET)
+        .build()?;
 
+    let join_handle = tokio::spawn(async move {
         let server = server
             .accept_http1(true)
             .layer(RerouteLayer { path_prefix })
@@ -248,14 +250,18 @@ fn rewrite_uri(uri: Uri, path_prefix: &str) -> Uri {
     if let Some(path_and_query) = uri.path_and_query() {
         builder = builder.path_and_query(rewrite_path(path_and_query, path_prefix));
     }
-    builder.build().expect("was invalid before")
+    builder
+        .build()
+        .inspect_err(|e| error!(%e, %uri, %path_prefix, "rewriting url failed"))
+        .unwrap_or(uri)
 }
 
 fn rewrite_path(path_and_query: &PathAndQuery, path_prefix: &str) -> PathAndQuery {
-    match path_and_query.path().strip_prefix(path_prefix) {
-        Some(rest) => {
-            PathAndQuery::try_from(rest.to_string() + path_and_query.query().unwrap_or("")).unwrap()
-        }
-        None => path_and_query.clone(),
-    }
+    path_and_query
+        .path()
+        .strip_prefix(path_prefix)
+        .map(|v| v.to_string() + path_and_query.query().unwrap_or(""))
+        .map(PathAndQuery::try_from)
+        .and_then(Result::ok)
+        .unwrap_or(path_and_query.clone())
 }
