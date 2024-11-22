@@ -7,6 +7,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
+* SQLite can now be used as a store, see [doc](doc/store.md)
+  ([#5](https://veenj.de/git/veenj/tiny-auth/issues/5)).
+
 * Store files are now watched for changes and reload their content automatically
   without server restart
   ([#102](https://veenj.de/git/veenj/tiny-auth/issues/102)).
