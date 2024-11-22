@@ -105,7 +105,6 @@ object Build : BuildType({
             workingDir = "src/rust"
             scriptContent = """
                 set -e
-                cargo nextest run
                 cargo llvm-cov --no-clean --html nextest
             """.trimIndent()
         }
