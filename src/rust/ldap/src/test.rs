@@ -203,7 +203,7 @@ uDkKrMsaTeI/ttvgR01xzMfPXyjA4Ifs
                 &public_key
             );
         }
-        _ => assert!(false),
+        _ => panic!("expected confidential client"),
     }
     assert_eq!(
         input,

@@ -811,17 +811,15 @@ mod tests {
         assert!(url
             .query_pairs()
             .into_owned()
-            .any(|param| param.0 == "error".to_string()
+            .any(|param| param.0 == *"error"
                 && param.1
                     == format!(
                         "{}",
                         oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied)
                     )));
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param.0 == "error_description".to_string()
-                && param.1 == "user failed to authenticate"));
+        assert!(url.query_pairs().into_owned().any(
+            |param| param.0 == *"error_description" && param.1 == "user failed to authenticate"
+        ));
     }
 
     fn build_test_templater() -> Data<dyn WebTemplater<AuthenticateContext>> {

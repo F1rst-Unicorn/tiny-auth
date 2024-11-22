@@ -60,7 +60,7 @@ async fn auth_code_storing_works() {
         .validate(ValidationRequest {
             client_id: request.client_id,
             authorization_code: &code,
-            validation_time: request.insertion_time.clone() + delta,
+            validation_time: request.insertion_time + delta,
         })
         .await;
 
@@ -94,7 +94,7 @@ async fn auth_code_can_be_used_only_once() {
         .validate(ValidationRequest {
             client_id: request.client_id,
             authorization_code: &code,
-            validation_time: request.insertion_time.clone() + delta,
+            validation_time: request.insertion_time + delta,
         })
         .await;
     assert!(response.is_ok());
@@ -103,7 +103,7 @@ async fn auth_code_can_be_used_only_once() {
         .validate(ValidationRequest {
             client_id: request.client_id,
             authorization_code: &code,
-            validation_time: request.insertion_time.clone() + delta,
+            validation_time: request.insertion_time + delta,
         })
         .await;
 
@@ -136,7 +136,7 @@ async fn expired_auth_code_is_cleared() {
         .validate(ValidationRequest {
             client_id: request.client_id,
             authorization_code: &code,
-            validation_time: request.insertion_time.clone(),
+            validation_time: request.insertion_time,
         })
         .await;
     assert!(response.is_err());
@@ -168,7 +168,7 @@ async fn non_expired_auth_code_is_retained() {
         .validate(ValidationRequest {
             client_id: request.client_id,
             authorization_code: &code,
-            validation_time: request.insertion_time.clone(),
+            validation_time: request.insertion_time,
         })
         .await;
     assert!(response.is_ok());

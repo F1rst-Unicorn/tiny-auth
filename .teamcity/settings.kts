@@ -97,7 +97,7 @@ object Build : BuildType({
             name = "Cargo Clippy"
             id = "RUNNER_21"
             workingDir = "src/rust"
-            scriptContent = "cargo clippy"
+            scriptContent = "cargo clippy --all-targets"
         }
         script {
             name = "Cargo Test"

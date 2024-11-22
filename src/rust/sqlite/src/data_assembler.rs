@@ -343,7 +343,7 @@ pub mod tests {
         let actual = uut
             .load_data(
                 &mut transaction,
-                Arc::new(TestTemplater::default()),
+                Arc::new(TestTemplater),
                 data_loader_context,
             )
             .await;
@@ -375,7 +375,7 @@ pub mod tests {
         let actual = uut
             .load_data(
                 &mut transaction,
-                Arc::new(TestTemplater::default()),
+                Arc::new(TestTemplater),
                 data_loader_context,
             )
             .await;

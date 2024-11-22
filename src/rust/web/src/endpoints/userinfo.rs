@@ -212,7 +212,7 @@ mod tests {
             .insert_header((
                 "authorization",
                 <&str as Into<String>>::into("Bearer ")
-                    + &creator
+                    + creator
                         .finalize_access_token(token.clone())
                         .unwrap()
                         .as_ref(),

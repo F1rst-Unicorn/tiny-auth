@@ -524,12 +524,11 @@ mod tests {
         assert!(url
             .query_pairs()
             .into_owned()
-            .any(|param| param.0 == "state".to_string()
-                && &param.1 == first_request.state.as_ref().unwrap()));
+            .any(|param| param.0 == *"state" && &param.1 == first_request.state.as_ref().unwrap()));
         assert!(url
             .query_pairs()
             .into_owned()
-            .any(|param| param.0 == "code".to_string() && !param.1.is_empty()));
+            .any(|param| param.0 == *"code" && !param.1.is_empty()));
     }
 
     #[test(actix_web::test)]
@@ -580,7 +579,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::FOUND);
+        assert_eq!(resp.status(), StatusCode::FOUND);
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         let url = dbg!(Url::parse(url).unwrap());

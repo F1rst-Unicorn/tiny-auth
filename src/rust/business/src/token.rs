@@ -461,56 +461,32 @@ mod tests {
 
     #[test]
     pub fn deserialise_single_audience() {
-        let input = r#"{
-            "iss":"",
-            "sub":"",
-            "aud":"audience",
-            "exp":1,
-            "iat":1,
-            "auth_time":1,
-            "nonce":"",
-            "acr":"",
-            "amr":[],
-            "azp":"",
-            "scopes":[]
-        }"#;
+        let input = r#""audience""#;
 
-        match from_str::<Token<Access>>(input) {
+        match from_str::<Audience>(input) {
             Err(e) => {
                 debug!(%e);
-                assert!(false);
+                panic!("invalid input");
             }
-            Ok(token) => {
-                assert_eq!(Audience::Single("audience".to_string()), token.audience);
+            Ok(audience) => {
+                assert_eq!(Audience::Single("audience".to_string()), audience);
             }
         }
     }
 
     #[test]
     pub fn deserialise_list_audience() {
-        let input = r#"{
-            "iss":"",
-            "sub":"",
-            "aud":["audience1","audience2"],
-            "exp":1,
-            "iat":1,
-            "auth_time":1,
-            "nonce":"",
-            "acr":"",
-            "amr":[],
-            "azp":"",
-            "scopes":[]
-        }"#;
+        let input = r#"["audience1","audience2"]"#;
 
-        match from_str::<Token<Access>>(input) {
+        match from_str::<Audience>(input) {
             Err(e) => {
                 debug!(%e);
-                assert!(false);
+                panic!("invalid input");
             }
-            Ok(token) => {
+            Ok(audience) => {
                 assert_eq!(
                     Audience::Several(vec!["audience1".to_string(), "audience2".to_string()]),
-                    token.audience
+                    audience
                 );
             }
         }

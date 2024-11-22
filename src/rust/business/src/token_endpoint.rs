@@ -1202,13 +1202,8 @@ mod tests {
 
     async fn build_refresh_token(client_id: &str) -> EncodedRefreshToken {
         let token_creator = build_test_token_creator();
-        let mut token = token_creator.build_refresh_token(
-            Local::now().timestamp(),
-            &vec![],
-            USER,
-            client_id,
-            0,
-        );
+        let mut token =
+            token_creator.build_refresh_token(Local::now().timestamp(), &[], USER, client_id, 0);
         token.set_nonce(Some("nonce".to_string()));
         token_creator.finalize_refresh_token(token).unwrap()
     }
