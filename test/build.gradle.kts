@@ -52,6 +52,8 @@ tasks.withType<JavaCompile> {
 }
 
 tasks.withType<Test> {
+    inputs.file("$projectDir/../src/rust/target/debug/tiny-auth")
+
     useJUnitPlatform()
     systemProperty("de.njsm.tinyauth.test.root", "$projectDir/..")
 
