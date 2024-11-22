@@ -47,8 +47,6 @@ openssl.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tracing-log.workspace = true
-test-log.workspace = true
-env_logger.workspace = true
 url.workspace = true
 async-trait.workspace = true
 notify.workspace = true
@@ -57,6 +55,10 @@ futures-util.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 systemd.workspace = true
+
+[dev-dependencies]
+test-log.workspace = true
+env_logger.workspace = true
 
 [build-dependencies]
 vergen.workspace = true

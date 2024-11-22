@@ -24,16 +24,16 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 url.workspace = true
 thiserror.workspace = true
-test-log.workspace = true
-env_logger.workspace = true
 regex.workspace = true
 futures-util.workspace = true
 futures.workspace = true
-lazy_static.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
 rstest.workspace = true
+test-log.workspace = true
+env_logger.workspace = true
+lazy_static.workspace = true
 
 [lints]
 workspace = true

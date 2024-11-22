@@ -15,7 +15,6 @@ url.workspace = true
 ldap3.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
-test-log.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
 enum_dispatch.workspace = true
@@ -28,6 +27,7 @@ tiny_auth_template = { path = "../template" }
 testcontainers.workspace = true
 pretty_assertions.workspace = true
 rstest.workspace = true
+test-log.workspace = true
 
 [lints]
 workspace = true

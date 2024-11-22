@@ -26,12 +26,14 @@ base64.workspace = true
 chrono.workspace = true
 tokio.workspace = true
 jsonwebtoken.workspace = true
-test-log.workspace = true
-env_logger.workspace = true
 rustls.workspace = true
 rustls-pemfile.workspace = true
 thiserror.workspace = true
 tracing-actix-web.workspace = true
+
+[dev-dependencies]
+test-log.workspace = true
+env_logger.workspace = true
 
 [lints]
 workspace = true
