@@ -70,7 +70,7 @@ impl Authenticator for SimpleBind {
                 for bind_template in &self.bind_dn_templates {
                     let bind_dn = bind_template
                         .instantiate(BindDnContext {
-                            user: username.to_string(),
+                            user: username.to_owned(),
                         })
                         .map_err(wrap_err)?;
                     if simple_bind(ldap, bind_dn.as_ref(), password)
@@ -151,7 +151,7 @@ impl Authenticator for SearchBind {
             let filter = search
                 .search_filter
                 .instantiate(LdapSearchContext {
-                    user: username.to_string(),
+                    user: username.to_owned(),
                 })
                 .map_err(wrap_err)?;
             if let Some(value) = Self::search(ldap, username, &search, filter.as_ref()).await {

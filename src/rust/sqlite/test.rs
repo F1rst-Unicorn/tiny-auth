@@ -49,7 +49,7 @@ async fn auth_code_storing_works() {
         scope: "openid",
         insertion_time: Local::now(),
         authentication_time: Local::now(),
-        nonce: Some("nonce".to_string()),
+        nonce: Some("nonce".to_owned()),
         pkce_challenge: Some((&("a".repeat(44))).try_into().unwrap()),
     };
     let uut = store().await;
@@ -84,7 +84,7 @@ async fn auth_code_can_be_used_only_once() {
         scope: "openid",
         insertion_time: Local::now(),
         authentication_time: Local::now(),
-        nonce: Some("nonce".to_string()),
+        nonce: Some("nonce".to_owned()),
         pkce_challenge: Some((&("a".repeat(44))).try_into().unwrap()),
     };
     let uut = store().await;
@@ -119,7 +119,7 @@ async fn expired_auth_code_is_cleared() {
         scope: "openid",
         insertion_time: Local::now(),
         authentication_time: Local::now(),
-        nonce: Some("nonce".to_string()),
+        nonce: Some("nonce".to_owned()),
         pkce_challenge: Some((&("a".repeat(44))).try_into().unwrap()),
     };
     let uut = store().await;
@@ -151,7 +151,7 @@ async fn non_expired_auth_code_is_retained() {
         scope: "openid",
         insertion_time: Local::now(),
         authentication_time: Local::now(),
-        nonce: Some("nonce".to_string()),
+        nonce: Some("nonce".to_owned()),
         pkce_challenge: Some((&("a".repeat(44))).try_into().unwrap()),
     };
     let uut = store().await;
@@ -184,7 +184,7 @@ async fn getting_user_works() {
     assert_eq!(key, &actual.name);
     assert!(matches!(actual.password, Password::Sqlite { .. }));
     assert_eq!(
-        BTreeSet::from_iter(vec!["openid".to_string(), "profile".to_string()]),
+        BTreeSet::from_iter(vec!["openid".to_owned(), "profile".to_owned()]),
         actual
             .allowed_scopes
             .remove("tiny-auth-frontend")
@@ -215,24 +215,24 @@ async fn getting_client_works() {
     assert!(matches!(actual.client_type, ClientType::Public));
     assert_eq!(
         BTreeSet::from_iter(vec![
-            "address".to_string(),
-            "email".to_string(),
-            "phone".to_string(),
-            "openid".to_string(),
-            "profile".to_string()
+            "address".to_owned(),
+            "email".to_owned(),
+            "phone".to_owned(),
+            "openid".to_owned(),
+            "profile".to_owned()
         ]),
         actual.allowed_scopes
     );
     assert_eq!(
         vec![
-            "http://localhost:8088/oidc-login-redirect".to_string(),
-            "http://localhost:8088/oidc-login-redirect-silent".to_string(),
-            "http://localhost:5173/oidc-login-redirect".to_string(),
-            "http://localhost:5173/oidc-login-redirect-silent".to_string(),
-            "http://localhost:34344/oidc/oidc-login-redirect".to_string(),
-            "http://localhost:34344/oidc/oidc-login-redirect-silent".to_string(),
-            "https://localhost:34344/oidc/oidc-login-redirect".to_string(),
-            "https://localhost:34344/oidc/oidc-login-redirect-silent".to_string(),
+            "http://localhost:8088/oidc-login-redirect".to_owned(),
+            "http://localhost:8088/oidc-login-redirect-silent".to_owned(),
+            "http://localhost:5173/oidc-login-redirect".to_owned(),
+            "http://localhost:5173/oidc-login-redirect-silent".to_owned(),
+            "http://localhost:34344/oidc/oidc-login-redirect".to_owned(),
+            "http://localhost:34344/oidc/oidc-login-redirect-silent".to_owned(),
+            "https://localhost:34344/oidc/oidc-login-redirect".to_owned(),
+            "https://localhost:34344/oidc/oidc-login-redirect-silent".to_owned(),
         ],
         actual.redirect_uris
     );
@@ -526,30 +526,30 @@ async fn health_check() -> impl HealthCheckCommand {
 async fn store_and_health_check() -> (Arc<SqliteStore>, impl HealthCheckCommand + Sized) {
     sqlite_store(
         "sqlite",
-        &(env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql/sqlite/build/unittests.sqlite"),
+        &(env!("CARGO_MANIFEST_DIR").to_owned() + "/../../sql/sqlite/build/unittests.sqlite"),
         Arc::new(InPlacePasswordStore {
-            pepper: "x5ePiX0TmUF2HzuraKuab9exzumu2sO54bnlVhgCS5AAXxqyhSSuHbCiUmx0FxmjZH9Gb2obp0ff2imMS6z40Qcc".to_string(),
+            pepper: "x5ePiX0TmUF2HzuraKuab9exzumu2sO54bnlVhgCS5AAXxqyhSSuHbCiUmx0FxmjZH9Gb2obp0ff2imMS6z40Qcc".to_owned(),
         }),
         inject::data_assembler([
             inject::query_loader(
-                DataLoader::new("desk".to_string(), "/user/desk".try_into().unwrap(), ToOne),
+                DataLoader::new("desk".to_owned(), "/user/desk".try_into().unwrap(), ToOne),
                 "select id as tiny_auth_id, assigned_to as tiny_auth_assigned_to, material \
-                from test_data_desk".to_string(),
+                from test_data_desk".to_owned(),
                 String::default()),
             inject::query_loader(
-                DataLoader::new("building".to_string(), "/user/building".try_into().unwrap(), ToOne),
+                DataLoader::new("building".to_owned(), "/user/building".try_into().unwrap(), ToOne),
                 "select u.sits_in as tiny_auth_id, u.id as tiny_auth_assigned_to, b.street
                 from tiny_auth_user u
-                join test_data_building b on b.id = u.sits_in".to_string(),
+                join test_data_building b on b.id = u.sits_in".to_owned(),
                 String::default()),
             inject::query_loader(
-                DataLoader::new("pets".to_string(), "/user/pets".try_into().unwrap(), ToMany),
-                "select id as tiny_auth_id, type from test_data_pet".to_string(),
-                "select user as tiny_auth_assigned_to, pet as tiny_auth_id from test_data_pet_likes_user".to_string()),
+                DataLoader::new("pets".to_owned(), "/user/pets".try_into().unwrap(), ToMany),
+                "select id as tiny_auth_id, type from test_data_pet".to_owned(),
+                "select user as tiny_auth_assigned_to, pet as tiny_auth_id from test_data_pet_likes_user".to_owned()),
             inject::query_loader(
-                DataLoader::new("meeting_rooms".to_string(), "/building/meeting_rooms".try_into().unwrap(), ToMany,),
+                DataLoader::new("meeting_rooms".to_owned(), "/building/meeting_rooms".try_into().unwrap(), ToMany,),
                 "select id as tiny_auth_id, contained_in as tiny_auth_assigned_to, kind \
-                from test_data_meeting_room".to_string(),
+                from test_data_meeting_room".to_owned(),
                 String::default()),
         ],
             Arc::new(TestTemplater)

@@ -60,12 +60,12 @@ impl ClientLookup {
 
     pub(crate) async fn record_missing(&self, name: &str) {
         trace!("caching client miss");
-        self.cache.insert(name.to_string(), None).await;
+        self.cache.insert(name.to_owned(), None).await;
     }
 
     pub(crate) async fn map_to_client(&self, name: &str, search_entry: SearchEntry) -> Client {
         let mut result = Client {
-            client_id: name.to_string(),
+            client_id: name.to_owned(),
             client_type: ClientType::Confidential {
                 password: Password::Ldap {
                     name: self.ldap_name.clone(),
@@ -83,7 +83,7 @@ impl ClientLookup {
 
         result
             .attributes
-            .insert("dn".to_string(), search_entry.dn.clone().into());
+            .insert("dn".to_owned(), search_entry.dn.clone().into());
         result.attributes.extend(
             search_entry
                 .attrs
@@ -108,7 +108,7 @@ impl ClientLookup {
 
         trace!("caching client");
         self.cache
-            .insert(name.to_string(), Some((search_entry.dn, result.clone())))
+            .insert(name.to_owned(), Some((search_entry.dn, result.clone())))
             .await;
         result
     }

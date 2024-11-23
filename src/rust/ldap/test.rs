@@ -141,7 +141,7 @@ pub async fn getting_user_works(#[future] container: ContainerAsync<GenericImage
     assert_eq!(
         vec!["profile", "openid"]
             .into_iter()
-            .map(str::to_string)
+            .map(str::to_owned)
             .collect::<BTreeSet<_>>(),
         *actual.allowed_scopes.get("tiny-auth-frontend").unwrap()
     );
@@ -172,7 +172,7 @@ pub async fn getting_client_works(#[future] container: ContainerAsync<GenericIma
     assert_eq!(
         vec!["profile", "openid"]
             .into_iter()
-            .map(str::to_string)
+            .map(str::to_owned)
             .collect::<BTreeSet<_>>(),
         actual.allowed_scopes
     );
@@ -238,7 +238,7 @@ async fn container() -> ContainerAsync<GenericImage> {
         .with_exposed_port(1389.tcp())
         .with_wait_for(WaitFor::message_on_stderr("slapd starting"))
         .with_mount(Mount::bind_mount(
-            env!("CARGO_MANIFEST_DIR").to_string() + "/../../../dev/ldif",
+            env!("CARGO_MANIFEST_DIR").to_owned() + "/../../../dev/ldif",
             "/ldifs",
         ))
         .start()
@@ -268,24 +268,24 @@ fn search_bind_uut(name: String, port: u16) -> Arc<LdapStore> {
         "bitnami2",
         vec![
             LdapSearch {
-                base_dn: "ou=users,dc=nonexistent".to_string(),
+                base_dn: "ou=users,dc=nonexistent".to_owned(),
                 search_filter: ldap_search_templater("(|(uid={{ user }})(mail={{ user }}))"),
             },
             LdapSearch {
-                base_dn: "ou=users,dc=example,dc=org".to_string(),
+                base_dn: "ou=users,dc=example,dc=org".to_owned(),
                 search_filter: ldap_search_templater("(|(uid={{ user }})(mail={{ user }}))"),
             },
         ],
         UserConfig {
-            allowed_scopes_attribute: "description".to_string().into(),
+            allowed_scopes_attribute: "description".to_owned().into(),
         }
         .into(),
         ClientConfig {
-            client_type_attribute: "employeeType".to_string().into(),
-            allowed_scopes_attribute: "description".to_string().into(),
-            password_attribute: "userPassword".to_string().into(),
-            public_key_attribute: "displayName".to_string().into(),
-            redirect_uri_attribute: "givenName".to_string().into(),
+            client_type_attribute: "employeeType".to_owned().into(),
+            allowed_scopes_attribute: "description".to_owned().into(),
+            password_attribute: "userPassword".to_owned().into(),
+            public_key_attribute: "displayName".to_owned().into(),
+            redirect_uri_attribute: "givenName".to_owned().into(),
         }
         .into(),
     )
@@ -301,11 +301,11 @@ fn search_bind_anonymous_uut(name: String, port: u16) -> Arc<LdapStore> {
         "",
         vec![
             LdapSearch {
-                base_dn: "ou=users,dc=nonexistent".to_string(),
+                base_dn: "ou=users,dc=nonexistent".to_owned(),
                 search_filter: ldap_search_templater("(|(uid={{ user }})(mail={{ user }}))"),
             },
             LdapSearch {
-                base_dn: "ou=users,dc=example,dc=org".to_string(),
+                base_dn: "ou=users,dc=example,dc=org".to_owned(),
                 search_filter: ldap_search_templater("(|(uid={{ user }})(mail={{ user }}))"),
             },
         ],
@@ -321,5 +321,5 @@ fn password(name: String) -> Password {
 
 #[fixture]
 fn name() -> String {
-    "LDAP".to_string()
+    "LDAP".to_owned()
 }

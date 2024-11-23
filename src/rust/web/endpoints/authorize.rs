@@ -282,7 +282,7 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let query = Query(Request {
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
             ..Request::default()
         });
 
@@ -296,7 +296,7 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let query = Query(Request {
-            client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
+            client_id: Some(UNKNOWN_CLIENT_ID.to_owned()),
             ..Request::default()
         });
 
@@ -310,8 +310,8 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let query = Query(Request {
-            client_id: Some(UNKNOWN_CLIENT_ID.to_string()),
-            redirect_uri: Some("invalid".to_string()),
+            client_id: Some(UNKNOWN_CLIENT_ID.to_owned()),
+            redirect_uri: Some("invalid".to_owned()),
             ..Request::default()
         });
 
@@ -330,12 +330,12 @@ mod tests {
             .await
             .unwrap()
             .redirect_uris[0]
-            .to_string();
-        let client_state = "somestate".to_string();
+            .to_owned();
+        let client_state = "somestate".to_owned();
         let query = Query(Request {
-            response_type: Some("code".to_string()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
-            redirect_uri: Some(redirect_uri.to_string()),
+            response_type: Some("code".to_owned()),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
+            redirect_uri: Some(redirect_uri.to_owned()),
             state: Some(client_state.clone()),
             ..Request::default()
         });
@@ -359,11 +359,11 @@ mod tests {
         assert!(url
             .query_pairs()
             .into_owned()
-            .any(|param| param == ("state".to_string(), client_state.to_string())));
+            .any(|param| param == ("state".to_owned(), client_state.to_owned())));
         assert!(url
             .query_pairs()
             .into_owned()
-            .any(|param| param == ("error".to_string(), expected_error.to_string())));
+            .any(|param| param == ("error".to_owned(), expected_error.to_owned())));
     }
 
     #[test(actix_web::test)]
@@ -376,15 +376,15 @@ mod tests {
             .await
             .unwrap()
             .redirect_uris[0]
-            .to_string();
-        let client_state = "somestate".to_string();
+            .to_owned();
+        let client_state = "somestate".to_owned();
         let query = Query(Request {
-            scope: Some("email".to_string()),
-            response_type: Some("code".to_string()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
-            redirect_uri: Some(redirect_uri.to_string()),
+            scope: Some("email".to_owned()),
+            response_type: Some("code".to_owned()),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
+            redirect_uri: Some(redirect_uri.to_owned()),
             state: Some(client_state.clone()),
-            prompt: Some("none login".to_string()),
+            prompt: Some("none login".to_owned()),
             ..Request::default()
         });
 
@@ -407,11 +407,11 @@ mod tests {
         assert!(url
             .query_pairs()
             .into_owned()
-            .any(|param| param == ("state".to_string(), client_state.to_string())));
+            .any(|param| param == ("state".to_owned(), client_state.to_owned())));
         assert!(url
             .query_pairs()
             .into_owned()
-            .any(|param| param == ("error".to_string(), expected_error.to_string())));
+            .any(|param| param == ("error".to_owned(), expected_error.to_owned())));
     }
 
     #[test(actix_web::test)]
@@ -424,12 +424,12 @@ mod tests {
             .await
             .unwrap()
             .redirect_uris[0]
-            .to_string();
-        let client_state = "somestate".to_string();
+            .to_owned();
+        let client_state = "somestate".to_owned();
         let query = Query(Request {
-            scope: Some("email".to_string()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
-            redirect_uri: Some(redirect_uri.to_string()),
+            scope: Some("email".to_owned()),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
+            redirect_uri: Some(redirect_uri.to_owned()),
             state: Some(client_state.clone()),
             ..Request::default()
         });
@@ -453,11 +453,11 @@ mod tests {
         assert!(url
             .query_pairs()
             .into_owned()
-            .any(|param| param == ("state".to_string(), client_state.to_string())));
+            .any(|param| param == ("state".to_owned(), client_state.to_owned())));
         assert!(url
             .query_pairs()
             .into_owned()
-            .any(|param| param == ("error".to_string(), expected_error.to_string())));
+            .any(|param| param == ("error".to_owned(), expected_error.to_owned())));
     }
 
     #[test(actix_web::test)]
@@ -470,13 +470,13 @@ mod tests {
             .await
             .unwrap()
             .redirect_uris[0]
-            .to_string();
-        let client_state = "somestate".to_string();
+            .to_owned();
+        let client_state = "somestate".to_owned();
         let request = Request {
-            scope: Some("email profile".to_string()),
-            response_type: Some("code".to_string()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
-            redirect_uri: Some(redirect_uri.to_string()),
+            scope: Some("email profile".to_owned()),
+            response_type: Some("code".to_owned()),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
+            redirect_uri: Some(redirect_uri.to_owned()),
             state: Some(client_state.clone()),
             ..Request::default()
         };
@@ -491,7 +491,7 @@ mod tests {
 
         let session = req.get_session();
         let first_request = parse_first_request(&session).unwrap();
-        assert_eq!(vec!["email".to_string()], first_request.scopes);
+        assert_eq!(vec!["email".to_owned()], first_request.scopes);
     }
 
     #[test(actix_web::test)]
@@ -504,13 +504,13 @@ mod tests {
             .await
             .unwrap()
             .redirect_uris[0]
-            .to_string();
-        let client_state = "somestate".to_string();
+            .to_owned();
+        let client_state = "somestate".to_owned();
         let request = Request {
-            scope: Some("email".to_string()),
-            response_type: Some("code".to_string()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_string()),
-            redirect_uri: Some(redirect_uri.to_string()),
+            scope: Some("email".to_owned()),
+            response_type: Some("code".to_owned()),
+            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
+            redirect_uri: Some(redirect_uri.to_owned()),
             state: Some(client_state.clone()),
             ..Request::default()
         };

@@ -50,7 +50,7 @@ impl RateLimiter {
             None => {
                 let mut events: BTreeSet<DateTime<Local>> = Default::default();
                 events.insert(event_time);
-                rates.insert(rate_name.to_string(), events);
+                rates.insert(rate_name.to_owned(), events);
             }
             Some(events) => {
                 events.insert(event_time);

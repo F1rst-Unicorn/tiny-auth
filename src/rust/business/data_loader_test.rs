@@ -52,15 +52,15 @@ pub mod loading {
     pub fn data_from_documentation_example_works() {
         let actual = load_user(
             vec![
-                DataLoader::new("desk".to_string(), "/user/desk".try_into().unwrap(), ToOne),
+                DataLoader::new("desk".to_owned(), "/user/desk".try_into().unwrap(), ToOne),
                 DataLoader::new(
-                    "building".to_string(),
+                    "building".to_owned(),
                     "/user/building".try_into().unwrap(),
                     ToOne,
                 ),
-                DataLoader::new("pets".to_string(), "/user/pets".try_into().unwrap(), ToMany),
+                DataLoader::new("pets".to_owned(), "/user/pets".try_into().unwrap(), ToMany),
                 DataLoader::new(
-                    "meeting_rooms".to_string(),
+                    "meeting_rooms".to_owned(),
                     "/building/meeting_rooms".try_into().unwrap(),
                     ToMany,
                 ),
@@ -103,7 +103,7 @@ pub mod loading {
     pub fn missing_loaded_data_gives_null() {
         let actual = load_user(
             vec![DataLoader::new(
-                "desk".to_string(),
+                "desk".to_owned(),
                 "/user/desk".try_into().unwrap(),
                 ToOne,
             )],
@@ -119,8 +119,8 @@ pub mod loading {
     pub fn non_unique_data_loader_names_give_null() {
         let actual = load_user(
             vec![
-                DataLoader::new("desk".to_string(), "/user/desk".try_into().unwrap(), ToOne),
-                DataLoader::new("desk".to_string(), "/user/other".try_into().unwrap(), ToOne),
+                DataLoader::new("desk".to_owned(), "/user/desk".try_into().unwrap(), ToOne),
+                DataLoader::new("desk".to_owned(), "/user/other".try_into().unwrap(), ToOne),
             ],
             vec![LoadedData::new([], []), LoadedData::new([], [])],
             USER.clone(),
@@ -134,7 +134,7 @@ pub mod loading {
     pub fn unknown_destination_is_skipped() {
         let actual = load_user(
             vec![DataLoader::new(
-                "desk".to_string(),
+                "desk".to_owned(),
                 "/unknown/desk".try_into().unwrap(),
                 ToOne,
             )],
@@ -150,7 +150,7 @@ pub mod loading {
     pub fn json_pointer_without_destination_is_skipped() {
         let actual = load_user(
             vec![DataLoader::new(
-                "desk".to_string(),
+                "desk".to_owned(),
                 "/".try_into().unwrap(),
                 ToOne,
             )],
@@ -188,7 +188,7 @@ pub mod nesting {
     pub fn one_object_is_nested() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pet".to_string(),
+                "pet".to_owned(),
                 "/user/pet".try_into().unwrap(),
                 ToOne,
             )],
@@ -212,7 +212,7 @@ pub mod nesting {
     pub fn one_array_is_nested() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/pets".try_into().unwrap(),
                 ToMany,
             )],
@@ -236,7 +236,7 @@ pub mod nesting {
     pub fn two_assignments_can_be_made() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/pets".try_into().unwrap(),
                 ToMany,
             )],
@@ -263,7 +263,7 @@ pub mod nesting {
     pub fn two_assignments_with_different_order_are_preserved() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/pets".try_into().unwrap(),
                 ToMany,
             )],
@@ -290,7 +290,7 @@ pub mod nesting {
     pub fn empty_middle_object_is_nested() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/pets/cats".try_into().unwrap(),
                 ToMany,
             )],
@@ -316,7 +316,7 @@ pub mod nesting {
     pub fn empty_array_is_nested() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/pets/0".try_into().unwrap(),
                 ToMany,
             )],
@@ -342,7 +342,7 @@ pub mod nesting {
     pub fn mixed_empty_json_is_nested() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/pets/0/cats".try_into().unwrap(),
                 ToMany,
             )],
@@ -368,7 +368,7 @@ pub mod nesting {
     pub fn missing_array_indices_are_filled_with_nulls() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/pets/3/cats".try_into().unwrap(),
                 ToMany,
             )],
@@ -398,7 +398,7 @@ pub mod nesting {
     pub fn one_past_last_index_works() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/pets/-/cats".try_into().unwrap(),
                 ToMany,
             )],
@@ -425,7 +425,7 @@ pub mod nesting {
     pub fn already_present_number_ignores_data() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/id".try_into().unwrap(),
                 ToMany,
             )],
@@ -444,7 +444,7 @@ pub mod nesting {
         });
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/name".try_into().unwrap(),
                 ToMany,
             )],
@@ -463,7 +463,7 @@ pub mod nesting {
         });
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/name".try_into().unwrap(),
                 ToMany,
             )],
@@ -479,7 +479,7 @@ pub mod nesting {
     pub fn nesting_behind_primitive_value_ignores_data() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/id/unused".try_into().unwrap(),
                 ToMany,
             )],
@@ -495,7 +495,7 @@ pub mod nesting {
     pub fn nesting_in_present_object_ignores_data() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user".try_into().unwrap(),
                 ToMany,
             )],
@@ -511,7 +511,7 @@ pub mod nesting {
     pub fn nesting_in_present_array_ignores_data() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/some array".try_into().unwrap(),
                 ToMany,
             )],
@@ -530,7 +530,7 @@ pub mod nesting {
         });
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/some array".try_into().unwrap(),
                 ToMany,
             )],
@@ -549,7 +549,7 @@ pub mod nesting {
         });
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/array/0".try_into().unwrap(),
                 ToMany,
             )],
@@ -568,7 +568,7 @@ pub mod nesting {
         });
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/array/0/1".try_into().unwrap(),
                 ToOne,
             )],
@@ -592,7 +592,7 @@ pub mod nesting {
         });
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/array/-/0".try_into().unwrap(),
                 ToOne,
             )],
@@ -616,7 +616,7 @@ pub mod nesting {
         });
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/array/0/1/0".try_into().unwrap(),
                 ToOne,
             )],
@@ -640,7 +640,7 @@ pub mod nesting {
         });
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/array/-".try_into().unwrap(),
                 ToMany,
             )],
@@ -664,7 +664,7 @@ pub mod nesting {
         });
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/array/key".try_into().unwrap(),
                 ToMany,
             )],
@@ -680,7 +680,7 @@ pub mod nesting {
     pub fn setting_value_in_array_exteds_with_nulls() {
         let actual = load_user(
             vec![DataLoader::new(
-                "pets".to_string(),
+                "pets".to_owned(),
                 "/user/some array/3".try_into().unwrap(),
                 ToMany,
             )],

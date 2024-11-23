@@ -64,7 +64,7 @@ impl Ord for Scope {
 }
 
 pub fn parse_scope_names(names: &str) -> Vec<String> {
-    names.split(' ').map(str::to_string).collect()
+    names.split(' ').map(str::to_owned).collect()
 }
 
 #[derive(Serialize)]
@@ -104,9 +104,9 @@ pub enum Error {
 impl Scope {
     pub fn new(name: &str, pretty_name: &str, description: &str) -> Self {
         Self {
-            name: name.to_string(),
-            pretty_name: pretty_name.to_string(),
-            description: description.to_string(),
+            name: name.to_owned(),
+            pretty_name: pretty_name.to_owned(),
+            description: description.to_owned(),
             mappings: Vec::new(),
         }
     }
@@ -118,9 +118,9 @@ impl Scope {
         mappings: Vec<Mapping>,
     ) -> Self {
         Self {
-            name: name.to_string(),
-            pretty_name: pretty_name.to_string(),
-            description: description.to_string(),
+            name: name.to_owned(),
+            pretty_name: pretty_name.to_owned(),
+            description: description.to_owned(),
             mappings,
         }
     }
@@ -653,14 +653,14 @@ mod tests {
     pub fn strings_are_templated() {
         let user = get_test_user();
         let client = get_test_client();
-        let value = Value::String("john".to_string());
+        let value = Value::String("john".to_owned());
 
         let (result, errors) = template(Arc::new(TestTemplater), &value, &user, &client);
 
         assert!(errors.is_empty());
         assert!(result.is_some());
         let result = result.unwrap();
-        assert_eq!(Value::String("john".to_string()), result);
+        assert_eq!(Value::String("john".to_owned()), result);
     }
 
     #[test]
@@ -694,7 +694,7 @@ mod tests {
     pub fn merging_object_with_string_fails() {
         let first = Map::new();
 
-        let result = merge(Value::Object(first), Value::String("".to_string()));
+        let result = merge(Value::Object(first), Value::String("".to_owned()));
 
         assert!(result.is_err());
         let result = result.unwrap_err();
@@ -704,9 +704,9 @@ mod tests {
     #[test]
     pub fn merging_objects_with_overlapping_keys_fails() {
         let mut first = Map::new();
-        first.insert("key".to_string(), Value::String("first".to_string()));
+        first.insert("key".to_owned(), Value::String("first".to_owned()));
         let mut second = Map::new();
-        second.insert("key".to_string(), Value::String("second".to_string()));
+        second.insert("key".to_owned(), Value::String("second".to_owned()));
 
         let result = merge(Value::Object(first), Value::Object(second));
 
@@ -718,13 +718,13 @@ mod tests {
     #[test]
     pub fn merging_two_objects_succeeds() {
         let mut first = Map::new();
-        first.insert("first".to_string(), Value::String("first".to_string()));
+        first.insert("first".to_owned(), Value::String("first".to_owned()));
         let mut second = Map::new();
-        second.insert("second".to_string(), Value::String("second".to_string()));
+        second.insert("second".to_owned(), Value::String("second".to_owned()));
 
         let mut expected = Map::new();
-        expected.insert("first".to_string(), Value::String("first".to_string()));
-        expected.insert("second".to_string(), Value::String("second".to_string()));
+        expected.insert("first".to_owned(), Value::String("first".to_owned()));
+        expected.insert("second".to_owned(), Value::String("second".to_owned()));
 
         let result = merge(Value::Object(first), Value::Object(second));
 

@@ -281,7 +281,7 @@ impl<'a> Constructor<'a> {
                         .iter()
                         .map(|v| bind_dn_templater(v))
                         .collect();
-                    let name = "ldap ".to_string() + name;
+                    let name = "ldap ".to_owned() + name;
                     let connector = connector(
                         urls,
                         std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
@@ -363,7 +363,7 @@ impl<'a> Constructor<'a> {
                         .into(),
                     };
 
-                    let name = "ldap ".to_string() + name;
+                    let name = "ldap ".to_owned() + name;
                     let connector = connector(
                         urls,
                         std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
@@ -511,7 +511,7 @@ impl<'a> Constructor<'a> {
     }
 
     fn build_issuer_url(config: &'a Config) -> String {
-        let mut token_issuer = "http".to_string();
+        let mut token_issuer = "http".to_owned();
         if config.web.tls.is_some() {
             token_issuer += "s";
         }
@@ -602,7 +602,7 @@ impl<'a> Constructor<'a> {
             Ok(key) => key,
         };
 
-        Ok(TokenValidator::new(key, algorithm, issuer_url.to_string()))
+        Ok(TokenValidator::new(key, algorithm, issuer_url.to_owned()))
     }
 
     pub fn build_own_token_validator(
@@ -618,7 +618,7 @@ impl<'a> Constructor<'a> {
         Ok(TokenValidator::new_for_own_api(
             key,
             algorithm,
-            issuer_url.to_string(),
+            issuer_url.to_owned(),
         ))
     }
 
@@ -629,7 +629,7 @@ impl<'a> Constructor<'a> {
         public_key_index: usize,
     ) -> Result<Jwk, Error> {
         let key = public_key.as_bytes();
-        let url = format!("{issuer_url}/cert/{public_key_index}").to_string();
+        let url = format!("{issuer_url}/cert/{public_key_index}").to_owned();
         let jwk = if let Ok(key) = Rsa::public_key_from_pem_pkcs1(key) {
             let n = Self::encode_bignum(key.n());
             let e = Self::encode_bignum(key.e());
@@ -649,7 +649,7 @@ impl<'a> Constructor<'a> {
             Jwk::new_rsa(id, url, n, e)
         } else if let Ok(key) = EcKey::public_key_from_pem(key) {
             let crv = match key.group().curve_name() {
-                Some(openssl::nid::Nid::SECP384R1) => "P-384".to_string(),
+                Some(openssl::nid::Nid::SECP384R1) => "P-384".to_owned(),
                 Some(_) | None => {
                     error!("unsupported curve in token key");
                     return Err(LoggedBeforeError);
@@ -866,7 +866,7 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
             } else {
                 "http://"
             }
-            .to_string()
+            .to_owned()
                 + &self.config.api.public_host.domain
                 + &self
                     .config
@@ -874,8 +874,8 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
                     .public_host
                     .port
                     .as_ref()
-                    .map(|v| ":".to_string() + v)
-                    .unwrap_or("".to_string())
+                    .map(|v| ":".to_owned() + v)
+                    .unwrap_or("".to_owned())
                 + self.config.api.public_path.as_deref().unwrap_or_default(),
         )
     }
@@ -929,7 +929,7 @@ pub mod tests {
     }
 
     pub fn build_test_token_issuer() -> String {
-        "https://localhost:8088".to_string()
+        "https://localhost:8088".to_owned()
     }
 
     fn build_test_algorithm() -> Algorithm {
@@ -939,7 +939,7 @@ pub mod tests {
     pub fn build_test_tera() -> Data<Tera> {
         Data::new(
             load_template_engine(
-                &(env!("CARGO_MANIFEST_DIR").to_string() + "/../../static/"),
+                &(env!("CARGO_MANIFEST_DIR").to_owned() + "/../../static/"),
                 "",
             )
             .unwrap(),
@@ -980,10 +980,10 @@ pub mod tests {
 
     pub fn build_test_jwk() -> Jwk {
         Jwk::new_rsa(
-            "key_id".to_string(),
-            "".to_string(),
-            "".to_string(),
-            "".to_string(),
+            "key_id".to_owned(),
+            "".to_owned(),
+            "".to_owned(),
+            "".to_owned(),
         )
     }
 }

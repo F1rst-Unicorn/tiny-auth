@@ -94,7 +94,7 @@ pub fn run(
         let store_paths = constructor.store_paths();
         drop(constructor);
         tokio::spawn(config_refresher(
-            config_path.to_string(),
+            config_path.to_owned(),
             config,
             handles,
             store_paths,

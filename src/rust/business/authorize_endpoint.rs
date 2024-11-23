@@ -277,20 +277,20 @@ impl Handler {
                 Err(_) => {
                     debug!(%method, "unknown code_challenge_method");
                     Err(Error::CodeChallengeMethodInvalid {
-                        redirect_uri: redirect_uri.to_string(),
+                        redirect_uri: redirect_uri.to_owned(),
                     })
                 }
                 Ok(CodeChallengeMethod::Plain) => {
                     debug!(%method, "code_challenge_method is insecure and not supported");
                     Err(Error::CodeChallengeMethodInvalid {
-                        redirect_uri: redirect_uri.to_string(),
+                        redirect_uri: redirect_uri.to_owned(),
                     })
                 }
                 Ok(_) => match CodeChallenge::try_from(challenge) {
                     Err(e) => {
                         debug!(%e, %challenge, "invalid code_challenge");
                         Err(Error::CodeChallengeInvalid {
-                            redirect_uri: redirect_uri.to_string(),
+                            redirect_uri: redirect_uri.to_owned(),
                         })
                     }
                     Ok(v) => Ok(Some(v)),
@@ -299,7 +299,7 @@ impl Handler {
             _ => {
                 debug!("code_challenge and code_challenge_method must both be present or absent");
                 Err(Error::CodeChallengeInvalid {
-                    redirect_uri: redirect_uri.to_string(),
+                    redirect_uri: redirect_uri.to_owned(),
                 })
             }
         }
@@ -314,7 +314,7 @@ impl Handler {
             None | Some(None) => {
                 debug!("missing or invalid response_type");
                 return Err(Error::MissingResponseType {
-                    redirect_uri: redirect_uri.to_string(),
+                    redirect_uri: redirect_uri.to_owned(),
                 });
             }
             Some(Some(response_type)) => response_type,
@@ -326,7 +326,7 @@ impl Handler {
         {
             debug!("missing required parameter nonce for implicit flow");
             Err(Error::MissingNonceForImplicitFlow {
-                redirect_uri: redirect_uri.to_string(),
+                redirect_uri: redirect_uri.to_owned(),
             })
         } else {
             Ok(response_types)

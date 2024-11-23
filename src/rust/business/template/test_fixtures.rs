@@ -27,16 +27,16 @@ impl<T: Send + Sync> Templater<T> for TestTemplater {
         _name: &str,
         content: &str,
     ) -> Result<InstantiatedTemplate, TemplateError> {
-        Ok(InstantiatedTemplate(content.to_string()))
+        Ok(InstantiatedTemplate(content.to_owned()))
     }
 
     fn instantiate(&self, _context: T) -> Result<InstantiatedTemplate, TemplateError> {
-        Ok(InstantiatedTemplate("".to_string()))
+        Ok(InstantiatedTemplate("".to_owned()))
     }
 }
 
 impl<T: Send + Sync> WebTemplater<T> for TestTemplater {
     fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate {
-        InstantiatedTemplate(error.title().to_string())
+        InstantiatedTemplate(error.title().to_owned())
     }
 }

@@ -77,7 +77,7 @@ pub mod test_fixtures {
     }
 
     pub fn build_test_token_issuer() -> String {
-        "https://localhost:8088".to_string()
+        "https://localhost:8088".to_owned()
     }
 
     pub fn build_test_algorithm() -> Algorithm {
@@ -106,10 +106,10 @@ pub mod test_fixtures {
 
     pub fn build_test_jwk() -> Jwk {
         Jwk::new_rsa(
-            "key_id".to_string(),
-            "".to_string(),
-            "".to_string(),
-            "".to_string(),
+            "key_id".to_owned(),
+            "".to_owned(),
+            "".to_owned(),
+            "".to_owned(),
         )
     }
 }

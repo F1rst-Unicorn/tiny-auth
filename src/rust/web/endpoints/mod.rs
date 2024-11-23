@@ -110,7 +110,7 @@ fn render_json_error(
         })
         .json(ErrorResponse {
             error,
-            error_description: Some(description.to_string()),
+            error_description: Some(description.to_owned()),
             error_uri: None,
         })
 }
@@ -150,7 +150,7 @@ fn render_redirect_error_with_base(
 
     let mut response_parameters = BTreeMap::new();
     response_parameters.insert("error", format!("{}", error));
-    response_parameters.insert("error_description", description.to_string());
+    response_parameters.insert("error_description", description.to_owned());
     state
         .clone()
         .map(|v| response_parameters.insert("state", v));
@@ -240,7 +240,7 @@ pub fn parse_basic_authorization(value: &HeaderValue) -> Option<(String, String)
         Ok(cred) => cred,
     };
 
-    let split: Vec<String> = credentials.splitn(2, ':').map(str::to_string).collect();
+    let split: Vec<String> = credentials.splitn(2, ':').map(str::to_owned).collect();
     if split.len() == 2 {
         Some((split[0].clone(), split[1].clone()))
     } else {
@@ -253,7 +253,7 @@ pub fn parse_bearer_authorization(value: &HeaderValue) -> Option<String> {
 }
 
 fn parse_authorization(value: &HeaderValue, auth_type: &str) -> Option<String> {
-    let auth_type = auth_type.to_string() + " ";
+    let auth_type = auth_type.to_owned() + " ";
     let value = match value.to_str() {
         Err(e) => {
             debug!(%e, "decoding of authorization header failed");
@@ -296,7 +296,7 @@ mod tests {
     #[test(actix_web::test)]
     async fn plus_is_encoded() {
         let input = Test {
-            value: Some("AI4qNF5I6XA+HH8b0KFobQ".to_string()),
+            value: Some("AI4qNF5I6XA+HH8b0KFobQ".to_owned()),
         };
         let result = serde_urlencoded::to_string(&input).expect("invalid input");
         assert_eq!("value=AI4qNF5I6XA%2BHH8b0KFobQ", result);
@@ -320,14 +320,14 @@ mod tests {
     async fn value_is_some() {
         let input = r#"value=value"#;
         let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
-        assert_eq!(Some("value".to_string()), result.value);
+        assert_eq!(Some("value".to_owned()), result.value);
     }
 
     #[test(actix_web::test)]
     async fn verify_wrong_csrf_verification() {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
-        let token = "token".to_string();
+        let token = "token".to_owned();
         assert!(!is_csrf_valid(&None, &session));
         assert!(!is_csrf_valid(&Some(token.clone()), &session));
 
@@ -339,7 +339,7 @@ mod tests {
     async fn verify_csrf_verification() {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
-        let token = "token".to_string();
+        let token = "token".to_owned();
         assert!(!is_csrf_valid(&None, &session));
         assert!(!is_csrf_valid(&Some(token.clone()), &session));
 
@@ -369,7 +369,7 @@ mod tests {
     async fn missing_password_is_rejected() {
         let actual = parse_basic_authorization(
             &HeaderValue::from_str(
-                &("Basic ".to_string() + &STANDARD.encode("username".as_bytes())),
+                &("Basic ".to_owned() + &STANDARD.encode("username".as_bytes())),
             )
             .unwrap(),
         );

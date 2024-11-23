@@ -282,7 +282,7 @@ pub struct Web {
 
 #[allow(clippy::unnecessary_wraps)]
 fn default_path() -> Option<String> {
-    Some("".to_string())
+    Some("".to_owned())
 }
 
 #[allow(clippy::unnecessary_wraps)]
@@ -469,5 +469,5 @@ pub enum Time {
 
 #[allow(clippy::unnecessary_wraps)]
 fn default_time_format() -> String {
-    "%F %T".to_string()
+    "%F %T".to_owned()
 }

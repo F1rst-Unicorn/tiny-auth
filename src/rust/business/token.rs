@@ -256,16 +256,16 @@ impl TokenCreator {
     ) -> Token<T> {
         let now = self.clock.now();
         let mut result = Token {
-            issuer: self.issuer.issuer_url.to_string(),
+            issuer: self.issuer.issuer_url.to_owned(),
             subject: user.name.clone(),
             audience: Audience::Single(client.client_id.clone()),
             expiration: (now + self.token_expiration).timestamp(),
             issuance_time: now.timestamp(),
             auth_time,
-            nonce: "".to_string(),
-            authentication_context_class_reference: "".to_string(),
+            nonce: "".to_owned(),
+            authentication_context_class_reference: "".to_owned(),
             authentication_methods_request: vec![],
-            authorized_party: client.client_id.to_string(),
+            authorized_party: client.client_id.to_owned(),
             scopes: scopes.iter().map(|v| v.name.clone()).collect(),
             scope_attributes: Value::Null,
             token_type: PhantomData,
@@ -341,13 +341,13 @@ impl TokenCreator {
     ) -> RefreshToken {
         debug!("issuing refresh token");
         RefreshToken {
-            issuer: self.issuer.issuer_url.to_string(),
-            subject: subject.to_string(),
-            nonce: "".to_string(),
-            authorized_party: authorized_party.to_string(),
+            issuer: self.issuer.issuer_url.to_owned(),
+            subject: subject.to_owned(),
+            nonce: "".to_owned(),
+            authorized_party: authorized_party.to_owned(),
             expiration: issuance_time + self.refresh_token_expiration.num_seconds(),
             auth_time,
-            scopes: scopes.iter().map(|v| v.name.to_string()).collect(),
+            scopes: scopes.iter().map(|v| v.name.to_owned()).collect(),
         }
     }
 
@@ -469,7 +469,7 @@ mod tests {
                 panic!("invalid input");
             }
             Ok(audience) => {
-                assert_eq!(Audience::Single("audience".to_string()), audience);
+                assert_eq!(Audience::Single("audience".to_owned()), audience);
             }
         }
     }
@@ -485,7 +485,7 @@ mod tests {
             }
             Ok(audience) => {
                 assert_eq!(
-                    Audience::Several(vec!["audience1".to_string(), "audience2".to_string()]),
+                    Audience::Several(vec!["audience1".to_owned(), "audience2".to_owned()]),
                     audience
                 );
             }

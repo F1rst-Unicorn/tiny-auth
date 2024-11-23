@@ -60,7 +60,7 @@ pub(crate) struct AuthorizeTemplater(pub(crate) Arc<Tera>);
 impl Templater<()> for AuthorizeTemplater {
     fn instantiate(&self, _context: ()) -> Result<InstantiatedTemplate, TemplateError> {
         error!("no call expected");
-        Ok(InstantiatedTemplate("".to_string()))
+        Ok(InstantiatedTemplate("".to_owned()))
     }
 }
 
@@ -133,7 +133,7 @@ fn render_error_page(tera: &Tera, error: ErrorPage) -> InstantiatedTemplate {
     match tera.render("error.html.j2", &context) {
         Err(e) => {
             warn!(e = render_tera_error(&e));
-            InstantiatedTemplate(error.title().to_string())
+            InstantiatedTemplate(error.title().to_owned())
         }
         Ok(v) => InstantiatedTemplate(v),
     }
@@ -143,11 +143,11 @@ pub fn load_template_engine(
     static_files_root: &str,
     http_path: &str,
 ) -> Result<Tera, TemplateError> {
-    let template_path = static_files_root.to_string() + "/templates/";
+    let template_path = static_files_root.to_owned() + "/templates/";
     let mut tera = Tera::new(&(template_path + "**/*")).map_err(map_err)?;
     tera.register_function("url", url_mapper);
     tera.register_function("translate", translator);
-    tera.register_function("static", make_static_mapper(http_path.to_string()));
+    tera.register_function("static", make_static_mapper(http_path.to_owned()));
     Ok(tera)
 }
 
@@ -181,7 +181,7 @@ fn make_static_mapper(
         let _guard = span!(Level::DEBUG, "static_mapper", ?args).entered();
         let result = match args.get("name") {
             Some(val) => match from_value::<String>(val.clone()) {
-                Ok(v) => to_value(http_path.to_string() + &v).map_err(Into::into),
+                Ok(v) => to_value(http_path.to_owned() + &v).map_err(Into::into),
                 Err(e) => {
                     error!(%e, "could not convert to string");
                     Err("oops".into())

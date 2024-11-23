@@ -103,7 +103,7 @@ impl<'a> Templater<DataLoaderContext<'a>> for DataLoaderTemplater {
 
     fn instantiate(&self, _: DataLoaderContext) -> Result<InstantiatedTemplate, TemplateError> {
         error!("no call expected");
-        Ok(InstantiatedTemplate("".to_string()))
+        Ok(InstantiatedTemplate("".to_owned()))
     }
 }
 

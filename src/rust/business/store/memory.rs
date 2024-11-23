@@ -88,8 +88,8 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
         debug!("issuing authorization code");
         let mut store = self.store.write().await;
         let mut key = AuthCodeKey {
-            client_id: request.client_id.to_string(),
-            authorization_code: "".to_string(),
+            client_id: request.client_id.to_owned(),
+            authorization_code: "".to_owned(),
         };
 
         loop {
@@ -100,9 +100,9 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
                 store.insert(
                     key,
                     AuthCodeValue {
-                        redirect_uri: request.redirect_uri.to_string(),
-                        user: request.user.to_string(),
-                        scope: request.scope.to_string(),
+                        redirect_uri: request.redirect_uri.to_owned(),
+                        user: request.user.to_owned(),
+                        scope: request.scope.to_owned(),
                         insertion_time: request.insertion_time,
                         authentication_time: request.authentication_time,
                         nonce: request.nonce,
@@ -122,8 +122,8 @@ impl AuthorizationCodeStore for MemoryAuthorizationCodeStore {
 
         let value = store
             .remove(&AuthCodeKey {
-                client_id: request.client_id.to_string(),
-                authorization_code: request.authorization_code.to_string(),
+                client_id: request.client_id.to_owned(),
+                authorization_code: request.authorization_code.to_owned(),
             })
             .ok_or(NotFound)?;
 
@@ -177,7 +177,7 @@ mod tests {
                 scope: "",
                 insertion_time: date,
                 authentication_time: date,
-                nonce: Some("nonce".to_string()),
+                nonce: Some("nonce".to_owned()),
                 pkce_challenge: None,
             })
             .await
@@ -212,7 +212,7 @@ mod tests {
                 scope: "",
                 insertion_time: date,
                 authentication_time: date,
-                nonce: Some("nonce".to_string()),
+                nonce: Some("nonce".to_owned()),
                 pkce_challenge: None,
             })
             .await
@@ -245,7 +245,7 @@ mod tests {
                 scope: "",
                 insertion_time: date,
                 authentication_time: date,
-                nonce: Some("nonce".to_string()),
+                nonce: Some("nonce".to_owned()),
                 pkce_challenge: None,
             })
             .await
@@ -282,7 +282,7 @@ mod tests {
                 scope: "",
                 insertion_time: date,
                 authentication_time: date,
-                nonce: Some("nonce".to_string()),
+                nonce: Some("nonce".to_owned()),
                 pkce_challenge: None,
             })
             .await

@@ -35,8 +35,8 @@ impl IssuerConfiguration {
 
     pub fn get_key_type(&self) -> String {
         match self.algorithm {
-            Algorithm::ES384 => "EC".to_string(),
-            Algorithm::PS512 => "RSA".to_string(),
+            Algorithm::ES384 => "EC".to_owned(),
+            Algorithm::PS512 => "RSA".to_owned(),
             _ => {
                 unimplemented!("unsupported token algorithm");
             }

@@ -27,9 +27,9 @@ use tracing::{instrument, trace};
 #[instrument(skip_all, name = "webapp_redirect")]
 pub async fn redirect(request: HttpRequest, web_base_path: Data<WebBasePath>) -> HttpResponse {
     let location = if request.query_string() != "" {
-        web_base_path.0.to_string() + "/?" + request.query_string()
+        web_base_path.0.to_owned() + "/?" + request.query_string()
     } else {
-        web_base_path.0.to_string() + "/"
+        web_base_path.0.to_owned() + "/"
     };
     trace!(%location, "redirecting");
     HttpResponse::TemporaryRedirect()
@@ -46,9 +46,9 @@ pub async fn get(
 ) -> HttpResponse {
     trace!("rendering webapp");
     let context = WebappRootContext {
-        provider_url: issuer_config.issuer_url.to_string(),
-        api_url: api_url.0.to_string(),
-        web_base: web_base_path.0.to_string(),
+        provider_url: issuer_config.issuer_url.to_owned(),
+        api_url: api_url.0.to_owned(),
+        web_base: web_base_path.0.to_owned(),
     };
     return_rendered_template(templater.instantiate(context), StatusCode::OK, || {
         templater.instantiate_error_page(ErrorPage::ServerError)

@@ -164,7 +164,7 @@ pub enum ScopeStoreError {
 #[async_trait]
 pub trait ScopeStore: Send + Sync {
     async fn get(&self, key: &str) -> Result<Scope, ScopeStoreError> {
-        self.get_all(&[key.to_string()])
+        self.get_all(&[key.to_owned()])
             .await
             .and_then(|mut v| v.pop().ok_or(ScopeStoreError::NotFound))
     }
@@ -320,8 +320,8 @@ pub mod test_fixtures {
         async fn get(&self, key: &str) -> Result<User, UserError> {
             match key {
                 "user1" | "user2" | "user3" => Ok(User {
-                    name: key.to_string(),
-                    password: Password::Plain(key.to_string()),
+                    name: key.to_owned(),
+                    password: Password::Plain(key.to_owned()),
                     allowed_scopes: Default::default(),
                     attributes: HashMap::new(),
                 }),
@@ -346,27 +346,27 @@ pub mod test_fixtures {
         async fn get(&self, key: &str) -> Result<Client, Error> {
             match key {
                 "client1" => Ok(Client {
-                    client_id: key.to_string(),
+                    client_id: key.to_owned(),
                     client_type: ClientType::Confidential {
-                        password: Password::Plain("client1".to_string()),
+                        password: Password::Plain("client1".to_owned()),
                         public_key: None,
                     },
-                    redirect_uris: vec!["http://localhost/client1".to_string()],
-                    allowed_scopes: BTreeSet::from_iter(vec!["email".to_string()]),
+                    redirect_uris: vec!["http://localhost/client1".to_owned()],
+                    allowed_scopes: BTreeSet::from_iter(vec!["email".to_owned()]),
                     attributes: HashMap::new(),
                 }),
                 "client2" => Ok(Client {
-                    client_id: key.to_string(),
+                    client_id: key.to_owned(),
                     client_type: ClientType::Public,
-                    redirect_uris: vec!["http://localhost/client2".to_string()],
-                    allowed_scopes: BTreeSet::from_iter(vec!["email".to_string()]),
+                    redirect_uris: vec!["http://localhost/client2".to_owned()],
+                    allowed_scopes: BTreeSet::from_iter(vec!["email".to_owned()]),
                     attributes: HashMap::new(),
                 }),
                 "tiny-auth-frontend" => Ok(Client {
-                    client_id: key.to_string(),
+                    client_id: key.to_owned(),
                     client_type: ClientType::Public,
-                    redirect_uris: vec!["http://localhost/client2".to_string()],
-                    allowed_scopes: BTreeSet::from_iter(vec!["email".to_string()]),
+                    redirect_uris: vec!["http://localhost/client2".to_owned()],
+                    allowed_scopes: BTreeSet::from_iter(vec!["email".to_owned()]),
                     attributes: HashMap::new(),
                 }),
                 _ => Err(Error::NotFound),
@@ -423,13 +423,13 @@ pub mod test_fixtures {
         ) -> Result<String, AuthCodeError> {
             self.store.borrow_mut().insert(
                 (
-                    request.client_id.to_string(),
+                    request.client_id.to_owned(),
                     request.insertion_time.to_rfc3339(),
                 ),
                 (
-                    request.redirect_uri.to_string(),
-                    request.user.to_string(),
-                    request.scope.to_string(),
+                    request.redirect_uri.to_owned(),
+                    request.user.to_owned(),
+                    request.scope.to_owned(),
                     request.insertion_time,
                     request.authentication_time,
                     request.nonce,
@@ -455,8 +455,8 @@ pub mod test_fixtures {
                 .store
                 .borrow_mut()
                 .remove(&(
-                    request.client_id.to_string(),
-                    request.authorization_code.to_string(),
+                    request.client_id.to_owned(),
+                    request.authorization_code.to_owned(),
                 ))
                 .ok_or(NotFound)?;
             Ok(AuthorizationCodeResponse {

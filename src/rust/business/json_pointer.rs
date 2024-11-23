@@ -67,7 +67,7 @@ impl JsonPointer {
                     Value::Null
                 } else {
                     let mut result = Map::new();
-                    result.insert(token.to_string(), nested);
+                    result.insert(token.to_owned(), nested);
                     result.into()
                 }
             }
@@ -116,7 +116,7 @@ impl From<JsonPointer> for String {
             .map(String::from)
             .map(|token| token.replace("~", ENCODED_TILDE))
             .map(|token| token.replace("/", ENCODED_SLASH))
-            .map(|token| "/".to_string() + &token)
+            .map(|token| "/".to_owned() + &token)
             .collect::<Vec<String>>()
             .join("")
     }

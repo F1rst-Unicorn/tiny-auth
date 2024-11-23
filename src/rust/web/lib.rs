@@ -169,7 +169,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
                     Key::from(secret_key.as_bytes()),
                 )
                 .cookie_domain(Some(public_domain.clone()))
-                .cookie_name("session".to_string())
+                .cookie_name("session".to_owned())
                 .cookie_path(web_path.clone())
                 .cookie_secure(tls_enabled)
                 .cookie_http_only(true)

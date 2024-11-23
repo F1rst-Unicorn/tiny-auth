@@ -56,7 +56,7 @@ impl SqliteStore {
                     continue;
                 }
             };
-            attributes.insert(column.name().to_string(), value);
+            attributes.insert(column.name().to_owned(), value);
         }
         attributes
     }

@@ -63,7 +63,7 @@ pub mod inject {
 
     pub fn health_check(name: &str, command: Arc<dyn HealthCheckCommand>) -> HealthCheck {
         HealthCheck {
-            name: name.to_string(),
+            name: name.to_owned(),
             command,
         }
     }

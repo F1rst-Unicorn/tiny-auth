@@ -491,7 +491,7 @@ mod tests {
                 AuthorizeRequestState {
                     prompts: vec![Prompt::None],
                     response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
-                    redirect_uri: "http://localhost/public".to_string(),
+                    redirect_uri: "http://localhost/public".to_owned(),
                     ..Default::default()
                 },
             )
@@ -530,8 +530,8 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let form = Form(Request {
-            username: Some("user".to_string()),
-            password: Some("user".to_string()),
+            username: Some("user".to_owned()),
+            password: Some("user".to_owned()),
             csrftoken: None,
         });
 
@@ -553,8 +553,8 @@ mod tests {
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let form = Form(Request {
-            username: Some("user".to_string()),
-            password: Some("user".to_string()),
+            username: Some("user".to_owned()),
+            password: Some("user".to_owned()),
             csrftoken: Some(csrftoken),
         });
 
@@ -581,7 +581,7 @@ mod tests {
 
         let form = Form(Request {
             username: None,
-            password: Some("user".to_string()),
+            password: Some("user".to_owned()),
             csrftoken: Some(csrftoken),
         });
 
@@ -614,7 +614,7 @@ mod tests {
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
         let form = Form(Request {
-            username: Some("user".to_string()),
+            username: Some("user".to_owned()),
             password: None,
             csrftoken: Some(csrftoken),
         });
@@ -648,8 +648,8 @@ mod tests {
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
         let form = Form(Request {
-            username: Some(UNKNOWN_USER.to_string()),
-            password: Some(UNKNOWN_USER.to_string() + "wrong"),
+            username: Some(UNKNOWN_USER.to_owned()),
+            password: Some(UNKNOWN_USER.to_owned() + "wrong"),
             csrftoken: Some(csrftoken),
         });
 
@@ -682,8 +682,8 @@ mod tests {
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
         let form = Form(Request {
-            username: Some(USER.to_string()),
-            password: Some(USER.to_string() + "wrong"),
+            username: Some(USER.to_owned()),
+            password: Some(USER.to_owned() + "wrong"),
             csrftoken: Some(csrftoken),
         });
 
@@ -716,8 +716,8 @@ mod tests {
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
         let form = Form(Request {
-            username: Some(USER.to_string()),
-            password: Some(USER.to_string()),
+            username: Some(USER.to_owned()),
+            password: Some(USER.to_owned()),
             csrftoken: Some(csrftoken),
         });
 
@@ -748,8 +748,8 @@ mod tests {
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
         let form = Form(Request {
-            username: Some(UNKNOWN_USER.to_string()),
-            password: Some(UNKNOWN_USER.to_string()),
+            username: Some(UNKNOWN_USER.to_owned()),
+            password: Some(UNKNOWN_USER.to_owned()),
             csrftoken: Some(csrftoken),
         });
 
@@ -783,7 +783,7 @@ mod tests {
             .insert(
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
-                    redirect_uri: "http://redirect_uri.example".to_string(),
+                    redirect_uri: "http://redirect_uri.example".to_owned(),
                     response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
                     ..Default::default()
                 },
@@ -794,8 +794,8 @@ mod tests {
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
         let form = Form(Request {
-            username: Some(UNKNOWN_USER.to_string()),
-            password: Some(UNKNOWN_USER.to_string()),
+            username: Some(UNKNOWN_USER.to_owned()),
+            password: Some(UNKNOWN_USER.to_owned()),
             csrftoken: Some(csrftoken),
         });
 

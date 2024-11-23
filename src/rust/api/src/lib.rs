@@ -108,7 +108,7 @@ pub async fn start(
         trace!("tls enabled")
     }
 
-    let path_prefix = constructor.path().to_string();
+    let path_prefix = constructor.path().to_owned();
 
     let reflection_service = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(tiny_auth_proto::FILE_DESCRIPTOR_SET)
@@ -260,7 +260,7 @@ fn rewrite_path(path_and_query: &PathAndQuery, path_prefix: &str) -> PathAndQuer
     path_and_query
         .path()
         .strip_prefix(path_prefix)
-        .map(|v| v.to_string() + path_and_query.query().unwrap_or(""))
+        .map(|v| v.to_owned() + path_and_query.query().unwrap_or(""))
         .map(PathAndQuery::try_from)
         .and_then(Result::ok)
         .unwrap_or(path_and_query.clone())

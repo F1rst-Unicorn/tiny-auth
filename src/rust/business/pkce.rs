@@ -76,10 +76,7 @@ impl TryFrom<&String> for CodeChallenge {
         } else if !pattern.is_match(value) {
             Err(Error::InvalidCharacter)
         } else {
-            Ok(CodeChallenge(
-                CodeChallengeMethod::SHA256,
-                value.to_string(),
-            ))
+            Ok(CodeChallenge(CodeChallengeMethod::SHA256, value.to_owned()))
         }
     }
 }
@@ -141,14 +138,14 @@ pub mod tests {
 
     #[test]
     pub fn learning_test_cow_eq() {
-        assert_eq!(Cow::Owned::<str>("abc".to_string()), Cow::Borrowed("abc"));
+        assert_eq!(Cow::Owned::<str>("abc".to_owned()), Cow::Borrowed("abc"));
     }
 
     #[test]
     pub fn valid_code_challenges_are_converted() {
-        assert!(CodeChallenge::try_from(
-            &"gfBGhTnM-57jV7buSQcDkmizJPPtIxJSJFjL0VHkS4s".to_string()
-        )
-        .is_ok());
+        assert!(
+            CodeChallenge::try_from(&"gfBGhTnM-57jV7buSQcDkmizJPPtIxJSJFjL0VHkS4s".to_owned())
+                .is_ok()
+        );
     }
 }

@@ -94,7 +94,7 @@ impl TryFrom<Client> for User {
         match client.client_type {
             ClientType::Public => {
                 debug!("tried to convert public client to user");
-                Err("invalid client type".to_string())
+                Err("invalid client type".to_owned())
             }
             ClientType::Confidential { password, .. } => Ok(Self {
                 name: client.client_id,

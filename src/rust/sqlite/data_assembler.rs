@@ -178,7 +178,7 @@ impl DataAssembler {
         let mut already_loaded_data: BTreeMap<String, Value> = BTreeMap::default();
         let mut transitive_multiplicity = BTreeMap::default();
         ids.insert(root_type.as_ref(), vec![id]);
-        already_loaded_data.insert(root_type.as_ref().to_string(), root.clone());
+        already_loaded_data.insert(root_type.as_ref().to_owned(), root.clone());
         transitive_multiplicity.insert(root_type.as_ref(), Multiplicity::ToOne);
 
         for query_loader in &self.query_loaders {
@@ -328,12 +328,12 @@ pub mod tests {
         let mut transaction = conn.begin_immediate().await.unwrap();
         let uut = QueryLoader {
             data_loader: DataLoader {
-                name: "desk".to_string(),
+                name: "desk".to_owned(),
                 location: "/user/desk".try_into().unwrap(),
                 multiplicity: Multiplicity::ToOne,
             },
-            query: "select * from test_data_desk".to_string(),
-            assignment_query: "".to_string(),
+            query: "select * from test_data_desk".to_owned(),
+            assignment_query: "".to_owned(),
         };
         let data_loader_context = DataLoaderContext {
             assigned_to: &[],
@@ -360,12 +360,12 @@ pub mod tests {
         let mut transaction = conn.begin_immediate().await.unwrap();
         let uut = QueryLoader {
             data_loader: DataLoader {
-                name: "desk".to_string(),
+                name: "desk".to_owned(),
                 location: "/user/desk".try_into().unwrap(),
                 multiplicity: Multiplicity::ToOne,
             },
-            query: "select material as tiny_auth_id from test_data_desk".to_string(),
-            assignment_query: "".to_string(),
+            query: "select material as tiny_auth_id from test_data_desk".to_owned(),
+            assignment_query: "".to_owned(),
         };
         let data_loader_context = DataLoaderContext {
             assigned_to: &[],
@@ -393,12 +393,12 @@ pub mod tests {
         let uut = DataAssembler {
             query_loaders: vec![QueryLoader {
                 data_loader: DataLoader {
-                    name: "desk".to_string(),
+                    name: "desk".to_owned(),
                     location: "/user/desk".try_into().unwrap(),
                     multiplicity: Multiplicity::ToOne,
                 },
-                query: "select * from non_existing_table".to_string(),
-                assignment_query: "".to_string(),
+                query: "select * from non_existing_table".to_owned(),
+                assignment_query: "".to_owned(),
             }],
             templater: Arc::new(TestTemplater),
         };
@@ -413,7 +413,7 @@ pub mod tests {
     #[fixture]
     async fn db() -> Pool<Sqlite> {
         let options = SqliteConnectOptions::from_str(
-            &(env!("CARGO_MANIFEST_DIR").to_string() + "/../../sql/sqlite/build/unittests.sqlite"),
+            &(env!("CARGO_MANIFEST_DIR").to_owned() + "/../../sql/sqlite/build/unittests.sqlite"),
         )
         .unwrap()
         .read_only(false)

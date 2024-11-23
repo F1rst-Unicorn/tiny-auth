@@ -233,7 +233,7 @@ pub mod inject {
 
     pub fn in_place_password_store(pepper: &str) -> InPlacePasswordStore {
         InPlacePasswordStore {
-            pepper: pepper.to_string(),
+            pepper: pepper.to_owned(),
         }
     }
 
@@ -253,7 +253,7 @@ pub mod test_fixtures {
 
     pub fn in_place_password_store() -> InPlacePasswordStore {
         InPlacePasswordStore {
-            pepper: "pepper".to_string(),
+            pepper: "pepper".to_owned(),
         }
     }
 
@@ -274,7 +274,7 @@ pub mod tests {
     #[test(tokio::test)]
     pub async fn passwords_can_be_verified() {
         let uut = InPlacePasswordStore {
-            pepper: "pepper".to_string(),
+            pepper: "pepper".to_owned(),
         };
         let password = "password";
         let pw = Password::new("username", password, "pepper");

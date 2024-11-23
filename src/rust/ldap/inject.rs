@@ -50,7 +50,7 @@ pub fn simple_bind_store(
     connector: Connector,
 ) -> Arc<dyn PasswordStore> {
     Arc::new(LdapStore {
-        name: name.to_string(),
+        name: name.to_owned(),
         connector,
         authenticator: SimpleBind {
             bind_dn_templates: bind_dn_templates.to_vec(),
@@ -83,16 +83,16 @@ pub fn search_bind_store(
     client_config: Option<ClientConfig>,
 ) -> Arc<LdapStore> {
     Arc::new(LdapStore {
-        name: name.to_string(),
+        name: name.to_owned(),
         connector,
         authenticator: SearchBind {
-            bind_dn: bind_dn.to_string(),
-            bind_dn_password: bind_dn_password.to_string(),
+            bind_dn: bind_dn.to_owned(),
+            bind_dn_password: bind_dn_password.to_owned(),
             searches,
         }
         .into(),
         user_lookup: user_config.map(|user_config| UserLookup {
-            ldap_name: name.to_string(),
+            ldap_name: name.to_owned(),
             cache: user_cache(name),
             mappings: user_config
                 .allowed_scopes_attribute
@@ -105,7 +105,7 @@ pub fn search_bind_store(
                 .collect(),
         }),
         client_lookup: client_config.map(|client_config| ClientLookup {
-            ldap_name: name.to_string(),
+            ldap_name: name.to_owned(),
             cache: client_cache(name),
             mappings: None
                 .into_iter()
@@ -152,8 +152,8 @@ pub fn search_bind_check(
     LdapHealth {
         connector,
         authenticator: SearchBind {
-            bind_dn: bind_dn.to_string(),
-            bind_dn_password: bind_dn_password.to_string(),
+            bind_dn: bind_dn.to_owned(),
+            bind_dn_password: bind_dn_password.to_owned(),
             searches: Default::default(),
         }
         .into(),

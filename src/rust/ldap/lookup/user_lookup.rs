@@ -59,14 +59,14 @@ impl UserLookup {
 
     pub(crate) async fn record_missing(&self, name: &str) {
         trace!("caching user miss");
-        self.cache.insert(name.to_string(), None).await;
+        self.cache.insert(name.to_owned(), None).await;
     }
 
     pub(crate) async fn map_to_user(&self, name: &str, search_entry: SearchEntry) -> User {
         let mut result = User {
-            name: name.to_string(),
+            name: name.to_owned(),
             password: Password::Ldap {
-                name: self.ldap_name.to_string(),
+                name: self.ldap_name.to_owned(),
             },
             allowed_scopes: Default::default(),
             attributes: HashMap::default(),
@@ -78,7 +78,7 @@ impl UserLookup {
 
         result
             .attributes
-            .insert("dn".to_string(), search_entry.dn.clone().into());
+            .insert("dn".to_owned(), search_entry.dn.clone().into());
         result.attributes.extend(
             search_entry
                 .attrs
@@ -95,7 +95,7 @@ impl UserLookup {
 
         trace!("caching user");
         self.cache
-            .insert(name.to_string(), Some((search_entry.dn, result.clone())))
+            .insert(name.to_owned(), Some((search_entry.dn, result.clone())))
             .await;
         result
     }
@@ -112,9 +112,9 @@ impl AttributeMapping<User> for UserAllowedScopesMapping {
                 if let Some((client_id, scope)) = value.split_once(' ') {
                     let scopes_of_client = entity
                         .allowed_scopes
-                        .entry(client_id.to_string())
+                        .entry(client_id.to_owned())
                         .or_default();
-                    scopes_of_client.insert(scope.to_string());
+                    scopes_of_client.insert(scope.to_owned());
                 }
             }
         }

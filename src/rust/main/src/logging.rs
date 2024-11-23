@@ -35,7 +35,7 @@ pub fn initialise_from_verbosity(verbosity_level: u8) -> (FilterHandle, FormatHa
         1 => "debug",
         _ => "trace",
     }
-    .to_string();
+    .to_owned();
 
     initialise_with_config(&Log {
         format: Format::Full,

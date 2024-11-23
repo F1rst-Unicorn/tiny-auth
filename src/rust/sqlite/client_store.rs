@@ -49,7 +49,7 @@ impl ClientStore for SqliteStore {
         let allowed_scopes = load_allowed_client_scopes(&mut transaction, client_id).await?;
 
         let mut client = Client {
-            client_id: key.to_string(),
+            client_id: key.to_owned(),
             client_type: self
                 .map_client_type(&client_record, &mut transaction)
                 .await?,

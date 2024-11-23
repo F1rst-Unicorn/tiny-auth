@@ -228,7 +228,7 @@ pub async fn post(
         .with_headers(HttpResponse::Ok())
         .json(Response {
             access_token,
-            token_type: "bearer".to_string(),
+            token_type: "bearer".to_owned(),
             expires_in: Some(60),
             refresh_token,
             scope: Some(
@@ -326,8 +326,8 @@ mod tests {
     async fn missing_grant_type_is_rejected() {
         let req = TestRequest::post().to_http_request();
         let form = Form(Request {
-            code: Some("fdsa".to_string()),
-            redirect_uri: Some("fdsa".to_string()),
+            code: Some("fdsa".to_owned()),
+            redirect_uri: Some("fdsa".to_owned()),
             ..Request::default()
         });
 

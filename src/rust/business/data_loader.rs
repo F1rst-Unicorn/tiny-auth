@@ -87,14 +87,14 @@ fn load_with_root_data(
     id: i32,
     kind: &str,
 ) -> Value {
-    let pointer = match ("/".to_string() + kind).try_into() {
+    let pointer = match ("/".to_owned() + kind).try_into() {
         Ok(v) => v,
         Err(e) => {
             error!(%e, "static json pointer is not valid. Please report a bug");
             return Value::Null;
         }
     };
-    data_loaders.push(DataLoader::new(kind.to_string(), pointer, ToOne));
+    data_loaders.push(DataLoader::new(kind.to_owned(), pointer, ToOne));
     loaded_data.push(LoadedData::new([(id, root)], []));
     load(data_loaders, loaded_data)
 }
@@ -235,7 +235,7 @@ fn nest_into(destination: &mut Value, value_to_nest: Value, location: JsonPointe
                 let mut target = Value::Null;
                 nest_into(&mut target, value_to_nest, location.pop_first());
                 let mut object = Map::new();
-                object.insert(current_step.to_string(), target);
+                object.insert(current_step.to_owned(), target);
                 object.into()
             }
         }
@@ -250,7 +250,7 @@ fn nest_into(destination: &mut Value, value_to_nest: Value, location: JsonPointe
             } else {
                 let mut value = Value::Null;
                 nest_into(&mut value, value_to_nest, location.pop_first());
-                object.insert(current_step.to_string(), value);
+                object.insert(current_step.to_owned(), value);
                 object.into()
             }
         }

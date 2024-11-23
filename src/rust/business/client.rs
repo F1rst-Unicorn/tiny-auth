@@ -73,7 +73,7 @@ impl Client {
     }
 
     pub fn is_redirect_uri_valid(&self, uri: &str) -> bool {
-        self.redirect_uris.contains(&uri.to_string())
+        self.redirect_uris.contains(&uri.to_owned())
     }
 
     pub fn merge(mut self, mut other: Self) -> Self {

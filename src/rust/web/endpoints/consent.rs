@@ -239,11 +239,11 @@ async fn process_skipping_csrf(
         .and_then(|v| response_parameters.insert("expires_in", v.num_seconds().to_string()));
     response
         .expiration
-        .and_then(|_| response_parameters.insert("token_type", "bearer".to_string()));
+        .and_then(|_| response_parameters.insert("token_type", "bearer".to_owned()));
     first_request
         .state
         .as_ref()
-        .and_then(|v| response_parameters.insert("state", v.to_string()));
+        .and_then(|v| response_parameters.insert("state", v.to_owned()));
 
     if first_request.encode_redirect_to_fragment {
         let fragment = serde_urlencoded::to_string(response_parameters).unwrap_or_else(|e| {
@@ -374,22 +374,22 @@ mod tests {
         let req = TestRequest::get().to_http_request();
         let session = req.get_session();
         let first_request = authorize::Request {
-            client_id: Some(PUBLIC_CLIENT.to_string()),
-            redirect_uri: Some("http://localhost/".to_string()),
-            state: Some("state".to_string()),
-            response_type: Some("code".to_string()),
-            scope: Some("openid".to_string()),
+            client_id: Some(PUBLIC_CLIENT.to_owned()),
+            redirect_uri: Some("http://localhost/".to_owned()),
+            state: Some("state".to_owned()),
+            response_type: Some("code".to_owned()),
+            scope: Some("openid".to_owned()),
             ..authorize::Request::default()
         };
         session
             .insert(
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
-                    client_id: PUBLIC_CLIENT.to_string(),
+                    client_id: PUBLIC_CLIENT.to_owned(),
                     redirect_uri: first_request.redirect_uri.unwrap().clone(),
                     state: first_request.state.clone(),
                     response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
-                    scopes: vec!["openid".to_string()],
+                    scopes: vec!["openid".to_owned()],
                     ..AuthorizeRequestState::default()
                 },
             )
@@ -479,22 +479,22 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let first_request = authorize::Request {
-            client_id: Some(PUBLIC_CLIENT.to_string()),
-            redirect_uri: Some("http://localhost/".to_string()),
-            state: Some("state".to_string()),
-            response_type: Some("code".to_string()),
-            scope: Some("".to_string()),
+            client_id: Some(PUBLIC_CLIENT.to_owned()),
+            redirect_uri: Some("http://localhost/".to_owned()),
+            state: Some("state".to_owned()),
+            response_type: Some("code".to_owned()),
+            scope: Some("".to_owned()),
             ..authorize::Request::default()
         };
         session
             .insert(
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
-                    client_id: PUBLIC_CLIENT.to_string(),
+                    client_id: PUBLIC_CLIENT.to_owned(),
                     redirect_uri: first_request.redirect_uri.clone().unwrap(),
                     state: first_request.state.clone(),
                     response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
-                    scopes: vec!["openid".to_string()],
+                    scopes: vec!["openid".to_owned()],
                     ..AuthorizeRequestState::default()
                 },
             )
@@ -543,25 +543,25 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let first_request = authorize::Request {
-            client_id: Some(PUBLIC_CLIENT.to_string()),
-            redirect_uri: Some("http://localhost/".to_string()),
-            state: Some("state".to_string()),
-            response_type: Some("id_token code".to_string()),
-            scope: Some("".to_string()),
+            client_id: Some(PUBLIC_CLIENT.to_owned()),
+            redirect_uri: Some("http://localhost/".to_owned()),
+            state: Some("state".to_owned()),
+            response_type: Some("id_token code".to_owned()),
+            scope: Some("".to_owned()),
             ..authorize::Request::default()
         };
         session
             .insert(
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
-                    client_id: PUBLIC_CLIENT.to_string(),
+                    client_id: PUBLIC_CLIENT.to_owned(),
                     redirect_uri: first_request.redirect_uri.clone().unwrap(),
                     state: first_request.state.clone(),
                     response_types: vec![
                         ResponseType::OAuth2(oauth2::ResponseType::Code),
                         ResponseType::Oidc(oidc::OidcResponseType::IdToken),
                     ],
-                    scopes: vec!["openid".to_string()],
+                    scopes: vec!["openid".to_owned()],
                     encode_redirect_to_fragment: true,
                     ..AuthorizeRequestState::default()
                 },
@@ -601,7 +601,7 @@ mod tests {
         let response_parameters =
             serde_urlencoded::from_str::<HashMap<String, String>>(fragment).unwrap();
 
-        assert_eq!(Some(&"state".to_string()), response_parameters.get("state"));
+        assert_eq!(Some(&"state".to_owned()), response_parameters.get("state"));
         assert!(!response_parameters.get("code").unwrap().is_empty());
         assert!(!response_parameters.get("id_token").unwrap().is_empty());
     }
