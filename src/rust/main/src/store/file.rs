@@ -204,7 +204,7 @@ impl<T: for<'a> Deserialize<'a> + Send + DataExt + 'static + Sync> FileStore<T> 
             trace!(path = %path.display(), own_path = %&self.base.display(), "path doesn't match");
             return None;
         }
-        let read_objects = read_object(self.base.to_string_lossy().as_ref(), T::validate)?;
+        let read_objects = read_objects(self.base.to_string_lossy().as_ref(), T::validate)?;
         let mut objects = self.data.write().await;
         objects.clear();
         read_objects
@@ -263,9 +263,6 @@ impl DataExt for Client {
             return None;
         }
 
-        if !client.are_all_redirect_uris_valid() {
-            return None;
-        }
         Some(client)
     }
 
@@ -324,7 +321,7 @@ pub enum ReloadEvent {
 }
 
 #[instrument(name = "iterate_directory", skip(transformer))]
-fn read_object<O, T>(base: &str, transformer: T) -> Option<Vec<O>>
+fn read_objects<O, T>(base: &str, transformer: T) -> Option<Vec<O>>
 where
     O: for<'a> Deserialize<'a>,
     T: Fn(O, &Path) -> Option<O>,

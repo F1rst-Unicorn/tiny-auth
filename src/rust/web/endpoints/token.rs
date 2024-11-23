@@ -34,6 +34,7 @@ use tiny_auth_business::serde::deserialise_empty_as_none;
 use tiny_auth_business::token::{EncodedAccessToken, EncodedIdToken, EncodedRefreshToken};
 use tiny_auth_business::token_endpoint::Error;
 use tracing::instrument;
+use url::Url;
 
 #[derive(Deserialize, Default)]
 pub struct Request {
@@ -44,8 +45,7 @@ pub struct Request {
     code: Option<String>,
 
     #[serde(default)]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    redirect_uri: Option<String>,
+    redirect_uri: Option<Url>,
 
     #[serde(default)]
     #[serde(deserialize_with = "deserialise_empty_as_none")]
@@ -327,7 +327,7 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let form = Form(Request {
             code: Some("fdsa".to_owned()),
-            redirect_uri: Some("fdsa".to_owned()),
+            redirect_uri: Some(Url::parse("http://localhost/client").unwrap()),
             ..Request::default()
         });
 

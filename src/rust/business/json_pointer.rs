@@ -14,6 +14,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use serde_derive::Deserialize;
 use serde_json::{Map, Value};
 
 const ENCODED_TILDE: &str = "~0";
@@ -36,7 +37,8 @@ impl TryFrom<&str> for PastLastArrayElement {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize)]
+#[serde(try_from = "String")]
 pub struct JsonPointer {
     tokens: Vec<String>,
 }

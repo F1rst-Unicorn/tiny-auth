@@ -49,7 +49,7 @@ pub struct Client {
     #[serde(with = "serde_yaml::with::singleton_map")]
     pub client_type: ClientType,
 
-    pub redirect_uris: Vec<String>,
+    pub redirect_uris: Vec<Url>,
 
     #[serde(default)]
     pub allowed_scopes: BTreeSet<String>,
@@ -59,21 +59,8 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn are_all_redirect_uris_valid(&self) -> bool {
-        for url in &self.redirect_uris {
-            if let Err(e) = Url::parse(url) {
-                error!(
-                    "Client '{}' has invalid redirect_uri {}: {}",
-                    self.client_id, url, e
-                );
-                return false;
-            }
-        }
-        true
-    }
-
-    pub fn is_redirect_uri_valid(&self, uri: &str) -> bool {
-        self.redirect_uris.contains(&uri.to_owned())
+    pub fn is_redirect_uri_valid(&self, uri: &Url) -> bool {
+        self.redirect_uris.contains(uri)
     }
 
     pub fn merge(mut self, mut other: Self) -> Self {

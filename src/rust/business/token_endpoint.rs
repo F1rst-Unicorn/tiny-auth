@@ -51,6 +51,7 @@ use std::iter::FromIterator;
 use std::sync::Arc;
 use tracing::{debug, instrument, Level, Span};
 use tracing::{info, warn};
+use url::Url;
 
 const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
@@ -87,7 +88,7 @@ pub struct Request {
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
     pub code: Option<String>,
-    pub redirect_uri: Option<String>,
+    pub redirect_uri: Option<Url>,
     pub scope: Option<String>,
     pub username: Option<String>,
     pub password: Option<String>,
@@ -283,8 +284,8 @@ impl Handler {
             .ok_or(Error::MissingRedirectUri)?;
         if &record.redirect_uri != redirect_uri_from_request {
             debug!(
-                expected = record.redirect_uri,
-                actual = request.redirect_uri,
+                expected = %record.redirect_uri,
+                actual = %redirect_uri_from_request,
                 "redirect_uri is wrong"
             );
             return Err(Error::InvalidAuthorizationCode);
@@ -756,7 +757,7 @@ mod tests {
     async fn missing_code_is_rejected() {
         let request = Request {
             grant_type: GrantType::AuthorizationCode,
-            redirect_uri: Some("fdsa".to_owned()),
+            redirect_uri: Some(Url::parse("http://localhost/client").unwrap()),
             ..Request::default()
         };
 
@@ -770,7 +771,7 @@ mod tests {
         let request = Request {
             grant_type: GrantType::AuthorizationCode,
             code: Some("fdsa".to_owned()),
-            redirect_uri: Some("fdsa".to_owned()),
+            redirect_uri: Some(Url::parse("http://localhost/client").unwrap()),
             ..Request::default()
         };
 
@@ -784,7 +785,7 @@ mod tests {
         let request = Request {
             grant_type: GrantType::AuthorizationCode,
             code: Some("fdsa".to_owned()),
-            redirect_uri: Some("fdsa".to_owned()),
+            redirect_uri: Some(Url::parse("http://localhost/client").unwrap()),
             client_id: Some(UNKNOWN_CLIENT_ID.to_owned()),
             ..Request::default()
         };
@@ -799,7 +800,7 @@ mod tests {
         let request = Request {
             grant_type: GrantType::AuthorizationCode,
             code: Some("fdsa".to_owned()),
-            redirect_uri: Some("fdsa".to_owned()),
+            redirect_uri: Some(Url::parse("http://localhost/client").unwrap()),
             client_id: Some(PUBLIC_CLIENT.to_owned()),
             ..Request::default()
         };
@@ -811,7 +812,7 @@ mod tests {
 
     #[test(tokio::test)]
     async fn wrong_redirect_uri_is_rejected() {
-        let redirect_uri = "fdsa".to_owned();
+        let redirect_uri = Url::parse("http://localhost/client").unwrap();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
             .get_authorization_code(AuthorizationCodeRequest {
@@ -843,7 +844,7 @@ mod tests {
 
     #[test(tokio::test)]
     async fn expired_code_is_rejected() {
-        let redirect_uri = "fdsa".to_owned();
+        let redirect_uri = Url::parse("http://localhost/client").unwrap();
         let auth_code_store = build_test_auth_code_store();
         let creation_time = Local::now() - Duration::minutes(2 * AUTH_CODE_LIFE_TIME);
         let auth_code = auth_code_store
@@ -876,7 +877,7 @@ mod tests {
 
     #[test(tokio::test)]
     async fn valid_token_is_issued() {
-        let redirect_uri = "fdsa".to_owned();
+        let redirect_uri = Url::parse("http://localhost/client").unwrap();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
             .get_authorization_code(AuthorizationCodeRequest {
@@ -913,7 +914,7 @@ mod tests {
 
     #[test(tokio::test)]
     async fn confidential_client_without_basic_auth_is_rejected() {
-        let redirect_uri = "fdsa".to_owned();
+        let redirect_uri = Url::parse("http://localhost/client").unwrap();
         let request = Request {
             grant_type: GrantType::AuthorizationCode,
             code: Some("fdsa".to_owned()),
@@ -929,7 +930,7 @@ mod tests {
 
     #[test(tokio::test)]
     async fn issue_valid_token_for_correct_password() {
-        let redirect_uri = "fdsa".to_owned();
+        let redirect_uri = Url::parse("http://localhost/client").unwrap();
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
             .get_authorization_code(AuthorizationCodeRequest {

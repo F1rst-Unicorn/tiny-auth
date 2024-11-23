@@ -28,6 +28,7 @@ use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::util::wrap_err;
 use tracing::{instrument, warn};
+use url::Url;
 
 #[async_trait]
 impl ClientStore for SqliteStore {
@@ -124,10 +125,19 @@ async fn load_allowed_client_scopes(
 async fn load_redirect_uris(
     transaction: &mut Transaction<'_>,
     client_id: i32,
-) -> Result<Vec<String>, ClientError> {
+) -> Result<Vec<Url>, ClientError> {
     let redirect_uris = query_file_scalar!("queries/get-client-redirect-uris.sql", client_id)
         .fetch_all(&mut **transaction)
         .await
-        .map_err(wrap_err)?;
+        .map_err(wrap_err)?
+        .into_iter()
+        .filter_map(|v| {
+            Url::parse(v.as_str())
+                .inspect_err(|e| {
+                    warn!(%e, redirect_uri = %v, "invalid redirect_uri");
+                })
+                .ok()
+        })
+        .collect();
     Ok(redirect_uris)
 }

@@ -32,6 +32,7 @@ use std::error::Error as StdError;
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, instrument, Level};
+use url::Url;
 
 #[async_trait]
 pub trait UserStore: Send + Sync {
@@ -223,7 +224,7 @@ pub struct AuthorizationCodeRequest<'a> {
 
     pub user: &'a str,
 
-    pub redirect_uri: &'a str,
+    pub redirect_uri: &'a Url,
 
     pub scope: &'a str,
 
@@ -238,7 +239,7 @@ pub struct AuthorizationCodeRequest<'a> {
 
 #[derive(Debug)]
 pub struct AuthorizationCodeResponse {
-    pub redirect_uri: String,
+    pub redirect_uri: Url,
 
     pub stored_duration: Duration,
 
@@ -297,18 +298,18 @@ pub trait AuthorizationCodeStore: Send + Sync {
 pub mod test_fixtures {
     use super::*;
 
-    use std::cell::RefCell;
-    use std::collections::BTreeSet;
-    use std::collections::HashMap;
-    use std::iter::FromIterator;
-    use std::sync::Arc;
-
     use crate::client::{Client, Error};
     use crate::oauth2::ClientType;
     use crate::password::Password;
     use crate::store::AuthCodeValidationError::NotFound;
     use crate::token::TokenValidator;
     use crate::user::User;
+    use std::cell::RefCell;
+    use std::collections::BTreeSet;
+    use std::collections::HashMap;
+    use std::iter::FromIterator;
+    use std::sync::Arc;
+    use url::Url;
 
     pub const UNKNOWN_USER: &str = "unknown_user";
     pub const USER: &str = "user1";
@@ -351,21 +352,24 @@ pub mod test_fixtures {
                         password: Password::Plain("client1".to_owned()),
                         public_key: None,
                     },
-                    redirect_uris: vec!["http://localhost/client1".to_owned()],
+                    #[allow(clippy::unwrap_used)] // test code
+                    redirect_uris: vec![Url::parse("http://localhost/client1").unwrap()],
                     allowed_scopes: BTreeSet::from_iter(vec!["email".to_owned()]),
                     attributes: HashMap::new(),
                 }),
                 "client2" => Ok(Client {
                     client_id: key.to_owned(),
                     client_type: ClientType::Public,
-                    redirect_uris: vec!["http://localhost/client2".to_owned()],
+                    #[allow(clippy::unwrap_used)] // test code
+                    redirect_uris: vec![Url::parse("http://localhost/client2").unwrap()],
                     allowed_scopes: BTreeSet::from_iter(vec!["email".to_owned()]),
                     attributes: HashMap::new(),
                 }),
                 "tiny-auth-frontend" => Ok(Client {
                     client_id: key.to_owned(),
                     client_type: ClientType::Public,
-                    redirect_uris: vec!["http://localhost/client2".to_owned()],
+                    #[allow(clippy::unwrap_used)] // test code
+                    redirect_uris: vec![Url::parse("http://localhost/client2").unwrap()],
                     allowed_scopes: BTreeSet::from_iter(vec!["email".to_owned()]),
                     attributes: HashMap::new(),
                 }),
@@ -399,7 +403,7 @@ pub mod test_fixtures {
 
     type AuthCodeStoreKey = (String, String);
     type AuthCodeStoreValue = (
-        String,
+        Url,
         String,
         String,
         DateTime<Local>,

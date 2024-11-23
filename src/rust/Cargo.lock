@@ -4016,6 +4016,7 @@ dependencies = [
  "tiny_auth_business",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]

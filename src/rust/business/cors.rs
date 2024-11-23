@@ -15,25 +15,27 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 use tracing::debug;
+use url::Url;
 
 pub trait CorsLister: Send + Sync {
     fn is_cors_allowed(&self, domain: &str) -> bool;
 }
 
 struct CorsListerImpl {
-    approved_domains: Vec<String>,
+    approved_domains: Vec<Url>,
 }
 
 impl CorsLister for CorsListerImpl {
     fn is_cors_allowed(&self, domain: &str) -> bool {
         debug!(domain, "cors check");
-        self.approved_domains.iter().any(|v| v == domain)
+        self.approved_domains.iter().any(|v| v.as_str() == domain)
     }
 }
 
 pub mod inject {
     use super::*;
-    pub fn cors_lister(approved_domains: Vec<String>) -> impl CorsLister {
+    use url::Url;
+    pub fn cors_lister(approved_domains: Vec<Url>) -> impl CorsLister {
         CorsListerImpl { approved_domains }
     }
 }

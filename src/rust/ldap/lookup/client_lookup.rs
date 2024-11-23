@@ -165,15 +165,15 @@ impl AttributeMapping<Client> for ClientRedirectUriMapping {
     fn map(&self, mut entity: Client, search_entry: &SearchEntry) -> Client {
         if let Some(attributes) = search_entry.attrs.get(&self.attribute) {
             for url in attributes {
-                if let Err(e) = Url::parse(url) {
-                    error!(
-                        redirect_uri = %url, %e,
-                        "invalid redirect_uri which will be ignored",
-                    );
-                    continue;
+                match Url::parse(url) {
+                    Err(e) => {
+                        error!(
+                            redirect_uri = %url, %e,
+                            "invalid redirect_uri which will be ignored",
+                        );
+                    }
+                    Ok(v) => entity.redirect_uris.push(v),
                 }
-
-                entity.redirect_uris.push(url.clone());
             }
         }
         entity

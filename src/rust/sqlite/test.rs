@@ -34,6 +34,7 @@ use tiny_auth_business::store::{
     UserStore, ValidationRequest,
 };
 use tiny_auth_business::template::test_fixtures::TestTemplater;
+use url::Url;
 
 #[test(tokio::test)]
 async fn connecting_works() {
@@ -42,10 +43,11 @@ async fn connecting_works() {
 
 #[test(tokio::test)]
 async fn auth_code_storing_works() {
+    let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
     let request = AuthorizationCodeRequest {
         client_id: "tiny-auth-frontend",
         user: "john",
-        redirect_uri: "http://localhost:8088/oidc-login-redirect",
+        redirect_uri: &redirect_uri,
         scope: "openid",
         insertion_time: Local::now(),
         authentication_time: Local::now(),
@@ -66,7 +68,7 @@ async fn auth_code_storing_works() {
 
     assert!(response.is_ok());
     let response = response.unwrap();
-    assert_eq!(request.redirect_uri, response.redirect_uri);
+    assert_eq!(request.redirect_uri, &response.redirect_uri);
     assert_eq!(delta, response.stored_duration);
     assert_eq!(request.user, response.username);
     assert_eq!(request.scope, response.scopes);
@@ -77,10 +79,11 @@ async fn auth_code_storing_works() {
 
 #[test(tokio::test)]
 async fn auth_code_can_be_used_only_once() {
+    let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
     let request = AuthorizationCodeRequest {
         client_id: "tiny-auth-frontend",
         user: "john",
-        redirect_uri: "http://localhost:8088/oidc-login-redirect",
+        redirect_uri: &redirect_uri,
         scope: "openid",
         insertion_time: Local::now(),
         authentication_time: Local::now(),
@@ -112,10 +115,11 @@ async fn auth_code_can_be_used_only_once() {
 
 #[test(tokio::test)]
 async fn expired_auth_code_is_cleared() {
+    let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
     let request = AuthorizationCodeRequest {
         client_id: "tiny-auth-frontend",
         user: "john",
-        redirect_uri: "http://localhost:8088/oidc-login-redirect",
+        redirect_uri: &redirect_uri,
         scope: "openid",
         insertion_time: Local::now(),
         authentication_time: Local::now(),
@@ -144,10 +148,11 @@ async fn expired_auth_code_is_cleared() {
 
 #[test(tokio::test)]
 async fn non_expired_auth_code_is_retained() {
+    let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
     let request = AuthorizationCodeRequest {
         client_id: "tiny-auth-frontend",
         user: "john",
-        redirect_uri: "http://localhost:8088/oidc-login-redirect",
+        redirect_uri: &redirect_uri,
         scope: "openid",
         insertion_time: Local::now(),
         authentication_time: Local::now(),
@@ -225,14 +230,14 @@ async fn getting_client_works() {
     );
     assert_eq!(
         vec![
-            "http://localhost:8088/oidc-login-redirect".to_owned(),
-            "http://localhost:8088/oidc-login-redirect-silent".to_owned(),
-            "http://localhost:5173/oidc-login-redirect".to_owned(),
-            "http://localhost:5173/oidc-login-redirect-silent".to_owned(),
-            "http://localhost:34344/oidc/oidc-login-redirect".to_owned(),
-            "http://localhost:34344/oidc/oidc-login-redirect-silent".to_owned(),
-            "https://localhost:34344/oidc/oidc-login-redirect".to_owned(),
-            "https://localhost:34344/oidc/oidc-login-redirect-silent".to_owned(),
+            Url::parse("http://localhost:8088/oidc-login-redirect").unwrap(),
+            Url::parse("http://localhost:8088/oidc-login-redirect-silent").unwrap(),
+            Url::parse("http://localhost:5173/oidc-login-redirect").unwrap(),
+            Url::parse("http://localhost:5173/oidc-login-redirect-silent").unwrap(),
+            Url::parse("http://localhost:34344/oidc/oidc-login-redirect").unwrap(),
+            Url::parse("http://localhost:34344/oidc/oidc-login-redirect-silent").unwrap(),
+            Url::parse("https://localhost:34344/oidc/oidc-login-redirect").unwrap(),
+            Url::parse("https://localhost:34344/oidc/oidc-login-redirect-silent").unwrap(),
         ],
         actual.redirect_uris
     );

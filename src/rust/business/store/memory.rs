@@ -30,6 +30,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time;
 use tracing::{debug, instrument, trace, Level};
+use url::Url;
 
 #[derive(PartialEq, Eq, Hash)]
 struct AuthCodeKey {
@@ -39,7 +40,7 @@ struct AuthCodeKey {
 }
 
 struct AuthCodeValue {
-    redirect_uri: String,
+    redirect_uri: Url,
 
     user: String,
 
@@ -169,11 +170,12 @@ mod tests {
         let uut = MemoryAuthorizationCodeStore::default();
         let date = Local::now();
         let duration = Duration::minutes(1);
+        let redirect_uri = Url::parse("http://localhost/client").unwrap();
         let auth_code = uut
             .get_authorization_code(AuthorizationCodeRequest {
                 client_id: "client",
                 user: "user",
-                redirect_uri: "redirect_uri",
+                redirect_uri: &redirect_uri,
                 scope: "",
                 insertion_time: date,
                 authentication_time: date,
@@ -193,7 +195,7 @@ mod tests {
 
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert_eq!("redirect_uri", &output.redirect_uri);
+        assert_eq!(&redirect_uri, &output.redirect_uri);
         assert_eq!("user", &output.username);
         assert_eq!(duration, output.stored_duration);
         assert_eq!("", output.scopes);
@@ -204,11 +206,12 @@ mod tests {
         let uut = MemoryAuthorizationCodeStore::default();
         let date = Local::now();
         let duration = Duration::minutes(1);
+        let redirect_uri = Url::parse("http://localhost/client").unwrap();
         let auth_code = uut
             .get_authorization_code(AuthorizationCodeRequest {
                 client_id: "client",
                 user: "user",
-                redirect_uri: "redirect_uri",
+                redirect_uri: &redirect_uri,
                 scope: "",
                 insertion_time: date,
                 authentication_time: date,
@@ -237,11 +240,12 @@ mod tests {
         let uut = MemoryAuthorizationCodeStore::default();
         let date = Local::now();
         let duration = Duration::minutes(1);
+        let redirect_uri = Url::parse("http://localhost/client").unwrap();
         let auth_code = uut
             .get_authorization_code(AuthorizationCodeRequest {
                 client_id: "client",
                 user: "user",
-                redirect_uri: "redirect_uri",
+                redirect_uri: &redirect_uri,
                 scope: "",
                 insertion_time: date,
                 authentication_time: date,
@@ -263,7 +267,7 @@ mod tests {
 
         assert!(output.is_ok());
         let output = output.unwrap();
-        assert_eq!("redirect_uri", &output.redirect_uri);
+        assert_eq!(&redirect_uri, &output.redirect_uri);
         assert_eq!("user", &output.username);
         assert_eq!(duration, output.stored_duration);
         assert_eq!("", output.scopes);
@@ -274,11 +278,12 @@ mod tests {
         let uut = MemoryAuthorizationCodeStore::default();
         let date = Local::now();
         let duration = Duration::minutes(1);
+        let redirect_uri = Url::parse("http://localhost/client").unwrap();
         let auth_code = uut
             .get_authorization_code(AuthorizationCodeRequest {
                 client_id: "client",
                 user: "user",
-                redirect_uri: "redirect_uri",
+                redirect_uri: &redirect_uri,
                 scope: "",
                 insertion_time: date,
                 authentication_time: date,

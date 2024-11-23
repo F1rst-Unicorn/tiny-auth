@@ -415,7 +415,7 @@ impl<'a> Constructor<'a> {
 
                     let (sqlite_store, check) = match tiny_auth_sqlite::inject::sqlite_store(
                         name.as_str(),
-                        &(String::from("sqlite://") + base),
+                        &(String::from("sqlite://") + base.to_string_lossy().as_ref()),
                         in_place_password_store.clone(),
                         user_loaders,
                         client_loaders,
@@ -497,7 +497,7 @@ impl<'a> Constructor<'a> {
 
     fn build_template_engine(config: &'a Config) -> Result<Tera, Error> {
         Ok(load_template_engine(
-            &config.web.static_files,
+            &config.web.static_files.to_string_lossy(),
             config.web.path.as_deref().unwrap_or(""),
         )?)
     }
@@ -783,7 +783,7 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
         self.config.web.path.clone().unwrap_or_default()
     }
 
-    fn static_files(&self) -> String {
+    fn static_files(&self) -> PathBuf {
         self.config.web.static_files.clone()
     }
 

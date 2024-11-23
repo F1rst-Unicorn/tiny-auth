@@ -42,7 +42,6 @@ use tiny_auth_business::template::web::ErrorPage::ServerError;
 use tiny_auth_business::template::web::{ConsentContext, ErrorPage, WebTemplater};
 use tracing::{debug, error, instrument};
 use tracing::{span, warn, Instrument, Level};
-use url::Url;
 use web::Data;
 
 #[instrument(skip_all, name = "consent_get")]
@@ -190,13 +189,7 @@ async fn process_skipping_csrf(
         .single()
         .unwrap_or(Local::now());
 
-    let mut url = match Url::parse(&first_request.redirect_uri) {
-        Err(e) => {
-            error!(%e, "should have been validated upon registration");
-            return render_invalid_consent_request(templater);
-        }
-        Ok(v) => v,
-    };
+    let mut redirect_uri = first_request.redirect_uri.clone();
     let mut response_parameters = HashMap::new();
 
     let response = match handler
@@ -250,15 +243,17 @@ async fn process_skipping_csrf(
             error!(%e, "failed to serialize response parameters");
             String::new()
         });
-        url.set_fragment(Some(&fragment));
+        redirect_uri.set_fragment(Some(&fragment));
     } else {
-        url.query_pairs_mut().extend_pairs(response_parameters);
+        redirect_uri
+            .query_pairs_mut()
+            .extend_pairs(response_parameters);
     }
 
     session.remove(authorize::SESSION_KEY);
 
     HttpResponse::Found()
-        .insert_header(("Location", url.as_str()))
+        .insert_header(("Location", redirect_uri.as_str()))
         .finish()
 }
 
@@ -338,6 +333,7 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
     use test_log::test;
+    use tiny_auth_business::authorize_endpoint::test_fixtures::test_request;
     use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
     use tiny_auth_business::consent::test_fixtures::handler;
     use tiny_auth_business::oidc::ResponseType;
@@ -361,7 +357,7 @@ mod tests {
         let req = TestRequest::get().to_http_request();
         let session = req.get_session();
         session
-            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
 
         let resp = get(build_test_templater(), session, Data::new(handler())).await;
@@ -375,7 +371,7 @@ mod tests {
         let session = req.get_session();
         let first_request = authorize::Request {
             client_id: Some(PUBLIC_CLIENT.to_owned()),
-            redirect_uri: Some("http://localhost/".to_owned()),
+            redirect_uri: Some(Url::parse("http://localhost/client").unwrap()),
             state: Some("state".to_owned()),
             response_type: Some("code".to_owned()),
             scope: Some("openid".to_owned()),
@@ -390,7 +386,7 @@ mod tests {
                     state: first_request.state.clone(),
                     response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
                     scopes: vec!["openid".to_owned()],
-                    ..AuthorizeRequestState::default()
+                    ..test_request()
                 },
             )
             .unwrap();
@@ -451,7 +447,7 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
-            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
         session
             .insert(authenticate::AUTH_TIME_SESSION_KEY, 0)
@@ -478,9 +474,10 @@ mod tests {
     async fn successful_request_is_forwarded() {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
+        let redirect_uri = Url::parse("http://localhost/client").unwrap();
         let first_request = authorize::Request {
             client_id: Some(PUBLIC_CLIENT.to_owned()),
-            redirect_uri: Some("http://localhost/".to_owned()),
+            redirect_uri: Some(redirect_uri.clone()),
             state: Some("state".to_owned()),
             response_type: Some("code".to_owned()),
             scope: Some("".to_owned()),
@@ -495,7 +492,7 @@ mod tests {
                     state: first_request.state.clone(),
                     response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
                     scopes: vec!["openid".to_owned()],
-                    ..AuthorizeRequestState::default()
+                    ..test_request()
                 },
             )
             .unwrap();
@@ -522,12 +519,11 @@ mod tests {
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
-        let expected_url = Url::parse(first_request.redirect_uri.as_ref().unwrap()).unwrap();
 
-        assert_eq!(expected_url.scheme(), url.scheme());
-        assert_eq!(expected_url.domain(), url.domain());
-        assert_eq!(expected_url.port(), url.port());
-        assert_eq!(expected_url.path(), url.path());
+        assert_eq!(redirect_uri.scheme(), url.scheme());
+        assert_eq!(redirect_uri.domain(), url.domain());
+        assert_eq!(redirect_uri.port(), url.port());
+        assert_eq!(redirect_uri.path(), url.path());
         assert!(url
             .query_pairs()
             .into_owned()
@@ -542,9 +538,10 @@ mod tests {
     async fn successful_request_with_id_token_is_forwarded() {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
+        let redirect_uri = Url::parse("http://localhost/client").unwrap();
         let first_request = authorize::Request {
             client_id: Some(PUBLIC_CLIENT.to_owned()),
-            redirect_uri: Some("http://localhost/".to_owned()),
+            redirect_uri: Some(redirect_uri.clone()),
             state: Some("state".to_owned()),
             response_type: Some("id_token code".to_owned()),
             scope: Some("".to_owned()),
@@ -563,7 +560,7 @@ mod tests {
                     ],
                     scopes: vec!["openid".to_owned()],
                     encode_redirect_to_fragment: true,
-                    ..AuthorizeRequestState::default()
+                    ..test_request()
                 },
             )
             .unwrap();
@@ -590,12 +587,11 @@ mod tests {
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         let url = dbg!(Url::parse(url).unwrap());
-        let expected_url = Url::parse(first_request.redirect_uri.as_ref().unwrap()).unwrap();
 
-        assert_eq!(expected_url.scheme(), url.scheme());
-        assert_eq!(expected_url.domain(), url.domain());
-        assert_eq!(expected_url.port(), url.port());
-        assert_eq!(expected_url.path(), url.path());
+        assert_eq!(redirect_uri.scheme(), url.scheme());
+        assert_eq!(redirect_uri.domain(), url.domain());
+        assert_eq!(redirect_uri.port(), url.port());
+        assert_eq!(redirect_uri.path(), url.path());
 
         let fragment = url.fragment().unwrap_or("");
         let response_parameters =

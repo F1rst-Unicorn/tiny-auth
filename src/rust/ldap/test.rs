@@ -178,12 +178,12 @@ pub async fn getting_client_works(#[future] container: ContainerAsync<GenericIma
     );
     assert_eq!(
         vec![
-            "http://localhost:5173/oidc-login-redirect",
-            "http://localhost:5173/oidc-login-redirect-silent",
-            "http://localhost:34344/oidc/oidc-login-redirect",
-            "http://localhost:34344/oidc/oidc-login-redirect-silent",
-            "https://localhost:34344/oidc/oidc-login-redirect",
-            "https://localhost:34344/oidc/oidc-login-redirect-silent"
+            Url::parse("http://localhost:5173/oidc-login-redirect").unwrap(),
+            Url::parse("http://localhost:5173/oidc-login-redirect-silent").unwrap(),
+            Url::parse("http://localhost:34344/oidc/oidc-login-redirect").unwrap(),
+            Url::parse("http://localhost:34344/oidc/oidc-login-redirect-silent").unwrap(),
+            Url::parse("https://localhost:34344/oidc/oidc-login-redirect").unwrap(),
+            Url::parse("https://localhost:34344/oidc/oidc-login-redirect-silent").unwrap(),
         ],
         actual.redirect_uris
     );

@@ -21,7 +21,9 @@ use actix_web::cookie::SameSite;
 use chrono::Duration;
 use serde_derive::Deserialize;
 use std::convert::From;
+use std::path::PathBuf;
 use tiny_auth_business::data_loader::DataLoader;
+use tiny_auth_business::json_pointer::JsonPointer;
 use url::Url;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
@@ -49,7 +51,7 @@ pub struct Config {
 #[allow(clippy::large_enum_variant)]
 pub enum Store {
     #[serde(rename = "configuration file")]
-    Config { name: String, base: String },
+    Config { name: String, base: PathBuf },
 
     #[serde(rename = "ldap")]
     Ldap {
@@ -70,7 +72,7 @@ pub enum Store {
     #[serde(rename = "sqlite")]
     Sqlite {
         name: String,
-        base: String,
+        base: PathBuf,
         #[serde(rename = "use for")]
         use_for: SqliteUseFor,
     },
@@ -171,7 +173,7 @@ pub struct SqliteUseFor {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct QueryLoader {
-    pub location: String,
+    pub location: JsonPointer,
     pub name: String,
     #[serde(default)]
     pub multiplicity: Multiplicity,
@@ -184,11 +186,7 @@ impl TryFrom<&QueryLoader> for tiny_auth_sqlite::QueryLoader {
     type Error = &'static str;
     fn try_from(v: &QueryLoader) -> Result<Self, &'static str> {
         Ok(tiny_auth_sqlite::inject::query_loader(
-            DataLoader::new(
-                v.name.clone(),
-                v.location.clone().try_into()?,
-                v.multiplicity.into(),
-            ),
+            DataLoader::new(v.name.clone(), v.location.clone(), v.multiplicity.into()),
             v.query.clone(),
             v.assignment.clone(),
         ))
@@ -246,7 +244,7 @@ pub struct Web {
     pub path: Option<String>,
 
     #[serde(default)]
-    pub cors: Vec<String>,
+    pub cors: Vec<Url>,
 
     pub tls: Option<Tls>,
 
@@ -257,7 +255,7 @@ pub struct Web {
     pub shutdown_timeout: u64,
 
     #[serde(alias = "static files")]
-    pub static_files: String,
+    pub static_files: PathBuf,
 
     #[serde(default = "default_session_timeout")]
     #[serde(alias = "session timeout")]
@@ -355,12 +353,12 @@ pub struct Api {
 
 #[derive(Default, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct Tls {
-    pub key: String,
+    pub key: PathBuf,
 
-    pub certificate: String,
+    pub certificate: PathBuf,
 
     #[serde(alias = "client ca")]
-    pub client_ca: Option<String>,
+    pub client_ca: Option<PathBuf>,
 
     #[serde(default = "default_versions")]
     pub versions: Vec<TlsVersion>,
@@ -390,10 +388,10 @@ impl From<TlsVersion> for &'static rustls::SupportedProtocolVersion {
 
 #[derive(Default, Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct CryptoKey {
-    pub key: String,
+    pub key: PathBuf,
 
     #[serde(rename = "public key")]
-    pub public_key: String,
+    pub public_key: PathBuf,
 }
 
 #[derive(Default, Clone, Debug, Deserialize, PartialEq, Eq)]

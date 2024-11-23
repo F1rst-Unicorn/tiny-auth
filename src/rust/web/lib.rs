@@ -52,6 +52,7 @@ use rustls::ServerConfig;
 use rustls_pemfile::certs;
 use rustls_pemfile::pkcs8_private_keys;
 use std::io::BufReader;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::authorize_endpoint::Handler as AuthorizeHandler;
@@ -94,7 +95,7 @@ pub trait Constructor<'a> {
     fn shutdown_timeout(&self) -> u64;
     fn tls_enabled(&self) -> bool;
     fn web_path(&self) -> String;
-    fn static_files(&self) -> String;
+    fn static_files(&self) -> PathBuf;
     fn session_timeout(&self) -> i64;
     fn session_same_site_policy(&self) -> SameSite;
     fn public_domain(&self) -> String;
@@ -138,6 +139,12 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     let workers = constructor.workers();
     let web_path = constructor.web_path();
     let static_files = constructor.static_files();
+    let mut css_files = static_files.clone();
+    css_files.push("css");
+    let mut img_files = static_files.clone();
+    img_files.push("img");
+    let mut assets_files = static_files;
+    assets_files.push("assets");
     let tls_enabled = constructor.tls_enabled();
     let session_timeout = constructor.session_timeout();
     let session_same_site_policy = constructor.session_same_site_policy();
@@ -185,15 +192,15 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             .wrap(TracingLogger::default())
             .service(actix_files::Files::new(
                 &(web_path.clone() + "/static/css"),
-                static_files.clone() + "/css",
+                css_files.clone(),
             ))
             .service(actix_files::Files::new(
                 &(web_path.clone() + "/static/img"),
-                static_files.clone() + "/img",
+                img_files.clone(),
             ))
             .service(actix_files::Files::new(
                 &(web_path.clone() + "/assets"),
-                static_files.clone() + "/assets",
+                assets_files.clone(),
             ))
             .service(
                 scope(&web_path)

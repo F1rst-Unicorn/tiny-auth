@@ -29,6 +29,7 @@ use tiny_auth_business::store::{
 use tiny_auth_business::util::wrap_err;
 use tracing::{debug, error, Level};
 use tracing::{instrument, warn};
+use url::Url;
 
 #[async_trait]
 impl AuthorizationCodeStore for SqliteStore {
@@ -52,6 +53,7 @@ impl AuthorizationCodeStore for SqliteStore {
             .as_ref()
             .map(CodeChallenge::code_challenge_method)
             .map(|v| format!("{}", v));
+        let redirect_uri = request.redirect_uri.as_str();
 
         let (result, auth_code) = loop {
             let auth_code = generate_random_string(32);
@@ -60,7 +62,7 @@ impl AuthorizationCodeStore for SqliteStore {
                 "queries/insert-authorization-code.sql",
                 request.client_id,
                 request.user,
-                request.redirect_uri,
+                redirect_uri,
                 request.scope,
                 auth_code,
                 encoded_auth_time,
@@ -151,8 +153,15 @@ impl AuthorizationCodeStore for SqliteStore {
             .map(|(u, v)| unsafe { CodeChallenge::from_parts(u, v) });
 
         transaction.commit().await.map_err(wrap_err)?;
+        let redirect_uri = match Url::parse(record.redirect_uri.as_str()) {
+            Err(e) => {
+                warn!(%e, redirect_uri = %record.redirect_uri, "invalid redirect_uri");
+                return Err(AuthCodeValidationError::BackendError);
+            }
+            Ok(v) => v,
+        };
         Ok(AuthorizationCodeResponse {
-            redirect_uri: record.redirect_uri,
+            redirect_uri,
             stored_duration: request.validation_time - (insertion_time),
             username: record.name,
             scopes: record.scope,

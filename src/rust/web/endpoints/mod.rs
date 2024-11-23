@@ -116,7 +116,7 @@ fn render_json_error(
 }
 
 fn render_redirect_error(
-    redirect_uri: &str,
+    redirect_uri: &Url,
     error: ProtocolError,
     description: &str,
     state: &Option<String>,
@@ -134,19 +134,13 @@ fn render_redirect_error(
 
 fn render_redirect_error_with_base(
     mut base_response: HttpResponseBuilder,
-    redirect_uri: &str,
+    redirect_uri: &Url,
     error: ProtocolError,
     description: &str,
     state: &Option<String>,
     encode_to_fragment: bool,
 ) -> HttpResponse {
-    let mut url = match Url::parse(redirect_uri) {
-        Err(e) => {
-            error!(%e, "should have been validated upon registration");
-            return base_response.finish();
-        }
-        Ok(v) => v,
-    };
+    let mut redirect_uri = redirect_uri.to_owned();
 
     let mut response_parameters = BTreeMap::new();
     response_parameters.insert("error", format!("{}", error));
@@ -160,13 +154,15 @@ fn render_redirect_error_with_base(
             error!(%e, "failed to serialize response parameters");
             String::new()
         });
-        url.set_fragment(Some(&fragment));
+        redirect_uri.set_fragment(Some(&fragment));
     } else {
-        url.query_pairs_mut().extend_pairs(response_parameters);
+        redirect_uri
+            .query_pairs_mut()
+            .extend_pairs(response_parameters);
     }
 
     base_response
-        .append_header(("Location", url.as_str()))
+        .append_header(("Location", redirect_uri.as_str()))
         .finish()
 }
 

@@ -26,13 +26,14 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use tracing::{debug, enabled, info};
 use tracing::{instrument, Level};
+use url::Url;
 
 #[derive(Default)]
 pub struct Request {
     pub scope: Option<String>,
     pub response_type: Option<String>,
     pub client_id: Option<String>,
-    pub redirect_uri: Option<String>,
+    pub redirect_uri: Option<Url>,
     pub nonce: Option<String>,
     pub state: Option<String>,
     pub prompt: Option<String>,
@@ -45,12 +46,12 @@ pub struct Request {
 pub enum Error {
     InvalidRedirectUri,
     InvalidClientId,
-    MissingScopes { redirect_uri: String },
-    ContradictingPrompts { redirect_uri: String },
-    CodeChallengeMethodInvalid { redirect_uri: String },
-    CodeChallengeInvalid { redirect_uri: String },
-    MissingResponseType { redirect_uri: String },
-    MissingNonceForImplicitFlow { redirect_uri: String },
+    MissingScopes { redirect_uri: Url },
+    ContradictingPrompts { redirect_uri: Url },
+    CodeChallengeMethodInvalid { redirect_uri: Url },
+    CodeChallengeInvalid { redirect_uri: Url },
+    MissingResponseType { redirect_uri: Url },
+    MissingNonceForImplicitFlow { redirect_uri: Url },
     ServerError,
 }
 
@@ -59,7 +60,7 @@ pub struct Handler {
     client_store: Arc<dyn ClientStore>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AuthorizeRequestState {
     #[serde(default)]
     #[serde(skip_serializing_if = "String::is_empty")]
@@ -73,9 +74,7 @@ pub struct AuthorizeRequestState {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub prompts: Vec<Prompt>,
 
-    #[serde(default)]
-    #[serde(skip_serializing_if = "String::is_empty")]
-    pub redirect_uri: String,
+    pub redirect_uri: Url,
 
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -161,7 +160,7 @@ impl Handler {
         Ok(())
     }
 
-    fn extract_redirect_uri(redirect_uri: Option<String>) -> Result<String, Error> {
+    fn extract_redirect_uri(redirect_uri: Option<Url>) -> Result<Url, Error> {
         match redirect_uri {
             None => {
                 debug!("missing redirect_uri");
@@ -193,7 +192,7 @@ impl Handler {
 
     fn ensure_client_supports_redirect_uri(
         client: &Client,
-        redirect_uri: &str,
+        redirect_uri: &Url,
     ) -> Result<(), Error> {
         if !client.is_redirect_uri_valid(redirect_uri) {
             info!(
@@ -269,7 +268,7 @@ impl Handler {
     fn validate_pkce(
         code_challenge: Option<String>,
         code_challenge_method: Option<String>,
-        redirect_uri: &str,
+        redirect_uri: &Url,
     ) -> Result<Option<CodeChallenge>, Error> {
         match (code_challenge.as_ref(), code_challenge_method.as_ref()) {
             (None, None) => Ok(None),
@@ -308,7 +307,7 @@ impl Handler {
     fn parse_response_types(
         response_type: Option<String>,
         nonce: Option<&String>,
-        redirect_uri: &str,
+        redirect_uri: &Url,
     ) -> Result<Vec<ResponseType>, Error> {
         let response_types = match response_type.as_deref().map(Self::parse_response_type) {
             None | Some(None) => {
@@ -364,6 +363,23 @@ pub mod test_fixtures {
 
     pub fn handler() -> Handler {
         inject::handler(build_test_client_store())
+    }
+
+    pub fn test_request() -> AuthorizeRequestState {
+        AuthorizeRequestState {
+            client_id: "".to_owned(),
+            scopes: vec![],
+            prompts: vec![],
+            #[allow(clippy::unwrap_used)] // test code
+            redirect_uri: Url::parse("http://localhost/client").unwrap(),
+            state: None,
+            nonce: None,
+            max_age: None,
+            login_hint: None,
+            encode_redirect_to_fragment: false,
+            response_types: vec![],
+            code_challenge: None,
+        }
     }
 }
 

@@ -31,10 +31,11 @@ use chrono::{DateTime, Duration, Local};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use tracing::{debug, instrument, warn, Level};
+use url::Url;
 
 pub struct Request<'a> {
     pub client_id: &'a str,
-    pub redirect_uri: &'a str,
+    pub redirect_uri: &'a Url,
     pub authenticated_username: &'a str,
     pub requested_scopes: &'a [String],
     pub user_confirmed_scopes: &'a BTreeSet<String>,

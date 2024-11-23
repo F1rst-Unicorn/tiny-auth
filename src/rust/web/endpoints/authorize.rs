@@ -32,6 +32,7 @@ use tiny_auth_business::serde::deserialise_empty_as_none;
 use tiny_auth_business::template::web::{ErrorPage, WebTemplater};
 use tracing::instrument;
 use tracing::Level;
+use url::Url;
 use web::Data;
 
 pub const SESSION_KEY: &str = "a";
@@ -53,10 +54,8 @@ pub struct Request {
     #[serde(deserialize_with = "deserialise_empty_as_none")]
     pub client_id: Option<String>,
 
-    #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(deserialize_with = "deserialise_empty_as_none")]
-    pub redirect_uri: Option<String>,
+    pub redirect_uri: Option<Url>,
 
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -229,7 +228,7 @@ fn render_invalid_redirect_uri_error(templater: Data<dyn WebTemplater<()>>) -> H
 }
 
 fn return_error(
-    redirect_uri: &str,
+    redirect_uri: &Url,
     error: ProtocolError,
     description: &str,
     state: &Option<String>,
@@ -311,7 +310,7 @@ mod tests {
         let session = req.get_session();
         let query = Query(Request {
             client_id: Some(UNKNOWN_CLIENT_ID.to_owned()),
-            redirect_uri: Some("invalid".to_owned()),
+            redirect_uri: Some(Url::parse("http://localhost/client").unwrap()),
             ..Request::default()
         });
 
@@ -346,12 +345,11 @@ mod tests {
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
-        let expected_url = Url::parse(&redirect_uri).unwrap();
 
-        assert_eq!(expected_url.scheme(), url.scheme());
-        assert_eq!(expected_url.domain(), url.domain());
-        assert_eq!(expected_url.port(), url.port());
-        assert_eq!(expected_url.path(), url.path());
+        assert_eq!(redirect_uri.scheme(), url.scheme());
+        assert_eq!(redirect_uri.domain(), url.domain());
+        assert_eq!(redirect_uri.port(), url.port());
+        assert_eq!(redirect_uri.path(), url.path());
         let expected_error = format!(
             "{}",
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
@@ -394,12 +392,11 @@ mod tests {
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
-        let expected_url = Url::parse(&redirect_uri).unwrap();
 
-        assert_eq!(expected_url.scheme(), url.scheme());
-        assert_eq!(expected_url.domain(), url.domain());
-        assert_eq!(expected_url.port(), url.port());
-        assert_eq!(expected_url.path(), url.path());
+        assert_eq!(redirect_uri.scheme(), url.scheme());
+        assert_eq!(redirect_uri.domain(), url.domain());
+        assert_eq!(redirect_uri.port(), url.port());
+        assert_eq!(redirect_uri.path(), url.path());
         let expected_error = format!(
             "{}",
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
@@ -440,12 +437,11 @@ mod tests {
 
         let url = resp.headers().get("Location").unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
-        let expected_url = Url::parse(&redirect_uri).unwrap();
 
-        assert_eq!(expected_url.scheme(), url.scheme());
-        assert_eq!(expected_url.domain(), url.domain());
-        assert_eq!(expected_url.port(), url.port());
-        assert_eq!(expected_url.path(), url.path());
+        assert_eq!(redirect_uri.scheme(), url.scheme());
+        assert_eq!(redirect_uri.domain(), url.domain());
+        assert_eq!(redirect_uri.port(), url.port());
+        assert_eq!(redirect_uri.path(), url.path());
         let expected_error = format!(
             "{}",
             ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)

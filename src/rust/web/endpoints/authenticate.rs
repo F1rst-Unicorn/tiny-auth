@@ -397,6 +397,7 @@ mod tests {
     use pretty_assertions::assert_eq;
     use std::sync::Arc;
     use test_log::test;
+    use tiny_auth_business::authorize_endpoint::test_fixtures::test_request;
     use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
     use tiny_auth_business::oidc::ResponseType;
     use tiny_auth_business::store::test_fixtures::UNKNOWN_USER;
@@ -419,7 +420,7 @@ mod tests {
         let req = TestRequest::get().to_http_request();
         let session = req.get_session();
         session
-            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
 
         let resp = get(session, build_test_templater()).await;
@@ -432,7 +433,7 @@ mod tests {
         let req = TestRequest::get().to_http_request();
         let session = req.get_session();
         session
-            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
         session.insert(SESSION_KEY, "dummy").unwrap();
 
@@ -450,7 +451,7 @@ mod tests {
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
                     prompts: vec![Prompt::Login],
-                    ..Default::default()
+                    ..test_request()
                 },
             )
             .unwrap();
@@ -470,7 +471,7 @@ mod tests {
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
                     prompts: vec![Prompt::SelectAccount],
-                    ..Default::default()
+                    ..test_request()
                 },
             )
             .unwrap();
@@ -491,8 +492,8 @@ mod tests {
                 AuthorizeRequestState {
                     prompts: vec![Prompt::None],
                     response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
-                    redirect_uri: "http://localhost/public".to_owned(),
-                    ..Default::default()
+                    redirect_uri: Url::parse("http://localhost/public").unwrap(),
+                    ..test_request()
                 },
             )
             .unwrap();
@@ -511,7 +512,7 @@ mod tests {
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
                     max_age: Some(0),
-                    ..Default::default()
+                    ..test_request()
                 },
             )
             .unwrap();
@@ -574,7 +575,7 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
-            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
@@ -608,7 +609,7 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
-            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
@@ -642,7 +643,7 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
-            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
@@ -676,7 +677,7 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
-            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
@@ -710,7 +711,7 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
-            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
@@ -742,7 +743,7 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         session
-            .insert(authorize::SESSION_KEY, AuthorizeRequestState::default())
+            .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
@@ -783,9 +784,9 @@ mod tests {
             .insert(
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
-                    redirect_uri: "http://redirect_uri.example".to_owned(),
+                    redirect_uri: Url::parse("http://redirect_uri.example").unwrap(),
                     response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
-                    ..Default::default()
+                    ..test_request()
                 },
             )
             .unwrap();
