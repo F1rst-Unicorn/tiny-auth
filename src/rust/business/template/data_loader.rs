@@ -18,7 +18,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy)]
-pub struct DataLoaderContext<'a> {
+pub struct DataLoaderContext<'a, 'b> {
     pub assigned_to: &'a [i32],
-    pub loaded_data: &'a BTreeMap<String, Value>,
+    pub loaded_data: &'a BTreeMap<&'b str, Value>,
 }

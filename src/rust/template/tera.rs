@@ -26,8 +26,11 @@ use tracing::error;
 
 pub(crate) struct BindDnTemplater(pub(crate) Template);
 
-impl Templater<BindDnContext> for BindDnTemplater {
-    fn instantiate(&self, context: BindDnContext) -> Result<InstantiatedTemplate, TemplateError> {
+impl<'a> Templater<BindDnContext<'a>> for BindDnTemplater {
+    fn instantiate(
+        &self,
+        context: BindDnContext<'a>,
+    ) -> Result<InstantiatedTemplate, TemplateError> {
         let mut tera_context = Context::new();
         tera_context.insert("user", &context.user);
         let result = Tera::one_off(self.0.as_ref(), &tera_context, false).map_err(map_err)?;
@@ -37,10 +40,10 @@ impl Templater<BindDnContext> for BindDnTemplater {
 
 pub(crate) struct LdapSearchTemplater(pub(crate) Template);
 
-impl Templater<LdapSearchContext> for LdapSearchTemplater {
+impl<'a> Templater<LdapSearchContext<'a>> for LdapSearchTemplater {
     fn instantiate(
         &self,
-        context: LdapSearchContext,
+        context: LdapSearchContext<'a>,
     ) -> Result<InstantiatedTemplate, TemplateError> {
         let mut tera_context = Context::new();
         tera_context.insert("user", &context.user);
@@ -77,10 +80,10 @@ impl<'a> Templater<ScopeContext<'a>> for ScopeTemplater {
 
 pub(crate) struct DataLoaderTemplater;
 
-impl<'a> Templater<DataLoaderContext<'a>> for DataLoaderTemplater {
+impl<'a, 'b> Templater<DataLoaderContext<'a, 'b>> for DataLoaderTemplater {
     fn instantiate_by_name(
         &self,
-        context: DataLoaderContext<'a>,
+        context: DataLoaderContext<'a, 'b>,
         name: &str,
         content: &str,
     ) -> Result<InstantiatedTemplate, TemplateError> {

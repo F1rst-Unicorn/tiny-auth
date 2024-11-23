@@ -39,16 +39,16 @@ pub async fn redirect(request: HttpRequest, web_base_path: Data<WebBasePath>) ->
 
 #[instrument(skip_all, name = "webapp")]
 pub async fn get(
-    templater: Data<dyn WebTemplater<WebappRootContext>>,
+    templater: Data<dyn for<'a> WebTemplater<WebappRootContext<'a>>>,
     issuer_config: Data<IssuerConfiguration>,
     api_url: Data<ApiUrl>,
     web_base_path: Data<WebBasePath>,
 ) -> HttpResponse {
     trace!("rendering webapp");
     let context = WebappRootContext {
-        provider_url: issuer_config.issuer_url.to_owned(),
-        api_url: api_url.0.to_owned(),
-        web_base: web_base_path.0.to_owned(),
+        provider_url: issuer_config.issuer_url.as_str(),
+        api_url: api_url.0.as_str(),
+        web_base: web_base_path.0.as_str(),
     };
     return_rendered_template(templater.instantiate(context), StatusCode::OK, || {
         templater.instantiate_error_page(ErrorPage::ServerError)

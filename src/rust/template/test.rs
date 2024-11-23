@@ -23,9 +23,7 @@ use tiny_auth_business::template::ldap_search::LdapSearchContext;
 
 #[test]
 pub fn bind_dn_is_formatted() {
-    let context = BindDnContext {
-        user: "john".to_owned(),
-    };
+    let context = BindDnContext { user: "john" };
     let uut = bind_dn_templater("cn={{ user }},ou=users,dc=example,dc=org");
 
     let actual = uut.instantiate(context).unwrap();
@@ -35,9 +33,7 @@ pub fn bind_dn_is_formatted() {
 
 #[test]
 pub fn ldap_search_is_formatted() {
-    let context = LdapSearchContext {
-        user: "john".to_owned(),
-    };
+    let context = LdapSearchContext { user: "john" };
     let uut = ldap_search_templater("(uid={{ user }})");
 
     let actual = uut.instantiate(context).unwrap();

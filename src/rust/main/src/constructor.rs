@@ -884,7 +884,7 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
         Arc::new(HealthChecker(self.health_checks.clone()))
     }
 
-    fn webapp_template(&self) -> Arc<dyn WebTemplater<WebappRootContext>> {
+    fn webapp_template(&self) -> Arc<dyn for<'b> WebTemplater<WebappRootContext<'b>>> {
         tiny_auth_template::inject::webapp_templater(self.tera.clone())
     }
 

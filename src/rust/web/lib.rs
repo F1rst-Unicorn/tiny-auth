@@ -76,7 +76,7 @@ pub trait Constructor<'a> {
     fn user_info_handler(&self) -> Arc<UserInfoHandler>;
     fn discovery_handler(&self) -> Arc<DiscoveryHandler>;
     fn health_checker(&self) -> Arc<HealthChecker>;
-    fn webapp_template(&self) -> Arc<dyn WebTemplater<WebappRootContext>>;
+    fn webapp_template(&self) -> Arc<dyn for<'b> WebTemplater<WebappRootContext<'b>>>;
     fn authorize_template(&self) -> Arc<dyn WebTemplater<()>>;
     fn authenticate_template(&self) -> Arc<dyn WebTemplater<AuthenticateContext>>;
     fn consent_template(&self) -> Arc<dyn WebTemplater<ConsentContext>>;

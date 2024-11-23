@@ -39,11 +39,11 @@ pub struct QueryLoader {
 }
 
 impl QueryLoader {
-    pub(crate) async fn load_data<'a>(
+    pub(crate) async fn load_data<'a, 'b>(
         &self,
         transaction: &mut Transaction<'_>,
-        templater: Arc<dyn Templater<DataLoaderContext<'a>>>,
-        context: DataLoaderContext<'a>,
+        templater: Arc<dyn Templater<DataLoaderContext<'a, 'b>>>,
+        context: DataLoaderContext<'a, 'b>,
     ) -> Result<LoadedData, SqliteError> {
         let query = templater.instantiate_by_name(
             context,
@@ -147,7 +147,7 @@ impl QueryLoader {
 
 pub struct DataAssembler {
     pub(crate) query_loaders: Vec<QueryLoader>,
-    pub(crate) templater: Arc<dyn for<'a> Templater<DataLoaderContext<'a>>>,
+    pub(crate) templater: Arc<dyn for<'a, 'b> Templater<DataLoaderContext<'a, 'b>>>,
 }
 
 #[derive(Clone, Copy)]
@@ -175,10 +175,10 @@ impl DataAssembler {
     ) -> Result<HashMap<String, Value>, SqliteError> {
         let mut loaded_data = Vec::new();
         let mut ids: BTreeMap<&str, Vec<i32>> = BTreeMap::default();
-        let mut already_loaded_data: BTreeMap<String, Value> = BTreeMap::default();
+        let mut already_loaded_data: BTreeMap<&str, Value> = BTreeMap::default();
         let mut transitive_multiplicity = BTreeMap::default();
         ids.insert(root_type.as_ref(), vec![id]);
-        already_loaded_data.insert(root_type.as_ref().to_owned(), root.clone());
+        already_loaded_data.insert(root_type.as_ref(), root.clone());
         transitive_multiplicity.insert(root_type.as_ref(), Multiplicity::ToOne);
 
         for query_loader in &self.query_loaders {
@@ -230,7 +230,7 @@ impl DataAssembler {
         query_loader: &'a QueryLoader,
         loaded_data: &mut Vec<LoadedData>,
         ids: &mut BTreeMap<&'a str, Vec<i32>>,
-        already_loaded_data: &mut BTreeMap<String, Value>,
+        already_loaded_data: &mut BTreeMap<&'a str, Value>,
         transitive_multiplicity: &mut BTreeMap<&'a str, Multiplicity>,
         transaction: &mut Transaction<'_>,
     ) {
@@ -282,7 +282,7 @@ impl DataAssembler {
         match current_transitive_multiplicity {
             Multiplicity::ToOne => {
                 already_loaded_data.insert(
-                    query_loader.data_loader.name.clone(),
+                    query_loader.data_loader.name.as_str(),
                     single_loaded_data
                         .data
                         .first_key_value()
@@ -292,7 +292,7 @@ impl DataAssembler {
             }
             Multiplicity::ToMany => {
                 already_loaded_data.insert(
-                    query_loader.data_loader.name.clone(),
+                    query_loader.data_loader.name.as_str(),
                     single_loaded_data.data.values().cloned().collect::<Value>(),
                 );
             }

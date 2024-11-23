@@ -15,6 +15,6 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub struct BindDnContext {
-    pub user: String,
+pub struct BindDnContext<'a> {
+    pub user: &'a str,
 }

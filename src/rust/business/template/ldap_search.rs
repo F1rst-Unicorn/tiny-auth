@@ -15,6 +15,6 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub struct LdapSearchContext {
-    pub user: String,
+pub struct LdapSearchContext<'a> {
+    pub user: &'a str,
 }

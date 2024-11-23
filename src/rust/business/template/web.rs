@@ -25,10 +25,10 @@ pub trait WebTemplater<Context: Send + Sync>: Templater<Context> {
     fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate;
 }
 
-pub struct WebappRootContext {
-    pub provider_url: String,
-    pub api_url: String,
-    pub web_base: String,
+pub struct WebappRootContext<'a> {
+    pub provider_url: &'a str,
+    pub api_url: &'a str,
+    pub web_base: &'a str,
 }
 
 pub struct AuthenticateContext {

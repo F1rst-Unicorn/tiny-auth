@@ -82,7 +82,7 @@ pub async fn sqlite_store(
 
 pub fn data_assembler(
     query_loaders: impl IntoIterator<Item = QueryLoader>,
-    templater: Arc<dyn for<'a> Templater<DataLoaderContext<'a>>>,
+    templater: Arc<dyn for<'a, 'b> Templater<DataLoaderContext<'a, 'b>>>,
 ) -> DataAssembler {
     DataAssembler {
         query_loaders: query_loaders.into_iter().collect(),

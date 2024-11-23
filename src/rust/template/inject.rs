@@ -29,11 +29,11 @@ use tiny_auth_business::template::web::{
 };
 use tiny_auth_business::template::{bind_dn::BindDnContext, Templater};
 
-pub fn bind_dn_templater(template: &str) -> Arc<dyn Templater<BindDnContext>> {
+pub fn bind_dn_templater(template: &str) -> Arc<dyn for<'a> Templater<BindDnContext<'a>>> {
     Arc::new(BindDnTemplater(template.to_owned().into()))
 }
 
-pub fn ldap_search_templater(template: &str) -> Arc<dyn Templater<LdapSearchContext>> {
+pub fn ldap_search_templater(template: &str) -> Arc<dyn for<'a> Templater<LdapSearchContext<'a>>> {
     Arc::new(LdapSearchTemplater(template.to_owned().into()))
 }
 
@@ -41,11 +41,11 @@ pub fn scope_templater() -> Arc<dyn for<'a> Templater<ScopeContext<'a>>> {
     Arc::new(ScopeTemplater)
 }
 
-pub fn data_loader_templater() -> Arc<dyn for<'a> Templater<DataLoaderContext<'a>>> {
+pub fn data_loader_templater() -> Arc<dyn for<'a, 'b> Templater<DataLoaderContext<'a, 'b>>> {
     Arc::new(DataLoaderTemplater)
 }
 
-pub fn webapp_templater(tera: Arc<Tera>) -> Arc<dyn WebTemplater<WebappRootContext>> {
+pub fn webapp_templater(tera: Arc<Tera>) -> Arc<dyn for<'a> WebTemplater<WebappRootContext<'a>>> {
     Arc::new(WebappRootTemplater(tera))
 }
 

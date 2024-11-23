@@ -54,7 +54,7 @@ pub(crate) trait Authenticator {
 }
 
 pub(crate) struct SimpleBind {
-    pub(crate) bind_dn_templates: Vec<Arc<dyn Templater<BindDnContext>>>,
+    pub(crate) bind_dn_templates: Vec<Arc<dyn for<'a> Templater<BindDnContext<'a>>>>,
 }
 
 #[async_trait]
@@ -69,9 +69,7 @@ impl Authenticator for SimpleBind {
             UserRepresentation::Name(username) => {
                 for bind_template in &self.bind_dn_templates {
                     let bind_dn = bind_template
-                        .instantiate(BindDnContext {
-                            user: username.to_owned(),
-                        })
+                        .instantiate(BindDnContext { user: username })
                         .map_err(wrap_err)?;
                     if simple_bind(ldap, bind_dn.as_ref(), password)
                         .await
@@ -106,7 +104,7 @@ pub(crate) struct SearchBind {
 
 pub struct LdapSearch {
     pub base_dn: String,
-    pub search_filter: Arc<dyn Templater<LdapSearchContext>>,
+    pub search_filter: Arc<dyn for<'a> Templater<LdapSearchContext<'a>>>,
 }
 
 #[async_trait]
@@ -150,9 +148,7 @@ impl Authenticator for SearchBind {
         for search in &self.searches {
             let filter = search
                 .search_filter
-                .instantiate(LdapSearchContext {
-                    user: username.to_owned(),
-                })
+                .instantiate(LdapSearchContext { user: username })
                 .map_err(wrap_err)?;
             if let Some(value) = Self::search(ldap, username, &search, filter.as_ref()).await {
                 return value;

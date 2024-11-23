@@ -32,10 +32,10 @@ use tracing::{error, instrument, span, trace, warn, Level};
 
 pub(crate) struct WebappRootTemplater(pub(crate) Arc<Tera>);
 
-impl Templater<WebappRootContext> for WebappRootTemplater {
+impl<'a> Templater<WebappRootContext<'a>> for WebappRootTemplater {
     fn instantiate(
         &self,
-        context: WebappRootContext,
+        context: WebappRootContext<'a>,
     ) -> Result<InstantiatedTemplate, TemplateError> {
         let mut tera_context = Context::new();
         tera_context.insert("tiny_auth_provider_url", &context.provider_url);
@@ -49,7 +49,7 @@ impl Templater<WebappRootContext> for WebappRootTemplater {
     }
 }
 
-impl WebTemplater<WebappRootContext> for WebappRootTemplater {
+impl<'a> WebTemplater<WebappRootContext<'a>> for WebappRootTemplater {
     fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate {
         render_error_page(&self.0, error)
     }

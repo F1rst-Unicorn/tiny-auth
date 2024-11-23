@@ -46,7 +46,7 @@ pub fn connector(urls: &[Url], connect_timeout: Duration, starttls: bool) -> Con
 
 pub fn simple_bind_store(
     name: &str,
-    bind_dn_templates: &[Arc<dyn Templater<BindDnContext>>],
+    bind_dn_templates: &[Arc<dyn for<'a> Templater<BindDnContext<'a>>>],
     connector: Connector,
 ) -> Arc<dyn PasswordStore> {
     Arc::new(LdapStore {
