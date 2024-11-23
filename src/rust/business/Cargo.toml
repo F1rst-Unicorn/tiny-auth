@@ -8,6 +8,7 @@ license.workspace = true
 version.workspace = true
 
 [lib]
+path = "./lib.rs"
 
 [dependencies]
 chrono.workspace = true
