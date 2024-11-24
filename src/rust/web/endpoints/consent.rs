@@ -64,7 +64,11 @@ pub async fn get(
     );
     async move {
         let username = match session.get::<String>(authenticate::SESSION_KEY) {
-            Err(_) | Ok(None) => {
+            Err(e) => {
+                debug!(%e, "unsolicited consent request, missing authentication session key");
+                return render_invalid_consent_request(templater);
+            }
+            Ok(None) => {
                 debug!("unsolicited consent request, missing authentication session key");
                 return render_invalid_consent_request(templater);
             }
@@ -75,7 +79,8 @@ pub async fn get(
             .can_skip_consent_screen(&username, &first_request.client_id, &first_request.scopes)
             .await
         {
-            Err(_) => {
+            Err(e) => {
+                debug!(%e, "unsolicited consent request, missing authentication session key");
                 return render_invalid_consent_request(templater);
             }
             Ok(v) => v,
@@ -170,7 +175,11 @@ async fn process_skipping_csrf(
     first_request: &AuthorizeRequestState,
 ) -> HttpResponse {
     let username = match session.get::<String>(authenticate::SESSION_KEY) {
-        Err(_) | Ok(None) => {
+        Err(e) => {
+            debug!(%e, "unsolicited consent request");
+            return render_invalid_consent_request(templater);
+        }
+        Ok(None) => {
             debug!("unsolicited consent request");
             return render_invalid_consent_request(templater);
         }
@@ -178,7 +187,11 @@ async fn process_skipping_csrf(
     };
 
     let auth_time = match session.get::<i64>(authenticate::AUTH_TIME_SESSION_KEY) {
-        Err(_) | Ok(None) => {
+        Err(e) => {
+            debug!(%e, "unsolicited consent request");
+            return render_invalid_consent_request(templater);
+        }
+        Ok(None) => {
             debug!("unsolicited consent request");
             return render_invalid_consent_request(templater);
         }

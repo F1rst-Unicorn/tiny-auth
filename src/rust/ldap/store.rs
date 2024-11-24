@@ -32,7 +32,7 @@ use tiny_auth_business::store::{
 use tiny_auth_business::user::Error as UserError;
 use tiny_auth_business::user::User;
 use tiny_auth_business::util::wrap_err;
-use tracing::{error, instrument, warn};
+use tracing::{debug, error, instrument, warn};
 
 pub struct LdapStore {
     pub(crate) name: String,
@@ -155,7 +155,10 @@ impl LdapStore {
                     user_lookup.map_to_user(username, search_result).await,
                 ))
             }
-            Err(_) => UserRepresentation::Name(username),
+            Err(e) => {
+                debug!(%e, "user not in cache");
+                UserRepresentation::Name(username)
+            }
         }
     }
 }

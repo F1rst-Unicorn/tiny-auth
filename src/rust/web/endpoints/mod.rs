@@ -54,7 +54,11 @@ const CSRF_SESSION_KEY: &str = "c";
 
 fn parse_first_request(session: &Session) -> Option<AuthorizeRequestState> {
     match session.get::<AuthorizeRequestState>(authorize::SESSION_KEY) {
-        Err(_) | Ok(None) => {
+        Err(e) => {
+            debug!(%e, "unsolicited request, lacks authorization session key");
+            None
+        }
+        Ok(None) => {
             debug!("unsolicited request, lacks authorization session key");
             None
         }

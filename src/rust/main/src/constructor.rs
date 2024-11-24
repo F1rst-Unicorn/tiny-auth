@@ -79,7 +79,7 @@ use tiny_auth_web::endpoints::token::Handler as TokenHandler;
 use tiny_auth_web::endpoints::userinfo::Handler as UserInfoHandler;
 use tiny_auth_web::ApiUrl;
 use tokio::sync::broadcast::{channel, Sender};
-use tracing::{error, span, warn, Level};
+use tracing::{debug, error, span, warn, Level};
 
 pub struct Constructor<'a> {
     config: &'a Config,
@@ -564,13 +564,16 @@ impl<'a> Constructor<'a> {
     fn build_encoding_key(private_key: &str) -> Result<(EncodingKey, Algorithm), Error> {
         let bytes = private_key.as_bytes();
         match EncodingKey::from_rsa_pem(bytes) {
-            Err(_) => match EncodingKey::from_ec_pem(bytes) {
-                Err(e) => {
-                    error!(%e, "failed to read private token key");
-                    Err(e.into())
+            Err(e) => {
+                debug!(%e, "not an RSA key");
+                match EncodingKey::from_ec_pem(bytes) {
+                    Err(e) => {
+                        error!(%e, "failed to read private token key");
+                        Err(e.into())
+                    }
+                    Ok(key) => Ok((key, Algorithm::ES384)),
                 }
-                Ok(key) => Ok((key, Algorithm::ES384)),
-            },
+            }
             Ok(key) => Ok((key, Algorithm::PS512)),
         }
     }
@@ -598,7 +601,10 @@ impl<'a> Constructor<'a> {
         issuer_url: &str,
     ) -> Result<TokenValidator, Error> {
         let key = match DecodingKey::from_rsa_pem(public_key.as_bytes()) {
-            Err(_) => DecodingKey::from_ec_pem(public_key.as_bytes())?,
+            Err(e) => {
+                debug!(%e, "not an RSA key");
+                DecodingKey::from_ec_pem(public_key.as_bytes())?
+            }
             Ok(key) => key,
         };
 
@@ -611,7 +617,10 @@ impl<'a> Constructor<'a> {
         issuer_url: &str,
     ) -> Result<TokenValidator, Error> {
         let key = match DecodingKey::from_rsa_pem(public_key.as_bytes()) {
-            Err(_) => DecodingKey::from_ec_pem(public_key.as_bytes())?,
+            Err(e) => {
+                debug!(%e, "not an RSA key");
+                DecodingKey::from_ec_pem(public_key.as_bytes())?
+            }
             Ok(key) => key,
         };
 

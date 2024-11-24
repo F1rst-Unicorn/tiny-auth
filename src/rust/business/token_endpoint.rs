@@ -557,7 +557,7 @@ impl Handler {
         }
 
         let unsafe_assertion = match self.decode_token_insecurely::<ClientAssertion>(&assertion) {
-            Err(_) => {
+            Err(()) => {
                 return Err(Error::InvalidAuthenticationToken(
                     oauth2::ProtocolError::InvalidRequest,
                 ));

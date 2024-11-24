@@ -273,7 +273,7 @@ impl Handler {
         match (code_challenge.as_ref(), code_challenge_method.as_ref()) {
             (None, None) => Ok(None),
             (Some(challenge), Some(method)) => match CodeChallengeMethod::try_from(method) {
-                Err(_) => {
+                Err(()) => {
                     debug!(%method, "unknown code_challenge_method");
                     Err(Error::CodeChallengeMethodInvalid {
                         redirect_uri: redirect_uri.to_owned(),

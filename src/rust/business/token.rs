@@ -288,8 +288,8 @@ impl TokenCreator {
             };
 
             claim_collector = match merge(claim_collector.clone(), claims) {
-                Err(_) => {
-                    error!(
+                Err(e) => {
+                    error!(%e,
                         "Failed to merge claims for scope '{}'. Skipping scope",
                         scope.name
                     );

@@ -313,8 +313,8 @@ fn configure_tls<'a>(constructor: &impl Constructor<'a>) -> Result<ServerConfig,
         .ok_or(LoggedBeforeError)
         .and_then(|v| Ok(pkcs8_private_keys(&mut BufReader::new(v.as_bytes()))?))
     {
-        Err(_) => {
-            error!("could not read tls key file");
+        Err(e) => {
+            error!(%e, "could not read tls key file");
             return Err(LoggedBeforeError);
         }
         Ok(keys) => match keys.len() {

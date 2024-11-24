@@ -29,6 +29,7 @@ use crate::token::{
 };
 use chrono::{DateTime, Duration, Local};
 use std::collections::BTreeSet;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use tracing::{debug, instrument, warn, Level};
 use url::Url;
@@ -62,6 +63,12 @@ pub enum Error {
 }
 
 pub struct UserNotFound;
+
+impl Display for UserNotFound {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "user not found")
+    }
+}
 
 #[derive(Clone)]
 pub struct Handler {

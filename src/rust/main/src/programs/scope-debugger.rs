@@ -122,7 +122,7 @@ async fn main() {
                 .build_token_creator()
                 .build_token::<Access>(&user, &client, &[scope], 0);
             match serde_json::to_string_pretty(&token) {
-                Err(_) => error!("failed to serialize data"),
+                Err(e) => error!(%e, "failed to serialize data"),
                 Ok(v) => println!("{}", v),
             };
         }
@@ -131,7 +131,7 @@ async fn main() {
                 .build_token_creator()
                 .build_token::<Id>(&user, &client, &[scope], 0);
             match serde_json::to_string_pretty(&token) {
-                Err(_) => error!("failed to serialize data"),
+                Err(e) => error!(%e, "failed to serialize data"),
                 Ok(v) => println!("{}", v),
             };
         }
@@ -140,7 +140,7 @@ async fn main() {
                 di.build_token_creator()
                     .build_token::<Userinfo>(&user, &client, &[scope], 0);
             match serde_json::to_string_pretty(&token) {
-                Err(_) => error!("failed to serialize data"),
+                Err(e) => error!(%e, "failed to serialize data"),
                 Ok(v) => println!("{}", v),
             };
         }

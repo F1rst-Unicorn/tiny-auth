@@ -93,7 +93,11 @@ pub async fn get(
             render_login_form(session, templater)
         } else if let Some(max_age) = first_request.max_age {
             let auth_time = match session.get::<i64>(AUTH_TIME_SESSION_KEY) {
-                Err(_) | Ok(None) => {
+                Err(e) => {
+                    debug!(%e, "unsolicited authentication request, missing auth_time but username was present");
+                    return render_invalid_authentication_request(templater);
+                }
+                Ok(None) => {
                     debug!("unsolicited authentication request, missing auth_time but username was present");
                     return render_invalid_authentication_request(templater);
                 }
@@ -169,8 +173,8 @@ pub async fn post(
     let flow_1 = flow.clone();
     let flow_guard = flow_1.enter();
     let tries_left = match session.get::<i32>(TRIES_LEFT_SESSION_KEY) {
-        Err(_) => {
-            debug!("unsolicited authentication request");
+        Err(e) => {
+            debug!(%e, "unsolicited authentication request");
             return render_invalid_authentication_request(templater);
         }
         Ok(None) => 2,
