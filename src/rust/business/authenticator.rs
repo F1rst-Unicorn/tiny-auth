@@ -125,21 +125,47 @@ pub mod inject {
     }
 }
 
+#[cfg(test)]
+pub mod test {
+    use crate::password::test_fixtures::in_place_password_store;
+    use crate::store::test_fixtures::{build_test_user_store, USER};
+    use crate::store::{PasswordStore, UserStore};
+    use test_log::test;
+
+    #[test(tokio::test)]
+    async fn own_constructed_password_is_verifiable() {
+        let uut = super::test_fixtures::authenticator();
+        let user = build_test_user_store().get(USER).await.unwrap();
+        let new_password = "new-password";
+
+        let actual = uut
+            .construct_password(user.clone(), new_password)
+            .await
+            .unwrap();
+
+        assert!(in_place_password_store()
+            .verify(user.name.as_str(), &actual, new_password)
+            .await
+            .unwrap_or(false));
+    }
+}
+
 pub mod test_fixtures {
     use crate::authenticator::Authenticator;
     use crate::password::inject::{dispatching_password_store, in_place_password_store};
+    use crate::password::test_fixtures::PEPPER;
     use crate::store::test_fixtures::build_test_user_store;
     use crate::test_fixtures::build_test_rate_limiter;
     use std::sync::Arc;
 
     pub fn authenticator() -> Authenticator {
-        Authenticator {
-            user_store: build_test_user_store(),
-            rate_limiter: Arc::new(build_test_rate_limiter()),
-            password_store: Arc::new(dispatching_password_store(
+        super::inject::authenticator(
+            build_test_user_store(),
+            Arc::new(build_test_rate_limiter()),
+            Arc::new(dispatching_password_store(
                 Default::default(),
-                Arc::new(in_place_password_store("pepper")),
+                Arc::new(in_place_password_store(PEPPER)),
             )),
-        }
+        )
     }
 }

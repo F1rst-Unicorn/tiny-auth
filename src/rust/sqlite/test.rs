@@ -155,6 +155,7 @@ mod auth_code {
         }
     }
 }
+
 #[test(tokio::test)]
 async fn getting_user_works() {
     let uut = store().await;

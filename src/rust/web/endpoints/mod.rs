@@ -293,8 +293,8 @@ mod tests {
         pub value: Option<String>,
     }
 
-    #[test(actix_web::test)]
-    async fn plus_is_encoded() {
+    #[test]
+    fn plus_is_encoded() {
         let input = Test {
             value: Some("AI4qNF5I6XA+HH8b0KFobQ".to_owned()),
         };
@@ -302,29 +302,29 @@ mod tests {
         assert_eq!("value=AI4qNF5I6XA%2BHH8b0KFobQ", result);
     }
 
-    #[test(actix_web::test)]
-    async fn empty_string_is_mapped_to_none() {
+    #[test]
+    fn empty_string_is_mapped_to_none() {
         let input = r#"value="#;
         let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
         assert_eq!(None, result.value);
     }
 
-    #[test(actix_web::test)]
-    async fn missing_value_is_none() {
+    #[test]
+    fn missing_value_is_none() {
         let input = r#""#;
         let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
         assert_eq!(None, result.value);
     }
 
-    #[test(actix_web::test)]
-    async fn value_is_some() {
+    #[test]
+    fn value_is_some() {
         let input = r#"value=value"#;
         let result = serde_urlencoded::from_str::<Test>(input).expect("invalid input");
         assert_eq!(Some("value".to_owned()), result.value);
     }
 
-    #[test(actix_web::test)]
-    async fn verify_wrong_csrf_verification() {
+    #[test]
+    fn verify_wrong_csrf_verification() {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let token = "token".to_owned();
@@ -335,8 +335,8 @@ mod tests {
         assert!(!is_csrf_valid(&Some(token.clone() + "wrong"), &session));
     }
 
-    #[test(actix_web::test)]
-    async fn verify_csrf_verification() {
+    #[test]
+    fn verify_csrf_verification() {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let token = "token".to_owned();
@@ -347,26 +347,26 @@ mod tests {
         assert!(is_csrf_valid(&Some(token), &session));
     }
 
-    #[test(actix_web::test)]
-    async fn unknown_authorization_is_rejected() {
+    #[test]
+    fn unknown_authorization_is_rejected() {
         let actual = parse_basic_authorization(&HeaderValue::from_str("Invalid").unwrap());
         assert_eq!(None, actual);
     }
 
-    #[test(actix_web::test)]
-    async fn invalid_base64_password_is_rejected() {
+    #[test]
+    fn invalid_base64_password_is_rejected() {
         let actual = parse_basic_authorization(&HeaderValue::from_str("Basic invalid").unwrap());
         assert_eq!(None, actual);
     }
 
-    #[test(actix_web::test)]
-    async fn invalid_utf8_password_is_rejected() {
+    #[test]
+    fn invalid_utf8_password_is_rejected() {
         let actual = parse_basic_authorization(&HeaderValue::from_str("Basic changeme").unwrap());
         assert_eq!(None, actual);
     }
 
-    #[test(actix_web::test)]
-    async fn missing_password_is_rejected() {
+    #[test]
+    fn missing_password_is_rejected() {
         let actual = parse_basic_authorization(
             &HeaderValue::from_str(
                 &("Basic ".to_owned() + &STANDARD.encode("username".as_bytes())),

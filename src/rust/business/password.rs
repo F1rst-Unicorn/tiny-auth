@@ -251,9 +251,11 @@ pub mod inject {
 pub mod test_fixtures {
     use super::*;
 
+    pub const PEPPER: &str = "pepper";
+
     pub fn in_place_password_store() -> InPlacePasswordStore {
         InPlacePasswordStore {
-            pepper: "pepper".to_owned(),
+            pepper: PEPPER.to_owned(),
         }
     }
 
@@ -269,17 +271,17 @@ pub mod test_fixtures {
 pub mod tests {
 
     use super::*;
+    use crate::password::test_fixtures::PEPPER;
     use test_log::test;
 
     #[test(tokio::test)]
     pub async fn passwords_can_be_verified() {
-        let pepper = "pepper";
         let password = "password";
         let username = "username";
         let uut = InPlacePasswordStore {
-            pepper: pepper.to_owned(),
+            pepper: PEPPER.to_owned(),
         };
-        let pw = Password::new(username, password, pepper);
+        let pw = Password::new(username, password, PEPPER);
 
         assert!(uut.verify(username, &pw, password).await.unwrap())
     }
