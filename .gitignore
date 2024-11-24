@@ -1,5 +1,6 @@
 
 src/rust/target
+src/rust/mutants*
 src/rust/licenses.html
 src/typescript/src/generated
 *profraw
