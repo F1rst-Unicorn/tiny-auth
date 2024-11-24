@@ -184,6 +184,7 @@ pub mod nesting {
             "type":"dog",
         });
     }
+
     #[test]
     pub fn one_object_is_nested() {
         let actual = load_user(

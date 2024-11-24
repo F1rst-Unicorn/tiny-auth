@@ -17,7 +17,6 @@
 use crate::inject;
 use crate::inject::sqlite_store;
 use crate::store::SqliteStore;
-use chrono::{Duration, Local};
 use pretty_assertions::assert_eq;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
@@ -29,10 +28,7 @@ use tiny_auth_business::health::HealthCheckCommand;
 use tiny_auth_business::oauth2::ClientType;
 use tiny_auth_business::password::{InPlacePasswordStore, Password};
 use tiny_auth_business::scope::{Destination, Mapping, Type};
-use tiny_auth_business::store::{
-    AuthorizationCodeRequest, AuthorizationCodeStore, ClientStore, PasswordStore, ScopeStore,
-    UserStore, ValidationRequest,
-};
+use tiny_auth_business::store::{ClientStore, PasswordStore, ScopeStore, UserStore};
 use tiny_auth_business::template::test_fixtures::TestTemplater;
 use url::Url;
 
@@ -41,144 +37,124 @@ async fn connecting_works() {
     store().await;
 }
 
-#[test(tokio::test)]
-async fn auth_code_storing_works() {
-    let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
-    let request = AuthorizationCodeRequest {
-        client_id: "tiny-auth-frontend",
-        user: "john",
-        redirect_uri: &redirect_uri,
-        scope: "openid",
-        insertion_time: Local::now(),
-        authentication_time: Local::now(),
-        nonce: Some("nonce".to_owned()),
-        pkce_challenge: Some((&("a".repeat(44))).try_into().unwrap()),
+mod auth_code {
+    use super::*;
+    use crate::store::SqliteStore;
+    use chrono::{Duration, Local, TimeDelta};
+    use pretty_assertions::assert_eq;
+    use std::sync::Arc;
+    use test_log::test;
+    use tiny_auth_business::store::{
+        AuthCodeValidationError, AuthorizationCodeRequest, AuthorizationCodeResponse,
+        AuthorizationCodeStore, ValidationRequest,
     };
-    let uut = store().await;
+    use url::Url;
 
-    let code = uut.get_authorization_code(request.clone()).await.unwrap();
-    let delta = Duration::minutes(1);
-    let response = uut
-        .validate(ValidationRequest {
+    #[test(tokio::test)]
+    async fn auth_code_storing_works() {
+        let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
+        let request = auth_code_request(&redirect_uri);
+        let uut = store().await;
+        let code = uut.get_authorization_code(request.clone()).await.unwrap();
+        let delta = Duration::minutes(1);
+
+        let response = get_validation_result(&request, uut.clone(), &code, delta).await;
+
+        assert!(response.is_ok());
+        let response = response.unwrap();
+        assert_eq!(request.redirect_uri, &response.redirect_uri);
+        assert_eq!(delta, response.stored_duration);
+        assert_eq!(request.user, response.username);
+        assert_eq!(request.scope, response.scopes);
+        assert_eq!(request.authentication_time, response.authentication_time);
+        assert_eq!(request.nonce, response.nonce);
+        assert_eq!(request.pkce_challenge, response.pkce_challenge);
+    }
+
+    #[test(tokio::test)]
+    async fn auth_code_can_be_used_only_once() {
+        let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
+        let request = auth_code_request(&redirect_uri);
+        let uut = store().await;
+        let code = uut.get_authorization_code(request.clone()).await.unwrap();
+        let delta = Duration::minutes(1);
+        let response = get_validation_result(&request, uut.clone(), &code, delta).await;
+        assert!(response.is_ok());
+
+        let response = get_validation_result(&request, uut, &code, delta).await;
+
+        assert!(response.is_err());
+    }
+
+    #[test(tokio::test)]
+    async fn expired_auth_code_is_cleared() {
+        let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
+        let request = auth_code_request(&redirect_uri);
+        let uut = store().await;
+        let code = uut.get_authorization_code(request.clone()).await.unwrap();
+        let validity = Duration::minutes(1);
+
+        uut.clear_expired_codes(
+            request.insertion_time + validity + Duration::nanoseconds(1),
+            validity,
+        )
+        .await;
+
+        let response = get_validation_result(&request, uut.clone(), &code, Duration::zero()).await;
+        assert!(response.is_err());
+    }
+
+    async fn get_validation_result(
+        request: &AuthorizationCodeRequest<'_>,
+        uut: Arc<SqliteStore>,
+        code: &String,
+        delta: TimeDelta,
+    ) -> Result<AuthorizationCodeResponse, AuthCodeValidationError> {
+        uut.validate(ValidationRequest {
             client_id: request.client_id,
-            authorization_code: &code,
+            authorization_code: code,
             validation_time: request.insertion_time + delta,
         })
+        .await
+    }
+
+    #[test(tokio::test)]
+    async fn non_expired_auth_code_is_retained() {
+        let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
+        let request = auth_code_request(&redirect_uri);
+        let uut = store().await;
+        let code = uut.get_authorization_code(request.clone()).await.unwrap();
+        let validity = Duration::minutes(1);
+
+        uut.clear_expired_codes(
+            request.insertion_time + validity - Duration::nanoseconds(1),
+            validity,
+        )
         .await;
 
-    assert!(response.is_ok());
-    let response = response.unwrap();
-    assert_eq!(request.redirect_uri, &response.redirect_uri);
-    assert_eq!(delta, response.stored_duration);
-    assert_eq!(request.user, response.username);
-    assert_eq!(request.scope, response.scopes);
-    assert_eq!(request.authentication_time, response.authentication_time);
-    assert_eq!(request.nonce, response.nonce);
-    assert_eq!(request.pkce_challenge, response.pkce_challenge);
+        let response = uut
+            .validate(ValidationRequest {
+                client_id: request.client_id,
+                authorization_code: &code,
+                validation_time: request.insertion_time,
+            })
+            .await;
+        assert!(response.is_ok());
+    }
+
+    fn auth_code_request(redirect_uri: &Url) -> AuthorizationCodeRequest {
+        AuthorizationCodeRequest {
+            client_id: "tiny-auth-frontend",
+            user: "john",
+            redirect_uri,
+            scope: "openid",
+            insertion_time: Local::now(),
+            authentication_time: Local::now(),
+            nonce: Some("nonce".to_owned()),
+            pkce_challenge: Some((&("a".repeat(44))).try_into().unwrap()),
+        }
+    }
 }
-
-#[test(tokio::test)]
-async fn auth_code_can_be_used_only_once() {
-    let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
-    let request = AuthorizationCodeRequest {
-        client_id: "tiny-auth-frontend",
-        user: "john",
-        redirect_uri: &redirect_uri,
-        scope: "openid",
-        insertion_time: Local::now(),
-        authentication_time: Local::now(),
-        nonce: Some("nonce".to_owned()),
-        pkce_challenge: Some((&("a".repeat(44))).try_into().unwrap()),
-    };
-    let uut = store().await;
-    let code = uut.get_authorization_code(request.clone()).await.unwrap();
-    let delta = Duration::minutes(1);
-    let response = uut
-        .validate(ValidationRequest {
-            client_id: request.client_id,
-            authorization_code: &code,
-            validation_time: request.insertion_time + delta,
-        })
-        .await;
-    assert!(response.is_ok());
-
-    let response = uut
-        .validate(ValidationRequest {
-            client_id: request.client_id,
-            authorization_code: &code,
-            validation_time: request.insertion_time + delta,
-        })
-        .await;
-
-    assert!(response.is_err());
-}
-
-#[test(tokio::test)]
-async fn expired_auth_code_is_cleared() {
-    let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
-    let request = AuthorizationCodeRequest {
-        client_id: "tiny-auth-frontend",
-        user: "john",
-        redirect_uri: &redirect_uri,
-        scope: "openid",
-        insertion_time: Local::now(),
-        authentication_time: Local::now(),
-        nonce: Some("nonce".to_owned()),
-        pkce_challenge: Some((&("a".repeat(44))).try_into().unwrap()),
-    };
-    let uut = store().await;
-    let code = uut.get_authorization_code(request.clone()).await.unwrap();
-    let validity = Duration::minutes(1);
-
-    uut.clear_expired_codes(
-        request.insertion_time + validity + Duration::nanoseconds(1),
-        validity,
-    )
-    .await;
-
-    let response = uut
-        .validate(ValidationRequest {
-            client_id: request.client_id,
-            authorization_code: &code,
-            validation_time: request.insertion_time,
-        })
-        .await;
-    assert!(response.is_err());
-}
-
-#[test(tokio::test)]
-async fn non_expired_auth_code_is_retained() {
-    let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
-    let request = AuthorizationCodeRequest {
-        client_id: "tiny-auth-frontend",
-        user: "john",
-        redirect_uri: &redirect_uri,
-        scope: "openid",
-        insertion_time: Local::now(),
-        authentication_time: Local::now(),
-        nonce: Some("nonce".to_owned()),
-        pkce_challenge: Some((&("a".repeat(44))).try_into().unwrap()),
-    };
-    let uut = store().await;
-    let code = uut.get_authorization_code(request.clone()).await.unwrap();
-    let validity = Duration::minutes(1);
-
-    uut.clear_expired_codes(
-        request.insertion_time + validity - Duration::nanoseconds(1),
-        validity,
-    )
-    .await;
-
-    let response = uut
-        .validate(ValidationRequest {
-            client_id: request.client_id,
-            authorization_code: &code,
-            validation_time: request.insertion_time,
-        })
-        .await;
-    assert!(response.is_ok());
-}
-
 #[test(tokio::test)]
 async fn getting_user_works() {
     let uut = store().await;

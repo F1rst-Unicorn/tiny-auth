@@ -494,39 +494,19 @@ mod tests {
 
     #[test(tokio::test)]
     pub async fn different_audience_is_rejected() {
-        let token_creator = build_test_token_creator();
-        let token = token_creator.build_token(
-            &build_test_user_store().get(USER).await.unwrap(),
-            &build_test_client_store()
-                .get(CONFIDENTIAL_CLIENT)
-                .await
-                .unwrap(),
-            &[],
-            0,
-        );
-        let token = build_test_token_creator()
-            .finalize_access_token(token)
-            .unwrap();
-
-        let actual = TokenValidator::new_for_own_api(
-            build_test_decoding_key(),
-            build_test_algorithm(),
-            build_test_token_issuer(),
-        )
-        .validate_access_token(token);
-
-        assert!(actual.is_none());
+        validate_audience(CONFIDENTIAL_CLIENT, false).await;
     }
 
     #[test(tokio::test)]
     pub async fn own_audience_is_accepted() {
+        validate_audience(TINY_AUTH_FRONTEND_CLIENT, true).await;
+    }
+
+    async fn validate_audience(audience: &str, expected: bool) {
         let token_creator = build_test_token_creator();
         let token = token_creator.build_token(
             &build_test_user_store().get(USER).await.unwrap(),
-            &build_test_client_store()
-                .get(TINY_AUTH_FRONTEND_CLIENT)
-                .await
-                .unwrap(),
+            &build_test_client_store().get(audience).await.unwrap(),
             &[],
             0,
         );
@@ -539,6 +519,6 @@ mod tests {
         )
         .validate_access_token(token);
 
-        assert!(actual.is_some());
+        assert_eq!(expected, actual.is_some());
     }
 }
