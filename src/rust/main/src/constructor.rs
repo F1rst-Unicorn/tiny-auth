@@ -246,7 +246,7 @@ impl<'a> Constructor<'a> {
         let mut client_stores: Vec<Arc<dyn ClientStore>> = vec![];
         let mut user_stores: Vec<Arc<dyn UserStore>> = vec![];
         let mut scope_stores: Vec<Arc<dyn ScopeStore>> = vec![];
-        let mut password_stores = BTreeMap::default();
+        let mut password_stores: BTreeMap<String, Arc<dyn PasswordStore>> = BTreeMap::default();
         let (sender, _receiver) = channel(8);
         let mut store_paths = Vec::new();
         let mut health_checks = Vec::new();

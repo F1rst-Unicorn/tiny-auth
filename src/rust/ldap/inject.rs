@@ -31,7 +31,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tiny_auth_business::client::Client;
 use tiny_auth_business::health::HealthCheckCommand;
-use tiny_auth_business::store::PasswordStore;
 use tiny_auth_business::template::{bind_dn::BindDnContext, Templater};
 use tiny_auth_business::user::User;
 use url::Url;
@@ -48,7 +47,7 @@ pub fn simple_bind_store(
     name: &str,
     bind_dn_templates: &[Arc<dyn for<'a> Templater<BindDnContext<'a>>>],
     connector: Connector,
-) -> Arc<dyn PasswordStore> {
+) -> Arc<LdapStore> {
     Arc::new(LdapStore {
         name: name.to_owned(),
         connector,
