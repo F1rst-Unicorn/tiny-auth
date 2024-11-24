@@ -273,12 +273,14 @@ pub mod tests {
 
     #[test(tokio::test)]
     pub async fn passwords_can_be_verified() {
-        let uut = InPlacePasswordStore {
-            pepper: "pepper".to_owned(),
-        };
+        let pepper = "pepper";
         let password = "password";
-        let pw = Password::new("username", password, "pepper");
+        let username = "username";
+        let uut = InPlacePasswordStore {
+            pepper: pepper.to_owned(),
+        };
+        let pw = Password::new(username, password, pepper);
 
-        assert!(uut.verify("username", &pw, password).await.unwrap())
+        assert!(uut.verify(username, &pw, password).await.unwrap())
     }
 }

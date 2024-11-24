@@ -91,29 +91,27 @@ impl RateLimiter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
+    use rstest::{fixture, rstest};
     use std::convert::TryInto;
     use test_log::test;
 
+    #[rstest]
     #[test(tokio::test)]
-    async fn empty_rate_is_ok() {
-        let duration = Duration::seconds(1);
-        let events = 5;
-        let now = Local::now();
-        let rate_name = "test";
-        let uut = RateLimiter::new(events, duration);
-
+    async fn empty_rate_is_ok(now: DateTime<Local>, rate_name: &str, uut: RateLimiter) {
         assert!(uut.is_rate_below_maximum(rate_name, now).await);
         assert!(!uut.is_rate_above_maximum(rate_name, now).await);
     }
 
+    #[rstest]
     #[test(tokio::test)]
-    async fn recording_max_events_is_still_ok() {
-        let duration = Duration::seconds(1);
-        let events = 5;
-        let now = Local::now();
-        let rate_name = "test";
-        let uut = RateLimiter::new(events, duration);
-
+    async fn recording_max_events_is_still_ok(
+        duration: Duration,
+        events: usize,
+        now: DateTime<Local>,
+        rate_name: &str,
+        uut: RateLimiter,
+    ) {
         for i in 0..events {
             uut.record_event(
                 rate_name,
@@ -127,14 +125,15 @@ mod tests {
         assert!(!uut.is_rate_above_maximum(rate_name, now).await);
     }
 
+    #[rstest]
     #[test(tokio::test)]
-    async fn recording_one_more_than_max_events_is_not_ok() {
-        let duration = Duration::seconds(1);
-        let events = 5;
-        let now = Local::now();
-        let rate_name = "test";
-        let uut = RateLimiter::new(events, duration);
-
+    async fn recording_one_more_than_max_events_is_not_ok(
+        duration: Duration,
+        events: usize,
+        now: DateTime<Local>,
+        rate_name: &str,
+        uut: RateLimiter,
+    ) {
         for i in 0..(events + 1) {
             uut.record_event(
                 rate_name,
@@ -151,14 +150,15 @@ mod tests {
         assert!(uut.is_rate_above_maximum(rate_name, now).await);
     }
 
+    #[rstest]
     #[test(tokio::test)]
-    async fn removing_works() {
-        let duration = Duration::seconds(1);
-        let events = 5;
-        let now = Local::now();
-        let rate_name = "test";
-        let uut = RateLimiter::new(events, duration);
-
+    async fn removing_works(
+        duration: Duration,
+        events: usize,
+        now: DateTime<Local>,
+        rate_name: &str,
+        uut: RateLimiter,
+    ) {
         for i in 0..(events + 1) {
             uut.record_event(
                 rate_name,
@@ -173,5 +173,30 @@ mod tests {
 
         assert!(!uut.is_rate_above_maximum(rate_name, now).await);
         assert!(uut.is_rate_below_maximum(rate_name, now).await);
+    }
+
+    #[fixture]
+    fn uut(events: usize, duration: Duration) -> RateLimiter {
+        RateLimiter::new(events, duration)
+    }
+
+    #[fixture]
+    fn duration() -> Duration {
+        Duration::seconds(1)
+    }
+
+    #[fixture]
+    fn events() -> usize {
+        5
+    }
+
+    #[fixture]
+    fn now() -> DateTime<Local> {
+        Local.timestamp_opt(0, 0).unwrap()
+    }
+
+    #[fixture]
+    fn rate_name() -> &'static str {
+        "test"
     }
 }

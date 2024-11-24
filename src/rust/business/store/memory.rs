@@ -162,26 +162,21 @@ pub fn generate_random_string(length: u32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{TimeDelta, TimeZone};
     use pretty_assertions::assert_eq;
+    use rstest::{fixture, rstest};
     use test_log::test;
 
+    #[rstest]
     #[test(tokio::test)]
-    async fn successful_validation_works() {
-        let uut = MemoryAuthorizationCodeStore::default();
-        let date = Local::now();
-        let duration = Duration::minutes(1);
-        let redirect_uri = Url::parse("http://localhost/client").unwrap();
+    async fn successful_validation_works(
+        uut: MemoryAuthorizationCodeStore,
+        now: DateTime<Local>,
+        duration: TimeDelta,
+        redirect_uri: Url,
+    ) {
         let auth_code = uut
-            .get_authorization_code(AuthorizationCodeRequest {
-                client_id: "client",
-                user: "user",
-                redirect_uri: &redirect_uri,
-                scope: "",
-                insertion_time: date,
-                authentication_time: date,
-                nonce: Some("nonce".to_owned()),
-                pkce_challenge: None,
-            })
+            .get_authorization_code(auth_code_request(now, &redirect_uri))
             .await
             .unwrap();
 
@@ -189,7 +184,7 @@ mod tests {
             .validate(ValidationRequest {
                 client_id: "client",
                 authorization_code: &auth_code,
-                validation_time: date + duration,
+                validation_time: now + duration,
             })
             .await;
 
@@ -201,71 +196,56 @@ mod tests {
         assert_eq!("", output.scopes);
     }
 
+    #[rstest]
     #[test(tokio::test)]
-    async fn expired_code_is_deleted() {
-        let uut = MemoryAuthorizationCodeStore::default();
-        let date = Local::now();
-        let duration = Duration::minutes(1);
-        let redirect_uri = Url::parse("http://localhost/client").unwrap();
+    async fn expired_code_is_deleted(
+        uut: MemoryAuthorizationCodeStore,
+        now: DateTime<Local>,
+        duration: TimeDelta,
+        redirect_uri: Url,
+    ) {
         let auth_code = uut
-            .get_authorization_code(AuthorizationCodeRequest {
-                client_id: "client",
-                user: "user",
-                redirect_uri: &redirect_uri,
-                scope: "",
-                insertion_time: date,
-                authentication_time: date,
-                nonce: Some("nonce".to_owned()),
-                pkce_challenge: None,
-            })
+            .get_authorization_code(auth_code_request(now, &redirect_uri))
             .await
             .unwrap();
-
-        uut.clear_expired_codes(date + duration + duration, duration)
+        uut.clear_expired_codes(now + duration + duration, duration)
             .await;
 
         let output = uut
             .validate(ValidationRequest {
                 client_id: "client",
                 authorization_code: &auth_code,
-                validation_time: date + duration,
+                validation_time: now + duration,
             })
             .await;
 
         assert!(matches!(output, Err(NotFound)));
     }
 
+    #[rstest]
     #[test(tokio::test)]
-    async fn code_still_works_at_sharp_expiration_time() {
-        let uut = MemoryAuthorizationCodeStore::default();
-        let date = Local::now();
-        let duration = Duration::minutes(1);
-        let redirect_uri = Url::parse("http://localhost/client").unwrap();
+    async fn code_still_works_at_sharp_expiration_time(
+        uut: MemoryAuthorizationCodeStore,
+        now: DateTime<Local>,
+        duration: TimeDelta,
+        redirect_uri: Url,
+    ) {
         let auth_code = uut
-            .get_authorization_code(AuthorizationCodeRequest {
-                client_id: "client",
-                user: "user",
-                redirect_uri: &redirect_uri,
-                scope: "",
-                insertion_time: date,
-                authentication_time: date,
-                nonce: Some("nonce".to_owned()),
-                pkce_challenge: None,
-            })
+            .get_authorization_code(auth_code_request(now, &redirect_uri))
             .await
             .unwrap();
 
-        uut.clear_expired_codes(date + duration, duration).await;
+        uut.clear_expired_codes(now + duration, duration).await;
 
         let output = uut
             .validate(ValidationRequest {
                 client_id: "client",
                 authorization_code: &auth_code,
-                validation_time: date + duration,
+                validation_time: now + duration,
             })
             .await;
 
-        assert!(output.is_ok());
+        assert!(dbg!(&output).is_ok());
         let output = output.unwrap();
         assert_eq!(&redirect_uri, &output.redirect_uri);
         assert_eq!("user", &output.username);
@@ -273,37 +253,62 @@ mod tests {
         assert_eq!("", output.scopes);
     }
 
+    #[rstest]
     #[test(tokio::test)]
-    async fn code_past_expiration_date_doesnt_work_anymore() {
-        let uut = MemoryAuthorizationCodeStore::default();
-        let date = Local::now();
-        let duration = Duration::minutes(1);
-        let redirect_uri = Url::parse("http://localhost/client").unwrap();
+    async fn code_past_expiration_date_doesnt_work_anymore(
+        uut: MemoryAuthorizationCodeStore,
+        now: DateTime<Local>,
+        duration: TimeDelta,
+        redirect_uri: Url,
+    ) {
         let auth_code = uut
-            .get_authorization_code(AuthorizationCodeRequest {
-                client_id: "client",
-                user: "user",
-                redirect_uri: &redirect_uri,
-                scope: "",
-                insertion_time: date,
-                authentication_time: date,
-                nonce: Some("nonce".to_owned()),
-                pkce_challenge: None,
-            })
+            .get_authorization_code(auth_code_request(now, &redirect_uri))
             .await
             .unwrap();
-
-        uut.clear_expired_codes(date + duration + Duration::nanoseconds(1), duration)
+        uut.clear_expired_codes(now + duration + Duration::nanoseconds(1), duration)
             .await;
 
         let output = uut
             .validate(ValidationRequest {
                 client_id: "client",
                 authorization_code: &auth_code,
-                validation_time: date + duration,
+                validation_time: now + duration,
             })
             .await;
 
         assert!(output.is_err());
+    }
+
+    #[fixture]
+    fn uut() -> MemoryAuthorizationCodeStore {
+        MemoryAuthorizationCodeStore::default()
+    }
+
+    #[fixture]
+    fn now() -> DateTime<Local> {
+        Local.timestamp_opt(0, 0).unwrap()
+    }
+
+    #[fixture]
+    fn duration() -> TimeDelta {
+        Duration::minutes(1)
+    }
+
+    #[fixture]
+    fn redirect_uri() -> Url {
+        Url::parse("http://localhost/client").unwrap()
+    }
+
+    fn auth_code_request(now: DateTime<Local>, redirect_uri: &Url) -> AuthorizationCodeRequest {
+        AuthorizationCodeRequest {
+            client_id: "client",
+            user: "user",
+            redirect_uri,
+            scope: "",
+            insertion_time: now,
+            authentication_time: now,
+            nonce: Some("nonce".to_owned()),
+            pkce_challenge: None,
+        }
     }
 }
