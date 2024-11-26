@@ -95,11 +95,12 @@ impl CodeChallenge {
     pub fn verify(&self, val: CodeVerifier) -> bool {
         match self.0 {
             CodeChallengeMethod::Plain => self.1 == val.0,
-            CodeChallengeMethod::SHA256 => {
-                self.1
-                    == Cow::<str>::Owned(URL_SAFE_NO_PAD.encode(digest(&SHA256, val.0.as_bytes())))
-            }
+            CodeChallengeMethod::SHA256 => self.1 == Cow::<str>::Owned(Self::hash(val.0)),
         }
+    }
+
+    fn hash(value: Cow<str>) -> String {
+        URL_SAFE_NO_PAD.encode(digest(&SHA256, value.as_bytes()))
     }
 
     pub fn code_challenge(&self) -> String {
@@ -131,7 +132,7 @@ impl<'a> TryFrom<&'a str> for CodeVerifier<'a> {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::pkce::CodeChallenge;
+    use crate::pkce::{CodeChallenge, CodeChallengeMethod, CodeVerifier};
     use pretty_assertions::assert_eq;
     use std::borrow::Cow;
     use test_log::test;
@@ -139,6 +140,34 @@ pub mod tests {
     #[test]
     pub fn learning_test_cow_eq() {
         assert_eq!(Cow::Owned::<str>("abc".to_owned()), Cow::Borrowed("abc"));
+    }
+
+    #[test]
+    pub fn valid_plain_challenge_validates() {
+        let challenge = CodeChallenge(CodeChallengeMethod::Plain, "hello".to_owned());
+        assert!(challenge.verify(CodeVerifier(Cow::Borrowed(challenge.1.as_str()))));
+    }
+
+    #[test]
+    pub fn invalid_plain_challenge_is_rejected() {
+        let challenge = CodeChallenge(CodeChallengeMethod::Plain, "hello".to_owned());
+        assert!(!challenge.verify(CodeVerifier(Cow::Borrowed("bye"))));
+    }
+
+    #[test]
+    pub fn valid_s256_challenge_validates() {
+        let verifier = Cow::Borrowed("verifier");
+        let raw_challenge = CodeChallenge::hash(verifier.clone());
+        let challenge = CodeChallenge(CodeChallengeMethod::SHA256, raw_challenge);
+        assert!(challenge.verify(CodeVerifier(verifier)));
+    }
+
+    #[test]
+    pub fn invalid_s256_challenge_is_rejected() {
+        let verifier = Cow::Borrowed("verifier");
+        let raw_challenge = CodeChallenge::hash(verifier);
+        let challenge = CodeChallenge(CodeChallengeMethod::SHA256, raw_challenge);
+        assert!(!challenge.verify(CodeVerifier(Cow::Borrowed("different"))));
     }
 
     #[test]
