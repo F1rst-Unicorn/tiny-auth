@@ -14,7 +14,6 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::client;
 use crate::store::{ClientStore, ScopeStore, ScopeStoreError, UserStore};
 use crate::token::{Access, EncodedAccessToken, Token, TokenCreator, TokenValidator, Userinfo};
 use std::sync::Arc;
@@ -32,7 +31,7 @@ pub enum Error {
     #[error("user lookup error")]
     UserError(#[from] crate::store::user_store::Error),
     #[error("client lookup error")]
-    ClientError(#[from] client::Error),
+    ClientError(#[from] crate::store::client_store::Error),
     #[error("scope lookup error")]
     ScopeError(#[from] ScopeStoreError),
 }
@@ -90,7 +89,8 @@ pub mod inject {
 }
 
 pub mod test_fixtures {
-    use crate::store::test_fixtures::{build_test_client_store, build_test_scope_store};
+    use crate::store::client_store::test_fixtures::build_test_client_store;
+    use crate::store::test_fixtures::build_test_scope_store;
     use crate::store::user_store::test_fixtures::build_test_user_store;
     use crate::test_fixtures::{build_test_token_creator, build_test_token_validator};
     use crate::userinfo_endpoint::Handler;

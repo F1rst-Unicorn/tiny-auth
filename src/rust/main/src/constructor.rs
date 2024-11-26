@@ -49,14 +49,17 @@ use tiny_auth_business::change_password::Handler as ChangePasswordHandler;
 use tiny_auth_business::consent::Handler as ConsentHandler;
 use tiny_auth_business::cors::inject::cors_lister;
 use tiny_auth_business::cors::CorsLister;
+use tiny_auth_business::data::jwk::Jwk;
+use tiny_auth_business::data::jwk::Jwks;
+use tiny_auth_business::data::password::inject::{
+    dispatching_password_store, in_place_password_store,
+};
+use tiny_auth_business::data::password::DispatchingPasswordStore;
 use tiny_auth_business::health::inject::health_check;
 use tiny_auth_business::health::{HealthCheck, HealthCheckCommand, HealthChecker};
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
-use tiny_auth_business::jwk::Jwk;
-use tiny_auth_business::jwk::Jwks;
-use tiny_auth_business::password::inject::{dispatching_password_store, in_place_password_store};
-use tiny_auth_business::password::DispatchingPasswordStore;
 use tiny_auth_business::rate_limiter::RateLimiter;
+use tiny_auth_business::store::client_store::MergingClientStore;
 use tiny_auth_business::store::memory::*;
 use tiny_auth_business::store::user_store::MergingUserStore;
 use tiny_auth_business::store::*;
@@ -919,10 +922,9 @@ pub mod tests {
     use jsonwebtoken::DecodingKey;
     use std::sync::Arc;
     use tera::Tera;
+    use tiny_auth_business::data::jwk::Jwk;
     use tiny_auth_business::issuer_configuration::IssuerConfiguration;
-    use tiny_auth_business::jwk::Jwk;
     use tiny_auth_business::store::AuthorizationCodeStore;
-    use tiny_auth_business::store::ClientStore;
     use tiny_auth_business::store::ScopeStore;
     use tiny_auth_business::token::TokenValidator;
 
@@ -953,10 +955,6 @@ pub mod tests {
             )
             .unwrap(),
         )
-    }
-
-    pub fn build_test_client_store() -> Data<Arc<dyn ClientStore>> {
-        Data::new(test_fixtures::build_test_client_store())
     }
 
     pub fn build_test_scope_store() -> Data<Arc<dyn ScopeStore>> {

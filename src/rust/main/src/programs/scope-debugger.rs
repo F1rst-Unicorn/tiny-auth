@@ -20,7 +20,7 @@ use clap::Arg;
 use clap::ArgAction::Count;
 use clap::ArgMatches;
 use clap::Command;
-use tiny_auth_business::scope::Destination;
+use tiny_auth_business::data::scope::Destination;
 use tiny_auth_business::token::{Access, Id, Userinfo};
 use tiny_auth_main::config::parser::parse_config;
 use tiny_auth_main::constructor::Constructor;

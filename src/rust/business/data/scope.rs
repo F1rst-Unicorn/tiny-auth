@@ -14,11 +14,11 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::client::Client;
+use crate::data::client::Client;
+use crate::data::user::User;
 use crate::template::scope::ScopeContext;
 use crate::template::{TemplateError, Templater};
 use crate::token::{Access, Id, TokenType, Userinfo};
-use crate::user::User;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Map;
@@ -482,9 +482,9 @@ pub fn merge(left: Value, right: Value) -> Result<Value, MergeError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::client::tests::get_test_client;
+    use crate::data::client::test_fixtures::CONFIDENTIAL_CLIENT;
+    use crate::data::user::test_fixtures::USER_1;
     use crate::template::test_fixtures::TestTemplater;
-    use crate::user::tests::get_test_user;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use test_log::test;
@@ -630,11 +630,14 @@ mod tests {
 
     #[test]
     pub fn objects_are_templated() {
-        let user = get_test_user();
-        let client = get_test_client();
         let value = json!({"key": "john"});
 
-        let (result, errors) = template(Arc::new(TestTemplater), &value, &user, &client);
+        let (result, errors) = template(
+            Arc::new(TestTemplater),
+            &value,
+            &USER_1,
+            &CONFIDENTIAL_CLIENT,
+        );
 
         assert!(errors.is_empty());
         assert!(result.is_some());
@@ -644,11 +647,14 @@ mod tests {
 
     #[test]
     pub fn arrays_are_templated() {
-        let user = get_test_user();
-        let client = get_test_client();
         let value = json!(["john"]);
 
-        let (result, errors) = template(Arc::new(TestTemplater), &value, &user, &client);
+        let (result, errors) = template(
+            Arc::new(TestTemplater),
+            &value,
+            &USER_1,
+            &CONFIDENTIAL_CLIENT,
+        );
 
         assert!(errors.is_empty());
         assert!(result.is_some());
@@ -658,11 +664,14 @@ mod tests {
 
     #[test]
     pub fn strings_are_templated() {
-        let user = get_test_user();
-        let client = get_test_client();
         let value = Value::String("john".to_owned());
 
-        let (result, errors) = template(Arc::new(TestTemplater), &value, &user, &client);
+        let (result, errors) = template(
+            Arc::new(TestTemplater),
+            &value,
+            &USER_1,
+            &CONFIDENTIAL_CLIENT,
+        );
 
         assert!(errors.is_empty());
         assert!(result.is_some());

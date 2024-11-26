@@ -256,9 +256,10 @@ mod tests {
     use std::sync::Arc;
     use test_log::test;
     use tiny_auth_business::authorize_endpoint::test_fixtures::handler;
-    use tiny_auth_business::store::test_fixtures::build_test_client_store;
-    use tiny_auth_business::store::test_fixtures::CONFIDENTIAL_CLIENT;
-    use tiny_auth_business::store::test_fixtures::UNKNOWN_CLIENT_ID;
+    use tiny_auth_business::data::client::test_fixtures::CONFIDENTIAL_CLIENT;
+    use tiny_auth_business::store::client_store::test_fixtures::{
+        build_test_client_store, UNKNOWN_CLIENT_ID,
+    };
     use tiny_auth_business::store::ClientStore;
     use tiny_auth_business::template::test_fixtures::TestTemplater;
     use url::Url;
@@ -281,7 +282,7 @@ mod tests {
         let req = TestRequest::post().to_http_request();
         let session = req.get_session();
         let query = Query(Request {
-            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
+            client_id: Some(CONFIDENTIAL_CLIENT.client_id.to_owned()),
             ..Request::default()
         });
 
@@ -325,7 +326,7 @@ mod tests {
         let session = req.get_session();
         let client_store = build_test_client_store();
         let redirect_uri = client_store
-            .get(CONFIDENTIAL_CLIENT)
+            .get(&CONFIDENTIAL_CLIENT.client_id)
             .await
             .unwrap()
             .redirect_uris[0]
@@ -333,7 +334,7 @@ mod tests {
         let client_state = "somestate".to_owned();
         let query = Query(Request {
             response_type: Some("code".to_owned()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
+            client_id: Some(CONFIDENTIAL_CLIENT.client_id.to_owned()),
             redirect_uri: Some(redirect_uri.to_owned()),
             state: Some(client_state.clone()),
             ..Request::default()
@@ -370,7 +371,7 @@ mod tests {
         let session = req.get_session();
         let client_store = build_test_client_store();
         let redirect_uri = client_store
-            .get(CONFIDENTIAL_CLIENT)
+            .get(&CONFIDENTIAL_CLIENT.client_id)
             .await
             .unwrap()
             .redirect_uris[0]
@@ -379,7 +380,7 @@ mod tests {
         let query = Query(Request {
             scope: Some("email".to_owned()),
             response_type: Some("code".to_owned()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
+            client_id: Some(CONFIDENTIAL_CLIENT.client_id.to_owned()),
             redirect_uri: Some(redirect_uri.to_owned()),
             state: Some(client_state.clone()),
             prompt: Some("none login".to_owned()),
@@ -417,7 +418,7 @@ mod tests {
         let session = req.get_session();
         let client_store = build_test_client_store();
         let redirect_uri = client_store
-            .get(CONFIDENTIAL_CLIENT)
+            .get(&CONFIDENTIAL_CLIENT.client_id)
             .await
             .unwrap()
             .redirect_uris[0]
@@ -425,7 +426,7 @@ mod tests {
         let client_state = "somestate".to_owned();
         let query = Query(Request {
             scope: Some("email".to_owned()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
+            client_id: Some(CONFIDENTIAL_CLIENT.client_id.to_owned()),
             redirect_uri: Some(redirect_uri.to_owned()),
             state: Some(client_state.clone()),
             ..Request::default()
@@ -462,7 +463,7 @@ mod tests {
         let client_store = build_test_client_store();
         let session = req.get_session();
         let redirect_uri = client_store
-            .get(CONFIDENTIAL_CLIENT)
+            .get(&CONFIDENTIAL_CLIENT.client_id)
             .await
             .unwrap()
             .redirect_uris[0]
@@ -471,7 +472,7 @@ mod tests {
         let request = Request {
             scope: Some("email profile".to_owned()),
             response_type: Some("code".to_owned()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
+            client_id: Some(CONFIDENTIAL_CLIENT.client_id.to_owned()),
             redirect_uri: Some(redirect_uri.to_owned()),
             state: Some(client_state.clone()),
             ..Request::default()
@@ -496,7 +497,7 @@ mod tests {
         let client_store = build_test_client_store();
         let session = req.get_session();
         let redirect_uri = client_store
-            .get(CONFIDENTIAL_CLIENT)
+            .get(&CONFIDENTIAL_CLIENT.client_id)
             .await
             .unwrap()
             .redirect_uris[0]
@@ -505,7 +506,7 @@ mod tests {
         let request = Request {
             scope: Some("email".to_owned()),
             response_type: Some("code".to_owned()),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
+            client_id: Some(CONFIDENTIAL_CLIENT.client_id.to_owned()),
             redirect_uri: Some(redirect_uri.to_owned()),
             state: Some(client_state.clone()),
             ..Request::default()

@@ -15,7 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::data::user::User;
+use crate::data::client::Client;
+use crate::store::client_store::Error as ClientError;
 use async_trait::async_trait;
 use futures_util::future::join_all;
 use serde::de::StdError;
@@ -34,24 +35,24 @@ pub enum Error {
 }
 
 #[async_trait]
-pub trait UserStore: Send + Sync {
-    async fn get(&self, key: &str) -> Result<User, Error>;
+pub trait ClientStore: Send + Sync {
+    async fn get(&self, key: &str) -> Result<Client, Error>;
 }
 
-pub struct MergingUserStore {
-    stores: Vec<Arc<dyn UserStore>>,
+pub struct MergingClientStore {
+    stores: Vec<Arc<dyn ClientStore>>,
 }
 
-impl From<Vec<Arc<dyn UserStore>>> for MergingUserStore {
-    fn from(value: Vec<Arc<dyn UserStore>>) -> Self {
+impl From<Vec<Arc<dyn ClientStore>>> for MergingClientStore {
+    fn from(value: Vec<Arc<dyn ClientStore>>) -> Self {
         Self { stores: value }
     }
 }
 
 #[async_trait]
-impl UserStore for MergingUserStore {
-    #[instrument(level = Level::DEBUG, name = "get_user", skip_all)]
-    async fn get(&self, key: &str) -> Result<User, Error> {
+impl ClientStore for MergingClientStore {
+    #[instrument(level = Level::DEBUG, name = "get_client", skip_all)]
+    async fn get(&self, key: &str) -> Result<Client, ClientError> {
         let results: Vec<_> = join_all(self.stores.iter().map(|v| v.get(key)))
             .await
             .into_iter()
@@ -60,7 +61,7 @@ impl UserStore for MergingUserStore {
         if let Some(Err(error)) = results.iter().find(|v| {
             matches!(
                 v,
-                Err(Error::BackendError | Error::BackendErrorWithContext(_))
+                Err(ClientError::BackendError | ClientError::BackendErrorWithContext(_))
             )
         }) {
             return Err(error.clone());
@@ -69,39 +70,43 @@ impl UserStore for MergingUserStore {
         results
             .into_iter()
             .filter_map(Result::ok)
-            .reduce(User::merge)
+            .reduce(Client::merge)
             .inspect(|_| debug!("found"))
-            .ok_or(Error::NotFound)
+            .ok_or(ClientError::NotFound)
     }
 }
 
 pub mod test_fixtures {
     use super::*;
 
-    use crate::data::password::Password;
-    use crate::data::user::User;
+    use crate::data::client::Client;
     use std::collections::BTreeMap;
-    use std::collections::HashMap;
     use std::iter::FromIterator;
     use std::sync::Arc;
     use tokio::sync::RwLock;
 
-    pub struct TestUserStore {
-        users: RwLock<BTreeMap<String, User>>,
+    pub const UNKNOWN_CLIENT_ID: &str = "unknown_client";
+
+    struct TestClientStore {
+        clients: RwLock<BTreeMap<String, Client>>,
     }
 
-    impl FromIterator<User> for TestUserStore {
-        fn from_iter<T: IntoIterator<Item = User>>(iter: T) -> Self {
+    impl FromIterator<Client> for TestClientStore {
+        fn from_iter<T: IntoIterator<Item = Client>>(iter: T) -> Self {
             Self {
-                users: RwLock::new(iter.into_iter().map(|v| (v.name.to_owned(), v)).collect()),
+                clients: RwLock::new(
+                    iter.into_iter()
+                        .map(|v| (v.client_id.to_owned(), v))
+                        .collect(),
+                ),
             }
         }
     }
 
     #[async_trait]
-    impl UserStore for TestUserStore {
-        async fn get(&self, key: &str) -> Result<User, crate::store::user_store::Error> {
-            self.users
+    impl ClientStore for TestClientStore {
+        async fn get(&self, key: &str) -> Result<Client, Error> {
+            self.clients
                 .read()
                 .await
                 .get(key)
@@ -110,33 +115,15 @@ pub mod test_fixtures {
         }
     }
 
-    pub const UNKNOWN_USER: &str = "unknown_user";
-    pub const USER: &str = "user1";
-
-    pub fn build_test_user_store() -> Arc<impl UserStore> {
+    pub fn build_test_client_store() -> Arc<impl ClientStore> {
         Arc::new(
             [
-                User {
-                    name: USER.to_owned(),
-                    password: Password::Plain(USER.to_owned()),
-                    allowed_scopes: Default::default(),
-                    attributes: HashMap::new(),
-                },
-                User {
-                    name: "user2".to_owned(),
-                    password: Password::Plain("user2".to_owned()),
-                    allowed_scopes: Default::default(),
-                    attributes: HashMap::new(),
-                },
-                User {
-                    name: "user3".to_owned(),
-                    password: Password::Plain("user3".to_owned()),
-                    allowed_scopes: Default::default(),
-                    attributes: HashMap::new(),
-                },
+                crate::data::client::test_fixtures::CONFIDENTIAL_CLIENT.clone(),
+                crate::data::client::test_fixtures::PUBLIC_CLIENT.clone(),
+                crate::data::client::test_fixtures::TINY_AUTH_FRONTEND.clone(),
             ]
             .into_iter()
-            .collect::<TestUserStore>(),
+            .collect::<TestClientStore>(),
         )
     }
 }

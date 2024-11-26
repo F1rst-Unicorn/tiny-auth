@@ -15,15 +15,14 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+pub mod client_store;
 pub mod memory;
 pub mod user_store;
 
-use crate::client::Client;
-use crate::client::Error as ClientError;
-use crate::password::{Error as PasswordError, Password};
+use crate::data::password::{Error as PasswordError, Password};
+use crate::data::scope::Scope;
+use crate::data::user::User;
 use crate::pkce::CodeChallenge;
-use crate::scope::Scope;
-use crate::user::User;
 use async_trait::async_trait;
 use chrono::DateTime;
 use chrono::Duration;
@@ -32,52 +31,11 @@ use futures_util::future::join_all;
 use std::error::Error as StdError;
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{debug, instrument, Level};
+use tracing::{instrument, Level};
 use url::Url;
 
+pub use client_store::ClientStore;
 pub use user_store::UserStore;
-
-#[async_trait]
-pub trait ClientStore: Send + Sync {
-    async fn get(&self, key: &str) -> Result<Client, ClientError>;
-}
-
-pub struct MergingClientStore {
-    stores: Vec<Arc<dyn ClientStore>>,
-}
-
-impl From<Vec<Arc<dyn ClientStore>>> for MergingClientStore {
-    fn from(value: Vec<Arc<dyn ClientStore>>) -> Self {
-        Self { stores: value }
-    }
-}
-
-#[async_trait]
-impl ClientStore for MergingClientStore {
-    #[instrument(level = Level::DEBUG, name = "get_client", skip_all)]
-    async fn get(&self, key: &str) -> Result<Client, ClientError> {
-        let results: Vec<_> = join_all(self.stores.iter().map(|v| v.get(key)))
-            .await
-            .into_iter()
-            .collect();
-
-        if let Some(Err(error)) = results.iter().find(|v| {
-            matches!(
-                v,
-                Err(ClientError::BackendError | ClientError::BackendErrorWithContext(_))
-            )
-        }) {
-            return Err(error.clone());
-        }
-
-        results
-            .into_iter()
-            .filter_map(Result::ok)
-            .reduce(Client::merge)
-            .inspect(|_| debug!("found"))
-            .ok_or(ClientError::NotFound)
-    }
-}
 
 #[derive(Error, Debug)]
 pub enum PasswordConstructionError {
@@ -259,64 +217,11 @@ pub trait AuthorizationCodeStore: Send + Sync {
 pub mod test_fixtures {
     use super::*;
 
-    use crate::client::{Client, Error};
-    use crate::oauth2::ClientType;
-    use crate::password::Password;
     use crate::store::AuthCodeValidationError::NotFound;
-    use crate::token::TokenValidator;
     use std::cell::RefCell;
-    use std::collections::BTreeSet;
     use std::collections::HashMap;
-    use std::iter::FromIterator;
     use std::sync::Arc;
     use url::Url;
-
-    pub const UNKNOWN_CLIENT_ID: &str = "unknown_client";
-    pub const CONFIDENTIAL_CLIENT: &str = "client1";
-    pub const PUBLIC_CLIENT: &str = "client2";
-    pub const TINY_AUTH_FRONTEND_CLIENT: &str = TokenValidator::TINY_AUTH_FRONTEND_CLIENT_ID;
-
-    struct TestClientStore {}
-
-    #[async_trait]
-    impl ClientStore for TestClientStore {
-        async fn get(&self, key: &str) -> Result<Client, Error> {
-            match key {
-                "client1" => Ok(Client {
-                    client_id: key.to_owned(),
-                    client_type: ClientType::Confidential {
-                        password: Password::Plain("client1".to_owned()),
-                        public_key: None,
-                    },
-                    #[allow(clippy::unwrap_used)] // test code
-                    redirect_uris: vec![Url::parse("http://localhost/client1").unwrap()],
-                    allowed_scopes: BTreeSet::from_iter(vec!["email".to_owned()]),
-                    attributes: HashMap::new(),
-                }),
-                "client2" => Ok(Client {
-                    client_id: key.to_owned(),
-                    client_type: ClientType::Public,
-                    #[allow(clippy::unwrap_used)] // test code
-                    redirect_uris: vec![Url::parse("http://localhost/client2").unwrap()],
-                    allowed_scopes: BTreeSet::from_iter(vec!["email".to_owned()]),
-                    attributes: HashMap::new(),
-                }),
-                "tiny-auth-frontend" => Ok(Client {
-                    client_id: key.to_owned(),
-                    client_type: ClientType::Public,
-                    #[allow(clippy::unwrap_used)] // test code
-                    redirect_uris: vec![Url::parse("http://localhost/client2").unwrap()],
-                    allowed_scopes: BTreeSet::from_iter(vec!["email".to_owned()]),
-                    attributes: HashMap::new(),
-                }),
-                _ => Err(Error::NotFound),
-            }
-        }
-    }
-
-    pub fn build_test_client_store() -> Arc<impl ClientStore> {
-        Arc::new(TestClientStore {})
-    }
 
     struct TestScopeStore {}
 

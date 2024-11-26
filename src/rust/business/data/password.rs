@@ -15,8 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::data::user::User;
 use crate::store::{PasswordConstructionError, PasswordStore};
-use crate::user::User;
 use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -271,7 +271,7 @@ pub mod test_fixtures {
 pub mod tests {
 
     use super::*;
-    use crate::password::test_fixtures::PEPPER;
+    use crate::data::password::test_fixtures::PEPPER;
     use test_log::test;
 
     #[test(tokio::test)]

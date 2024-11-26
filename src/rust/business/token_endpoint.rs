@@ -17,14 +17,15 @@
 
 use crate::authenticator::Authenticator;
 use crate::authenticator::Error::WrongCredentials;
-use crate::client::Client;
+use crate::data::client::Client;
+use crate::data::client::ClientType;
+use crate::data::scope::parse_scope_names;
+use crate::data::scope::Scope;
+use crate::data::user::User;
 use crate::issuer_configuration::IssuerConfiguration;
 use crate::oauth2;
-use crate::oauth2::ClientType;
 use crate::oauth2::GrantType;
 use crate::pkce::{CodeChallenge, CodeVerifier};
-use crate::scope::parse_scope_names;
-use crate::scope::Scope;
 use crate::store::ScopeStore;
 use crate::store::UserStore;
 use crate::store::AUTH_CODE_LIFE_TIME;
@@ -36,7 +37,6 @@ use crate::token::TokenValidator;
 use crate::token::{
     Access, EncodedAccessToken, EncodedIdToken, EncodedRefreshToken, Id, RefreshToken,
 };
-use crate::user::User;
 use chrono::offset::Local;
 use chrono::Duration;
 use futures_util::future::join_all;
@@ -734,11 +734,9 @@ pub mod inject {
 mod tests {
     use super::*;
     use crate::authenticator::test_fixtures::authenticator;
-    use crate::store::test_fixtures::build_test_client_store;
-    use crate::store::test_fixtures::build_test_scope_store;
-    use crate::store::test_fixtures::PUBLIC_CLIENT;
-    use crate::store::test_fixtures::UNKNOWN_CLIENT_ID;
-    use crate::store::test_fixtures::{build_test_auth_code_store, CONFIDENTIAL_CLIENT};
+    use crate::data::client::test_fixtures::{CONFIDENTIAL_CLIENT, PUBLIC_CLIENT};
+    use crate::store::client_store::test_fixtures::{build_test_client_store, UNKNOWN_CLIENT_ID};
+    use crate::store::test_fixtures::{build_test_auth_code_store, build_test_scope_store};
     use crate::store::user_store::test_fixtures::{build_test_user_store, USER};
     use crate::store::AuthorizationCodeRequest;
     use crate::test_fixtures::build_test_issuer_config;
@@ -805,7 +803,7 @@ mod tests {
             grant_type: GrantType::AuthorizationCode,
             code: Some("fdsa".to_owned()),
             redirect_uri: Some(Url::parse("http://localhost/client").unwrap()),
-            client_id: Some(PUBLIC_CLIENT.to_owned()),
+            client_id: Some(PUBLIC_CLIENT.client_id.to_owned()),
             ..Request::default()
         };
 
@@ -820,7 +818,7 @@ mod tests {
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
             .get_authorization_code(AuthorizationCodeRequest {
-                client_id: PUBLIC_CLIENT,
+                client_id: &PUBLIC_CLIENT.client_id,
                 user: USER,
                 redirect_uri: &redirect_uri,
                 scope: "",
@@ -835,7 +833,7 @@ mod tests {
             grant_type: GrantType::AuthorizationCode,
             code: Some(auth_code + "/wrong"),
             redirect_uri: Some(redirect_uri),
-            client_id: Some(PUBLIC_CLIENT.to_owned()),
+            client_id: Some(PUBLIC_CLIENT.client_id.to_owned()),
             ..Request::default()
         };
 
@@ -853,7 +851,7 @@ mod tests {
         let creation_time = Local::now() - Duration::minutes(2 * AUTH_CODE_LIFE_TIME);
         let auth_code = auth_code_store
             .get_authorization_code(AuthorizationCodeRequest {
-                client_id: PUBLIC_CLIENT,
+                client_id: PUBLIC_CLIENT.client_id.as_str(),
                 user: USER,
                 redirect_uri: &redirect_uri,
                 scope: "",
@@ -868,7 +866,7 @@ mod tests {
             grant_type: GrantType::AuthorizationCode,
             code: Some(auth_code),
             redirect_uri: Some(redirect_uri),
-            client_id: Some(PUBLIC_CLIENT.to_owned()),
+            client_id: Some(PUBLIC_CLIENT.client_id.to_owned()),
             ..Request::default()
         };
 
@@ -885,7 +883,7 @@ mod tests {
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
             .get_authorization_code(AuthorizationCodeRequest {
-                client_id: PUBLIC_CLIENT,
+                client_id: PUBLIC_CLIENT.client_id.as_str(),
                 user: USER,
                 redirect_uri: &redirect_uri,
                 scope: "",
@@ -900,7 +898,7 @@ mod tests {
             grant_type: GrantType::AuthorizationCode,
             code: Some(auth_code),
             redirect_uri: Some(redirect_uri),
-            client_id: Some(PUBLIC_CLIENT.to_owned()),
+            client_id: Some(PUBLIC_CLIENT.client_id.to_owned()),
             ..Request::default()
         };
 
@@ -923,7 +921,7 @@ mod tests {
             grant_type: GrantType::AuthorizationCode,
             code: Some("fdsa".to_owned()),
             redirect_uri: Some(redirect_uri),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
+            client_id: Some(CONFIDENTIAL_CLIENT.client_id.to_owned()),
             ..Request::default()
         };
 
@@ -938,7 +936,7 @@ mod tests {
         let auth_code_store = build_test_auth_code_store();
         let auth_code = auth_code_store
             .get_authorization_code(AuthorizationCodeRequest {
-                client_id: CONFIDENTIAL_CLIENT,
+                client_id: &CONFIDENTIAL_CLIENT.client_id,
                 user: USER,
                 redirect_uri: &redirect_uri,
                 scope: "",
@@ -954,8 +952,8 @@ mod tests {
             code: Some(auth_code),
             redirect_uri: Some(redirect_uri),
             basic_authentication: Some((
-                CONFIDENTIAL_CLIENT.to_owned(),
-                CONFIDENTIAL_CLIENT.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
             )),
             ..Request::default()
         };
@@ -979,7 +977,10 @@ mod tests {
     async fn public_client_cannot_get_access_token_for_itself() {
         let request = Request {
             grant_type: GrantType::ClientCredentials,
-            basic_authentication: Some((PUBLIC_CLIENT.to_owned(), PUBLIC_CLIENT.to_owned())),
+            basic_authentication: Some((
+                PUBLIC_CLIENT.client_id.to_owned(),
+                PUBLIC_CLIENT.client_id.to_owned(),
+            )),
             ..Request::default()
         };
 
@@ -993,8 +994,8 @@ mod tests {
         let request = Request {
             grant_type: GrantType::ClientCredentials,
             basic_authentication: Some((
-                CONFIDENTIAL_CLIENT.to_owned(),
-                CONFIDENTIAL_CLIENT.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
             )),
             ..Request::default()
         };
@@ -1017,8 +1018,8 @@ mod tests {
         let request = Request {
             grant_type: GrantType::Password,
             basic_authentication: Some((
-                CONFIDENTIAL_CLIENT.to_owned(),
-                CONFIDENTIAL_CLIENT.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
             )),
             password: Some(USER.to_owned()),
             ..Request::default()
@@ -1034,8 +1035,8 @@ mod tests {
         let request = Request {
             grant_type: GrantType::Password,
             basic_authentication: Some((
-                CONFIDENTIAL_CLIENT.to_owned(),
-                CONFIDENTIAL_CLIENT.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
             )),
             username: Some(USER.to_owned()),
             ..Request::default()
@@ -1050,7 +1051,10 @@ mod tests {
     async fn public_client_cannot_use_password_grant() {
         let request = Request {
             grant_type: GrantType::Password,
-            basic_authentication: Some((PUBLIC_CLIENT.to_owned(), PUBLIC_CLIENT.to_owned())),
+            basic_authentication: Some((
+                PUBLIC_CLIENT.client_id.to_owned(),
+                PUBLIC_CLIENT.client_id.to_owned(),
+            )),
             username: Some(USER.to_owned()),
             password: Some(USER.to_owned()),
             ..Request::default()
@@ -1066,8 +1070,8 @@ mod tests {
         let request = Request {
             grant_type: GrantType::Password,
             basic_authentication: Some((
-                CONFIDENTIAL_CLIENT.to_owned(),
-                CONFIDENTIAL_CLIENT.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
             )),
             username: Some(USER.to_owned()),
             password: Some(USER.to_owned()),
@@ -1116,8 +1120,11 @@ mod tests {
     async fn invalid_client_credentials_with_refresh_token_are_rejected() {
         let request = Request {
             grant_type: GrantType::RefreshToken,
-            basic_authentication: Some((CONFIDENTIAL_CLIENT.to_owned(), "wrong".to_owned())),
-            refresh_token: Some(build_refresh_token(CONFIDENTIAL_CLIENT).await),
+            basic_authentication: Some((
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
+                "wrong".to_owned(),
+            )),
+            refresh_token: Some(build_refresh_token(&CONFIDENTIAL_CLIENT.client_id).await),
             ..Request::default()
         };
 
@@ -1131,10 +1138,10 @@ mod tests {
         let request = Request {
             grant_type: GrantType::RefreshToken,
             basic_authentication: Some((
-                CONFIDENTIAL_CLIENT.to_owned(),
-                CONFIDENTIAL_CLIENT.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
             )),
-            refresh_token: Some(build_refresh_token(PUBLIC_CLIENT).await),
+            refresh_token: Some(build_refresh_token(&PUBLIC_CLIENT.client_id).await),
             ..Request::default()
         };
 
@@ -1148,10 +1155,10 @@ mod tests {
         let request = Request {
             grant_type: GrantType::RefreshToken,
             basic_authentication: Some((
-                CONFIDENTIAL_CLIENT.to_owned(),
-                CONFIDENTIAL_CLIENT.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
+                CONFIDENTIAL_CLIENT.client_id.to_owned(),
             )),
-            refresh_token: Some(build_refresh_token(CONFIDENTIAL_CLIENT).await),
+            refresh_token: Some(build_refresh_token(&CONFIDENTIAL_CLIENT.client_id).await),
             ..Request::default()
         };
 
@@ -1172,9 +1179,9 @@ mod tests {
     async fn successful_authentication_with_secret_as_post_parameter() {
         let request = Request {
             grant_type: GrantType::RefreshToken,
-            refresh_token: Some(build_refresh_token(CONFIDENTIAL_CLIENT).await),
-            client_id: Some(CONFIDENTIAL_CLIENT.to_owned()),
-            client_secret: Some(CONFIDENTIAL_CLIENT.to_owned()),
+            refresh_token: Some(build_refresh_token(&CONFIDENTIAL_CLIENT.client_id).await),
+            client_id: Some(CONFIDENTIAL_CLIENT.client_id.to_owned()),
+            client_secret: Some(CONFIDENTIAL_CLIENT.client_id.to_owned()),
             ..Request::default()
         };
 

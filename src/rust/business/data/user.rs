@@ -15,10 +15,9 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::client::Client;
-use crate::oauth2::ClientType;
-use crate::password::{pick_password_by_priority, Password};
-use crate::scope::merge_attributes;
+use crate::data::client::{Client, ClientType};
+use crate::data::password::{pick_password_by_priority, Password};
+use crate::data::scope::merge_attributes;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -93,8 +92,8 @@ impl TryFrom<Client> for User {
     }
 }
 
-#[cfg(test)]
-pub mod tests {
+#[allow(clippy::unwrap_used)]
+pub mod test_fixtures {
     use super::*;
     use lazy_static::lazy_static;
 
@@ -122,14 +121,13 @@ pub mod tests {
 
     lazy_static! {
         pub static ref DEFAULT_USER: User = User {
-            name: "name".to_owned(),
+            name: Default::default(),
             password: Password::Plain(String::new()),
             allowed_scopes: Default::default(),
             attributes: Default::default(),
         };
-    }
-
-    const USER_1: &str = r#"
+        pub static ref USER_1: User = serde_yaml::from_str(
+            r#"
 ---
 name: john
 password:
@@ -159,9 +157,8 @@ locale: en-US
 updated_at: 0
 groups:
   - test
-"#;
-
-    pub fn get_test_user() -> User {
-        serde_yaml::from_str(USER_1).unwrap()
+"#
+        )
+        .unwrap();
     }
 }

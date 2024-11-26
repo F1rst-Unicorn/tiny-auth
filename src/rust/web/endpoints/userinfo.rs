@@ -169,8 +169,8 @@ mod tests {
     use actix_web::test::TestRequest;
     use test_log::test;
     use tiny_auth_business::cors::test_fixtures::cors_lister;
-    use tiny_auth_business::store::test_fixtures::build_test_client_store;
-    use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
+    use tiny_auth_business::data::client::test_fixtures::PUBLIC_CLIENT;
+    use tiny_auth_business::store::client_store::test_fixtures::build_test_client_store;
     use tiny_auth_business::store::user_store::test_fixtures::build_test_user_store;
     use tiny_auth_business::store::user_store::test_fixtures::USER;
     use tiny_auth_business::store::ClientStore;
@@ -205,7 +205,10 @@ mod tests {
     pub async fn valid_token_is_returned() {
         let creator = build_test_token_creator();
         let user = build_test_user_store().get(USER).await.unwrap();
-        let client = build_test_client_store().get(PUBLIC_CLIENT).await.unwrap();
+        let client = build_test_client_store()
+            .get(&PUBLIC_CLIENT.client_id)
+            .await
+            .unwrap();
         let token = creator.build_token(&user, &client, &Vec::new(), 0);
         let expected_userinfo = creator.build_token(&user, &client, &Vec::new(), 0);
         let request = TestRequest::post()

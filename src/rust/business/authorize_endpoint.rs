@@ -15,10 +15,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::client::Client;
+use crate::data::client::Client;
+use crate::data::scope::parse_scope_names;
 use crate::oidc::{OidcResponseType, Prompt, ResponseType};
 use crate::pkce::{CodeChallenge, CodeChallengeMethod};
-use crate::scope::parse_scope_names;
 use crate::serde::deserialise_empty_as_none;
 use crate::store::ClientStore;
 use serde_derive::{Deserialize, Serialize};
@@ -359,7 +359,7 @@ pub mod inject {
 
 pub mod test_fixtures {
     use super::*;
-    use crate::store::test_fixtures::build_test_client_store;
+    use crate::store::client_store::test_fixtures::build_test_client_store;
 
     pub fn handler() -> Handler {
         inject::handler(build_test_client_store())

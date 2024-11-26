@@ -21,7 +21,7 @@ use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use ldap3::{Ldap, Scope, SearchEntry};
 use std::sync::Arc;
-use tiny_auth_business::password::Error as PasswordError;
+use tiny_auth_business::data::password::Error as PasswordError;
 use tiny_auth_business::store::user_store::Error as UserError;
 use tiny_auth_business::template::ldap_search::LdapSearchContext;
 use tiny_auth_business::template::{bind_dn::BindDnContext, Templater};

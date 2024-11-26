@@ -15,27 +15,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::password::Password;
-
 use std::fmt::Display;
 
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
-
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum ClientType {
-    #[serde(rename = "public")]
-    Public,
-
-    #[serde(rename = "confidential")]
-    Confidential {
-        #[serde(with = "serde_yaml::with::singleton_map")]
-        password: Password,
-
-        #[serde(alias = "public key")]
-        public_key: Option<String>,
-    },
-}
 
 #[derive(Deserialize, PartialEq, Eq, Clone, Copy, Debug, Default)]
 pub enum GrantType {

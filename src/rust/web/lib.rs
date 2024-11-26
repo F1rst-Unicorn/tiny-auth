@@ -58,9 +58,9 @@ use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::authorize_endpoint::Handler as AuthorizeHandler;
 use tiny_auth_business::consent::Handler as ConsentHandler;
 use tiny_auth_business::cors::CorsLister;
+use tiny_auth_business::data::jwk::Jwks;
 use tiny_auth_business::health::HealthChecker;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
-use tiny_auth_business::jwk::Jwks;
 use tiny_auth_business::template::web::{
     AuthenticateContext, ConsentContext, WebTemplater, WebappRootContext,
 };

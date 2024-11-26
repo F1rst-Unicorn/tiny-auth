@@ -34,9 +34,9 @@ use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
 use tiny_auth_business::consent::Error;
 use tiny_auth_business::consent::Handler;
 use tiny_auth_business::consent::Request as BusinessRequest;
+use tiny_auth_business::data::scope::ScopeDescription;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
-use tiny_auth_business::scope::ScopeDescription;
 use tiny_auth_business::serde::deserialise_empty_as_none;
 use tiny_auth_business::template::web::ErrorPage::ServerError;
 use tiny_auth_business::template::web::{ConsentContext, ErrorPage, WebTemplater};
@@ -349,8 +349,8 @@ mod tests {
     use tiny_auth_business::authorize_endpoint::test_fixtures::test_request;
     use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
     use tiny_auth_business::consent::test_fixtures::handler;
+    use tiny_auth_business::data::client::test_fixtures::PUBLIC_CLIENT;
     use tiny_auth_business::oidc::ResponseType;
-    use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
     use tiny_auth_business::store::user_store::test_fixtures::USER;
     use tiny_auth_business::template::test_fixtures::TestTemplater;
     use url::Url;
@@ -383,7 +383,7 @@ mod tests {
         let req = TestRequest::get().to_http_request();
         let session = req.get_session();
         let first_request = authorize::Request {
-            client_id: Some(PUBLIC_CLIENT.to_owned()),
+            client_id: Some(PUBLIC_CLIENT.client_id.to_owned()),
             redirect_uri: Some(Url::parse("http://localhost/client").unwrap()),
             state: Some("state".to_owned()),
             response_type: Some("code".to_owned()),
@@ -394,7 +394,7 @@ mod tests {
             .insert(
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
-                    client_id: PUBLIC_CLIENT.to_owned(),
+                    client_id: PUBLIC_CLIENT.client_id.to_owned(),
                     redirect_uri: first_request.redirect_uri.unwrap().clone(),
                     state: first_request.state.clone(),
                     response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
@@ -489,7 +489,7 @@ mod tests {
         let session = req.get_session();
         let redirect_uri = Url::parse("http://localhost/client").unwrap();
         let first_request = authorize::Request {
-            client_id: Some(PUBLIC_CLIENT.to_owned()),
+            client_id: Some(PUBLIC_CLIENT.client_id.to_owned()),
             redirect_uri: Some(redirect_uri.clone()),
             state: Some("state".to_owned()),
             response_type: Some("code".to_owned()),
@@ -500,7 +500,7 @@ mod tests {
             .insert(
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
-                    client_id: PUBLIC_CLIENT.to_owned(),
+                    client_id: PUBLIC_CLIENT.client_id.to_owned(),
                     redirect_uri: first_request.redirect_uri.clone().unwrap(),
                     state: first_request.state.clone(),
                     response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
@@ -553,7 +553,7 @@ mod tests {
         let session = req.get_session();
         let redirect_uri = Url::parse("http://localhost/client").unwrap();
         let first_request = authorize::Request {
-            client_id: Some(PUBLIC_CLIENT.to_owned()),
+            client_id: Some(PUBLIC_CLIENT.client_id.to_owned()),
             redirect_uri: Some(redirect_uri.clone()),
             state: Some("state".to_owned()),
             response_type: Some("id_token code".to_owned()),
@@ -564,7 +564,7 @@ mod tests {
             .insert(
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
-                    client_id: PUBLIC_CLIENT.to_owned(),
+                    client_id: PUBLIC_CLIENT.client_id.to_owned(),
                     redirect_uri: first_request.redirect_uri.clone().unwrap(),
                     state: first_request.state.clone(),
                     response_types: vec![

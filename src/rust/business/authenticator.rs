@@ -15,11 +15,11 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::client::Client;
-use crate::password::{DispatchingPasswordStore, Password};
+use crate::data::client::Client;
+use crate::data::password::{DispatchingPasswordStore, Password};
+use crate::data::user::User;
 use crate::rate_limiter::RateLimiter;
 use crate::store::{PasswordConstructionError, PasswordStore, UserStore};
-use crate::user::User;
 use chrono::Local;
 use std::sync::Arc;
 use tracing::warn;
@@ -41,7 +41,7 @@ pub enum Error {
     #[error("username or password wrong")]
     WrongCredentials,
     #[error("{0}")]
-    PasswordStoreError(#[from] crate::password::Error),
+    PasswordStoreError(#[from] crate::data::password::Error),
     #[error("{0}")]
     UserStoreError(#[from] crate::store::user_store::Error),
 }
@@ -127,7 +127,7 @@ pub mod inject {
 
 #[cfg(test)]
 pub mod test {
-    use crate::password::test_fixtures::in_place_password_store;
+    use crate::data::password::test_fixtures::in_place_password_store;
     use crate::store::user_store::test_fixtures::{build_test_user_store, USER};
     use crate::store::{PasswordStore, UserStore};
     use test_log::test;
@@ -152,8 +152,8 @@ pub mod test {
 
 pub mod test_fixtures {
     use crate::authenticator::Authenticator;
-    use crate::password::inject::{dispatching_password_store, in_place_password_store};
-    use crate::password::test_fixtures::PEPPER;
+    use crate::data::password::inject::{dispatching_password_store, in_place_password_store};
+    use crate::data::password::test_fixtures::PEPPER;
     use crate::store::user_store::test_fixtures::build_test_user_store;
     use crate::test_fixtures::build_test_rate_limiter;
     use std::sync::Arc;

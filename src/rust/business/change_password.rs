@@ -16,7 +16,7 @@
  */
 
 use crate::authenticator::Authenticator;
-use crate::password::Password;
+use crate::data::password::Password;
 use crate::token::{Access, Token, TokenValidator};
 use std::sync::Arc;
 use tracing::{span, Instrument, Level};

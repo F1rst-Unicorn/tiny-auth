@@ -15,10 +15,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::data::scope::Scope;
 use crate::oauth2;
 use crate::oidc;
 use crate::pkce::CodeChallenge;
-use crate::scope::Scope;
 use crate::store::AuthorizationCodeStore;
 use crate::store::ClientStore;
 use crate::store::ScopeStore;
@@ -210,7 +210,7 @@ impl Handler {
                 };
                 response.access_token = Some(encoded_token);
             }
-            if let oauth2::ClientType::Confidential { .. } = client.client_type {
+            if let crate::data::client::ClientType::Confidential { .. } = client.client_type {
                 let encoded_refresh_token = match self.token_creator.finalize_refresh_token(
                     self.token_creator.build_fresh_refresh_token(
                         &all_scopes,
@@ -285,10 +285,11 @@ pub mod inject {
 
 pub mod test_fixtures {
     use super::*;
+    use crate::data::user::User;
+    use crate::store::client_store::test_fixtures::build_test_client_store;
     use crate::store::test_fixtures::*;
     use crate::store::user_store::test_fixtures::{build_test_user_store, TestUserStore};
     use crate::test_fixtures::build_test_token_creator;
-    use crate::user::User;
 
     pub fn handler() -> Handler {
         inject::handler(
@@ -314,21 +315,21 @@ pub mod test_fixtures {
 #[cfg(test)]
 pub mod test {
     use crate::consent::test_fixtures::handler_with_user_store;
-    use crate::store::test_fixtures::CONFIDENTIAL_CLIENT;
-    use crate::user::tests::DEFAULT_USER;
+    use crate::data::client::test_fixtures::CONFIDENTIAL_CLIENT;
+    use crate::data::user::test_fixtures::DEFAULT_USER;
     use test_log::test;
 
     #[test(tokio::test)]
     async fn can_skip_consent_if_all_scopes_allowed() {
         let user = DEFAULT_USER
             .clone()
-            .with_allowed_scopes([(CONFIDENTIAL_CLIENT, ["email"])]);
+            .with_allowed_scopes([(CONFIDENTIAL_CLIENT.client_id.as_str(), ["email"])]);
         let uut = handler_with_user_store([user.clone()]);
 
         let actual = uut
             .can_skip_consent_screen(
                 user.name.as_str(),
-                CONFIDENTIAL_CLIENT,
+                CONFIDENTIAL_CLIENT.client_id.as_str(),
                 &[String::from("email")],
             )
             .await;
@@ -341,13 +342,13 @@ pub mod test {
     async fn must_consent_if_scope_is_not_allowed() {
         let user = DEFAULT_USER
             .clone()
-            .with_allowed_scopes([(CONFIDENTIAL_CLIENT, ["openid"])]);
+            .with_allowed_scopes([(&CONFIDENTIAL_CLIENT.client_id, ["openid"])]);
         let uut = handler_with_user_store([user.clone()]);
 
         let actual = uut
             .can_skip_consent_screen(
                 user.name.as_str(),
-                CONFIDENTIAL_CLIENT,
+                CONFIDENTIAL_CLIENT.client_id.as_str(),
                 &[String::from("email")],
             )
             .await;

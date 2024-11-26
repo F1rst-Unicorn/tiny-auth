@@ -21,12 +21,12 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use sqlx::{query_file, query_file_scalar};
 use std::num::{NonZeroI64, NonZeroU32};
-use tiny_auth_business::password::{Error as PasswordError, Password, HASH_ITERATIONS};
+use tiny_auth_business::data::password::{Error as PasswordError, Password, HASH_ITERATIONS};
+use tiny_auth_business::data::user::User;
 use tiny_auth_business::store::PasswordConstructionError::BackendError;
 use tiny_auth_business::store::{
     PasswordConstructionError, PasswordStore, PasswordUnchangedReason,
 };
-use tiny_auth_business::user::User;
 use tiny_auth_business::util::wrap_err;
 use tracing::{error, info};
 use tracing::{instrument, warn};

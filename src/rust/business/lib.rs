@@ -18,35 +18,31 @@
 pub mod authenticator;
 pub mod authorize_endpoint;
 pub mod change_password;
-pub mod client;
 pub mod clock;
 pub mod consent;
 pub mod cors;
+pub mod data;
 pub mod data_loader;
 #[cfg(test)]
 pub mod data_loader_test;
 pub mod health;
 pub mod issuer_configuration;
 pub mod json_pointer;
-pub mod jwk;
 pub mod oauth2;
 pub mod oidc;
-pub mod password;
 pub mod pkce;
 pub mod rate_limiter;
-pub mod scope;
 pub mod serde;
 pub mod store;
 pub mod template;
 pub mod token;
 pub mod token_endpoint;
-pub mod user;
 pub mod userinfo_endpoint;
 pub mod util;
 
 pub mod test_fixtures {
+    use crate::data::jwk::Jwk;
     use crate::issuer_configuration::IssuerConfiguration;
-    use crate::jwk::Jwk;
     use crate::rate_limiter::RateLimiter;
     use crate::template::test_fixtures::TestTemplater;
     use crate::token::TokenCreator;

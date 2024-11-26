@@ -15,11 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::data::client::Client;
-use crate::data::user::User;
-
-#[derive(Clone, Copy)]
-pub struct ScopeContext<'a> {
-    pub user: &'a User,
-    pub client: &'a Client,
-}
+pub mod client;
+pub mod jwk;
+pub mod password;
+pub mod scope;
+pub mod user;

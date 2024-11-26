@@ -14,15 +14,15 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::client::Client;
 use crate::clock::Clock;
+use crate::data::client::Client;
+use crate::data::jwk::Jwk;
+use crate::data::scope::Scope;
+use crate::data::scope::{merge, Destination};
+use crate::data::user::User;
 use crate::issuer_configuration::IssuerConfiguration;
-use crate::jwk::Jwk;
-use crate::scope::Scope;
-use crate::scope::{merge, Destination};
 use crate::template::scope::ScopeContext;
 use crate::template::Templater;
-use crate::user::User;
 use chrono::Duration;
 use jsonwebtoken::decode;
 use jsonwebtoken::encode;
@@ -445,9 +445,8 @@ pub mod test_fixtures {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::store::test_fixtures::{
-        build_test_client_store, CONFIDENTIAL_CLIENT, TINY_AUTH_FRONTEND_CLIENT,
-    };
+    use crate::data::client::test_fixtures::{CONFIDENTIAL_CLIENT, TINY_AUTH_FRONTEND};
+    use crate::store::client_store::test_fixtures::build_test_client_store;
     use crate::store::user_store::test_fixtures::{build_test_user_store, USER};
     use crate::store::ClientStore;
     use crate::store::UserStore;
@@ -494,12 +493,12 @@ mod tests {
 
     #[test(tokio::test)]
     pub async fn different_audience_is_rejected() {
-        validate_audience(CONFIDENTIAL_CLIENT, false).await;
+        validate_audience(CONFIDENTIAL_CLIENT.client_id.as_str(), false).await;
     }
 
     #[test(tokio::test)]
     pub async fn own_audience_is_accepted() {
-        validate_audience(TINY_AUTH_FRONTEND_CLIENT, true).await;
+        validate_audience(TINY_AUTH_FRONTEND.client_id.as_str(), true).await;
     }
 
     async fn validate_audience(audience: &str, expected: bool) {

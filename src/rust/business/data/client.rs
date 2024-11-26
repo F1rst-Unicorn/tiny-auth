@@ -15,9 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::oauth2::ClientType;
-use crate::password::{pick_password_by_priority, Password};
-use crate::scope::merge_attributes;
+use crate::data::password::{pick_password_by_priority, Password};
+use crate::data::scope::merge_attributes;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
 use serde::Deserialize;
@@ -25,21 +24,22 @@ use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::error::Error as StdError;
-use std::sync::Arc;
-use thiserror::Error;
-use tracing::error;
 use tracing::warn;
 use url::Url;
 
-#[derive(Error, Debug, Clone)]
-pub enum Error {
-    #[error("not found")]
-    NotFound,
-    #[error("backend error")]
-    BackendError,
-    #[error("backend error: {0}")]
-    BackendErrorWithContext(#[from] Arc<dyn StdError + Send + Sync>),
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ClientType {
+    #[serde(rename = "public")]
+    Public,
+
+    #[serde(rename = "confidential")]
+    Confidential {
+        #[serde(with = "serde_yaml::with::singleton_map")]
+        password: Password,
+
+        #[serde(alias = "public key")]
+        public_key: Option<String>,
+    },
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -189,26 +189,42 @@ impl Client {
     }
 }
 
-#[cfg(test)]
-pub mod tests {
+#[allow(clippy::unwrap_used)]
+pub mod test_fixtures {
     use super::*;
+    use crate::token::TokenValidator;
+    use lazy_static::lazy_static;
 
-    const CLIENT_1: &str = r#"
+    lazy_static! {
+        pub static ref PUBLIC_CLIENT: Client = Client {
+            client_id: "client2".to_owned(),
+            client_type: ClientType::Public,
+            redirect_uris: vec![Url::parse("http://localhost/client2").unwrap()],
+            allowed_scopes: BTreeSet::from_iter(vec!["email".to_owned()]),
+            attributes: Default::default(),
+        };
+        pub static ref TINY_AUTH_FRONTEND: Client = Client {
+            client_id: TokenValidator::TINY_AUTH_FRONTEND_CLIENT_ID.to_owned(),
+            client_type: ClientType::Public,
+            redirect_uris: vec![Url::parse("http://localhost").unwrap()],
+            allowed_scopes: BTreeSet::from_iter(vec!["email".to_owned()]),
+            attributes: Default::default(),
+        };
+        pub static ref CONFIDENTIAL_CLIENT: Client = serde_yaml::from_str(
+            r#"
 ---
 client_id: confidential
 client_type:
   confidential:
     password:
-      Pbkdf2HmacSha256:
-        credential: yIwGQgK7dU7LKxageOikUK1Ci8LekYLAUqsUQqKgBXk=
-        iterations: 100000
-        salt: GDyTkeq//lzzWvEd6JJn8Eu227floAeFemr+4oAsXA1jb25maWRlbnRpYWw=
+      plain: confidential
 
 redirect_uris:
-  - http://localhost/confidential
-"#;
-
-    pub fn get_test_client() -> Client {
-        serde_yaml::from_str(CLIENT_1).unwrap()
+  - http://localhost/client1
+allowed_scopes:
+  - email
+"#
+        )
+        .unwrap();
     }
 }
