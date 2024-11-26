@@ -58,6 +58,7 @@ use tiny_auth_business::password::inject::{dispatching_password_store, in_place_
 use tiny_auth_business::password::DispatchingPasswordStore;
 use tiny_auth_business::rate_limiter::RateLimiter;
 use tiny_auth_business::store::memory::*;
+use tiny_auth_business::store::user_store::MergingUserStore;
 use tiny_auth_business::store::*;
 use tiny_auth_business::template::web::{
     AuthenticateContext, ConsentContext, WebTemplater, WebappRootContext,
@@ -923,7 +924,6 @@ pub mod tests {
     use tiny_auth_business::store::AuthorizationCodeStore;
     use tiny_auth_business::store::ClientStore;
     use tiny_auth_business::store::ScopeStore;
-    use tiny_auth_business::store::UserStore;
     use tiny_auth_business::token::TokenValidator;
 
     pub fn build_test_issuer_config_for_web() -> Data<IssuerConfiguration> {
@@ -957,10 +957,6 @@ pub mod tests {
 
     pub fn build_test_client_store() -> Data<Arc<dyn ClientStore>> {
         Data::new(test_fixtures::build_test_client_store())
-    }
-
-    pub fn build_test_user_store() -> Data<Arc<dyn UserStore>> {
-        Data::new(test_fixtures::build_test_user_store())
     }
 
     pub fn build_test_scope_store() -> Data<Arc<dyn ScopeStore>> {

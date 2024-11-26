@@ -170,9 +170,9 @@ mod tests {
     use test_log::test;
     use tiny_auth_business::cors::test_fixtures::cors_lister;
     use tiny_auth_business::store::test_fixtures::build_test_client_store;
-    use tiny_auth_business::store::test_fixtures::build_test_user_store;
     use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
-    use tiny_auth_business::store::test_fixtures::USER;
+    use tiny_auth_business::store::user_store::test_fixtures::build_test_user_store;
+    use tiny_auth_business::store::user_store::test_fixtures::USER;
     use tiny_auth_business::store::ClientStore;
     use tiny_auth_business::store::UserStore;
     use tiny_auth_business::test_fixtures::build_test_token_creator;

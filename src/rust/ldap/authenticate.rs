@@ -22,9 +22,9 @@ use enum_dispatch::enum_dispatch;
 use ldap3::{Ldap, Scope, SearchEntry};
 use std::sync::Arc;
 use tiny_auth_business::password::Error as PasswordError;
+use tiny_auth_business::store::user_store::Error as UserError;
 use tiny_auth_business::template::ldap_search::LdapSearchContext;
 use tiny_auth_business::template::{bind_dn::BindDnContext, Templater};
-use tiny_auth_business::user::Error as UserError;
 use tiny_auth_business::util::wrap_err;
 use tracing::{debug, instrument, warn, Level};
 

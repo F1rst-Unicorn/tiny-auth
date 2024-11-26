@@ -446,9 +446,9 @@ pub mod test_fixtures {
 mod tests {
     use super::*;
     use crate::store::test_fixtures::{
-        build_test_client_store, build_test_user_store, CONFIDENTIAL_CLIENT,
-        TINY_AUTH_FRONTEND_CLIENT, USER,
+        build_test_client_store, CONFIDENTIAL_CLIENT, TINY_AUTH_FRONTEND_CLIENT,
     };
+    use crate::store::user_store::test_fixtures::{build_test_user_store, USER};
     use crate::store::ClientStore;
     use crate::store::UserStore;
     use crate::test_fixtures::{

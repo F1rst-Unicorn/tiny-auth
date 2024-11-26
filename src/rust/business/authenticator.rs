@@ -43,7 +43,7 @@ pub enum Error {
     #[error("{0}")]
     PasswordStoreError(#[from] crate::password::Error),
     #[error("{0}")]
-    UserStoreError(#[from] crate::user::Error),
+    UserStoreError(#[from] crate::store::user_store::Error),
 }
 
 impl Authenticator {
@@ -128,7 +128,7 @@ pub mod inject {
 #[cfg(test)]
 pub mod test {
     use crate::password::test_fixtures::in_place_password_store;
-    use crate::store::test_fixtures::{build_test_user_store, USER};
+    use crate::store::user_store::test_fixtures::{build_test_user_store, USER};
     use crate::store::{PasswordStore, UserStore};
     use test_log::test;
 
@@ -154,7 +154,7 @@ pub mod test_fixtures {
     use crate::authenticator::Authenticator;
     use crate::password::inject::{dispatching_password_store, in_place_password_store};
     use crate::password::test_fixtures::PEPPER;
-    use crate::store::test_fixtures::build_test_user_store;
+    use crate::store::user_store::test_fixtures::build_test_user_store;
     use crate::test_fixtures::build_test_rate_limiter;
     use std::sync::Arc;
 

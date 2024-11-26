@@ -404,8 +404,8 @@ mod tests {
     use tiny_auth_business::authorize_endpoint::test_fixtures::test_request;
     use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
     use tiny_auth_business::oidc::ResponseType;
-    use tiny_auth_business::store::test_fixtures::UNKNOWN_USER;
-    use tiny_auth_business::store::test_fixtures::USER;
+    use tiny_auth_business::store::user_store::test_fixtures::UNKNOWN_USER;
+    use tiny_auth_business::store::user_store::test_fixtures::USER;
     use tiny_auth_business::template::test_fixtures::TestTemplater;
     use url::Url;
 

@@ -305,12 +305,14 @@ impl Handler {
             .get(&record.username)
             .await
             .map_err(|e| match e {
-                crate::user::Error::NotFound => {
+                crate::store::user_store::Error::NotFound => {
                     debug!("user not found");
                     Error::WrongUsernameOrPassword(format!("{}", WrongCredentials))
                 }
-                crate::user::Error::BackendError
-                | crate::user::Error::BackendErrorWithContext(_) => Error::AuthenticationFailed,
+                crate::store::user_store::Error::BackendError
+                | crate::store::user_store::Error::BackendErrorWithContext(_) => {
+                    Error::AuthenticationFailed
+                }
             })?;
 
         let scopes = self
@@ -428,12 +430,14 @@ impl Handler {
             .get(&refresh_token.subject)
             .await
             .map_err(|e| match e {
-                crate::user::Error::NotFound => {
+                crate::store::user_store::Error::NotFound => {
                     debug!("user not found");
                     Error::WrongUsernameOrPassword(format!("{}", WrongCredentials))
                 }
-                crate::user::Error::BackendError
-                | crate::user::Error::BackendErrorWithContext(_) => Error::AuthenticationFailed,
+                crate::store::user_store::Error::BackendError
+                | crate::store::user_store::Error::BackendErrorWithContext(_) => {
+                    Error::AuthenticationFailed
+                }
             })?;
 
         let granted_scopes = BTreeSet::from_iter(refresh_token.scopes);
@@ -732,10 +736,10 @@ mod tests {
     use crate::authenticator::test_fixtures::authenticator;
     use crate::store::test_fixtures::build_test_client_store;
     use crate::store::test_fixtures::build_test_scope_store;
-    use crate::store::test_fixtures::build_test_user_store;
     use crate::store::test_fixtures::PUBLIC_CLIENT;
     use crate::store::test_fixtures::UNKNOWN_CLIENT_ID;
-    use crate::store::test_fixtures::{build_test_auth_code_store, CONFIDENTIAL_CLIENT, USER};
+    use crate::store::test_fixtures::{build_test_auth_code_store, CONFIDENTIAL_CLIENT};
+    use crate::store::user_store::test_fixtures::{build_test_user_store, USER};
     use crate::store::AuthorizationCodeRequest;
     use crate::test_fixtures::build_test_issuer_config;
     use crate::test_fixtures::build_test_token_creator;

@@ -16,13 +16,14 @@
  */
 
 pub mod memory;
+pub mod user_store;
 
 use crate::client::Client;
 use crate::client::Error as ClientError;
 use crate::password::{Error as PasswordError, Password};
 use crate::pkce::CodeChallenge;
 use crate::scope::Scope;
-use crate::user::{Error as UserError, User};
+use crate::user::User;
 use async_trait::async_trait;
 use chrono::DateTime;
 use chrono::Duration;
@@ -34,47 +35,7 @@ use thiserror::Error;
 use tracing::{debug, instrument, Level};
 use url::Url;
 
-#[async_trait]
-pub trait UserStore: Send + Sync {
-    async fn get(&self, key: &str) -> Result<User, UserError>;
-}
-
-pub struct MergingUserStore {
-    stores: Vec<Arc<dyn UserStore>>,
-}
-
-impl From<Vec<Arc<dyn UserStore>>> for MergingUserStore {
-    fn from(value: Vec<Arc<dyn UserStore>>) -> Self {
-        Self { stores: value }
-    }
-}
-
-#[async_trait]
-impl UserStore for MergingUserStore {
-    #[instrument(level = Level::DEBUG, name = "get_user", skip_all)]
-    async fn get(&self, key: &str) -> Result<User, UserError> {
-        let results: Vec<_> = join_all(self.stores.iter().map(|v| v.get(key)))
-            .await
-            .into_iter()
-            .collect();
-
-        if let Some(Err(error)) = results.iter().find(|v| {
-            matches!(
-                v,
-                Err(UserError::BackendError | UserError::BackendErrorWithContext(_))
-            )
-        }) {
-            return Err(error.clone());
-        }
-
-        results
-            .into_iter()
-            .filter_map(Result::ok)
-            .reduce(User::merge)
-            .inspect(|_| debug!("found"))
-            .ok_or(UserError::NotFound)
-    }
-}
+pub use user_store::UserStore;
 
 #[async_trait]
 pub trait ClientStore: Send + Sync {
@@ -303,37 +264,12 @@ pub mod test_fixtures {
     use crate::password::Password;
     use crate::store::AuthCodeValidationError::NotFound;
     use crate::token::TokenValidator;
-    use crate::user::User;
     use std::cell::RefCell;
     use std::collections::BTreeSet;
     use std::collections::HashMap;
     use std::iter::FromIterator;
     use std::sync::Arc;
     use url::Url;
-
-    pub const UNKNOWN_USER: &str = "unknown_user";
-    pub const USER: &str = "user1";
-
-    struct TestUserStore {}
-
-    #[async_trait]
-    impl UserStore for TestUserStore {
-        async fn get(&self, key: &str) -> Result<User, UserError> {
-            match key {
-                "user1" | "user2" | "user3" => Ok(User {
-                    name: key.to_owned(),
-                    password: Password::Plain(key.to_owned()),
-                    allowed_scopes: Default::default(),
-                    attributes: HashMap::new(),
-                }),
-                _ => Err(UserError::NotFound),
-            }
-        }
-    }
-
-    pub fn build_test_user_store() -> Arc<impl UserStore> {
-        Arc::new(TestUserStore {})
-    }
 
     pub const UNKNOWN_CLIENT_ID: &str = "unknown_client";
     pub const CONFIDENTIAL_CLIENT: &str = "client1";

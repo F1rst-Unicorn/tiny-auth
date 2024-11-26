@@ -62,6 +62,7 @@ pub enum Error {
     TokenEncodingError,
 }
 
+#[derive(Debug)]
 pub struct UserNotFound;
 
 impl Display for UserNotFound {
@@ -99,7 +100,7 @@ impl Handler {
 
         let allowed_scopes = user.get_allowed_scopes(client_id);
         let requested_scopes = BTreeSet::from_iter(requested_scopes);
-        return Ok(requested_scopes.is_subset(&allowed_scopes.iter().collect()));
+        Ok(requested_scopes.is_subset(&allowed_scopes.iter().collect()))
     }
 
     pub async fn get_scope(&self, key: &str) -> Option<Scope> {
@@ -285,7 +286,9 @@ pub mod inject {
 pub mod test_fixtures {
     use super::*;
     use crate::store::test_fixtures::*;
+    use crate::store::user_store::test_fixtures::{build_test_user_store, TestUserStore};
     use crate::test_fixtures::build_test_token_creator;
+    use crate::user::User;
 
     pub fn handler() -> Handler {
         inject::handler(
@@ -295,5 +298,61 @@ pub mod test_fixtures {
             build_test_auth_code_store(),
             build_test_token_creator(),
         )
+    }
+
+    pub fn handler_with_user_store(users: impl IntoIterator<Item = User>) -> Handler {
+        inject::handler(
+            build_test_scope_store(),
+            Arc::new(users.into_iter().collect::<TestUserStore>()),
+            build_test_client_store(),
+            build_test_auth_code_store(),
+            build_test_token_creator(),
+        )
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use crate::consent::test_fixtures::handler_with_user_store;
+    use crate::store::test_fixtures::CONFIDENTIAL_CLIENT;
+    use crate::user::tests::DEFAULT_USER;
+    use test_log::test;
+
+    #[test(tokio::test)]
+    async fn can_skip_consent_if_all_scopes_allowed() {
+        let user = DEFAULT_USER
+            .clone()
+            .with_allowed_scopes([(CONFIDENTIAL_CLIENT, ["email"])]);
+        let uut = handler_with_user_store([user.clone()]);
+
+        let actual = uut
+            .can_skip_consent_screen(
+                user.name.as_str(),
+                CONFIDENTIAL_CLIENT,
+                &[String::from("email")],
+            )
+            .await;
+
+        assert!(actual.is_ok());
+        assert!(actual.unwrap());
+    }
+
+    #[test(tokio::test)]
+    async fn must_consent_if_scope_is_not_allowed() {
+        let user = DEFAULT_USER
+            .clone()
+            .with_allowed_scopes([(CONFIDENTIAL_CLIENT, ["openid"])]);
+        let uut = handler_with_user_store([user.clone()]);
+
+        let actual = uut
+            .can_skip_consent_screen(
+                user.name.as_str(),
+                CONFIDENTIAL_CLIENT,
+                &[String::from("email")],
+            )
+            .await;
+
+        assert!(actual.is_ok());
+        assert!(!actual.unwrap());
     }
 }

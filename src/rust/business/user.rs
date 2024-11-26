@@ -26,20 +26,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::error::Error as StdError;
-use std::sync::Arc;
-use thiserror::Error;
 use tracing::{debug, warn};
-
-#[derive(Error, Debug, Clone)]
-pub enum Error {
-    #[error("not found")]
-    NotFound,
-    #[error("backend error")]
-    BackendError,
-    #[error("backend error: {0}")]
-    BackendErrorWithContext(#[from] Arc<dyn StdError + Send + Sync>),
-}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct User {
@@ -109,6 +96,38 @@ impl TryFrom<Client> for User {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use lazy_static::lazy_static;
+
+    impl User {
+        pub fn with_allowed_scopes<'a, 'b, C, S>(
+            mut self,
+            scopes: impl IntoIterator<Item = (&'a C, impl IntoIterator<Item = &'b S>)>,
+        ) -> Self
+        where
+            C: ToOwned<Owned = String> + ?Sized + 'a,
+            S: ToOwned<Owned = String> + ?Sized + 'b,
+        {
+            self.allowed_scopes = scopes
+                .into_iter()
+                .map(|(client_id, scopes)| {
+                    (
+                        client_id.to_owned(),
+                        scopes.into_iter().map(|v| v.to_owned()).collect(),
+                    )
+                })
+                .collect();
+            self
+        }
+    }
+
+    lazy_static! {
+        pub static ref DEFAULT_USER: User = User {
+            name: "name".to_owned(),
+            password: Password::Plain(String::new()),
+            allowed_scopes: Default::default(),
+            attributes: Default::default(),
+        };
+    }
 
     const USER_1: &str = r#"
 ---

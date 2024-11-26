@@ -351,7 +351,7 @@ mod tests {
     use tiny_auth_business::consent::test_fixtures::handler;
     use tiny_auth_business::oidc::ResponseType;
     use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
-    use tiny_auth_business::store::test_fixtures::USER;
+    use tiny_auth_business::store::user_store::test_fixtures::USER;
     use tiny_auth_business::template::test_fixtures::TestTemplater;
     use url::Url;
 

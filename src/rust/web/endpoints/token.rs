@@ -318,7 +318,7 @@ mod tests {
     use tiny_auth_business::store::test_fixtures::build_test_auth_code_store;
     use tiny_auth_business::store::test_fixtures::build_test_client_store;
     use tiny_auth_business::store::test_fixtures::build_test_scope_store;
-    use tiny_auth_business::store::test_fixtures::build_test_user_store;
+    use tiny_auth_business::store::user_store::test_fixtures::build_test_user_store;
     use tiny_auth_business::test_fixtures::build_test_issuer_config;
     use tiny_auth_business::test_fixtures::build_test_token_creator;
     use tiny_auth_business::test_fixtures::build_test_token_validator;
