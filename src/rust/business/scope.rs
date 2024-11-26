@@ -490,6 +490,13 @@ mod tests {
     use test_log::test;
 
     #[test]
+    pub fn destinations_map_correctly() {
+        assert_eq!(Destination::AccessToken, Destination::from(Access));
+        assert_eq!(Destination::IdToken, Destination::from(Id));
+        assert_eq!(Destination::UserInfo, Destination::from(Userinfo));
+    }
+
+    #[test]
     pub fn valid_inserting_works() {
         let structure = json!({
             "key": {

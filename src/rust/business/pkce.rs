@@ -26,7 +26,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Eq, PartialEq)]
 pub enum Error {
     #[error("invalid length")]
     InvalidLength,
@@ -112,7 +112,7 @@ impl CodeChallenge {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct CodeVerifier<'a>(Cow<'a, str>);
 
 impl<'a> TryFrom<&'a str> for CodeVerifier<'a> {
@@ -132,7 +132,7 @@ impl<'a> TryFrom<&'a str> for CodeVerifier<'a> {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::pkce::{CodeChallenge, CodeChallengeMethod, CodeVerifier};
+    use super::*;
     use pretty_assertions::assert_eq;
     use std::borrow::Cow;
     use test_log::test;
@@ -140,6 +140,18 @@ pub mod tests {
     #[test]
     pub fn learning_test_cow_eq() {
         assert_eq!(Cow::Owned::<str>("abc".to_owned()), Cow::Borrowed("abc"));
+    }
+
+    #[test]
+    pub fn short_challenges_are_rejected() {
+        assert_eq!(
+            Err(Error::InvalidLength),
+            CodeVerifier::try_from(String::from("a").repeat(42).as_str())
+        );
+        assert_eq!(
+            Err(Error::InvalidLength),
+            CodeVerifier::try_from(String::from("a").repeat(129).as_str())
+        );
     }
 
     #[test]
