@@ -15,12 +15,13 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::{error_with_code, return_rendered_template, server_error};
+use super::{error_with_code, return_rendered_template, server_error, REDIRECT_QUERY_PARAM_CODE};
 use crate::endpoints::authenticate;
 use crate::endpoints::authorize;
 use crate::endpoints::parse_first_request;
 use crate::endpoints::render_redirect_error;
 use actix_session::Session;
+use actix_web::http::header::LOCATION;
 use actix_web::http::StatusCode;
 use actix_web::web;
 use actix_web::HttpResponse;
@@ -43,6 +44,8 @@ use tiny_auth_business::template::web::{ConsentContext, ErrorPage, WebTemplater}
 use tracing::{debug, error, instrument};
 use tracing::{span, warn, Instrument, Level};
 use web::Data;
+
+pub const ENDPOINT_NAME: &str = "consent";
 
 #[instrument(skip_all, name = "consent_get")]
 pub async fn get(
@@ -230,7 +233,7 @@ async fn process_skipping_csrf(
 
     response
         .code
-        .and_then(|v| response_parameters.insert("code", v));
+        .and_then(|v| response_parameters.insert(REDIRECT_QUERY_PARAM_CODE, v));
     response
         .access_token
         .and_then(|v| response_parameters.insert("access_token", v.into()));
@@ -266,7 +269,7 @@ async fn process_skipping_csrf(
     session.remove(authorize::SESSION_KEY);
 
     HttpResponse::Found()
-        .insert_header(("Location", redirect_uri.as_str()))
+        .insert_header((LOCATION, redirect_uri.as_str()))
         .finish()
 }
 
@@ -337,8 +340,11 @@ mod tests {
     use super::super::generate_csrf_token;
     use super::super::CSRF_SESSION_KEY;
     use super::*;
+    use crate::endpoints::tests::query_parameter_of;
+    use crate::endpoints::{REDIRECT_QUERY_PARAM_CODE, REDIRECT_QUERY_PARAM_STATE};
     use actix_session::SessionExt;
     use actix_web::http;
+    use actix_web::http::header::LOCATION;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
     use actix_web::web::Form;
@@ -530,21 +536,20 @@ mod tests {
 
         assert_eq!(resp.status(), http::StatusCode::FOUND);
 
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
 
         assert_eq!(redirect_uri.scheme(), url.scheme());
         assert_eq!(redirect_uri.domain(), url.domain());
         assert_eq!(redirect_uri.port(), url.port());
         assert_eq!(redirect_uri.path(), url.path());
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param.0 == *"state" && &param.1 == first_request.state.as_ref().unwrap()));
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param.0 == *"code" && !param.1.is_empty()));
+        assert_eq!(
+            first_request.state.to_owned(),
+            query_parameter_of(&url, REDIRECT_QUERY_PARAM_STATE)
+        );
+        assert!(!query_parameter_of(&url, REDIRECT_QUERY_PARAM_CODE)
+            .unwrap()
+            .is_empty());
     }
 
     #[test(actix_web::test)]
@@ -598,8 +603,8 @@ mod tests {
 
         assert_eq!(resp.status(), StatusCode::FOUND);
 
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        let url = dbg!(Url::parse(url).unwrap());
+        let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
+        let url = Url::parse(url).unwrap();
 
         assert_eq!(redirect_uri.scheme(), url.scheme());
         assert_eq!(redirect_uri.domain(), url.domain());
@@ -610,8 +615,14 @@ mod tests {
         let response_parameters =
             serde_urlencoded::from_str::<HashMap<String, String>>(fragment).unwrap();
 
-        assert_eq!(Some(&"state".to_owned()), response_parameters.get("state"));
-        assert!(!response_parameters.get("code").unwrap().is_empty());
+        assert_eq!(
+            Some(&REDIRECT_QUERY_PARAM_STATE.to_owned()),
+            response_parameters.get(REDIRECT_QUERY_PARAM_STATE)
+        );
+        assert!(!response_parameters
+            .get(REDIRECT_QUERY_PARAM_CODE)
+            .unwrap()
+            .is_empty());
         assert!(!response_parameters.get("id_token").unwrap().is_empty());
     }
 

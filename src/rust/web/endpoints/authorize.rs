@@ -15,9 +15,10 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::{error_with_code, server_error};
+use super::{authenticate, error_with_code, server_error};
 use crate::session::AuthorizeSession;
 use actix_session::Session;
+use actix_web::http::header::LOCATION;
 use actix_web::http::StatusCode;
 use actix_web::web;
 use actix_web::HttpResponse;
@@ -208,7 +209,7 @@ pub async fn handle(
         }) {
         Err(e) => e,
         Ok(_) => HttpResponse::SeeOther()
-            .insert_header(("Location", "authenticate"))
+            .insert_header((LOCATION, authenticate::ENDPOINT_NAME))
             .finish(),
     }
 }
@@ -247,7 +248,10 @@ fn return_error(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::endpoints::parse_first_request;
+    use crate::endpoints::tests::query_parameter_of;
+    use crate::endpoints::{
+        parse_first_request, REDIRECT_QUERY_PARAM_ERROR, REDIRECT_QUERY_PARAM_STATE,
+    };
     use actix_session::SessionExt;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
@@ -344,25 +348,21 @@ mod tests {
 
         assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
 
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
 
         assert_eq!(redirect_uri.scheme(), url.scheme());
         assert_eq!(redirect_uri.domain(), url.domain());
         assert_eq!(redirect_uri.port(), url.port());
         assert_eq!(redirect_uri.path(), url.path());
-        let expected_error = format!(
-            "{}",
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
+        assert_eq!(
+            Some(client_state.to_owned()),
+            query_parameter_of(&url, REDIRECT_QUERY_PARAM_STATE)
         );
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param == ("state".to_owned(), client_state.to_owned())));
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param == ("error".to_owned(), expected_error.to_owned())));
+        assert_eq!(
+            Some(oauth2::ProtocolError::InvalidRequest.to_string()),
+            query_parameter_of(&url, REDIRECT_QUERY_PARAM_ERROR)
+        );
     }
 
     #[test(actix_web::test)]
@@ -391,25 +391,21 @@ mod tests {
 
         assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
 
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
 
         assert_eq!(redirect_uri.scheme(), url.scheme());
         assert_eq!(redirect_uri.domain(), url.domain());
         assert_eq!(redirect_uri.port(), url.port());
         assert_eq!(redirect_uri.path(), url.path());
-        let expected_error = format!(
-            "{}",
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
+        assert_eq!(
+            Some(client_state.to_owned()),
+            query_parameter_of(&url, REDIRECT_QUERY_PARAM_STATE)
         );
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param == ("state".to_owned(), client_state.to_owned())));
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param == ("error".to_owned(), expected_error.to_owned())));
+        assert_eq!(
+            Some(oauth2::ProtocolError::InvalidRequest.to_string()),
+            query_parameter_of(&url, REDIRECT_QUERY_PARAM_ERROR)
+        );
     }
 
     #[test(actix_web::test)]
@@ -436,25 +432,21 @@ mod tests {
 
         assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
 
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
 
         assert_eq!(redirect_uri.scheme(), url.scheme());
         assert_eq!(redirect_uri.domain(), url.domain());
         assert_eq!(redirect_uri.port(), url.port());
         assert_eq!(redirect_uri.path(), url.path());
-        let expected_error = format!(
-            "{}",
-            ProtocolError::OAuth2(oauth2::ProtocolError::InvalidRequest)
+        assert_eq!(
+            Some(client_state.to_owned()),
+            query_parameter_of(&url, REDIRECT_QUERY_PARAM_STATE)
         );
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param == ("state".to_owned(), client_state.to_owned())));
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param == ("error".to_owned(), expected_error.to_owned())));
+        assert_eq!(
+            Some(oauth2::ProtocolError::InvalidRequest.to_string()),
+            query_parameter_of(&url, REDIRECT_QUERY_PARAM_ERROR)
+        );
     }
 
     #[test(actix_web::test)]
@@ -483,8 +475,8 @@ mod tests {
 
         assert_eq!(resp.status(), StatusCode::SEE_OTHER);
 
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        assert_eq!("authenticate", url);
+        let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
+        assert_eq!(authenticate::ENDPOINT_NAME, url);
 
         let session = req.get_session();
         let first_request = parse_first_request(&session).unwrap();
@@ -517,8 +509,8 @@ mod tests {
 
         assert_eq!(resp.status(), StatusCode::SEE_OTHER);
 
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        assert_eq!("authenticate", url);
+        let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
+        assert_eq!(authenticate::ENDPOINT_NAME, url);
     }
 
     fn build_test_handler() -> Data<Handler> {

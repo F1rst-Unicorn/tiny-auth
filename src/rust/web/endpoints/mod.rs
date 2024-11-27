@@ -29,7 +29,7 @@ use crate::cors::render_invalid_request;
 use crate::cors::CorsCheckResult;
 use crate::cors::CorsChecker;
 use actix_session::Session;
-use actix_web::http::header::HeaderValue;
+use actix_web::http::header::{HeaderValue, LOCATION};
 use actix_web::http::StatusCode;
 use actix_web::HttpResponseBuilder;
 use actix_web::{HttpRequest, HttpResponse};
@@ -136,6 +136,11 @@ fn render_redirect_error(
     )
 }
 
+pub const REDIRECT_QUERY_PARAM_ERROR: &str = "error";
+pub const REDIRECT_QUERY_PARAM_ERROR_DESCRIPTION: &str = "error_description";
+pub const REDIRECT_QUERY_PARAM_STATE: &str = "state";
+pub const REDIRECT_QUERY_PARAM_CODE: &str = "code";
+
 fn render_redirect_error_with_base(
     mut base_response: HttpResponseBuilder,
     redirect_uri: &Url,
@@ -147,11 +152,14 @@ fn render_redirect_error_with_base(
     let mut redirect_uri = redirect_uri.to_owned();
 
     let mut response_parameters = BTreeMap::new();
-    response_parameters.insert("error", format!("{}", error));
-    response_parameters.insert("error_description", description.to_owned());
+    response_parameters.insert(REDIRECT_QUERY_PARAM_ERROR, format!("{}", error));
+    response_parameters.insert(
+        REDIRECT_QUERY_PARAM_ERROR_DESCRIPTION,
+        description.to_owned(),
+    );
     state
         .clone()
-        .map(|v| response_parameters.insert("state", v));
+        .map(|v| response_parameters.insert(REDIRECT_QUERY_PARAM_STATE, v));
 
     if encode_to_fragment {
         let fragment = serde_urlencoded::to_string(response_parameters).unwrap_or_else(|e| {
@@ -166,7 +174,7 @@ fn render_redirect_error_with_base(
     }
 
     base_response
-        .append_header(("Location", redirect_uri.as_str()))
+        .append_header((LOCATION, redirect_uri.as_str()))
         .finish()
 }
 
@@ -387,5 +395,14 @@ mod tests {
 
     pub fn build_test_authenticator() -> Data<Authenticator> {
         Data::new(tiny_auth_test_fixtures::authenticator::authenticator())
+    }
+
+    pub fn query_parameter_of(url: &Url, key: &str) -> Option<String> {
+        url.clone()
+            .query_pairs()
+            .into_owned()
+            .filter(|(k, _)| k == key)
+            .map(|(_, v)| v)
+            .next()
     }
 }
