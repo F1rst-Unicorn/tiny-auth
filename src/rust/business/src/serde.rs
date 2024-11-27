@@ -19,7 +19,6 @@ use serde::de::Deserialize as _;
 use serde::de::Visitor;
 use serde::Deserializer;
 
-#[allow(clippy::unnecessary_wraps)]
 pub fn deserialise_empty_as_none<'de, D: Deserializer<'de>>(
     value: D,
 ) -> Result<Option<String>, D::Error> {

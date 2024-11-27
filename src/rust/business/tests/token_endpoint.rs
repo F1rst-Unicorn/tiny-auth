@@ -14,6 +14,9 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+#![expect(clippy::unwrap_used)] // this is test code
+
 use chrono::{Duration, Local};
 use pretty_assertions::assert_eq;
 use std::sync::Arc;

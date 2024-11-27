@@ -55,29 +55,30 @@ use url::Url;
 
 const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
+/// [OAuth JWT Assertions](https://www.rfc-editor.org/rfc/rfc7523.txt)
 #[derive(Deserialize)]
 struct ClientAssertion {
     #[serde(rename = "iss")]
-    #[allow(dead_code)]
+    #[expect(dead_code)] // read by crate jsonwebtoken
     issuer: String,
 
     #[serde(rename = "sub")]
     subject: String,
 
     #[serde(rename = "aud")]
-    #[allow(dead_code)]
+    #[expect(dead_code)] // read by crate jsonwebtoken
     audience: String,
 
     #[serde(rename = "jti")]
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     id: String,
 
     #[serde(rename = "exp")]
-    #[allow(dead_code)]
+    #[expect(dead_code)] // read by crate jsonwebtoken
     expiration_time: i64,
 
     #[serde(rename = "iat")]
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     issuance_time: i64,
 }
 
@@ -167,7 +168,7 @@ impl Handler {
         ))
     }
 
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)] // debatable
     #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user))]
     async fn grant_token(
         &self,
@@ -442,8 +443,6 @@ impl Handler {
 
         let granted_scopes = BTreeSet::from_iter(refresh_token.scopes);
         let requested_scopes = match &request.scope {
-            #[allow(clippy::redundant_clone)]
-            // false positive https://github.com/rust-lang/rust-clippy/issues/10940
             None => granted_scopes.clone(),
             Some(scopes) => BTreeSet::from_iter(parse_scope_names(scopes)),
         };
@@ -706,7 +705,7 @@ pub mod inject {
     use crate::token::{TokenCreator, TokenValidator};
     use std::sync::Arc;
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn handler(
         client_store: Arc<dyn ClientStore>,
         user_store: Arc<dyn UserStore>,

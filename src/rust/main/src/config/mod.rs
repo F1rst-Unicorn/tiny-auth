@@ -48,7 +48,6 @@ pub struct Config {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-#[allow(clippy::large_enum_variant)]
 pub enum Store {
     #[serde(rename = "configuration file")]
     Config { name: String, base: PathBuf },
@@ -278,27 +277,26 @@ pub struct Web {
     pub secret_key: String,
 }
 
-#[allow(clippy::unnecessary_wraps)]
+#[expect(clippy::unnecessary_wraps)] // serde needs this API
 fn default_path() -> Option<String> {
     Some("".to_owned())
 }
 
-#[allow(clippy::unnecessary_wraps)]
+#[expect(clippy::unnecessary_wraps)] // serde needs this API
 fn default_session_timeout() -> Option<i64> {
     Some(3600)
 }
 
-#[allow(clippy::unnecessary_wraps)]
+#[expect(clippy::unnecessary_wraps)] // serde needs this API
 fn default_token_timeout_in_seconds() -> Option<i64> {
     Some(60)
 }
 
-#[allow(clippy::unnecessary_wraps)]
+#[expect(clippy::unnecessary_wraps)] // serde needs this API
 fn default_refresh_token_timeout_in_seconds() -> Option<i64> {
     Some(180)
 }
 
-#[allow(clippy::unnecessary_wraps)]
 fn default_session_same_site_policy() -> SameSitePolicy {
     SameSitePolicy::Lax
 }
@@ -465,7 +463,6 @@ pub enum Time {
     },
 }
 
-#[allow(clippy::unnecessary_wraps)]
 fn default_time_format() -> String {
     "%F %T".to_owned()
 }

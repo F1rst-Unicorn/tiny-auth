@@ -28,7 +28,6 @@ use tracing::error;
 use tracing::info;
 use tracing::{debug, trace};
 
-#[allow(clippy::cognitive_complexity)] // not really complex to read
 pub async fn terminator(
     server: ServerHandle,
     api_join_handle: (Sender<()>, JoinHandle<()>),

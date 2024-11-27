@@ -173,7 +173,7 @@ fn translator(args: &HashMap<String, Value>) -> TeraResult<Value> {
     }
 }
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)] // tera needs this API
 fn make_static_mapper(
     http_path: String,
 ) -> Box<dyn Fn(&HashMap<String, Value>) -> TeraResult<Value> + Sync + Send> {

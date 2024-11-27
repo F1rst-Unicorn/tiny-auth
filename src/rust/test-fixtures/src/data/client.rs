@@ -62,7 +62,6 @@ lazy_static! {
     pub static ref PUBLIC_CLIENT: Client = Client {
         client_id: "client2".to_owned(),
         client_type: ClientType::Public,
-        #[allow(clippy::unwrap_used)] // test code
         redirect_uris: vec![Url::parse("http://localhost/client2").unwrap()],
         allowed_scopes: BTreeSet::from_iter(vec!["email".to_owned()]),
         attributes: Default::default(),
@@ -70,11 +69,9 @@ lazy_static! {
     pub static ref TINY_AUTH_FRONTEND: Client = Client {
         client_id: TokenValidator::TINY_AUTH_FRONTEND_CLIENT_ID.to_owned(),
         client_type: ClientType::Public,
-        #[allow(clippy::unwrap_used)] // test code
         redirect_uris: vec![Url::parse("http://localhost").unwrap()],
         allowed_scopes: BTreeSet::from_iter(vec!["email".to_owned()]),
         attributes: Default::default(),
     };
-    pub static ref CONFIDENTIAL_CLIENT: Client = serde_yaml::from_str(CLIENT)
-        .unwrap();
+    pub static ref CONFIDENTIAL_CLIENT: Client = serde_yaml::from_str(CLIENT).unwrap();
 }

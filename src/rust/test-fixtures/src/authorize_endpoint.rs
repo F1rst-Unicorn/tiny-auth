@@ -27,7 +27,6 @@ pub fn test_request() -> AuthorizeRequestState {
         client_id: "".to_owned(),
         scopes: vec![],
         prompts: vec![],
-        #[allow(clippy::unwrap_used)] // test code
         redirect_uri: Url::parse("http://localhost/client").unwrap(),
         state: None,
         nonce: None,

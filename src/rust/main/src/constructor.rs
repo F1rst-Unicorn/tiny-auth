@@ -231,7 +231,6 @@ impl<'a> Constructor<'a> {
         Arc::new(authenticator(user_store, rate_limiter, password_store))
     }
 
-    #[allow(clippy::type_complexity)]
     async fn build_stores(
         config: &Config,
     ) -> Result<
