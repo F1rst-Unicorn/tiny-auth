@@ -7,9 +7,6 @@ homepage.workspace = true
 license.workspace = true
 version.workspace = true
 
-[lib]
-path = "./lib.rs"
-
 [dependencies]
 chrono.workspace = true
 tokio.workspace = true
@@ -34,6 +31,7 @@ lazy_static.workspace = true
 pretty_assertions.workspace = true
 rstest.workspace = true
 test-log.workspace = true
+tiny_auth_test_fixtures = { path = "../test-fixtures" }
 
 [lints]
 workspace = true

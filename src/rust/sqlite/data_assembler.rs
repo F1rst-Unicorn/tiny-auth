@@ -317,7 +317,7 @@ pub mod tests {
     use std::time::Duration;
     use test_log::test;
     use tiny_auth_business::data_loader::Multiplicity;
-    use tiny_auth_business::template::test_fixtures::TestTemplater;
+    use tiny_auth_test_fixtures::template::TestTemplater;
     use tracing::log::LevelFilter;
 
     #[rstest]

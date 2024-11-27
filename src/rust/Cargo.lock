@@ -3929,6 +3929,7 @@ dependencies = [
  "serde_yaml",
  "test-log",
  "thiserror",
+ "tiny_auth_test_fixtures",
  "tokio",
  "tracing",
  "url",
@@ -3988,6 +3989,7 @@ dependencies = [
  "tiny_auth_ldap",
  "tiny_auth_sqlite",
  "tiny_auth_template",
+ "tiny_auth_test_fixtures",
  "tiny_auth_web",
  "tokio",
  "tracing",
@@ -4013,6 +4015,7 @@ dependencies = [
  "test-log",
  "thiserror",
  "tiny_auth_business",
+ "tiny_auth_test_fixtures",
  "tokio",
  "tracing",
  "url",
@@ -4028,6 +4031,20 @@ dependencies = [
  "test-log",
  "tiny_auth_business",
  "tracing",
+]
+
+[[package]]
+name = "tiny_auth_test_fixtures"
+version = "2.0.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "jsonwebtoken",
+ "lazy_static",
+ "serde_yaml",
+ "tiny_auth_business",
+ "tokio",
+ "url",
 ]
 
 [[package]]
@@ -4052,6 +4069,7 @@ dependencies = [
  "test-log",
  "thiserror",
  "tiny_auth_business",
+ "tiny_auth_test_fixtures",
  "tokio",
  "tracing",
  "tracing-actix-web",

@@ -401,12 +401,11 @@ mod tests {
     use pretty_assertions::assert_eq;
     use std::sync::Arc;
     use test_log::test;
-    use tiny_auth_business::authorize_endpoint::test_fixtures::test_request;
     use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
     use tiny_auth_business::oidc::ResponseType;
-    use tiny_auth_business::store::user_store::test_fixtures::UNKNOWN_USER;
-    use tiny_auth_business::store::user_store::test_fixtures::USER;
-    use tiny_auth_business::template::test_fixtures::TestTemplater;
+    use tiny_auth_test_fixtures::authorize_endpoint::test_request;
+    use tiny_auth_test_fixtures::store::user_store::{UNKNOWN_USER, USER};
+    use tiny_auth_test_fixtures::template::TestTemplater;
     use url::Url;
 
     #[test(actix_web::test)]

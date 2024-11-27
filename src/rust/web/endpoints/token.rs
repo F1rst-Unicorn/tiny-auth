@@ -311,17 +311,18 @@ mod tests {
     use actix_web::web::Form;
     use pretty_assertions::assert_eq;
     use test_log::test;
-    use tiny_auth_business::authenticator::test_fixtures::authenticator;
-    use tiny_auth_business::cors::test_fixtures::cors_lister;
     use tiny_auth_business::oauth2::ProtocolError;
     use tiny_auth_business::oidc::ProtocolError as OidcError;
-    use tiny_auth_business::store::client_store::test_fixtures::build_test_client_store;
-    use tiny_auth_business::store::test_fixtures::build_test_auth_code_store;
-    use tiny_auth_business::store::test_fixtures::build_test_scope_store;
-    use tiny_auth_business::store::user_store::test_fixtures::build_test_user_store;
-    use tiny_auth_business::test_fixtures::build_test_issuer_config;
-    use tiny_auth_business::test_fixtures::build_test_token_creator;
-    use tiny_auth_business::test_fixtures::build_test_token_validator;
+    use tiny_auth_test_fixtures::authenticator::authenticator;
+    use tiny_auth_test_fixtures::cors::cors_lister;
+    use tiny_auth_test_fixtures::store::auth_code_store::build_test_auth_code_store;
+    use tiny_auth_test_fixtures::store::client_store::build_test_client_store;
+    use tiny_auth_test_fixtures::store::scope_store::build_test_scope_store;
+    use tiny_auth_test_fixtures::store::user_store::build_test_user_store;
+    use tiny_auth_test_fixtures::token::{
+        build_test_issuer_config, build_test_token_creator, build_test_token_validator,
+    };
+
     #[test(actix_web::test)]
     async fn missing_grant_type_is_rejected() {
         let req = TestRequest::post().to_http_request();

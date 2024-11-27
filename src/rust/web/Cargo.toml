@@ -36,6 +36,7 @@ tracing-actix-web.workspace = true
 test-log.workspace = true
 env_logger.workspace = true
 pretty_assertions.workspace = true
+tiny_auth_test_fixtures = { path = "../test-fixtures" }
 
 [lints]
 workspace = true

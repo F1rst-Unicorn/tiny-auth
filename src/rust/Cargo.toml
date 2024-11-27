@@ -1,5 +1,5 @@
 [workspace]
-members = ["main", "business", "web", "api", "ldap", "template", "sqlite"]
+members = ["main", "business", "web", "api", "ldap", "template", "sqlite", "test-fixtures"]
 resolver = "2"
 
 [workspace.package]

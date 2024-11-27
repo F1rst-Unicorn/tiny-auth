@@ -255,13 +255,13 @@ mod tests {
     use pretty_assertions::assert_eq;
     use std::sync::Arc;
     use test_log::test;
-    use tiny_auth_business::authorize_endpoint::test_fixtures::handler;
-    use tiny_auth_business::data::client::test_fixtures::CONFIDENTIAL_CLIENT;
-    use tiny_auth_business::store::client_store::test_fixtures::{
+    use tiny_auth_business::store::ClientStore;
+    use tiny_auth_test_fixtures::authorize_endpoint::handler;
+    use tiny_auth_test_fixtures::data::client::CONFIDENTIAL_CLIENT;
+    use tiny_auth_test_fixtures::store::client_store::{
         build_test_client_store, UNKNOWN_CLIENT_ID,
     };
-    use tiny_auth_business::store::ClientStore;
-    use tiny_auth_business::template::test_fixtures::TestTemplater;
+    use tiny_auth_test_fixtures::template::TestTemplater;
     use url::Url;
 
     #[test(actix_web::test)]

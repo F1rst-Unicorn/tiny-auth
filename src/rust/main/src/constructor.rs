@@ -958,11 +958,11 @@ pub mod tests {
     }
 
     pub fn build_test_scope_store() -> Data<Arc<dyn ScopeStore>> {
-        Data::new(test_fixtures::build_test_scope_store())
+        Data::new(tiny_auth_test_fixtures::store::scope_store::build_test_scope_store())
     }
 
     pub fn build_test_auth_code_store() -> Data<Arc<dyn AuthorizationCodeStore>> {
-        Data::new(test_fixtures::build_test_auth_code_store())
+        Data::new(tiny_auth_test_fixtures::store::auth_code_store::build_test_auth_code_store())
     }
 
     pub fn build_test_rate_limiter() -> RateLimiter {

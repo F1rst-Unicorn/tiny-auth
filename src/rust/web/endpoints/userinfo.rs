@@ -168,16 +168,15 @@ mod tests {
     use actix_web::http;
     use actix_web::test::TestRequest;
     use test_log::test;
-    use tiny_auth_business::cors::test_fixtures::cors_lister;
-    use tiny_auth_business::data::client::test_fixtures::PUBLIC_CLIENT;
-    use tiny_auth_business::store::client_store::test_fixtures::build_test_client_store;
-    use tiny_auth_business::store::user_store::test_fixtures::build_test_user_store;
-    use tiny_auth_business::store::user_store::test_fixtures::USER;
     use tiny_auth_business::store::ClientStore;
     use tiny_auth_business::store::UserStore;
-    use tiny_auth_business::test_fixtures::build_test_token_creator;
     use tiny_auth_business::token::Token;
-    use tiny_auth_business::userinfo_endpoint::test_fixtures::build_test_userinfo_handler;
+    use tiny_auth_test_fixtures::cors::cors_lister;
+    use tiny_auth_test_fixtures::data::client::PUBLIC_CLIENT;
+    use tiny_auth_test_fixtures::store::client_store::build_test_client_store;
+    use tiny_auth_test_fixtures::store::user_store::{build_test_user_store, USER};
+    use tiny_auth_test_fixtures::token::build_test_token_creator;
+    use tiny_auth_test_fixtures::userinfo_endpoint::build_test_userinfo_handler;
 
     #[test(tokio::test)]
     pub async fn missing_header_is_rejected() {

@@ -1,0 +1,21 @@
+[package]
+name = "tiny_auth_test_fixtures"
+authors.workspace = true
+description.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+tiny_auth_business = { path = "../business" }
+chrono.workspace = true
+jsonwebtoken.workspace = true
+url.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+lazy_static.workspace = true
+serde_yaml.workspace = true
+
+[lints]
+workspace = true

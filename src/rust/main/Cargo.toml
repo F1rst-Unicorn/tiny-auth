@@ -60,6 +60,7 @@ systemd.workspace = true
 test-log.workspace = true
 env_logger.workspace = true
 pretty_assertions.workspace = true
+tiny_auth_test_fixtures = { path = "../test-fixtures" }
 
 [build-dependencies]
 vergen.workspace = true

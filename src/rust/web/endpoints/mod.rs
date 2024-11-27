@@ -386,6 +386,6 @@ mod tests {
     }
 
     pub fn build_test_authenticator() -> Data<Authenticator> {
-        Data::new(tiny_auth_business::authenticator::test_fixtures::authenticator())
+        Data::new(tiny_auth_test_fixtures::authenticator::authenticator())
     }
 }
