@@ -343,12 +343,12 @@ mod tests {
     use crate::endpoints::tests::query_parameter_of;
     use crate::endpoints::{REDIRECT_QUERY_PARAM_CODE, REDIRECT_QUERY_PARAM_STATE};
     use actix_session::SessionExt;
-    use actix_web::http;
     use actix_web::http::header::LOCATION;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
     use actix_web::web::Form;
     use pretty_assertions::assert_eq;
+    use rstest::{fixture, rstest};
     use std::collections::HashMap;
     use std::sync::Arc;
     use test_log::test;
@@ -361,36 +361,33 @@ mod tests {
     use tiny_auth_test_fixtures::template::TestTemplater;
     use url::Url;
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn empty_session_gives_error() {
-        let req = TestRequest::get().to_http_request();
-        let session = req.get_session();
-
+    async fn empty_session_gives_error(session: Session) {
         let resp = get(build_test_templater(), session, Data::new(handler())).await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn missing_authentication_gives_error() {
-        let req = TestRequest::get().to_http_request();
-        let session = req.get_session();
+    async fn missing_authentication_gives_error(session: Session) {
         session
             .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
 
         let resp = get(build_test_templater(), session, Data::new(handler())).await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn valid_request_is_rendered() {
-        let req = TestRequest::get().to_http_request();
-        let session = req.get_session();
+    async fn valid_request_is_rendered(session: Session) {
+        let redirect_uri = PUBLIC_CLIENT.redirect_uris[0].clone();
         let first_request = authorize::Request {
             client_id: Some(PUBLIC_CLIENT.client_id.to_owned()),
-            redirect_uri: Some(Url::parse("http://localhost/client").unwrap()),
+            redirect_uri: Some(redirect_uri),
             state: Some("state".to_owned()),
             response_type: Some("code".to_owned()),
             scope: Some("openid".to_owned()),
@@ -414,13 +411,12 @@ mod tests {
 
         let resp = get(build_test_templater(), session, Data::new(handler())).await;
 
-        assert_eq!(resp.status(), http::StatusCode::OK);
+        assert_eq!(resp.status(), StatusCode::OK);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn wrong_csrf_gives_error() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
+    async fn wrong_csrf_gives_error(session: Session) {
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
@@ -436,13 +432,12 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn posting_empty_session_gives_error() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
+    async fn posting_empty_session_gives_error(session: Session) {
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
@@ -458,13 +453,12 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn posting_missing_authentication_gives_error() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
+    async fn posting_missing_authentication_gives_error(session: Session) {
         session
             .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
@@ -486,14 +480,13 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn successful_request_is_forwarded() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let redirect_uri = Url::parse("http://localhost/client").unwrap();
+    async fn successful_request_is_forwarded(session: Session) {
+        let redirect_uri = PUBLIC_CLIENT.redirect_uris[0].clone();
         let first_request = authorize::Request {
             client_id: Some(PUBLIC_CLIENT.client_id.to_owned()),
             redirect_uri: Some(redirect_uri.clone()),
@@ -534,7 +527,7 @@ mod tests {
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::FOUND);
+        assert_eq!(resp.status(), StatusCode::FOUND);
 
         let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
@@ -552,11 +545,10 @@ mod tests {
             .is_empty());
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn successful_request_with_id_token_is_forwarded() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let redirect_uri = Url::parse("http://localhost/client").unwrap();
+    async fn successful_request_with_id_token_is_forwarded(session: Session) {
+        let redirect_uri = PUBLIC_CLIENT.redirect_uris[0].clone();
         let first_request = authorize::Request {
             client_id: Some(PUBLIC_CLIENT.client_id.to_owned()),
             redirect_uri: Some(redirect_uri.clone()),
@@ -624,6 +616,12 @@ mod tests {
             .unwrap()
             .is_empty());
         assert!(!response_parameters.get("id_token").unwrap().is_empty());
+    }
+
+    #[fixture]
+    fn session() -> Session {
+        let req = TestRequest::post().to_http_request();
+        req.get_session()
     }
 
     fn build_test_templater() -> Data<dyn WebTemplater<ConsentContext>> {
