@@ -256,35 +256,30 @@ mod tests {
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
     use actix_web::web::Query;
+    use actix_web::HttpRequest;
     use pretty_assertions::assert_eq;
+    use rstest::{fixture, rstest};
     use std::sync::Arc;
     use test_log::test;
-    use tiny_auth_business::store::ClientStore;
     use tiny_auth_test_fixtures::authorize_endpoint::handler;
     use tiny_auth_test_fixtures::data::client::CONFIDENTIAL_CLIENT;
-    use tiny_auth_test_fixtures::store::client_store::{
-        build_test_client_store, UNKNOWN_CLIENT_ID,
-    };
+    use tiny_auth_test_fixtures::store::client_store::UNKNOWN_CLIENT_ID;
     use tiny_auth_test_fixtures::template::TestTemplater;
     use url::Url;
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn missing_client_id_is_rejected() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let query = Query(Request {
-            ..Request::default()
-        });
+    async fn missing_client_id_is_rejected(session: Session) {
+        let query = Query(Request::default());
 
         let resp = handle(query, build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn missing_redirect_uri_is_rejected() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
+    async fn missing_redirect_uri_is_rejected(session: Session) {
         let query = Query(Request {
             client_id: Some(CONFIDENTIAL_CLIENT.client_id.to_owned()),
             ..Request::default()
@@ -295,10 +290,9 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn unknown_client_id_is_rejected() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
+    async fn unknown_client_id_is_rejected(session: Session) {
         let query = Query(Request {
             client_id: Some(UNKNOWN_CLIENT_ID.to_owned()),
             ..Request::default()
@@ -309,13 +303,13 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn unregistered_redirect_uri_is_rejected() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
+    async fn unregistered_redirect_uri_is_rejected(session: Session) {
+        let redirect_uri = CONFIDENTIAL_CLIENT.redirect_uris[0].clone();
         let query = Query(Request {
             client_id: Some(UNKNOWN_CLIENT_ID.to_owned()),
-            redirect_uri: Some(Url::parse("http://localhost/client").unwrap()),
+            redirect_uri: Some(redirect_uri),
             ..Request::default()
         });
 
@@ -324,17 +318,10 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn missing_scope_is_redirected() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let client_store = build_test_client_store();
-        let redirect_uri = client_store
-            .get(&CONFIDENTIAL_CLIENT.client_id)
-            .await
-            .unwrap()
-            .redirect_uris[0]
-            .to_owned();
+    async fn missing_scope_is_redirected(session: Session) {
+        let redirect_uri = CONFIDENTIAL_CLIENT.redirect_uris[0].clone();
         let client_state = "somestate".to_owned();
         let query = Query(Request {
             response_type: Some("code".to_owned()),
@@ -365,17 +352,10 @@ mod tests {
         );
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn contradicting_prompts_are_rejected() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let client_store = build_test_client_store();
-        let redirect_uri = client_store
-            .get(&CONFIDENTIAL_CLIENT.client_id)
-            .await
-            .unwrap()
-            .redirect_uris[0]
-            .to_owned();
+    async fn contradicting_prompts_are_rejected(session: Session) {
+        let redirect_uri = CONFIDENTIAL_CLIENT.redirect_uris[0].clone();
         let client_state = "somestate".to_owned();
         let query = Query(Request {
             scope: Some("email".to_owned()),
@@ -408,17 +388,10 @@ mod tests {
         );
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn missing_response_type_is_redirected() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let client_store = build_test_client_store();
-        let redirect_uri = client_store
-            .get(&CONFIDENTIAL_CLIENT.client_id)
-            .await
-            .unwrap()
-            .redirect_uris[0]
-            .to_owned();
+    async fn missing_response_type_is_redirected(session: Session) {
+        let redirect_uri = CONFIDENTIAL_CLIENT.redirect_uris[0].clone();
         let client_state = "somestate".to_owned();
         let query = Query(Request {
             scope: Some("email".to_owned()),
@@ -449,17 +422,11 @@ mod tests {
         );
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn disallowed_scope_is_dropped() {
-        let req = TestRequest::post().to_http_request();
-        let client_store = build_test_client_store();
+    async fn disallowed_scope_is_dropped(req: HttpRequest) {
         let session = req.get_session();
-        let redirect_uri = client_store
-            .get(&CONFIDENTIAL_CLIENT.client_id)
-            .await
-            .unwrap()
-            .redirect_uris[0]
-            .to_owned();
+        let redirect_uri = CONFIDENTIAL_CLIENT.redirect_uris[0].clone();
         let client_state = "somestate".to_owned();
         let request = Request {
             scope: Some("email profile".to_owned()),
@@ -483,23 +450,16 @@ mod tests {
         assert_eq!(vec!["email".to_owned()], first_request.scopes);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn successful_authorization_is_redirected() {
-        let req = TestRequest::post().to_http_request();
-        let client_store = build_test_client_store();
-        let session = req.get_session();
-        let redirect_uri = client_store
-            .get(&CONFIDENTIAL_CLIENT.client_id)
-            .await
-            .unwrap()
-            .redirect_uris[0]
-            .to_owned();
+    async fn successful_authorization_is_redirected(session: Session) {
+        let redirect_uri = CONFIDENTIAL_CLIENT.redirect_uris[0].clone();
         let client_state = "somestate".to_owned();
         let request = Request {
             scope: Some("email".to_owned()),
             response_type: Some("code".to_owned()),
             client_id: Some(CONFIDENTIAL_CLIENT.client_id.to_owned()),
-            redirect_uri: Some(redirect_uri.to_owned()),
+            redirect_uri: Some(redirect_uri),
             state: Some(client_state.clone()),
             ..Request::default()
         };
@@ -508,9 +468,19 @@ mod tests {
         let resp = handle(query, build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::SEE_OTHER);
-
         let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
         assert_eq!(authenticate::ENDPOINT_NAME, url);
+    }
+
+    #[fixture]
+    fn session() -> Session {
+        let req = TestRequest::post().to_http_request();
+        req.get_session()
+    }
+
+    #[fixture]
+    fn req() -> HttpRequest {
+        TestRequest::post().to_http_request()
     }
 
     fn build_test_handler() -> Data<Handler> {
