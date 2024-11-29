@@ -27,8 +27,12 @@ struct CorsListerImpl {
 
 impl CorsLister for CorsListerImpl {
     fn is_cors_allowed(&self, domain: &str) -> bool {
-        debug!(domain, "cors check");
-        self.approved_domains.iter().any(|v| v.as_str() == domain)
+        let Ok(domain) = Url::parse(domain) else {
+            debug!(domain, "no valid domain");
+            return false;
+        };
+        debug!(%domain, "cors check");
+        self.approved_domains.iter().any(|v| *v == domain)
     }
 }
 
