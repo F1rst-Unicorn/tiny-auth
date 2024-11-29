@@ -57,7 +57,7 @@ impl<'c> Transaction<'c> {
     }
 }
 
-impl<'c> Drop for Transaction<'c> {
+impl Drop for Transaction<'_> {
     fn drop(&mut self) {
         if self.is_open {
             let _ = futures::executor::block_on(self.execute("rollback;"));
@@ -65,7 +65,7 @@ impl<'c> Drop for Transaction<'c> {
     }
 }
 
-impl<'c> Deref for Transaction<'c> {
+impl Deref for Transaction<'_> {
     type Target = SqliteConnection;
 
     fn deref(&self) -> &Self::Target {
@@ -73,7 +73,7 @@ impl<'c> Deref for Transaction<'c> {
     }
 }
 
-impl<'c> DerefMut for Transaction<'c> {
+impl DerefMut for Transaction<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.conn
     }

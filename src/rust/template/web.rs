@@ -49,7 +49,7 @@ impl<'a> Templater<WebappRootContext<'a>> for WebappRootTemplater {
     }
 }
 
-impl<'a> WebTemplater<WebappRootContext<'a>> for WebappRootTemplater {
+impl WebTemplater<WebappRootContext<'_>> for WebappRootTemplater {
     fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate {
         render_error_page(&self.0, error)
     }
