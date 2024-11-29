@@ -285,13 +285,11 @@ mod tests {
     use actix_web::body::to_bytes;
     use actix_web::test::TestRequest;
     use actix_web::web::BytesMut;
-    use actix_web::web::Data;
     use actix_web::HttpResponse;
     use pretty_assertions::assert_eq;
     use serde::de::DeserializeOwned;
     use serde_derive::Deserialize;
     use test_log::test;
-    use tiny_auth_business::authenticator::Authenticator;
     use tiny_auth_business::serde::deserialise_empty_as_none;
 
     #[derive(Debug, Deserialize, Serialize)]
@@ -391,10 +389,6 @@ mod tests {
             bytes.extend_from_slice(&item);
         }
         serde_json::from_slice::<T>(&bytes).expect("Failed to deserialize response")
-    }
-
-    pub fn build_test_authenticator() -> Data<Authenticator> {
-        Data::new(tiny_auth_test_fixtures::authenticator::authenticator())
     }
 
     pub fn query_parameter_of(url: &Url, key: &str) -> Option<String> {

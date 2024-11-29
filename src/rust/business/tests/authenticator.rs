@@ -16,6 +16,7 @@
  */
 
 use test_log::test;
+use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::store::{PasswordStore, UserStore};
 use tiny_auth_test_fixtures::authenticator::authenticator;
 use tiny_auth_test_fixtures::data::password::in_place_password_store;

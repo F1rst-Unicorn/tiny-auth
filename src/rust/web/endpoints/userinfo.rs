@@ -23,6 +23,7 @@ use actix_web::web::Data;
 use actix_web::web::Form;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
+use async_trait::async_trait;
 use serde_derive::Deserialize;
 use std::sync::Arc;
 use thiserror::Error;
@@ -40,7 +41,7 @@ pub struct Request {
 }
 
 #[instrument(skip_all, name = "userinfo_get")]
-pub async fn get(request: HttpRequest, handler: Data<Handler>) -> HttpResponse {
+pub async fn get(request: HttpRequest, handler: Data<dyn Handler>) -> HttpResponse {
     post(Form(Request { access_token: None }), request, handler).await
 }
 
@@ -48,14 +49,18 @@ pub async fn get(request: HttpRequest, handler: Data<Handler>) -> HttpResponse {
 pub async fn post(
     query: Form<Request>,
     request: HttpRequest,
-    handler: Data<Handler>,
+    handler: Data<dyn Handler>,
 ) -> HttpResponse {
     let cors_check_result = handler.check_cors(&request);
     if let CorsCheckResult::IllegalOrigin = cors_check_result {
         return render_invalid_request();
     }
 
-    match handler.handle(query, &request).await {
+    let userinfo_result = match handler.look_up_token(query, &request) {
+        Ok(token) => handler.handle(token).await,
+        Err(e) => Err(e),
+    };
+    match userinfo_result {
         Ok(token) => cors_check_result
             .with_headers(HttpResponse::Ok())
             .json(token),
@@ -83,28 +88,35 @@ pub async fn post(
     }
 }
 
+#[async_trait]
+pub trait Handler: Send + Sync {
+    fn check_cors<'a>(&self, request: &'a HttpRequest) -> CorsCheckResult<'a>;
+    async fn handle(&self, token: EncodedAccessToken) -> Result<Token<Userinfo>, Error>;
+    fn look_up_token(
+        &self,
+        query: Form<Request>,
+        request: &HttpRequest,
+    ) -> Result<EncodedAccessToken, Error>;
+}
+
 #[derive(Clone)]
-pub struct Handler {
+pub struct HandlerImpl<BusinessHandler> {
     handler: Arc<BusinessHandler>,
     cors_checker: Arc<CorsChecker>,
 }
 
-impl Handler {
+#[async_trait]
+impl<B: BusinessHandler> Handler for HandlerImpl<B> {
     fn check_cors<'a>(&self, request: &'a HttpRequest) -> CorsCheckResult<'a> {
         self.cors_checker.check(request)
     }
 
-    async fn handle(
-        &self,
-        query: Form<Request>,
-        request: &HttpRequest,
-    ) -> Result<Token<Userinfo>, Error> {
-        let token = Self::look_up_token(query, request)?;
-
+    async fn handle(&self, token: EncodedAccessToken) -> Result<Token<Userinfo>, Error> {
         Ok(self.handler.get_userinfo(BusinessRequest { token }).await?)
     }
 
     fn look_up_token(
+        &self,
         query: Form<Request>,
         request: &HttpRequest,
     ) -> Result<EncodedAccessToken, Error> {
@@ -138,13 +150,16 @@ impl Handler {
 }
 
 pub mod inject {
-    use super::Handler;
+    use super::HandlerImpl;
     use crate::cors::CorsChecker;
+    use crate::endpoints::userinfo::Handler;
     use std::sync::Arc;
-    use tiny_auth_business::userinfo_endpoint::Handler as BusinessHandler;
 
-    pub fn handler(handler: Arc<BusinessHandler>, cors_checker: Arc<CorsChecker>) -> Handler {
-        Handler {
+    pub fn handler<H>(handler: Arc<H>, cors_checker: Arc<CorsChecker>) -> impl Handler
+    where
+        H: tiny_auth_business::userinfo_endpoint::Handler,
+    {
+        HandlerImpl {
             handler,
             cors_checker,
         }
@@ -152,7 +167,7 @@ pub mod inject {
 }
 
 #[derive(Debug, Error)]
-enum Error {
+pub enum Error {
     #[error("invalid authorization header")]
     InvalidAuthorizationHeader,
     #[error("missing authorization header")]
@@ -171,6 +186,7 @@ mod tests {
     use tiny_auth_business::store::ClientStore;
     use tiny_auth_business::store::UserStore;
     use tiny_auth_business::token::Token;
+    use tiny_auth_business::token::TokenCreator;
     use tiny_auth_test_fixtures::cors::cors_lister;
     use tiny_auth_test_fixtures::data::client::PUBLIC_CLIENT;
     use tiny_auth_test_fixtures::store::client_store::build_test_client_store;
@@ -229,10 +245,14 @@ mod tests {
         assert_eq!(expected_userinfo, response);
     }
 
-    fn build_test_handler() -> Data<Handler> {
-        Data::new(Handler {
+    fn build_test_handler() -> Data<dyn Handler> {
+        Data::from(coerce_to_dyn(HandlerImpl {
             handler: Arc::new(build_test_userinfo_handler()),
             cors_checker: Arc::new(CorsChecker::new(cors_lister())),
-        })
+        }))
+    }
+
+    fn coerce_to_dyn(t: impl Handler + 'static) -> Arc<dyn Handler> {
+        Arc::new(t)
     }
 }

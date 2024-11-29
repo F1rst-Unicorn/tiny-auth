@@ -14,8 +14,29 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use chrono::{DateTime, Local, TimeZone};
 use tiny_auth_business::clock::Clock;
 
+struct EpochClock;
+
+impl Clock for EpochClock {
+    fn now(&self) -> DateTime<Local> {
+        Local.timestamp_opt(0, 0).unwrap()
+    }
+}
+
 pub fn clock() -> impl Clock {
-    tiny_auth_business::clock::inject::clock() // return prod impl as long as direct now() calls exist in code
+    EpochClock
+}
+
+struct SystemTimeClock;
+
+impl Clock for SystemTimeClock {
+    fn now(&self) -> DateTime<Local> {
+        Local::now()
+    }
+}
+
+pub fn system_time_clock() -> impl Clock {
+    SystemTimeClock
 }

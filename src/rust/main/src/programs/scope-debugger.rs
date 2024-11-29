@@ -21,11 +21,11 @@ use clap::ArgAction::Count;
 use clap::ArgMatches;
 use clap::Command;
 use tiny_auth_business::data::scope::Destination;
+use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::{Access, Id, Userinfo};
 use tiny_auth_main::config::parser::parse_config;
-use tiny_auth_main::constructor::Constructor;
-use tiny_auth_main::logging;
 use tiny_auth_main::logging::initialise_from_verbosity;
+use tiny_auth_main::{constructor, logging};
 use tracing::debug;
 use tracing::error;
 
@@ -53,7 +53,7 @@ async fn main() {
     let config = parse_config(config_path);
     logging::reload_with_config(&config.log, &handles);
 
-    let di = match Constructor::new(&config).await {
+    let di = match constructor::new(&config).await {
         Err(e) => {
             error!(%e, "failed to read config");
             return;

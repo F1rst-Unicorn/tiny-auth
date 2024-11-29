@@ -40,7 +40,7 @@ async fn connecting_works() {
 mod auth_code {
     use super::*;
     use crate::store::SqliteStore;
-    use chrono::{Duration, Local, TimeDelta};
+    use chrono::{Duration, Local, TimeDelta, TimeZone};
     use pretty_assertions::assert_eq;
     use std::sync::Arc;
     use test_log::test;
@@ -148,8 +148,8 @@ mod auth_code {
             user: "john",
             redirect_uri,
             scope: "openid",
-            insertion_time: Local::now(),
-            authentication_time: Local::now(),
+            insertion_time: Local.timestamp_opt(0, 0).unwrap(),
+            authentication_time: Local.timestamp_opt(0, 0).unwrap(),
             nonce: Some("nonce".to_owned()),
             pkce_challenge: Some((&("a".repeat(44))).try_into().unwrap()),
         }

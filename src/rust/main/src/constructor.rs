@@ -21,6 +21,7 @@ use crate::config::{TlsVersion, UserAttributes};
 use crate::runtime::Error;
 use crate::runtime::Error::LoggedBeforeError;
 use crate::store::file::*;
+use crate::util::inject::clock;
 use crate::util::read_file;
 use actix_web::cookie::SameSite;
 use base64::engine::general_purpose;
@@ -45,7 +46,8 @@ use tera::Tera;
 use tiny_auth_business::authenticator::inject::authenticator;
 use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::authorize_endpoint::Handler as AuthorizeHandler;
-use tiny_auth_business::change_password::Handler as ChangePasswordHandler;
+use tiny_auth_business::change_password::{inject, Handler};
+use tiny_auth_business::clock::Clock;
 use tiny_auth_business::consent::Handler as ConsentHandler;
 use tiny_auth_business::cors::inject::cors_lister;
 use tiny_auth_business::cors::CorsLister;
@@ -66,6 +68,7 @@ use tiny_auth_business::store::*;
 use tiny_auth_business::template::web::{
     AuthenticateContext, ConsentContext, WebTemplater, WebappRootContext,
 };
+use tiny_auth_business::token::inject::token_creator;
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
 use tiny_auth_business::userinfo_endpoint;
@@ -85,7 +88,7 @@ use tiny_auth_web::ApiUrl;
 use tokio::sync::broadcast::{channel, Sender};
 use tracing::{debug, error, span, warn, Level};
 
-pub struct Constructor<'a> {
+pub struct Constructor<'a, Authenticator> {
     config: &'a Config,
 
     user_store: Arc<dyn UserStore>,
@@ -125,352 +128,88 @@ pub struct Constructor<'a> {
     client_ca: Option<String>,
 }
 
-impl<'a> Constructor<'a> {
-    pub async fn new(config: &'a Config) -> Result<Self, Error> {
-        let (
-            user_store,
-            password_store,
-            client_store,
-            scope_store,
-            reload_sender,
-            store_paths,
-            auth_code_store,
-            health_checks,
-        ) = Self::build_stores(config).await?;
-        let tera = Arc::new(Self::build_template_engine(config)?);
-        let issuer_url = Self::build_issuer_url(config);
-        let (public_key, public_keys, private_key) = Self::read_token_keypairs(config)?;
-        let (encoding_key, algorithm) = Self::build_encoding_key(&private_key)?;
-        let issuer_configuration = Self::build_issuer_config(issuer_url.clone(), algorithm);
-        let jwks = Jwks::with_keys(
-            Self::build_jwk(public_key.as_str(), &issuer_url, 0)?,
-            public_keys
-                .iter()
-                .enumerate()
-                .map(|(i, k)| Self::build_jwk(k, &issuer_url, i + 1))
-                .try_fold(vec![], |mut v, i| {
-                    v.push(i?);
-                    Ok::<Vec<Jwk>, Error>(v)
-                })?,
-        );
-        let token_validator: Arc<TokenValidator> = Arc::new(Self::build_token_validator(
-            public_key.as_str(),
-            algorithm,
-            &issuer_url,
-        )?);
-        let own_token_validator: Arc<TokenValidator> = Arc::new(Self::build_own_token_validator(
-            public_key.as_str(),
-            algorithm,
-            &issuer_url,
-        )?);
-        let rate_limiter = Self::build_rate_limiter(config);
-        let authenticator = Self::build_authenticator(
-            user_store.clone(),
-            rate_limiter.clone(),
-            password_store.clone(),
-        );
-        let (tls_cert, tls_key, client_ca) = match &config.web.tls {
-            None => (None, None, None),
-            Some(tls) => (
-                Some(read_file(&tls.certificate)?),
-                Some(read_file(&tls.key)?),
-                match tls.client_ca.as_ref().map(read_file) {
-                    None => None,
-                    Some(v) => Some(v?),
-                },
-            ),
-        };
+pub async fn new(config: &Config) -> Result<Constructor<impl Authenticator>, Error> {
+    let (
+        user_store,
+        password_store,
+        client_store,
+        scope_store,
+        reload_sender,
+        store_paths,
+        auth_code_store,
+        health_checks,
+    ) = build_stores(config).await?;
+    let tera = Arc::new(build_template_engine(config)?);
+    let issuer_url = build_issuer_url(config);
+    let (public_key, public_keys, private_key) = read_token_keypairs(config)?;
+    let (encoding_key, algorithm) = build_encoding_key(&private_key)?;
+    let issuer_configuration = build_issuer_config(issuer_url.clone(), algorithm);
+    let jwks = Jwks::with_keys(
+        build_jwk(public_key.as_str(), &issuer_url, 0)?,
+        public_keys
+            .iter()
+            .enumerate()
+            .map(|(i, k)| build_jwk(k, &issuer_url, i + 1))
+            .try_fold(vec![], |mut v, i| {
+                v.push(i?);
+                Ok::<Vec<Jwk>, Error>(v)
+            })?,
+    );
+    let token_validator: Arc<TokenValidator> = Arc::new(build_token_validator(
+        public_key.as_str(),
+        algorithm,
+        &issuer_url,
+    )?);
+    let own_token_validator: Arc<TokenValidator> = Arc::new(build_own_token_validator(
+        public_key.as_str(),
+        algorithm,
+        &issuer_url,
+    )?);
+    let rate_limiter = build_rate_limiter(config);
+    let authenticator = build_authenticator(
+        user_store.clone(),
+        rate_limiter.clone(),
+        password_store.clone(),
+        clock(),
+    );
+    let (tls_cert, tls_key, client_ca) = match &config.web.tls {
+        None => (None, None, None),
+        Some(tls) => (
+            Some(read_file(&tls.certificate)?),
+            Some(read_file(&tls.key)?),
+            match tls.client_ca.as_ref().map(read_file) {
+                None => None,
+                Some(v) => Some(v?),
+            },
+        ),
+    };
 
-        Ok(Self {
-            config,
-            user_store,
-            client_store,
-            scope_store,
-            reload_sender,
-            store_paths,
-            authorization_code_store: auth_code_store
-                .unwrap_or_else(|| Self::build_auth_code_store()),
-            health_checks,
-            tera,
-            public_keys,
-            issuer_configuration,
-            encoding_key,
-            jwks,
-            token_validator,
-            own_token_validator,
-            authenticator,
-            tls_cert,
-            tls_key,
-            client_ca,
-        })
-    }
+    Ok(Constructor {
+        config,
+        user_store,
+        client_store,
+        scope_store,
+        reload_sender,
+        store_paths,
+        authorization_code_store: auth_code_store.unwrap_or_else(|| build_auth_code_store(clock())),
+        health_checks,
+        tera,
+        public_keys,
+        issuer_configuration,
+        encoding_key,
+        jwks,
+        token_validator,
+        own_token_validator,
+        authenticator,
+        tls_cert,
+        tls_key,
+        client_ca,
+    })
+}
 
+impl<A: Authenticator + 'static> Constructor<'_, A> {
     pub fn get_issuer_config(&self) -> IssuerConfiguration {
         self.issuer_configuration.clone()
-    }
-
-    fn build_issuer_config(issuer_url: String, algorithm: Algorithm) -> IssuerConfiguration {
-        IssuerConfiguration {
-            issuer_url,
-            algorithm,
-        }
-    }
-
-    pub fn build_rate_limiter(config: &Config) -> Arc<RateLimiter> {
-        Arc::new(RateLimiter::new(
-            config.rate_limit.events,
-            Duration::seconds(config.rate_limit.period_in_seconds),
-        ))
-    }
-
-    pub fn build_authenticator(
-        user_store: Arc<dyn UserStore>,
-        rate_limiter: Arc<RateLimiter>,
-        password_store: Arc<DispatchingPasswordStore>,
-    ) -> Arc<Authenticator> {
-        Arc::new(authenticator(user_store, rate_limiter, password_store))
-    }
-
-    async fn build_stores(
-        config: &Config,
-    ) -> Result<
-        (
-            Arc<dyn UserStore>,
-            Arc<DispatchingPasswordStore>,
-            Arc<dyn ClientStore>,
-            Arc<dyn ScopeStore>,
-            Sender<ReloadEvent>,
-            Vec<PathBuf>,
-            Option<Arc<dyn AuthorizationCodeStore>>,
-            Vec<HealthCheck>,
-        ),
-        Error,
-    > {
-        let mut client_stores: Vec<Arc<dyn ClientStore>> = vec![];
-        let mut user_stores: Vec<Arc<dyn UserStore>> = vec![];
-        let mut scope_stores: Vec<Arc<dyn ScopeStore>> = vec![];
-        let mut password_stores: BTreeMap<String, Arc<dyn PasswordStore>> = BTreeMap::default();
-        let (sender, _receiver) = channel(8);
-        let mut store_paths = Vec::new();
-        let mut health_checks = Vec::new();
-        let in_place_password_store = Arc::new(in_place_password_store(&config.crypto.pepper));
-        let mut auth_code_store: Option<Arc<dyn AuthorizationCodeStore>> = None;
-
-        for store_config in &config.store {
-            match store_config {
-                Store::Config { name: _, base } => {
-                    store_paths.push(base.into());
-                    match FileStore::new(Path::new(&base), "clients", sender.subscribe()).await {
-                        None => return Err(LoggedBeforeError),
-                        Some(v) => client_stores.push(v),
-                    };
-                    match FileStore::new(Path::new(&base), "users", sender.subscribe()).await {
-                        None => return Err(LoggedBeforeError),
-                        Some(v) => user_stores.push(v),
-                    };
-                    match FileStore::new(Path::new(&base), "scopes", sender.subscribe()).await {
-                        None => return Err(LoggedBeforeError),
-                        Some(v) => scope_stores.push(v),
-                    };
-                }
-                Store::Ldap {
-                    name,
-                    urls,
-                    mode: LdapMode::SimpleBind { bind_dn_format },
-                    connect_timeout_in_seconds,
-                    starttls,
-                } => {
-                    let templaters: Vec<_> = bind_dn_format
-                        .iter()
-                        .map(|v| bind_dn_templater(v))
-                        .collect();
-                    let name = "ldap ".to_owned() + name;
-                    let connector = connector(
-                        urls,
-                        std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
-                        *starttls,
-                    );
-                    let check: Arc<dyn HealthCheckCommand> =
-                        Arc::new(simple_bind_check(connector.clone()));
-                    health_checks.push(health_check(&name, check));
-                    password_stores.insert(
-                        name.clone(),
-                        tiny_auth_ldap::inject::simple_bind_store(
-                            name.as_str(),
-                            templaters.as_slice(),
-                            connector,
-                        ),
-                    );
-                }
-                Store::Ldap {
-                    name,
-                    urls,
-                    mode:
-                        LdapMode::SearchBind {
-                            bind_dn,
-                            bind_dn_password,
-                            searches,
-                            use_for,
-                        },
-                    connect_timeout_in_seconds,
-                    starttls,
-                } => {
-                    let searches = searches
-                        .iter()
-                        .map(|v| tiny_auth_ldap::LdapSearch {
-                            base_dn: v.base_dn.clone(),
-                            search_filter: ldap_search_templater(&v.search_filter),
-                        })
-                        .collect();
-
-                    let user_config = match &use_for.users {
-                        None => None,
-                        Some(LdapUsageUsers { attributes: None }) => UserConfig {
-                            allowed_scopes_attribute: None,
-                        }
-                        .into(),
-                        Some(LdapUsageUsers {
-                            attributes: Some(UserAttributes { allowed_scopes }),
-                        }) => UserConfig {
-                            allowed_scopes_attribute: allowed_scopes.clone(),
-                        }
-                        .into(),
-                    };
-
-                    let client_config = match &use_for.clients {
-                        None => None,
-                        Some(LdapUsageClients { attributes: None }) => ClientConfig {
-                            client_type_attribute: None,
-                            allowed_scopes_attribute: None,
-                            password_attribute: None,
-                            public_key_attribute: None,
-                            redirect_uri_attribute: None,
-                        }
-                        .into(),
-                        Some(LdapUsageClients {
-                            attributes:
-                                Some(ClientAttributes {
-                                    client_type,
-                                    redirect_uri,
-                                    password,
-                                    public_key,
-                                    allowed_scopes,
-                                }),
-                        }) => ClientConfig {
-                            client_type_attribute: client_type.clone(),
-                            allowed_scopes_attribute: allowed_scopes.clone(),
-                            password_attribute: password.clone(),
-                            public_key_attribute: public_key.clone(),
-                            redirect_uri_attribute: redirect_uri.clone(),
-                        }
-                        .into(),
-                    };
-
-                    let name = "ldap ".to_owned() + name;
-                    let connector = connector(
-                        urls,
-                        std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
-                        *starttls,
-                    );
-                    let check: Arc<dyn HealthCheckCommand> = Arc::new(search_bind_check(
-                        connector.clone(),
-                        bind_dn,
-                        bind_dn_password,
-                    ));
-
-                    let ldap_store = tiny_auth_ldap::inject::search_bind_store(
-                        name.as_str(),
-                        connector,
-                        bind_dn,
-                        bind_dn_password,
-                        searches,
-                        user_config,
-                        client_config,
-                    );
-                    health_checks.push(health_check(&name, check));
-                    user_stores.push(ldap_store.clone());
-                    client_stores.push(ldap_store.clone());
-                    password_stores.insert(name.clone(), ldap_store);
-                }
-                Store::Sqlite {
-                    name,
-                    base,
-                    use_for,
-                } => {
-                    let _store_span = span!(Level::INFO, "", store = %name).entered();
-                    let templater = data_loader_templater();
-                    let user_loaders = tiny_auth_sqlite::inject::data_assembler(
-                        use_for.users.iter().flat_map(|v| v.iter()).filter_map(|v| {
-                            v.try_into().map_err(|e| warn!(%e, "invalid location")).ok()
-                        }),
-                        templater.clone(),
-                    );
-                    let client_loaders = tiny_auth_sqlite::inject::data_assembler(
-                        use_for
-                            .clients
-                            .iter()
-                            .flat_map(|v| v.iter())
-                            .filter_map(|v| {
-                                v.try_into().map_err(|e| warn!(%e, "invalid location")).ok()
-                            }),
-                        templater.clone(),
-                    );
-
-                    let (sqlite_store, check) = match tiny_auth_sqlite::inject::sqlite_store(
-                        name.as_str(),
-                        &(String::from("sqlite://") + base.to_string_lossy().as_ref()),
-                        in_place_password_store.clone(),
-                        user_loaders,
-                        client_loaders,
-                    )
-                    .await
-                    {
-                        Err(e) => {
-                            error!(%e, %name, "failed to create sqlite store");
-                            return Err(LoggedBeforeError);
-                        }
-                        Ok(v) => v,
-                    };
-
-                    let health_check_name = "sqlite ".to_owned() + name;
-                    health_checks.push(health_check(health_check_name.as_str(), Arc::new(check)));
-                    if use_for.users.is_some() {
-                        user_stores.push(sqlite_store.clone());
-                    }
-                    if use_for.clients.is_some() {
-                        client_stores.push(sqlite_store.clone());
-                    }
-                    if use_for.scopes {
-                        scope_stores.push(sqlite_store.clone());
-                    }
-                    if use_for.passwords {
-                        password_stores.insert(name.clone(), sqlite_store.clone());
-                    }
-                    if use_for.auth_codes {
-                        match auth_code_store {
-                            None => auth_code_store = Some(sqlite_store),
-                            Some(_) => {
-                                error!(%name, "more than one auth code store configured");
-                                return Err(LoggedBeforeError);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        let password_store = dispatching_password_store(password_stores, in_place_password_store);
-
-        Ok((
-            Arc::new(MergingUserStore::from(user_stores)),
-            Arc::new(password_store),
-            Arc::new(MergingClientStore::from(client_stores)),
-            Arc::new(MergingScopeStore::from(scope_stores)),
-            sender,
-            store_paths,
-            auth_code_store,
-            health_checks,
-        ))
     }
 
     pub fn get_client_store(&self) -> Arc<dyn ClientStore> {
@@ -489,104 +228,20 @@ impl<'a> Constructor<'a> {
         self.store_paths.clone()
     }
 
-    pub fn build_auth_code_store() -> Arc<dyn AuthorizationCodeStore> {
-        let result = Arc::new(MemoryAuthorizationCodeStore::default());
-        let arg = result.clone();
-        tokio::spawn(async {
-            auth_code_clean_job(arg).await;
-        });
-        result
+    pub fn build_jwks(&self) -> Jwks {
+        self.jwks.clone()
     }
 
-    fn build_template_engine(config: &'a Config) -> Result<Tera, Error> {
-        Ok(load_template_engine(
-            &config.web.static_files.to_string_lossy(),
-            config.web.path.as_deref().unwrap_or(""),
-        )?)
+    pub fn user_store(&self) -> Arc<dyn UserStore> {
+        self.user_store.clone()
     }
 
-    pub fn get_public_keys(&self) -> Vec<TokenCertificate> {
-        self.public_keys
-            .iter()
-            .map(Clone::clone)
-            .map(TokenCertificate)
-            .collect()
-    }
-
-    fn build_issuer_url(config: &'a Config) -> String {
-        let mut token_issuer = "http".to_owned();
-        if config.web.tls.is_some() {
-            token_issuer += "s";
-        }
-        token_issuer += "://";
-        token_issuer += &config.web.public_host.domain;
-        if let Some(port) = &config.web.public_host.port {
-            token_issuer += ":";
-            token_issuer += port;
-        }
-        if let Some(path) = &config.web.path {
-            if !path.is_empty() {
-                if !path.starts_with('/') {
-                    token_issuer += "/";
-                }
-                token_issuer += path;
-            }
-        }
-
-        while token_issuer.ends_with('/') {
-            token_issuer.pop();
-        }
-
-        token_issuer
-    }
-
-    fn read_token_keypairs(config: &'a Config) -> Result<(String, Vec<String>, String), Error> {
-        let first_key = match config.crypto.keys.first() {
-            None => {
-                error!("at least one crypto.keys entry must be given");
-                return Err(LoggedBeforeError);
-            }
-            Some(v) => v,
-        };
-        let private_key = read_file(&first_key.key)?;
-        let public_key = read_file(&first_key.public_key)?;
-        let public_keys = config
-            .crypto
-            .keys
-            .iter()
-            .skip(1)
-            .map(|k| read_file(&k.public_key))
-            .try_fold(vec![], |mut v, i| {
-                v.push(i?);
-                Ok::<Vec<String>, Error>(v)
-            })?;
-
-        Ok((public_key, public_keys, private_key))
-    }
-
-    fn build_encoding_key(private_key: &str) -> Result<(EncodingKey, Algorithm), Error> {
-        let bytes = private_key.as_bytes();
-        match EncodingKey::from_rsa_pem(bytes) {
-            Err(e) => {
-                debug!(%e, "not an RSA key");
-                match EncodingKey::from_ec_pem(bytes) {
-                    Err(e) => {
-                        error!(%e, "failed to read private token key");
-                        Err(e.into())
-                    }
-                    Ok(key) => Ok((key, Algorithm::ES384)),
-                }
-            }
-            Ok(key) => Ok((key, Algorithm::PS512)),
-        }
-    }
-
-    pub fn build_token_creator(&self) -> TokenCreator {
-        TokenCreator::new(
+    pub fn build_token_creator(&self) -> impl TokenCreator {
+        token_creator(
             self.encoding_key.clone(),
             self.issuer_configuration.clone(),
             self.jwks.first_key.clone(),
-            Arc::new(tiny_auth_business::clock::inject::clock()),
+            clock(),
             Duration::seconds(self.config.web.token_timeout_in_seconds.unwrap_or_default()),
             Duration::seconds(
                 self.config
@@ -598,114 +253,464 @@ impl<'a> Constructor<'a> {
         )
     }
 
-    pub fn build_token_validator(
-        public_key: &str,
-        algorithm: Algorithm,
-        issuer_url: &str,
-    ) -> Result<TokenValidator, Error> {
-        let key = match DecodingKey::from_rsa_pem(public_key.as_bytes()) {
-            Err(e) => {
-                debug!(%e, "not an RSA key");
-                DecodingKey::from_ec_pem(public_key.as_bytes())?
-            }
-            Ok(key) => key,
-        };
-
-        Ok(TokenValidator::new(key, algorithm, issuer_url.to_owned()))
-    }
-
-    pub fn build_own_token_validator(
-        public_key: &str,
-        algorithm: Algorithm,
-        issuer_url: &str,
-    ) -> Result<TokenValidator, Error> {
-        let key = match DecodingKey::from_rsa_pem(public_key.as_bytes()) {
-            Err(e) => {
-                debug!(%e, "not an RSA key");
-                DecodingKey::from_ec_pem(public_key.as_bytes())?
-            }
-            Ok(key) => key,
-        };
-
-        Ok(TokenValidator::new_for_own_api(
-            key,
-            algorithm,
-            issuer_url.to_owned(),
-        ))
-    }
-
-    // See https://tools.ietf.org/html/rfc7518#section-6
-    fn build_jwk(
-        public_key: &str,
-        issuer_url: &str,
-        public_key_index: usize,
-    ) -> Result<Jwk, Error> {
-        let key = public_key.as_bytes();
-        let url = format!("{issuer_url}/cert/{public_key_index}").to_owned();
-        let jwk = if let Ok(key) = Rsa::public_key_from_pem_pkcs1(key) {
-            let n = Self::encode_bignum(key.n());
-            let e = Self::encode_bignum(key.e());
-
-            let mut hasher = Hasher::new(MessageDigest::sha1())?;
-            hasher.update(&key.n().to_vec())?;
-            hasher.update(&key.e().to_vec())?;
-            let id = STANDARD.encode(hasher.finish()?);
-            Jwk::new_rsa(id, url, n, e)
-        } else if let Ok(key) = Rsa::public_key_from_pem(key) {
-            let n = Self::encode_bignum(key.n());
-            let e = Self::encode_bignum(key.e());
-            let mut hasher = Hasher::new(MessageDigest::sha1())?;
-            hasher.update(&key.n().to_vec())?;
-            hasher.update(&key.e().to_vec())?;
-            let id = STANDARD.encode(hasher.finish()?);
-            Jwk::new_rsa(id, url, n, e)
-        } else if let Ok(key) = EcKey::public_key_from_pem(key) {
-            let crv = match key.group().curve_name() {
-                Some(openssl::nid::Nid::SECP384R1) => "P-384".to_owned(),
-                Some(_) | None => {
-                    error!("unsupported curve in token key");
-                    return Err(LoggedBeforeError);
-                }
-            };
-
-            let mut context = BigNumContext::new()?;
-            let mut x = BigNum::new()?;
-            let mut y = BigNum::new()?;
-
-            key.public_key()
-                .affine_coordinates_gfp(key.group(), &mut x, &mut y, &mut context)?;
-
-            let mut hasher = Hasher::new(MessageDigest::sha1())?;
-            hasher.update(&x.to_vec())?;
-            hasher.update(&y.to_vec())?;
-            hasher.update(crv.as_bytes())?;
-
-            let x = Self::encode_bignum(&x);
-            let y = Self::encode_bignum(&y);
-            let id = STANDARD.encode(hasher.finish()?);
-            Jwk::new_ecdsa(id, url, crv, x, y)
-        } else {
-            error!("token key has unknown type, tried RSA and ECDSA");
-            return Err(LoggedBeforeError);
-        };
-
-        Ok(jwk)
-    }
-
-    pub fn build_jwks(&self) -> Jwks {
-        self.jwks.clone()
-    }
-
-    fn encode_bignum(num: &BigNumRef) -> String {
-        general_purpose::URL_SAFE_NO_PAD.encode(num.to_vec())
-    }
-
-    pub fn user_store(&self) -> Arc<dyn UserStore> {
-        self.user_store.clone()
+    pub fn get_public_keys(&self) -> Vec<TokenCertificate> {
+        self.public_keys
+            .iter()
+            .map(Clone::clone)
+            .map(TokenCertificate)
+            .collect()
     }
 }
 
-impl<'a> tiny_auth_api::Constructor<'a> for Constructor<'a> {
+pub fn build_auth_code_store(clock: impl Clock + 'static) -> Arc<dyn AuthorizationCodeStore> {
+    let result = Arc::new(MemoryAuthorizationCodeStore::default());
+    let arg = result.clone();
+    tokio::spawn(async {
+        auth_code_clean_job(arg, clock).await;
+    });
+    result
+}
+
+fn build_template_engine(config: &Config) -> Result<Tera, Error> {
+    Ok(load_template_engine(
+        &config.web.static_files.to_string_lossy(),
+        config.web.path.as_deref().unwrap_or(""),
+    )?)
+}
+
+fn build_issuer_url(config: &Config) -> String {
+    let mut token_issuer = "http".to_owned();
+    if config.web.tls.is_some() {
+        token_issuer += "s";
+    }
+    token_issuer += "://";
+    token_issuer += &config.web.public_host.domain;
+    if let Some(port) = &config.web.public_host.port {
+        token_issuer += ":";
+        token_issuer += port;
+    }
+    if let Some(path) = &config.web.path {
+        if !path.is_empty() {
+            if !path.starts_with('/') {
+                token_issuer += "/";
+            }
+            token_issuer += path;
+        }
+    }
+
+    while token_issuer.ends_with('/') {
+        token_issuer.pop();
+    }
+
+    token_issuer
+}
+
+fn read_token_keypairs(config: &Config) -> Result<(String, Vec<String>, String), Error> {
+    let first_key = match config.crypto.keys.first() {
+        None => {
+            error!("at least one crypto.keys entry must be given");
+            return Err(LoggedBeforeError);
+        }
+        Some(v) => v,
+    };
+    let private_key = read_file(&first_key.key)?;
+    let public_key = read_file(&first_key.public_key)?;
+    let public_keys = config
+        .crypto
+        .keys
+        .iter()
+        .skip(1)
+        .map(|k| read_file(&k.public_key))
+        .try_fold(vec![], |mut v, i| {
+            v.push(i?);
+            Ok::<Vec<String>, Error>(v)
+        })?;
+
+    Ok((public_key, public_keys, private_key))
+}
+
+fn build_encoding_key(private_key: &str) -> Result<(EncodingKey, Algorithm), Error> {
+    let bytes = private_key.as_bytes();
+    match EncodingKey::from_rsa_pem(bytes) {
+        Err(e) => {
+            debug!(%e, "not an RSA key");
+            match EncodingKey::from_ec_pem(bytes) {
+                Err(e) => {
+                    error!(%e, "failed to read private token key");
+                    Err(e.into())
+                }
+                Ok(key) => Ok((key, Algorithm::ES384)),
+            }
+        }
+        Ok(key) => Ok((key, Algorithm::PS512)),
+    }
+}
+
+pub fn build_token_validator(
+    public_key: &str,
+    algorithm: Algorithm,
+    issuer_url: &str,
+) -> Result<TokenValidator, Error> {
+    let key = match DecodingKey::from_rsa_pem(public_key.as_bytes()) {
+        Err(e) => {
+            debug!(%e, "not an RSA key");
+            DecodingKey::from_ec_pem(public_key.as_bytes())?
+        }
+        Ok(key) => key,
+    };
+
+    Ok(TokenValidator::new(key, algorithm, issuer_url.to_owned()))
+}
+
+pub fn build_own_token_validator(
+    public_key: &str,
+    algorithm: Algorithm,
+    issuer_url: &str,
+) -> Result<TokenValidator, Error> {
+    let key = match DecodingKey::from_rsa_pem(public_key.as_bytes()) {
+        Err(e) => {
+            debug!(%e, "not an RSA key");
+            DecodingKey::from_ec_pem(public_key.as_bytes())?
+        }
+        Ok(key) => key,
+    };
+
+    Ok(TokenValidator::new_for_own_api(
+        key,
+        algorithm,
+        issuer_url.to_owned(),
+    ))
+}
+
+// See https://tools.ietf.org/html/rfc7518#section-6
+fn build_jwk(public_key: &str, issuer_url: &str, public_key_index: usize) -> Result<Jwk, Error> {
+    let key = public_key.as_bytes();
+    let url = format!("{issuer_url}/cert/{public_key_index}").to_owned();
+    let jwk = if let Ok(key) = Rsa::public_key_from_pem_pkcs1(key) {
+        let n = encode_bignum(key.n());
+        let e = encode_bignum(key.e());
+
+        let mut hasher = Hasher::new(MessageDigest::sha1())?;
+        hasher.update(&key.n().to_vec())?;
+        hasher.update(&key.e().to_vec())?;
+        let id = STANDARD.encode(hasher.finish()?);
+        Jwk::new_rsa(id, url, n, e)
+    } else if let Ok(key) = Rsa::public_key_from_pem(key) {
+        let n = encode_bignum(key.n());
+        let e = encode_bignum(key.e());
+        let mut hasher = Hasher::new(MessageDigest::sha1())?;
+        hasher.update(&key.n().to_vec())?;
+        hasher.update(&key.e().to_vec())?;
+        let id = STANDARD.encode(hasher.finish()?);
+        Jwk::new_rsa(id, url, n, e)
+    } else if let Ok(key) = EcKey::public_key_from_pem(key) {
+        let crv = match key.group().curve_name() {
+            Some(openssl::nid::Nid::SECP384R1) => "P-384".to_owned(),
+            Some(_) | None => {
+                error!("unsupported curve in token key");
+                return Err(LoggedBeforeError);
+            }
+        };
+
+        let mut context = BigNumContext::new()?;
+        let mut x = BigNum::new()?;
+        let mut y = BigNum::new()?;
+
+        key.public_key()
+            .affine_coordinates_gfp(key.group(), &mut x, &mut y, &mut context)?;
+
+        let mut hasher = Hasher::new(MessageDigest::sha1())?;
+        hasher.update(&x.to_vec())?;
+        hasher.update(&y.to_vec())?;
+        hasher.update(crv.as_bytes())?;
+
+        let x = encode_bignum(&x);
+        let y = encode_bignum(&y);
+        let id = STANDARD.encode(hasher.finish()?);
+        Jwk::new_ecdsa(id, url, crv, x, y)
+    } else {
+        error!("token key has unknown type, tried RSA and ECDSA");
+        return Err(LoggedBeforeError);
+    };
+
+    Ok(jwk)
+}
+
+fn encode_bignum(num: &BigNumRef) -> String {
+    general_purpose::URL_SAFE_NO_PAD.encode(num.to_vec())
+}
+
+fn build_issuer_config(issuer_url: String, algorithm: Algorithm) -> IssuerConfiguration {
+    IssuerConfiguration {
+        issuer_url,
+        algorithm,
+    }
+}
+
+pub fn build_rate_limiter(config: &Config) -> Arc<RateLimiter> {
+    Arc::new(RateLimiter::new(
+        config.rate_limit.events,
+        Duration::seconds(config.rate_limit.period_in_seconds),
+    ))
+}
+
+async fn build_stores(
+    config: &Config,
+) -> Result<
+    (
+        Arc<dyn UserStore>,
+        Arc<DispatchingPasswordStore>,
+        Arc<dyn ClientStore>,
+        Arc<dyn ScopeStore>,
+        Sender<ReloadEvent>,
+        Vec<PathBuf>,
+        Option<Arc<dyn AuthorizationCodeStore>>,
+        Vec<HealthCheck>,
+    ),
+    Error,
+> {
+    let mut client_stores: Vec<Arc<dyn ClientStore>> = vec![];
+    let mut user_stores: Vec<Arc<dyn UserStore>> = vec![];
+    let mut scope_stores: Vec<Arc<dyn ScopeStore>> = vec![];
+    let mut password_stores: BTreeMap<String, Arc<dyn PasswordStore>> = BTreeMap::default();
+    let (sender, _receiver) = channel(8);
+    let mut store_paths = Vec::new();
+    let mut health_checks = Vec::new();
+    let in_place_password_store = Arc::new(in_place_password_store(&config.crypto.pepper));
+    let mut auth_code_store: Option<Arc<dyn AuthorizationCodeStore>> = None;
+
+    for store_config in &config.store {
+        match store_config {
+            Store::Config { name: _, base } => {
+                store_paths.push(base.into());
+                match FileStore::new(Path::new(&base), "clients", sender.subscribe()).await {
+                    None => return Err(LoggedBeforeError),
+                    Some(v) => client_stores.push(v),
+                };
+                match FileStore::new(Path::new(&base), "users", sender.subscribe()).await {
+                    None => return Err(LoggedBeforeError),
+                    Some(v) => user_stores.push(v),
+                };
+                match FileStore::new(Path::new(&base), "scopes", sender.subscribe()).await {
+                    None => return Err(LoggedBeforeError),
+                    Some(v) => scope_stores.push(v),
+                };
+            }
+            Store::Ldap {
+                name,
+                urls,
+                mode: LdapMode::SimpleBind { bind_dn_format },
+                connect_timeout_in_seconds,
+                starttls,
+            } => {
+                let templaters: Vec<_> = bind_dn_format
+                    .iter()
+                    .map(|v| bind_dn_templater(v))
+                    .collect();
+                let name = "ldap ".to_owned() + name;
+                let connector = connector(
+                    urls,
+                    std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
+                    *starttls,
+                );
+                let check: Arc<dyn HealthCheckCommand> =
+                    Arc::new(simple_bind_check(connector.clone()));
+                health_checks.push(health_check(&name, check));
+                password_stores.insert(
+                    name.clone(),
+                    tiny_auth_ldap::inject::simple_bind_store(
+                        name.as_str(),
+                        templaters.as_slice(),
+                        connector,
+                    ),
+                );
+            }
+            Store::Ldap {
+                name,
+                urls,
+                mode:
+                    LdapMode::SearchBind {
+                        bind_dn,
+                        bind_dn_password,
+                        searches,
+                        use_for,
+                    },
+                connect_timeout_in_seconds,
+                starttls,
+            } => {
+                let searches = searches
+                    .iter()
+                    .map(|v| tiny_auth_ldap::LdapSearch {
+                        base_dn: v.base_dn.clone(),
+                        search_filter: ldap_search_templater(&v.search_filter),
+                    })
+                    .collect();
+
+                let user_config = match &use_for.users {
+                    None => None,
+                    Some(LdapUsageUsers { attributes: None }) => UserConfig {
+                        allowed_scopes_attribute: None,
+                    }
+                    .into(),
+                    Some(LdapUsageUsers {
+                        attributes: Some(UserAttributes { allowed_scopes }),
+                    }) => UserConfig {
+                        allowed_scopes_attribute: allowed_scopes.clone(),
+                    }
+                    .into(),
+                };
+
+                let client_config = match &use_for.clients {
+                    None => None,
+                    Some(LdapUsageClients { attributes: None }) => ClientConfig {
+                        client_type_attribute: None,
+                        allowed_scopes_attribute: None,
+                        password_attribute: None,
+                        public_key_attribute: None,
+                        redirect_uri_attribute: None,
+                    }
+                    .into(),
+                    Some(LdapUsageClients {
+                        attributes:
+                            Some(ClientAttributes {
+                                client_type,
+                                redirect_uri,
+                                password,
+                                public_key,
+                                allowed_scopes,
+                            }),
+                    }) => ClientConfig {
+                        client_type_attribute: client_type.clone(),
+                        allowed_scopes_attribute: allowed_scopes.clone(),
+                        password_attribute: password.clone(),
+                        public_key_attribute: public_key.clone(),
+                        redirect_uri_attribute: redirect_uri.clone(),
+                    }
+                    .into(),
+                };
+
+                let name = "ldap ".to_owned() + name;
+                let connector = connector(
+                    urls,
+                    std::time::Duration::from_secs(*connect_timeout_in_seconds as u64),
+                    *starttls,
+                );
+                let check: Arc<dyn HealthCheckCommand> = Arc::new(search_bind_check(
+                    connector.clone(),
+                    bind_dn,
+                    bind_dn_password,
+                ));
+
+                let ldap_store = tiny_auth_ldap::inject::search_bind_store(
+                    name.as_str(),
+                    connector,
+                    bind_dn,
+                    bind_dn_password,
+                    searches,
+                    user_config,
+                    client_config,
+                );
+                health_checks.push(health_check(&name, check));
+                user_stores.push(ldap_store.clone());
+                client_stores.push(ldap_store.clone());
+                password_stores.insert(name.clone(), ldap_store);
+            }
+            Store::Sqlite {
+                name,
+                base,
+                use_for,
+            } => {
+                let _store_span = span!(Level::INFO, "", store = %name).entered();
+                let templater = data_loader_templater();
+                let user_loaders = tiny_auth_sqlite::inject::data_assembler(
+                    use_for.users.iter().flat_map(|v| v.iter()).filter_map(|v| {
+                        v.try_into().map_err(|e| warn!(%e, "invalid location")).ok()
+                    }),
+                    templater.clone(),
+                );
+                let client_loaders = tiny_auth_sqlite::inject::data_assembler(
+                    use_for
+                        .clients
+                        .iter()
+                        .flat_map(|v| v.iter())
+                        .filter_map(|v| {
+                            v.try_into().map_err(|e| warn!(%e, "invalid location")).ok()
+                        }),
+                    templater.clone(),
+                );
+
+                let (sqlite_store, check) = match tiny_auth_sqlite::inject::sqlite_store(
+                    name.as_str(),
+                    &(String::from("sqlite://") + base.to_string_lossy().as_ref()),
+                    in_place_password_store.clone(),
+                    user_loaders,
+                    client_loaders,
+                )
+                .await
+                {
+                    Err(e) => {
+                        error!(%e, %name, "failed to create sqlite store");
+                        return Err(LoggedBeforeError);
+                    }
+                    Ok(v) => v,
+                };
+
+                let health_check_name = "sqlite ".to_owned() + name;
+                health_checks.push(health_check(health_check_name.as_str(), Arc::new(check)));
+                if use_for.users.is_some() {
+                    user_stores.push(sqlite_store.clone());
+                }
+                if use_for.clients.is_some() {
+                    client_stores.push(sqlite_store.clone());
+                }
+                if use_for.scopes {
+                    scope_stores.push(sqlite_store.clone());
+                }
+                if use_for.passwords {
+                    password_stores.insert(name.clone(), sqlite_store.clone());
+                }
+                if use_for.auth_codes {
+                    match auth_code_store {
+                        None => auth_code_store = Some(sqlite_store),
+                        Some(_) => {
+                            error!(%name, "more than one auth code store configured");
+                            return Err(LoggedBeforeError);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let password_store = dispatching_password_store(password_stores, in_place_password_store);
+
+    Ok((
+        Arc::new(MergingUserStore::from(user_stores)),
+        Arc::new(password_store),
+        Arc::new(MergingClientStore::from(client_stores)),
+        Arc::new(MergingScopeStore::from(scope_stores)),
+        sender,
+        store_paths,
+        auth_code_store,
+        health_checks,
+    ))
+}
+
+pub fn build_authenticator(
+    user_store: Arc<dyn UserStore>,
+    rate_limiter: Arc<RateLimiter>,
+    password_store: Arc<DispatchingPasswordStore>,
+    clock: impl Clock,
+) -> Arc<impl Authenticator> {
+    Arc::new(authenticator(
+        user_store,
+        rate_limiter,
+        password_store,
+        clock,
+    ))
+}
+
+impl<'a, A: Authenticator + 'static> tiny_auth_api::Constructor<'a> for Constructor<'a, A> {
     fn endpoint(&self) -> &'a str {
         self.config.api.bind.as_str()
     }
@@ -726,16 +731,16 @@ impl<'a> tiny_auth_api::Constructor<'a> for Constructor<'a> {
         self.client_ca.clone()
     }
 
-    fn change_password_handler(&self) -> ChangePasswordHandler {
-        ChangePasswordHandler::new(self.authenticator.clone(), self.own_token_validator.clone())
+    fn change_password_handler(&self) -> impl Handler + 'static {
+        inject::handler(self.authenticator.clone(), self.own_token_validator.clone())
     }
 }
 
-impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
+impl<'a, A: Authenticator + 'static> tiny_auth_web::Constructor<'a> for Constructor<'a, A> {
     fn get_public_keys(&self) -> Vec<TokenCertificate> {
         self.get_public_keys()
     }
-    fn authenticator(&self) -> Arc<Authenticator> {
+    fn authenticator(&self) -> Arc<dyn Authenticator + 'static> {
         self.authenticator.clone()
     }
     fn get_issuer_config(&self) -> IssuerConfiguration {
@@ -824,18 +829,19 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
         ))
     }
 
-    fn consent_handler(&self) -> Arc<ConsentHandler> {
+    fn consent_handler(&self) -> Arc<dyn ConsentHandler> {
         Arc::new(tiny_auth_business::consent::inject::handler(
             self.scope_store.clone(),
             self.user_store.clone(),
             self.client_store.clone(),
             self.authorization_code_store.clone(),
             self.build_token_creator(),
+            clock(),
         ))
     }
 
-    fn token_handler(&self) -> Arc<TokenHandler> {
-        Arc::new(tiny_auth_web::endpoints::token::Handler::new(
+    fn token_handler(&self) -> Arc<dyn TokenHandler> {
+        Arc::new(tiny_auth_web::endpoints::token::inject::handler(
             Arc::new(tiny_auth_business::token_endpoint::inject::handler(
                 self.client_store.clone(),
                 self.user_store.clone(),
@@ -845,12 +851,13 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
                 self.token_validator.clone(),
                 self.scope_store.clone(),
                 self.issuer_configuration.clone(),
+                clock(),
             )),
             Arc::new(CorsChecker::new(self.build_cors_lister())),
         ))
     }
 
-    fn user_info_handler(&self) -> Arc<UserInfoHandler> {
+    fn user_info_handler(&self) -> Arc<dyn UserInfoHandler> {
         Arc::new(tiny_auth_web::endpoints::userinfo::inject::handler(
             Arc::new(userinfo_endpoint::inject::handler(
                 self.token_validator.clone(),
@@ -910,6 +917,10 @@ impl<'a> tiny_auth_web::Constructor<'a> for Constructor<'a> {
 
     fn consent_template(&self) -> Arc<dyn WebTemplater<ConsentContext>> {
         tiny_auth_template::inject::consent_templater(self.tera.clone())
+    }
+
+    fn clock(&self) -> Arc<dyn Clock> {
+        Arc::new(clock())
     }
 }
 

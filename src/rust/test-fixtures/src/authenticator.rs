@@ -14,6 +14,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+use crate::clock::clock;
 use crate::data::password::PEPPER;
 use crate::store::user_store::build_test_user_store;
 use crate::token::build_test_rate_limiter;
@@ -23,7 +24,7 @@ use tiny_auth_business::data::password::inject::{
     dispatching_password_store, in_place_password_store,
 };
 
-pub fn authenticator() -> Authenticator {
+pub fn authenticator() -> impl Authenticator + 'static {
     inject::authenticator(
         build_test_user_store(),
         Arc::new(build_test_rate_limiter()),
@@ -31,5 +32,6 @@ pub fn authenticator() -> Authenticator {
             Default::default(),
             Arc::new(in_place_password_store(PEPPER)),
         )),
+        clock(),
     )
 }

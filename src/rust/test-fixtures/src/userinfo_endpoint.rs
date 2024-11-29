@@ -22,7 +22,7 @@ use crate::token::{build_test_token_creator, build_test_token_validator};
 use std::sync::Arc;
 use tiny_auth_business::userinfo_endpoint::{inject, Handler};
 
-pub fn build_test_userinfo_handler() -> Handler {
+pub fn build_test_userinfo_handler() -> impl Handler {
     inject::handler(
         Arc::new(build_test_token_validator()),
         build_test_token_creator(),

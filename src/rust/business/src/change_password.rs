@@ -18,10 +18,21 @@
 use crate::authenticator::Authenticator;
 use crate::data::password::Password;
 use crate::token::{Access, Token, TokenValidator};
+use async_trait::async_trait;
 use std::sync::Arc;
 use tracing::{span, Instrument, Level};
 
-pub struct Handler {
+#[async_trait]
+pub trait Handler: Send + Sync {
+    async fn handle(
+        &self,
+        current_password: &str,
+        new_password: &str,
+        token: &str,
+    ) -> Result<Password, Error>;
+}
+
+pub struct HandlerImpl<Authenticator> {
     pub(crate) authenticator: Arc<Authenticator>,
     pub(crate) token_validator: Arc<TokenValidator>,
 }
@@ -36,15 +47,26 @@ pub enum Error {
     TokenAuthentication,
 }
 
-impl Handler {
-    pub fn new(authenticator: Arc<Authenticator>, token_validator: Arc<TokenValidator>) -> Self {
-        Self {
+pub mod inject {
+    use crate::authenticator::Authenticator;
+    use crate::change_password::{Handler, HandlerImpl};
+    use crate::token::TokenValidator;
+    use std::sync::Arc;
+
+    pub fn handler<A>(authenticator: Arc<A>, token_validator: Arc<TokenValidator>) -> impl Handler
+    where
+        A: Authenticator,
+    {
+        HandlerImpl {
             authenticator,
             token_validator,
         }
     }
+}
 
-    pub async fn handle(
+#[async_trait]
+impl<A: Authenticator> Handler for HandlerImpl<A> {
+    async fn handle(
         &self,
         current_password: &str,
         new_password: &str,

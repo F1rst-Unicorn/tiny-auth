@@ -21,19 +21,3 @@ use chrono::Local;
 pub trait Clock: Send + Sync {
     fn now(&self) -> DateTime<Local>;
 }
-
-struct ClockImpl {}
-
-impl Clock for ClockImpl {
-    fn now(&self) -> DateTime<Local> {
-        Local::now()
-    }
-}
-
-pub mod inject {
-    use super::*;
-
-    pub fn clock() -> impl Clock {
-        ClockImpl {}
-    }
-}

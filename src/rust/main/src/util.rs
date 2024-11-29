@@ -15,14 +15,31 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use chrono::{DateTime, Local};
 use std::fmt::{Debug, Display};
 use std::fs;
 use std::fs::File;
 use std::io::Error;
 use std::io::Read;
 use std::path::Path;
-
+use tiny_auth_business::clock::Clock;
 use tracing::error;
+
+pub struct ClockImpl {}
+
+impl Clock for ClockImpl {
+    fn now(&self) -> DateTime<Local> {
+        Local::now()
+    }
+}
+
+pub mod inject {
+    use super::*;
+
+    pub fn clock() -> impl Clock {
+        ClockImpl {}
+    }
+}
 
 pub fn read_file(file_path: impl AsRef<Path>) -> Result<String, Error> {
     let mut file = File::open(file_path)?;

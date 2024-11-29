@@ -32,6 +32,7 @@ rustls-pemfile.workspace = true
 thiserror.workspace = true
 tracing-actix-web.workspace = true
 rstest.workspace = true
+async-trait.workspace = true
 
 [dev-dependencies]
 test-log.workspace = true

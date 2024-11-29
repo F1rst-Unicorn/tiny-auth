@@ -15,18 +15,18 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::{authenticate, consent, error_with_code, return_rendered_template, server_error};
+use super::{consent, error_with_code, return_rendered_template, server_error};
 use crate::endpoints::parse_first_request;
 use actix_session::Session;
 use actix_web::http::header::LOCATION;
 use actix_web::http::StatusCode;
 use actix_web::web;
 use actix_web::HttpResponse;
-use chrono::Local;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::authenticator::Error;
+use tiny_auth_business::clock::Clock;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
 use tiny_auth_business::oidc::Prompt;
@@ -72,6 +72,7 @@ pub struct Request {
 pub async fn get(
     session: Session,
     templater: Data<dyn WebTemplater<AuthenticateContext>>,
+    clock: Data<dyn Clock>,
 ) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
@@ -106,8 +107,7 @@ pub async fn get(
                 }
                 Ok(Some(v)) => v,
             };
-            let now = Local::now();
-            if now.timestamp() - auth_time <= max_age {
+            if clock.now().timestamp() - auth_time <= max_age {
                 debug!("recognised authenticated user and max_age is still ok",);
                 redirect_successfully()
             } else {
@@ -151,7 +151,7 @@ pub async fn post(
     query: web::Form<Request>,
     session: Session,
     templater: Data<dyn WebTemplater<AuthenticateContext>>,
-    authenticator: Data<Authenticator>,
+    authenticator: Data<dyn Authenticator>,
 ) -> HttpResponse {
     session.remove(ERROR_CODE_SESSION_KEY);
 
@@ -208,14 +208,14 @@ pub async fn post(
 
     let _flow_guard = flow.enter();
     match auth_result {
-        Ok(_) => {
+        Ok(auth_time) => {
             session.remove(TRIES_LEFT_SESSION_KEY);
             session.remove(ERROR_CODE_SESSION_KEY);
             if let Err(e) = session.insert(SESSION_KEY, username) {
                 error!(%e, "failed to serialise session");
                 return server_error(templater.instantiate_error_page(ServerError));
             }
-            if let Err(e) = session.insert(AUTH_TIME_SESSION_KEY, Local::now().timestamp()) {
+            if let Err(e) = session.insert(AUTH_TIME_SESSION_KEY, auth_time.timestamp()) {
                 error!(%e, "failed to serialise auth_time");
                 return server_error(templater.instantiate_error_page(ServerError));
             }
@@ -294,7 +294,7 @@ pub async fn select_account(session: Session) -> HttpResponse {
     session.remove(AUTH_TIME_SESSION_KEY);
 
     HttpResponse::SeeOther()
-        .insert_header((LOCATION, authenticate::ENDPOINT_NAME))
+        .insert_header((LOCATION, ENDPOINT_NAME))
         .finish()
 }
 
@@ -377,7 +377,7 @@ fn render_invalid_login_attempt_error(
     }
 
     HttpResponse::SeeOther()
-        .insert_header((LOCATION, authenticate::ENDPOINT_NAME))
+        .insert_header((LOCATION, ENDPOINT_NAME))
         .finish()
 }
 
@@ -394,6 +394,7 @@ fn render_invalid_authentication_request(
 mod tests {
     use actix_web::web::Data;
     use std::sync::Arc;
+    use tiny_auth_business::authenticator::Authenticator;
     use tiny_auth_business::template::web::{AuthenticateContext, WebTemplater};
     use tiny_auth_test_fixtures::template::TestTemplater;
 
@@ -406,11 +407,13 @@ mod tests {
         use actix_web::http::header::{HeaderValue, LOCATION};
         use actix_web::http::StatusCode;
         use actix_web::test::TestRequest;
-        use chrono::Local;
+        use actix_web::web::Data;
         use pretty_assertions::assert_eq;
         use rstest::{fixture, rstest};
+        use std::sync::Arc;
         use test_log::test;
         use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
+        use tiny_auth_business::clock::Clock;
         use tiny_auth_business::oauth2;
         use tiny_auth_business::oidc::OidcProtocolError::LoginRequired;
         use tiny_auth_business::oidc::{Prompt, ResponseType};
@@ -419,33 +422,36 @@ mod tests {
 
         #[rstest]
         #[test(actix_web::test)]
-        async fn empty_session_gives_error(session: Session) {
-            let resp = get(session, build_test_templater()).await;
+        async fn empty_session_gives_error(session: Session, clock: Data<dyn Clock>) {
+            let resp = get(session, build_test_templater(), clock).await;
 
             assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
         }
 
         #[rstest]
         #[test(actix_web::test)]
-        async fn authorization_in_session_gives_login_form(session: Session) {
+        async fn authorization_in_session_gives_login_form(
+            session: Session,
+            clock: Data<dyn Clock>,
+        ) {
             session
                 .insert(authorize::SESSION_KEY, test_request())
                 .unwrap();
 
-            let resp = get(session, build_test_templater()).await;
+            let resp = get(session, build_test_templater(), clock).await;
 
             assert_eq!(resp.status(), StatusCode::OK);
         }
 
         #[rstest]
         #[test(actix_web::test)]
-        async fn recognising_user_redirects_to_consent(session: Session) {
+        async fn recognising_user_redirects_to_consent(session: Session, clock: Data<dyn Clock>) {
             session
                 .insert(authorize::SESSION_KEY, test_request())
                 .unwrap();
             session.insert(SESSION_KEY, "dummy").unwrap();
 
-            let resp = get(session, build_test_templater()).await;
+            let resp = get(session, build_test_templater(), clock).await;
 
             assert_eq!(resp.status(), StatusCode::SEE_OTHER);
             assert_eq!(
@@ -459,7 +465,10 @@ mod tests {
 
         #[rstest]
         #[test(actix_web::test)]
-        async fn recognising_user_but_login_demanded_gives_form(session: Session) {
+        async fn recognising_user_but_login_demanded_gives_form(
+            session: Session,
+            clock: Data<dyn Clock>,
+        ) {
             session
                 .insert(
                     authorize::SESSION_KEY,
@@ -471,14 +480,17 @@ mod tests {
                 .unwrap();
             session.insert(SESSION_KEY, "dummy").unwrap();
 
-            let resp = get(session, build_test_templater()).await;
+            let resp = get(session, build_test_templater(), clock).await;
 
             assert_eq!(resp.status(), StatusCode::OK);
         }
 
         #[rstest]
         #[test(actix_web::test)]
-        async fn recognising_user_but_account_selection_demanded_gives_form(session: Session) {
+        async fn recognising_user_but_account_selection_demanded_gives_form(
+            session: Session,
+            clock: Data<dyn Clock>,
+        ) {
             session
                 .insert(
                     authorize::SESSION_KEY,
@@ -490,14 +502,17 @@ mod tests {
                 .unwrap();
             session.insert(SESSION_KEY, "dummy").unwrap();
 
-            let resp = get(session, build_test_templater()).await;
+            let resp = get(session, build_test_templater(), clock).await;
 
             assert_eq!(resp.status(), StatusCode::OK);
         }
 
         #[rstest]
         #[test(actix_web::test)]
-        async fn no_user_recognised_but_no_prompt_demanded_gives_error(session: Session) {
+        async fn no_user_recognised_but_no_prompt_demanded_gives_error(
+            session: Session,
+            clock: Data<dyn Clock>,
+        ) {
             session
                 .insert(
                     authorize::SESSION_KEY,
@@ -509,7 +524,7 @@ mod tests {
                 )
                 .unwrap();
 
-            let resp = get(session, build_test_templater()).await;
+            let resp = get(session, build_test_templater(), clock).await;
 
             assert_eq!(StatusCode::FOUND, resp.status());
             let actual_redirect_uri = resp
@@ -528,22 +543,26 @@ mod tests {
 
         #[rstest]
         #[test(actix_web::test)]
-        async fn user_recognised_but_login_too_old_gives_login_form(session: Session) {
+        async fn user_recognised_but_login_too_old_gives_login_form(
+            session: Session,
+            clock: Data<dyn Clock>,
+        ) {
+            let anchor_time = 0;
             session
                 .insert(
                     authorize::SESSION_KEY,
                     AuthorizeRequestState {
-                        max_age: Some(0),
+                        max_age: Some(anchor_time),
                         ..test_request()
                     },
                 )
                 .unwrap();
             session.insert(SESSION_KEY, "dummy").unwrap();
             session
-                .insert(AUTH_TIME_SESSION_KEY, Local::now().timestamp() - 1)
+                .insert(AUTH_TIME_SESSION_KEY, anchor_time - 1)
                 .unwrap();
 
-            let resp = get(session, build_test_templater()).await;
+            let resp = get(session, build_test_templater(), clock).await;
 
             assert_eq!(resp.status(), StatusCode::OK);
         }
@@ -553,14 +572,25 @@ mod tests {
             let req = TestRequest::get().to_http_request();
             req.get_session()
         }
+
+        #[fixture]
+        fn clock() -> Data<dyn Clock> {
+            Data::from(coerce_to_dyn(tiny_auth_test_fixtures::clock::clock()))
+        }
+
+        fn coerce_to_dyn(t: impl Clock + 'static) -> Arc<dyn Clock> {
+            Arc::new(t)
+        }
     }
 
     mod post {
-        use crate::endpoints::authenticate::tests::build_test_templater;
+        use crate::endpoints::authenticate::tests::{
+            build_test_authenticator, build_test_templater,
+        };
         use crate::endpoints::authenticate::{
             post, Request, ERROR_CODE_SESSION_KEY, SESSION_KEY, TRIES_LEFT_SESSION_KEY,
         };
-        use crate::endpoints::tests::{build_test_authenticator, query_parameter_of};
+        use crate::endpoints::tests::query_parameter_of;
         use crate::endpoints::{
             authenticate, authorize, consent, generate_csrf_token, CSRF_SESSION_KEY,
             REDIRECT_QUERY_PARAM_ERROR, REDIRECT_QUERY_PARAM_ERROR_DESCRIPTION,
@@ -883,7 +913,17 @@ mod tests {
             req.get_session()
         }
     }
+
     fn build_test_templater() -> Data<dyn WebTemplater<AuthenticateContext>> {
         Data::from(Arc::new(TestTemplater) as Arc<dyn WebTemplater<_>>)
+    }
+
+    pub fn build_test_authenticator() -> Data<dyn Authenticator> {
+        let x = coerce_to_dyn(tiny_auth_test_fixtures::authenticator::authenticator());
+        Data::<dyn Authenticator>::from(x)
+    }
+
+    fn coerce_to_dyn(t: impl Authenticator + 'static) -> Arc<dyn Authenticator> {
+        Arc::new(t)
     }
 }

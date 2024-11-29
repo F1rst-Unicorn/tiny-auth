@@ -17,6 +17,7 @@
 
 use crate::authenticator::Authenticator;
 use crate::authenticator::Error::WrongCredentials;
+use crate::clock::Clock;
 use crate::data::client::Client;
 use crate::data::client::ClientType;
 use crate::data::scope::parse_scope_names;
@@ -31,13 +32,12 @@ use crate::store::UserStore;
 use crate::store::AUTH_CODE_LIFE_TIME;
 use crate::store::{AuthCodeValidationError, ClientStore};
 use crate::store::{AuthorizationCodeStore, ValidationRequest};
-use crate::token::Token;
-use crate::token::TokenCreator;
 use crate::token::TokenValidator;
 use crate::token::{
     Access, EncodedAccessToken, EncodedIdToken, EncodedRefreshToken, Id, RefreshToken,
 };
-use chrono::offset::Local;
+use crate::token::{Token, TokenCreator};
+use async_trait::async_trait;
 use chrono::Duration;
 use futures_util::future::join_all;
 use jsonwebtoken::Algorithm;
@@ -101,8 +101,24 @@ pub struct Request {
 
 type AuthorizationCodeResult = (User, Client, Vec<Scope>, i64, Option<String>);
 
+#[async_trait]
+pub trait Handler: Send + Sync {
+    async fn grant_tokens(
+        &self,
+        request: Request,
+    ) -> Result<
+        (
+            EncodedAccessToken,
+            EncodedIdToken,
+            Option<EncodedRefreshToken>,
+            Vec<Scope>,
+        ),
+        Error,
+    >;
+}
+
 #[derive(Clone)]
-pub struct Handler {
+pub struct HandlerImpl<Authenticator, Clock, TokenCreator> {
     client_store: Arc<dyn ClientStore>,
     user_store: Arc<dyn UserStore>,
     auth_code_store: Arc<dyn AuthorizationCodeStore>,
@@ -111,16 +127,18 @@ pub struct Handler {
     token_validator: Arc<TokenValidator>,
     scope_store: Arc<dyn ScopeStore>,
     issuer_configuration: IssuerConfiguration,
+    clock: Clock,
 }
 
-impl Handler {
+#[async_trait]
+impl<A: Authenticator, C: Clock, T: TokenCreator> Handler for HandlerImpl<A, C, T> {
     #[instrument(level = Level::DEBUG, skip_all, fields(
         client = request.client_id,
         pkce = request.pkce_verifier.is_some(),
         nonce,
         code = request.code,
         grant_type = ?request.grant_type))]
-    pub async fn grant_tokens(
+    async fn grant_tokens(
         &self,
         request: Request,
     ) -> Result<
@@ -167,7 +185,9 @@ impl Handler {
             scopes,
         ))
     }
+}
 
+impl<A: Authenticator, C: Clock, T: TokenCreator> HandlerImpl<A, C, T> {
     #[expect(clippy::type_complexity)] // debatable
     #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user))]
     async fn grant_token(
@@ -262,7 +282,7 @@ impl Handler {
             .validate(ValidationRequest {
                 client_id: &client.client_id,
                 authorization_code: code,
-                validation_time: Local::now(),
+                validation_time: self.clock.now(),
             })
             .await
         {
@@ -361,7 +381,7 @@ impl Handler {
                 .map_err(|_| Error::UnsupportedGrantType)?,
             client,
             scopes,
-            Local::now().timestamp(),
+            self.clock.now().timestamp(),
         ))
     }
 
@@ -396,7 +416,7 @@ impl Handler {
         .flatten()
         .collect();
 
-        Ok((user, client, scopes, Local::now().timestamp()))
+        Ok((user, client, scopes, self.clock.now().timestamp()))
     }
 
     async fn grant_with_refresh_token(
@@ -612,10 +632,10 @@ impl Handler {
         }
     }
 
-    fn decode_token_insecurely<T: DeserializeOwned>(
+    fn decode_token_insecurely<Token: DeserializeOwned>(
         &self,
         token: &str,
-    ) -> Result<TokenData<T>, ()> {
+    ) -> Result<TokenData<Token>, ()> {
         let mut error = None;
         for algorithm in &[
             Algorithm::HS256,
@@ -637,7 +657,8 @@ impl Handler {
             validation.validate_nbf = false;
             validation.insecure_disable_signature_validation();
 
-            match jsonwebtoken::decode::<T>(token, &DecodingKey::from_secret(&[]), &validation) {
+            match jsonwebtoken::decode::<Token>(token, &DecodingKey::from_secret(&[]), &validation)
+            {
                 Err(e) => {
                     error = Some(e);
                 }
@@ -698,25 +719,32 @@ fn verify_pkce(challenge: CodeChallenge, verifier: Option<String>) -> Result<(),
 }
 
 pub mod inject {
-    use super::Handler;
+    use super::{Handler, HandlerImpl};
     use crate::authenticator::Authenticator;
+    use crate::clock::Clock;
     use crate::issuer_configuration::IssuerConfiguration;
     use crate::store::{AuthorizationCodeStore, ClientStore, ScopeStore, UserStore};
     use crate::token::{TokenCreator, TokenValidator};
     use std::sync::Arc;
 
     #[expect(clippy::too_many_arguments)]
-    pub fn handler(
+    pub fn handler<A, C, T>(
         client_store: Arc<dyn ClientStore>,
         user_store: Arc<dyn UserStore>,
         auth_code_store: Arc<dyn AuthorizationCodeStore>,
-        token_creator: TokenCreator,
-        authenticator: Arc<Authenticator>,
+        token_creator: T,
+        authenticator: Arc<A>,
         token_validator: Arc<TokenValidator>,
         scope_store: Arc<dyn ScopeStore>,
         issuer_configuration: IssuerConfiguration,
-    ) -> Handler {
-        Handler {
+        clock: C,
+    ) -> impl Handler + 'static
+    where
+        A: Authenticator + 'static,
+        T: TokenCreator + 'static,
+        C: Clock + 'static,
+    {
+        HandlerImpl {
             client_store,
             user_store,
             auth_code_store,
@@ -725,6 +753,7 @@ pub mod inject {
             token_validator,
             scope_store,
             issuer_configuration,
+            clock,
         }
     }
 }

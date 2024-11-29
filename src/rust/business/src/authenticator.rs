@@ -15,23 +15,51 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::clock::Clock;
 use crate::data::client::Client;
 use crate::data::password::{DispatchingPasswordStore, Password};
 use crate::data::user::User;
 use crate::rate_limiter::RateLimiter;
 use crate::store::{PasswordConstructionError, PasswordStore, UserStore};
-use chrono::Local;
+use async_trait::async_trait;
+use chrono::{DateTime, Local};
 use std::sync::Arc;
 use tracing::warn;
 use tracing::{debug, instrument, Level};
 
+#[async_trait]
+pub trait Authenticator: Send + Sync {
+    async fn authenticate_user_and_forget(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<DateTime<Local>, Error>;
+
+    async fn authenticate_user(&self, username: &str, password: &str) -> Result<User, Error>;
+
+    async fn authenticate_client(
+        &self,
+        client: &Client,
+        stored_password: &Password,
+        password_to_check: &str,
+    ) -> Result<bool, Error>;
+
+    async fn construct_password(
+        &self,
+        user: User,
+        password: &str,
+    ) -> Result<Password, PasswordConstructionError>;
+}
+
 #[derive(Clone)]
-pub struct Authenticator {
+pub struct AuthenticatorImpl<Clock> {
     user_store: Arc<dyn UserStore>,
 
     password_store: Arc<DispatchingPasswordStore>,
 
     rate_limiter: Arc<RateLimiter>,
+
+    clock: Clock,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -46,18 +74,21 @@ pub enum Error {
     UserStoreError(#[from] crate::store::user_store::Error),
 }
 
-impl Authenticator {
+#[async_trait]
+impl<C: Clock> Authenticator for AuthenticatorImpl<C> {
     #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user = username))]
-    pub async fn authenticate_user_and_forget(
+    async fn authenticate_user_and_forget(
         &self,
         username: &str,
         password: &str,
-    ) -> Result<(), Error> {
-        self.authenticate_user(username, password).await.map(|_| ())
+    ) -> Result<DateTime<Local>, Error> {
+        self.authenticate_user(username, password)
+            .await
+            .map(|_| self.clock.now())
     }
 
     #[instrument(level = Level::DEBUG, skip_all)]
-    pub async fn authenticate_user(&self, username: &str, password: &str) -> Result<User, Error> {
+    async fn authenticate_user(&self, username: &str, password: &str) -> Result<User, Error> {
         let user = match self.user_store.get(username).await {
             Err(e) => {
                 debug!(%e, "not found");
@@ -66,7 +97,7 @@ impl Authenticator {
             Ok(u) => u,
         };
 
-        let now = Local::now();
+        let now = self.clock.now();
         self.rate_limiter.record_event(username, now).await;
 
         if self.rate_limiter.is_rate_above_maximum(username, now).await {
@@ -88,7 +119,7 @@ impl Authenticator {
         }
     }
 
-    pub async fn authenticate_client(
+    async fn authenticate_client(
         &self,
         client: &Client,
         stored_password: &Password,
@@ -100,7 +131,7 @@ impl Authenticator {
             .await?)
     }
 
-    pub async fn construct_password(
+    async fn construct_password(
         &self,
         user: User,
         password: &str,
@@ -112,15 +143,20 @@ impl Authenticator {
 pub mod inject {
     use super::*;
 
-    pub fn authenticator(
+    pub fn authenticator<C>(
         user_store: Arc<dyn UserStore>,
         rate_limiter: Arc<RateLimiter>,
         password_store: Arc<DispatchingPasswordStore>,
-    ) -> Authenticator {
-        Authenticator {
+        clock: C,
+    ) -> impl Authenticator
+    where
+        C: Clock,
+    {
+        AuthenticatorImpl {
             user_store,
             rate_limiter,
             password_store,
+            clock,
         }
     }
 }

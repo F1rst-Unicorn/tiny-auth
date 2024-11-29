@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::clock::Clock;
 use crate::data::scope::Scope;
 use crate::oauth2;
 use crate::oidc;
@@ -27,6 +28,7 @@ use crate::store::{AuthCodeError, AuthorizationCodeRequest};
 use crate::token::{
     Access, EncodedAccessToken, EncodedIdToken, EncodedRefreshToken, Id, TokenCreator,
 };
+use async_trait::async_trait;
 use chrono::{DateTime, Duration, Local};
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
@@ -41,7 +43,7 @@ pub struct Request<'a> {
     pub requested_scopes: &'a [String],
     pub user_confirmed_scopes: &'a BTreeSet<String>,
     pub response_types: &'a [oidc::ResponseType],
-    pub auth_time: DateTime<Local>,
+    pub auth_time: Option<DateTime<Local>>,
     pub nonce: Option<&'a String>,
     pub code_challenge: Option<&'a CodeChallenge>,
 }
@@ -71,20 +73,37 @@ impl Display for UserNotFound {
     }
 }
 
+#[async_trait]
+pub trait Handler: Send + Sync {
+    async fn can_skip_consent_screen(
+        &self,
+        authenticated_username: &str,
+        client_id: &str,
+        requested_scopes: &[String],
+    ) -> Result<bool, UserNotFound>;
+
+    async fn get_scope(&self, key: &str) -> Option<Scope>;
+
+    async fn issue_token<'a>(&self, request: Request<'a>) -> Result<Response, Error>;
+}
+
 #[derive(Clone)]
-pub struct Handler {
+pub struct HandlerImpl<Clock, TokenCreator> {
     scope_store: Arc<dyn ScopeStore>,
     user_store: Arc<dyn UserStore>,
     client_store: Arc<dyn ClientStore>,
     auth_code_store: Arc<dyn AuthorizationCodeStore>,
     token_creator: TokenCreator,
+    clock: Clock,
 }
 
-impl Handler {
+#[async_trait]
+impl<C: Clock + 'static, T: TokenCreator> Handler for HandlerImpl<C, T> {
     #[instrument(level = Level::DEBUG, skip_all, fields(
         client = client_id))]
-    #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user = authenticated_username))]
-    pub async fn can_skip_consent_screen(
+    #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user = authenticated_username)
+    )]
+    async fn can_skip_consent_screen(
         &self,
         authenticated_username: &str,
         client_id: &str,
@@ -103,7 +122,7 @@ impl Handler {
         Ok(requested_scopes.is_subset(&allowed_scopes.iter().collect()))
     }
 
-    pub async fn get_scope(&self, key: &str) -> Option<Scope> {
+    async fn get_scope(&self, key: &str) -> Option<Scope> {
         self.scope_store.get(key).await.ok()
     }
 
@@ -115,8 +134,9 @@ impl Handler {
             .fold(String::new(), |a, b| a + " " + b),
         response_types = ?request.response_types,
         pkce = request.code_challenge.is_some()))]
-    #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user = request.authenticated_username))]
-    pub async fn issue_token<'a>(&self, request: Request<'a>) -> Result<Response, Error> {
+    #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user = request.authenticated_username)
+    )]
+    async fn issue_token<'a>(&self, request: Request<'a>) -> Result<Response, Error> {
         let requested_scopes = BTreeSet::from_iter(request.requested_scopes);
         let scopes = request
             .user_confirmed_scopes
@@ -170,16 +190,15 @@ impl Handler {
                 Ok(v) => v,
             };
 
+            let auth_time = request.auth_time.unwrap_or(self.clock.now()).timestamp();
+
             if request
                 .response_types
                 .contains(&oidc::ResponseType::Oidc(oidc::OidcResponseType::IdToken))
             {
-                let mut token = self.token_creator.build_token::<Id>(
-                    &user,
-                    &client,
-                    &all_scopes,
-                    request.auth_time.timestamp(),
-                );
+                let mut token =
+                    self.token_creator
+                        .build_token::<Id>(&user, &client, &all_scopes, auth_time);
                 token.set_nonce(request.nonce.cloned());
                 let encoded_token = match self.token_creator.finalize_id_token(token.clone()) {
                     Err(e) => {
@@ -198,7 +217,7 @@ impl Handler {
                     &user,
                     &client,
                     &all_scopes,
-                    request.auth_time.timestamp(),
+                    auth_time,
                 );
                 token.set_nonce(request.nonce.cloned());
                 let encoded_token = match self.token_creator.finalize_access_token(token.clone()) {
@@ -216,7 +235,7 @@ impl Handler {
                         &all_scopes,
                         &user.name,
                         &client.client_id,
-                        request.auth_time.timestamp(),
+                        auth_time,
                     ),
                 ) {
                     Err(e) => {
@@ -233,7 +252,9 @@ impl Handler {
 
         Ok(response)
     }
+}
 
+impl<C: Clock + 'static, T: TokenCreator> HandlerImpl<C, T> {
     async fn generate_authz_code(
         &self,
         request: &Request<'_>,
@@ -251,8 +272,8 @@ impl Handler {
                     user: request.authenticated_username,
                     redirect_uri: request.redirect_uri,
                     scope: &scopes.join(" "),
-                    insertion_time: Local::now(),
-                    authentication_time: request.auth_time,
+                    insertion_time: self.clock.now(),
+                    authentication_time: request.auth_time.unwrap_or(self.clock.now()),
                     nonce: request.nonce.cloned(),
                     pkce_challenge: request.code_challenge.cloned(),
                 })
@@ -266,19 +287,25 @@ impl Handler {
 pub mod inject {
     use super::*;
 
-    pub fn handler(
+    pub fn handler<C, T>(
         scope_store: Arc<dyn ScopeStore>,
         user_store: Arc<dyn UserStore>,
         client_store: Arc<dyn ClientStore>,
         auth_code_store: Arc<dyn AuthorizationCodeStore>,
-        token_creator: TokenCreator,
-    ) -> Handler {
-        Handler {
+        token_creator: T,
+        clock: C,
+    ) -> impl Handler
+    where
+        C: Clock + 'static,
+        T: TokenCreator,
+    {
+        HandlerImpl {
             scope_store,
             user_store,
             client_store,
             auth_code_store,
             token_creator,
+            clock,
         }
     }
 }

@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::clock::clock;
+use crate::clock::system_time_clock;
 use crate::template::TestTemplater;
 use chrono::Duration;
 use jsonwebtoken::Algorithm;
@@ -25,15 +25,16 @@ use std::sync::Arc;
 use tiny_auth_business::data::jwk::Jwk;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::rate_limiter::RateLimiter;
+use tiny_auth_business::token::inject::token_creator;
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
 
-pub fn build_test_token_creator() -> TokenCreator {
-    TokenCreator::new(
+pub fn build_test_token_creator() -> impl TokenCreator {
+    token_creator(
         build_test_encoding_key(),
         build_test_issuer_config(),
         build_test_jwk(),
-        Arc::new(clock()),
+        system_time_clock(), // we cannot mock crate jsonwebtoken's now calls..
         Duration::minutes(1),
         Duration::minutes(3),
         Arc::new(TestTemplater),

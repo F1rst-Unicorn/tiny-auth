@@ -218,15 +218,48 @@ impl AsRef<str> for EncodedRefreshToken {
     }
 }
 
+pub trait TokenCreator: Send + Sync {
+    fn build_token<T: Default + Into<Destination>>(
+        &self,
+        user: &User,
+        client: &Client,
+        scopes: &[Scope],
+        auth_time: i64,
+    ) -> Token<T>;
+
+    fn expiration(&self) -> Duration;
+    fn renew<T>(&self, token: &mut Token<T>);
+    fn build_fresh_refresh_token(
+        &self,
+        scopes: &[Scope],
+        subject: &str,
+        authorized_party: &str,
+        auth_time: i64,
+    ) -> RefreshToken;
+
+    fn build_refresh_token(
+        &self,
+        issuance_time: i64,
+        scopes: &[Scope],
+        subject: &str,
+        authorized_party: &str,
+        auth_time: i64,
+    ) -> RefreshToken;
+
+    fn finalize_access_token(&self, token: Token<Access>) -> Result<EncodedAccessToken>;
+    fn finalize_id_token(&self, token: Token<Id>) -> Result<EncodedIdToken>;
+    fn finalize_refresh_token(&self, token: RefreshToken) -> Result<EncodedRefreshToken>;
+}
+
 #[derive(Clone)]
-pub struct TokenCreator {
+pub struct TokenCreatorImpl<Clock> {
     key: EncodingKey,
 
     issuer: IssuerConfiguration,
 
     jwk: Jwk,
 
-    clock: Arc<dyn Clock>,
+    clock: Clock,
 
     token_expiration: Duration,
 
@@ -235,17 +268,30 @@ pub struct TokenCreator {
     templater: Arc<dyn for<'a> Templater<ScopeContext<'a>>>,
 }
 
-impl TokenCreator {
-    pub fn new(
+pub mod inject {
+    use crate::clock::Clock;
+    use crate::data::jwk::Jwk;
+    use crate::issuer_configuration::IssuerConfiguration;
+    use crate::template::scope::ScopeContext;
+    use crate::template::Templater;
+    use crate::token::{TokenCreator, TokenCreatorImpl};
+    use chrono::Duration;
+    use jsonwebtoken::EncodingKey;
+    use std::sync::Arc;
+
+    pub fn token_creator<C>(
         key: EncodingKey,
         issuer: IssuerConfiguration,
         jwk: Jwk,
-        clock: Arc<dyn Clock>,
+        clock: C,
         token_expiration: Duration,
         refresh_token_expiration: Duration,
         templater: Arc<dyn for<'a> Templater<ScopeContext<'a>>>,
-    ) -> Self {
-        Self {
+    ) -> impl TokenCreator
+    where
+        C: Clock,
+    {
+        TokenCreatorImpl {
             key,
             issuer,
             jwk,
@@ -255,9 +301,11 @@ impl TokenCreator {
             templater,
         }
     }
+}
 
+impl<C: Clock> TokenCreator for TokenCreatorImpl<C> {
     #[instrument(skip_all)]
-    pub fn build_token<T: Default + Into<Destination>>(
+    fn build_token<T: Default + Into<Destination>>(
         &self,
         user: &User,
         client: &Client,
@@ -313,18 +361,18 @@ impl TokenCreator {
         result
     }
 
-    pub fn expiration(&self) -> Duration {
+    fn expiration(&self) -> Duration {
         self.token_expiration
     }
 
-    pub fn renew<T>(&self, token: &mut Token<T>) {
+    fn renew<T>(&self, token: &mut Token<T>) {
         debug!("renewing token");
         let now = self.clock.now();
         token.issuance_time = now.clone().timestamp();
         token.expiration = (now + self.token_expiration).timestamp();
     }
 
-    pub fn build_fresh_refresh_token(
+    fn build_fresh_refresh_token(
         &self,
         scopes: &[Scope],
         subject: &str,
@@ -341,7 +389,7 @@ impl TokenCreator {
         )
     }
 
-    pub fn build_refresh_token(
+    fn build_refresh_token(
         &self,
         issuance_time: i64,
         scopes: &[Scope],
@@ -361,21 +409,21 @@ impl TokenCreator {
         }
     }
 
-    pub fn finalize_access_token(&self, token: Token<Access>) -> Result<EncodedAccessToken> {
+    fn finalize_access_token(&self, token: Token<Access>) -> Result<EncodedAccessToken> {
         let mut header = Header::new(self.issuer.algorithm);
         header.kid = Some(self.jwk.key_id.clone());
         header.jku = Some(self.issuer.jwks());
         Ok(EncodedAccessToken(encode(&header, &token, &self.key)?))
     }
 
-    pub fn finalize_id_token(&self, token: Token<Id>) -> Result<EncodedIdToken> {
+    fn finalize_id_token(&self, token: Token<Id>) -> Result<EncodedIdToken> {
         let mut header = Header::new(self.issuer.algorithm);
         header.kid = Some(self.jwk.key_id.clone());
         header.jku = Some(self.issuer.jwks());
         Ok(EncodedIdToken(encode(&header, &token, &self.key)?))
     }
 
-    pub fn finalize_refresh_token(&self, token: RefreshToken) -> Result<EncodedRefreshToken> {
+    fn finalize_refresh_token(&self, token: RefreshToken) -> Result<EncodedRefreshToken> {
         let mut header = Header::new(self.issuer.algorithm);
         header.kid = Some(self.jwk.key_id.clone());
         header.jku = Some(self.issuer.jwks());

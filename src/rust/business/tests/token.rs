@@ -22,6 +22,7 @@ use serde_json::from_str;
 use test_log::test;
 use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::UserStore;
+use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::{Audience, EncodedRefreshToken, TokenValidator};
 use tiny_auth_test_fixtures::data::client::CONFIDENTIAL_CLIENT;
 use tiny_auth_test_fixtures::data::client::TINY_AUTH_FRONTEND;

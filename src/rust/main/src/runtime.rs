@@ -71,7 +71,7 @@ pub fn run(
 
     let actor_system = actix_rt::System::with_tokio_rt(|| tokio);
     actor_system.block_on(async move {
-        let constructor = crate::constructor::Constructor::new(&config).await?;
+        let constructor = crate::constructor::new(&config).await?;
 
         let (pass_server, receive_server) = oneshot::channel();
         let api_join_handle = match tiny_auth_api::start(&constructor).await {

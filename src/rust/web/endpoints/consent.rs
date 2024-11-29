@@ -32,9 +32,8 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
-use tiny_auth_business::consent::Error;
-use tiny_auth_business::consent::Handler;
 use tiny_auth_business::consent::Request as BusinessRequest;
+use tiny_auth_business::consent::{Error, Handler};
 use tiny_auth_business::data::scope::ScopeDescription;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
@@ -51,7 +50,7 @@ pub const ENDPOINT_NAME: &str = "consent";
 pub async fn get(
     templater: Data<dyn WebTemplater<ConsentContext>>,
     session: Session,
-    handler: Data<Handler>,
+    handler: Data<dyn Handler>,
 ) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
@@ -141,7 +140,7 @@ pub async fn post(
     query: web::Form<Request>,
     session: Session,
     templater: Data<dyn WebTemplater<ConsentContext>>,
-    handler: Data<Handler>,
+    handler: Data<dyn Handler>,
 ) -> HttpResponse {
     if !super::is_csrf_valid(&query.csrftoken, &session) {
         debug!("CSRF protection violation detected");
@@ -174,7 +173,7 @@ async fn process_skipping_csrf(
     scopes: BTreeSet<String>,
     session: Session,
     templater: Data<dyn WebTemplater<ConsentContext>>,
-    handler: Data<Handler>,
+    handler: Data<dyn Handler>,
     first_request: &AuthorizeRequestState,
 ) -> HttpResponse {
     let username = match session.get::<String>(authenticate::SESSION_KEY) {
@@ -200,10 +199,7 @@ async fn process_skipping_csrf(
         }
         Ok(Some(username)) => username,
     };
-    let auth_time = Local
-        .timestamp_opt(auth_time, 0)
-        .single()
-        .unwrap_or(Local::now());
+    let auth_time = Local.timestamp_opt(auth_time, 0).single();
 
     let mut redirect_uri = first_request.redirect_uri.clone();
     let mut response_parameters = HashMap::new();
@@ -312,7 +308,7 @@ fn render_invalid_consent_request(
     )
 }
 
-async fn build_context(session: &Session, handler: Data<Handler>) -> Option<ConsentContext> {
+async fn build_context(session: &Session, handler: Data<dyn Handler>) -> Option<ConsentContext> {
     let first_request = parse_first_request(session)?;
     let username = session.get::<String>(authenticate::SESSION_KEY).ok()??;
     let csrftoken = super::generate_csrf_token();
@@ -364,7 +360,7 @@ mod tests {
     #[rstest]
     #[test(actix_web::test)]
     async fn empty_session_gives_error(session: Session) {
-        let resp = get(build_test_templater(), session, Data::new(handler())).await;
+        let resp = get(build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
@@ -376,7 +372,7 @@ mod tests {
             .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
 
-        let resp = get(build_test_templater(), session, Data::new(handler())).await;
+        let resp = get(build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
@@ -409,7 +405,7 @@ mod tests {
 
         session.insert(authenticate::SESSION_KEY, USER).unwrap();
 
-        let resp = get(build_test_templater(), session, Data::new(handler())).await;
+        let resp = get(build_test_templater(), session, build_test_handler()).await;
 
         assert_eq!(resp.status(), StatusCode::OK);
     }
@@ -428,7 +424,7 @@ mod tests {
             request,
             session,
             build_test_templater(),
-            Data::new(handler()),
+            build_test_handler(),
         )
         .await;
 
@@ -449,7 +445,7 @@ mod tests {
             request,
             session,
             build_test_templater(),
-            Data::new(handler()),
+            build_test_handler(),
         )
         .await;
 
@@ -476,7 +472,7 @@ mod tests {
             request,
             session,
             build_test_templater(),
-            Data::new(handler()),
+            build_test_handler(),
         )
         .await;
 
@@ -523,7 +519,7 @@ mod tests {
             request,
             session,
             build_test_templater(),
-            Data::new(handler()),
+            build_test_handler(),
         )
         .await;
 
@@ -589,7 +585,7 @@ mod tests {
             request,
             session,
             build_test_templater(),
-            Data::new(handler()),
+            build_test_handler(),
         )
         .await;
 
@@ -622,6 +618,14 @@ mod tests {
     fn session() -> Session {
         let req = TestRequest::post().to_http_request();
         req.get_session()
+    }
+
+    fn build_test_handler() -> Data<dyn Handler> {
+        Data::from(coerce_to_dyn(handler()))
+    }
+
+    fn coerce_to_dyn(t: impl Handler + 'static) -> Arc<dyn Handler> {
+        Arc::new(t)
     }
 
     fn build_test_templater() -> Data<dyn WebTemplater<ConsentContext>> {

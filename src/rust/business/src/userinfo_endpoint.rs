@@ -16,6 +16,7 @@
  */
 use crate::store::{ClientStore, ScopeStore, ScopeStoreError, UserStore};
 use crate::token::{Access, EncodedAccessToken, Token, TokenCreator, TokenValidator, Userinfo};
+use async_trait::async_trait;
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::debug;
@@ -36,7 +37,12 @@ pub enum Error {
     ScopeError(#[from] ScopeStoreError),
 }
 
-pub struct Handler {
+#[async_trait]
+pub trait Handler: Send + Sync {
+    async fn get_userinfo(&self, request: Request) -> Result<Token<Userinfo>, Error>;
+}
+
+pub struct HandlerImpl<TokenCreator> {
     token_validator: Arc<TokenValidator>,
     token_creator: TokenCreator,
     client_store: Arc<dyn ClientStore>,
@@ -44,8 +50,9 @@ pub struct Handler {
     scope_store: Arc<dyn ScopeStore>,
 }
 
-impl Handler {
-    pub async fn get_userinfo(&self, request: Request) -> Result<Token<Userinfo>, Error> {
+#[async_trait]
+impl<T: TokenCreator> Handler for HandlerImpl<T> {
+    async fn get_userinfo(&self, request: Request) -> Result<Token<Userinfo>, Error> {
         let token = match self
             .token_validator
             .validate::<Token<Access>>(request.token.as_ref())
@@ -68,17 +75,20 @@ impl Handler {
 pub mod inject {
     use crate::store::{ClientStore, ScopeStore, UserStore};
     use crate::token::{TokenCreator, TokenValidator};
-    use crate::userinfo_endpoint::Handler;
+    use crate::userinfo_endpoint::{Handler, HandlerImpl};
     use std::sync::Arc;
 
-    pub fn handler(
+    pub fn handler<T>(
         token_validator: Arc<TokenValidator>,
-        token_creator: TokenCreator,
+        token_creator: T,
         client_store: Arc<dyn ClientStore>,
         user_store: Arc<dyn UserStore>,
         scope_store: Arc<dyn ScopeStore>,
-    ) -> Handler {
-        Handler {
+    ) -> impl Handler
+    where
+        T: TokenCreator,
+    {
+        HandlerImpl {
             token_validator,
             token_creator,
             client_store,

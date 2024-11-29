@@ -17,18 +17,22 @@
 
 #![expect(clippy::unwrap_used)] // this is test code
 
-use chrono::{Duration, Local};
+use chrono::Duration;
 use pretty_assertions::assert_eq;
+use rstest::{fixture, rstest};
 use std::sync::Arc;
 use test_log::test;
+use tiny_auth_business::clock::Clock;
 use tiny_auth_business::oauth2::GrantType;
 use tiny_auth_business::store::{
     AuthorizationCodeRequest, AuthorizationCodeStore, AUTH_CODE_LIFE_TIME,
 };
 use tiny_auth_business::token::EncodedRefreshToken;
-use tiny_auth_business::token_endpoint::inject;
-use tiny_auth_business::token_endpoint::{Error, Handler, Request};
+use tiny_auth_business::token::TokenCreator;
+use tiny_auth_business::token_endpoint::{inject, Handler};
+use tiny_auth_business::token_endpoint::{Error, Request};
 use tiny_auth_test_fixtures::authenticator::authenticator;
+use tiny_auth_test_fixtures::clock::system_time_clock;
 use tiny_auth_test_fixtures::data::client::CONFIDENTIAL_CLIENT;
 use tiny_auth_test_fixtures::data::client::PUBLIC_CLIENT;
 use tiny_auth_test_fixtures::store::auth_code_store::build_test_auth_code_store;
@@ -108,8 +112,9 @@ async fn unknown_auth_code_is_rejected() {
     assert_eq!(Err(Error::InvalidAuthorizationCode), response);
 }
 
+#[rstest]
 #[test(tokio::test)]
-async fn wrong_redirect_uri_is_rejected() {
+async fn wrong_redirect_uri_is_rejected(clock: impl Clock) {
     let redirect_uri = Url::parse("http://localhost/client").unwrap();
     let auth_code_store = build_test_auth_code_store();
     let auth_code = auth_code_store
@@ -118,8 +123,8 @@ async fn wrong_redirect_uri_is_rejected() {
             user: USER,
             redirect_uri: &redirect_uri,
             scope: "",
-            insertion_time: Local::now(),
-            authentication_time: Local::now(),
+            insertion_time: clock.now(),
+            authentication_time: clock.now(),
             nonce: Some("nonce".to_owned()),
             pkce_challenge: None,
         })
@@ -140,11 +145,12 @@ async fn wrong_redirect_uri_is_rejected() {
     assert_eq!(Err(Error::InvalidAuthorizationCode), response);
 }
 
+#[rstest]
 #[test(tokio::test)]
-async fn expired_code_is_rejected() {
+async fn expired_code_is_rejected(clock: impl Clock) {
     let redirect_uri = Url::parse("http://localhost/client").unwrap();
     let auth_code_store = build_test_auth_code_store();
-    let creation_time = Local::now() - Duration::minutes(2 * AUTH_CODE_LIFE_TIME);
+    let creation_time = clock.now() - Duration::minutes(2 * AUTH_CODE_LIFE_TIME);
     let auth_code = auth_code_store
         .get_authorization_code(AuthorizationCodeRequest {
             client_id: PUBLIC_CLIENT.client_id.as_str(),
@@ -152,7 +158,7 @@ async fn expired_code_is_rejected() {
             redirect_uri: &redirect_uri,
             scope: "",
             insertion_time: creation_time,
-            authentication_time: Local::now(),
+            authentication_time: clock.now(),
             nonce: Some("nonce".to_owned()),
             pkce_challenge: None,
         })
@@ -173,8 +179,9 @@ async fn expired_code_is_rejected() {
     assert_eq!(Err(Error::InvalidAuthorizationCode), response);
 }
 
+#[rstest]
 #[test(tokio::test)]
-async fn valid_token_is_issued() {
+async fn valid_token_is_issued(clock: impl Clock) {
     let redirect_uri = Url::parse("http://localhost/client").unwrap();
     let auth_code_store = build_test_auth_code_store();
     let auth_code = auth_code_store
@@ -183,8 +190,8 @@ async fn valid_token_is_issued() {
             user: USER,
             redirect_uri: &redirect_uri,
             scope: "",
-            insertion_time: Local::now(),
-            authentication_time: Local::now(),
+            insertion_time: clock.now(),
+            authentication_time: clock.now(),
             nonce: Some("nonce".to_owned()),
             pkce_challenge: None,
         })
@@ -226,8 +233,9 @@ async fn confidential_client_without_basic_auth_is_rejected() {
     assert_eq!(Err(Error::ConfidentialClientMustAuthenticate), response);
 }
 
+#[rstest]
 #[test(tokio::test)]
-async fn issue_valid_token_for_correct_password() {
+async fn issue_valid_token_for_correct_password(clock: impl Clock) {
     let redirect_uri = Url::parse("http://localhost/client").unwrap();
     let auth_code_store = build_test_auth_code_store();
     let auth_code = auth_code_store
@@ -236,8 +244,8 @@ async fn issue_valid_token_for_correct_password() {
             user: USER,
             redirect_uri: &redirect_uri,
             scope: "",
-            insertion_time: Local::now(),
-            authentication_time: Local::now(),
+            insertion_time: clock.now(),
+            authentication_time: clock.now(),
             nonce: Some("nonce".to_owned()),
             pkce_challenge: None,
         })
@@ -491,11 +499,16 @@ async fn successful_authentication_with_secret_as_post_parameter() {
         .is_some());
 }
 
-fn uut() -> Handler {
+#[fixture]
+fn clock() -> impl Clock {
+    tiny_auth_test_fixtures::clock::clock()
+}
+
+fn uut() -> impl Handler {
     uut_with_auth_code_store(build_test_auth_code_store())
 }
 
-fn uut_with_auth_code_store(auth_code_store: Arc<dyn AuthorizationCodeStore>) -> Handler {
+fn uut_with_auth_code_store(auth_code_store: Arc<dyn AuthorizationCodeStore>) -> impl Handler {
     inject::handler(
         build_test_client_store(),
         build_test_user_store(),
@@ -505,13 +518,19 @@ fn uut_with_auth_code_store(auth_code_store: Arc<dyn AuthorizationCodeStore>) ->
         Arc::new(build_test_token_validator()),
         build_test_scope_store(),
         build_test_issuer_config(),
+        clock(),
     )
 }
 
 async fn build_refresh_token(client_id: &str) -> EncodedRefreshToken {
     let token_creator = build_test_token_creator();
-    let mut token =
-        token_creator.build_refresh_token(Local::now().timestamp(), &[], USER, client_id, 0);
+    let mut token = token_creator.build_refresh_token(
+        system_time_clock().now().timestamp(),
+        &[],
+        USER,
+        client_id,
+        0,
+    );
     token.set_nonce(Some("nonce".to_owned()));
     token_creator.finalize_refresh_token(token).unwrap()
 }

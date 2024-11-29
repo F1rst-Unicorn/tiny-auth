@@ -20,6 +20,7 @@ use test_log::test;
 use tiny_auth_business::consent::{inject, Handler};
 use tiny_auth_business::data::client::Client;
 use tiny_auth_business::data::user::User;
+use tiny_auth_test_fixtures::clock::clock;
 use tiny_auth_test_fixtures::data::client::ClientExt;
 use tiny_auth_test_fixtures::data::client::DEFAULT_CLIENT;
 use tiny_auth_test_fixtures::data::user::UserExt;
@@ -75,12 +76,13 @@ async fn must_consent_if_scope_is_not_allowed() {
 fn custom_handler(
     users: impl IntoIterator<Item = User>,
     clients: impl IntoIterator<Item = Client>,
-) -> Handler {
+) -> impl Handler + 'static {
     inject::handler(
         build_test_scope_store(),
         Arc::new(users.into_iter().collect::<TestUserStore>()),
         Arc::new(clients.into_iter().collect::<TestClientStore>()),
         build_test_auth_code_store(),
         build_test_token_creator(),
+        clock(),
     )
 }

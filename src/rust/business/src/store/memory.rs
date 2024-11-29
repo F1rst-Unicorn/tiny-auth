@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use crate::clock::Clock;
 use crate::pkce::CodeChallenge;
 use crate::store::AuthCodeValidationError::NotFound;
 use crate::store::AuthorizationCodeStore;
@@ -67,14 +68,14 @@ impl Default for MemoryAuthorizationCodeStore {
     }
 }
 
-pub async fn auth_code_clean_job(store: Arc<dyn AuthorizationCodeStore>) {
-    let mut clock = time::interval(time::Duration::from_secs(120));
+pub async fn auth_code_clean_job(store: Arc<dyn AuthorizationCodeStore>, clock: impl Clock) {
+    let mut period = time::interval(time::Duration::from_secs(120));
 
     loop {
-        clock.tick().await;
+        period.tick().await;
         trace!("Purging expired auth codes");
         store
-            .clear_expired_codes(Local::now(), Duration::minutes(super::AUTH_CODE_LIFE_TIME))
+            .clear_expired_codes(clock.now(), Duration::minutes(super::AUTH_CODE_LIFE_TIME))
             .await;
     }
 }
