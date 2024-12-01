@@ -187,7 +187,7 @@ async fn config_refresher(
                     };
                     event.paths.iter().for_each(|v| {
                         if let Err(e) = reload_sender.send(event_to_send(v.to_owned())) {
-                            warn!(%e, ?event.kind, "failed to apply file reload");
+                            debug!(%e, ?event.kind, "no active receiver for config change");
                         }
                     })
                 }
