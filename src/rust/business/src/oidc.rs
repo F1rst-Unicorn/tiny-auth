@@ -19,13 +19,13 @@ use super::oauth2::ProtocolError as OAuth2Error;
 use super::oauth2::ResponseType as OAuth2ResponseType;
 
 use std::convert::TryFrom;
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 
 use crate::oauth2;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub enum ResponseType {
     OAuth2(OAuth2ResponseType),
     Oidc(OidcResponseType),
@@ -53,7 +53,18 @@ impl TryFrom<&str> for ResponseType {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+impl Display for ResponseType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let value = match self {
+            ResponseType::OAuth2(OAuth2ResponseType::Code) => "code",
+            ResponseType::OAuth2(OAuth2ResponseType::Token) => "token",
+            ResponseType::Oidc(OidcResponseType::IdToken) => "id_token",
+        };
+        write!(f, "{}", value)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 pub enum OidcResponseType {
     IdToken,
 }

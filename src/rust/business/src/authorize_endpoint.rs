@@ -43,6 +43,7 @@ pub struct Request {
     pub code_challenge: Option<String>,
 }
 
+#[derive(Eq, PartialEq, Debug)]
 pub enum Error {
     InvalidRedirectUri,
     InvalidClientId,
@@ -60,7 +61,7 @@ pub struct Handler {
     client_store: Arc<dyn ClientStore>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AuthorizeRequestState {
     #[serde(default)]
     #[serde(skip_serializing_if = "String::is_empty")]
