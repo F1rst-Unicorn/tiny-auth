@@ -34,6 +34,7 @@ version = "2024.03"
 
 project {
     buildType(Build)
+    buildType(MutationTest)
 }
 
 object Build : BuildType({
@@ -105,7 +106,7 @@ object Build : BuildType({
             workingDir = "src/rust"
             scriptContent = """
                 set -e
-                cargo llvm-cov --no-clean --html nextest
+                cargo llvm-cov --html nextest
             """.trimIndent()
         }
         script {
@@ -150,6 +151,29 @@ object Build : BuildType({
                     token = "credentialsJSON:557337ec-b35f-4879-a148-11d578a847a4"
                 }
             }
+        }
+    }
+})
+
+object MutationTest : BuildType( {
+    id("MutationTest")
+    name = "Mutation Test"
+
+    artifactRules = "src/rust/mutants.out => mutants"
+
+    params {
+        param("env.XDG_RUNTIME_DIR", "/run/user/%env.UID%/")
+    }
+
+    vcs {
+        root(DslContext.settingsRoot)
+    }
+
+    steps {
+        script {
+            name = "Cargo Mutants"
+            workingDir = "src/rust"
+            scriptContent = "cargo mutants --in-place"
         }
     }
 })
