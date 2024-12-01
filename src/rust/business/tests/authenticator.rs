@@ -17,11 +17,14 @@
 
 use test_log::test;
 use tiny_auth_business::authenticator::Authenticator;
+use tiny_auth_business::data::password::Password;
+use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::{PasswordStore, UserStore};
 use tiny_auth_test_fixtures::authenticator::authenticator;
+use tiny_auth_test_fixtures::data::client::CONFIDENTIAL_CLIENT;
 use tiny_auth_test_fixtures::data::password::in_place_password_store;
-use tiny_auth_test_fixtures::store::user_store::build_test_user_store;
-use tiny_auth_test_fixtures::store::user_store::USER;
+use tiny_auth_test_fixtures::store::client_store::build_test_client_store;
+use tiny_auth_test_fixtures::store::user_store::{build_test_user_store, USER};
 
 #[test(tokio::test)]
 async fn own_constructed_password_is_verifiable() {
@@ -38,4 +41,43 @@ async fn own_constructed_password_is_verifiable() {
         .verify(user.name.as_str(), &actual, new_password)
         .await
         .unwrap_or(false));
+}
+
+#[test(tokio::test)]
+async fn successful_client_authentication_works() {
+    let uut = authenticator();
+    let client = build_test_client_store()
+        .get(&CONFIDENTIAL_CLIENT.client_id)
+        .await
+        .unwrap();
+    let password_to_check = client.client_id.to_owned();
+
+    let actual = uut
+        .authenticate_client(
+            &client,
+            &Password::Plain(password_to_check.clone()),
+            &password_to_check,
+        )
+        .await
+        .unwrap();
+
+    assert!(actual);
+}
+
+#[test(tokio::test)]
+async fn failing_client_authentication_works() {
+    let uut = authenticator();
+    let client = build_test_client_store()
+        .get(&CONFIDENTIAL_CLIENT.client_id)
+        .await
+        .unwrap();
+    let actual_password = Password::Plain(client.client_id.to_owned());
+    let password_to_check = "different";
+
+    let actual = uut
+        .authenticate_client(&client, &actual_password, password_to_check)
+        .await
+        .unwrap();
+
+    assert!(!actual);
 }
