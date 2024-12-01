@@ -27,10 +27,11 @@ use tiny_auth_business::data::password::Error as PasswordError;
 use tiny_auth_business::data::password::Password;
 use tiny_auth_business::data::user::User;
 use tiny_auth_business::store::client_store::Error as ClientError;
-use tiny_auth_business::store::user_store::Error as UserError;
-use tiny_auth_business::store::{
-    ClientStore, PasswordConstructionError, PasswordStore, PasswordUnchangedReason, UserStore,
+use tiny_auth_business::store::password_store::{
+    PasswordConstructionError, PasswordStore, PasswordUnchangedReason,
 };
+use tiny_auth_business::store::user_store::Error as UserError;
+use tiny_auth_business::store::{ClientStore, UserStore};
 use tiny_auth_business::util::wrap_err;
 use tracing::{debug, error, instrument, warn};
 

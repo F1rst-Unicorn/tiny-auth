@@ -28,7 +28,8 @@ use tiny_auth_business::data::scope::{Destination, Mapping, Type};
 use tiny_auth_business::data_loader::DataLoader;
 use tiny_auth_business::data_loader::Multiplicity::{ToMany, ToOne};
 use tiny_auth_business::health::HealthCheckCommand;
-use tiny_auth_business::store::{ClientStore, PasswordStore, ScopeStore, UserStore};
+use tiny_auth_business::store::password_store::PasswordStore;
+use tiny_auth_business::store::{ClientStore, ScopeStore, UserStore};
 use tiny_auth_test_fixtures::template::TestTemplater;
 use url::Url;
 

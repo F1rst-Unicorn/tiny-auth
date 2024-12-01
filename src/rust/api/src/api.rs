@@ -23,7 +23,7 @@ use crate::tiny_auth_proto::{Managed, PasswordChangeResponse, StoredSuccessfully
 use async_trait::async_trait;
 use tiny_auth_business::change_password::{Error, Handler};
 use tiny_auth_business::data::password::Password;
-use tiny_auth_business::store::PasswordConstructionError;
+use tiny_auth_business::store::password_store::PasswordConstructionError;
 use tonic::Request;
 use tonic::Response;
 use tracing::error;

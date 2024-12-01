@@ -17,5 +17,6 @@
 
 pub mod auth_code_store;
 pub mod client_store;
+pub mod password_store;
 pub mod scope_store;
 pub mod user_store;

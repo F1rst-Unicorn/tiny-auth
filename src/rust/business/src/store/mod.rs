@@ -17,11 +17,10 @@
 
 pub mod client_store;
 pub mod memory;
+pub mod password_store;
 pub mod user_store;
 
-use crate::data::password::{Error as PasswordError, Password};
 use crate::data::scope::Scope;
-use crate::data::user::User;
 use crate::pkce::CodeChallenge;
 use async_trait::async_trait;
 use chrono::DateTime;
@@ -36,40 +35,6 @@ use url::Url;
 
 pub use client_store::ClientStore;
 pub use user_store::UserStore;
-
-#[derive(Error, Debug)]
-pub enum PasswordConstructionError {
-    #[error("unchanged")]
-    PasswordUnchanged(Password, PasswordUnchangedReason),
-    #[error("Unknown password store '{0}'")]
-    UnmatchedBackendName(String),
-    #[error("backend error")]
-    BackendError,
-    #[error("backend error: {0}")]
-    BackendErrorWithContext(#[from] Arc<dyn StdError + Send + Sync>),
-}
-
-#[derive(Debug)]
-pub enum PasswordUnchangedReason {
-    Managed,
-    Insecure,
-}
-
-#[async_trait]
-pub trait PasswordStore: Send + Sync {
-    async fn verify(
-        &self,
-        username: &str,
-        stored_password: &Password,
-        password_to_check: &str,
-    ) -> Result<bool, PasswordError>;
-
-    async fn construct_password(
-        &self,
-        user: User,
-        password: &str,
-    ) -> Result<Password, PasswordConstructionError>;
-}
 
 #[derive(Error, Debug, Clone)]
 pub enum ScopeStoreError {

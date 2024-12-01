@@ -63,6 +63,7 @@ use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::rate_limiter::RateLimiter;
 use tiny_auth_business::store::client_store::MergingClientStore;
 use tiny_auth_business::store::memory::*;
+use tiny_auth_business::store::password_store::PasswordStore;
 use tiny_auth_business::store::user_store::MergingUserStore;
 use tiny_auth_business::store::*;
 use tiny_auth_business::template::web::{

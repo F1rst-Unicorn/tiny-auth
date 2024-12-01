@@ -14,24 +14,24 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use crate::clock::clock;
-use crate::data::password::PEPPER;
-use crate::store::user_store::build_test_user_store;
-use crate::token::build_test_rate_limiter;
-use std::sync::Arc;
-use tiny_auth_business::authenticator::{inject, Authenticator};
-use tiny_auth_business::data::password::inject::{
-    dispatching_password_store, in_place_password_store,
-};
+use async_trait::async_trait;
+use tiny_auth_business::data::password::{Error as PasswordError, Password};
+use tiny_auth_business::data::user::User;
+use tiny_auth_business::store::password_store::{PasswordConstructionError, PasswordStore};
 
-pub fn authenticator() -> impl Authenticator + 'static {
-    inject::authenticator(
-        build_test_user_store(),
-        Arc::new(build_test_rate_limiter()),
-        Arc::new(dispatching_password_store(
-            [],
-            Arc::new(in_place_password_store(PEPPER)),
-        )),
-        clock(),
-    )
+pub struct FailingPasswordStore;
+
+#[async_trait]
+impl PasswordStore for FailingPasswordStore {
+    async fn verify(&self, _: &str, _: &Password, _: &str) -> Result<bool, PasswordError> {
+        Err(PasswordError::BackendError)
+    }
+
+    async fn construct_password(
+        &self,
+        _: User,
+        _: &str,
+    ) -> Result<Password, PasswordConstructionError> {
+        Err(PasswordConstructionError::BackendError)
+    }
 }

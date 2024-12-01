@@ -16,7 +16,7 @@
  */
 
 use crate::data::user::User;
-use crate::store::{PasswordConstructionError, PasswordStore};
+use crate::store::password_store::{PasswordConstructionError, PasswordStore};
 use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
@@ -238,11 +238,11 @@ pub mod inject {
     }
 
     pub fn dispatching_password_store(
-        named_stores: BTreeMap<String, Arc<dyn PasswordStore>>,
+        named_stores: impl IntoIterator<Item = (String, Arc<dyn PasswordStore>)>,
         in_place_store: Arc<InPlacePasswordStore>,
     ) -> DispatchingPasswordStore {
         DispatchingPasswordStore {
-            named_stores,
+            named_stores: named_stores.into_iter().collect(),
             in_place_store,
         }
     }

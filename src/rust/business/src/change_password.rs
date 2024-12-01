@@ -42,7 +42,7 @@ pub enum Error {
     #[error("password authentication: {0}")]
     PasswordAuthentication(#[from] crate::authenticator::Error),
     #[error("password construction: {0}")]
-    PasswordConstruction(#[from] crate::store::PasswordConstructionError),
+    PasswordConstruction(#[from] crate::store::password_store::PasswordConstructionError),
     #[error("token authentication")]
     TokenAuthentication,
 }

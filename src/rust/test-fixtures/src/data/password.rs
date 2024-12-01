@@ -27,7 +27,7 @@ pub fn in_place_password_store() -> InPlacePasswordStore {
 
 pub fn dispatching_password_store() -> DispatchingPasswordStore {
     tiny_auth_business::data::password::inject::dispatching_password_store(
-        Default::default(),
+        [],
         Arc::new(in_place_password_store()),
     )
 }

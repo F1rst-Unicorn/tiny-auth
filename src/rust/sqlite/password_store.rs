@@ -23,8 +23,8 @@ use sqlx::{query_file, query_file_scalar};
 use std::num::{NonZeroI64, NonZeroU32};
 use tiny_auth_business::data::password::{Error as PasswordError, Password, HASH_ITERATIONS};
 use tiny_auth_business::data::user::User;
-use tiny_auth_business::store::PasswordConstructionError::BackendError;
-use tiny_auth_business::store::{
+use tiny_auth_business::store::password_store::PasswordConstructionError::BackendError;
+use tiny_auth_business::store::password_store::{
     PasswordConstructionError, PasswordStore, PasswordUnchangedReason,
 };
 use tiny_auth_business::util::wrap_err;
