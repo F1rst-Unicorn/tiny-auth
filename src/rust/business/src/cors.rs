@@ -43,3 +43,25 @@ pub mod inject {
         CorsListerImpl { approved_domains }
     }
 }
+
+#[cfg(test)]
+pub mod test {
+    use crate::cors::*;
+    use test_log::test;
+
+    #[test]
+    fn approved_domain_is_allowed() {
+        let approved_domain = "http://domain.example/path";
+        let uut = inject::cors_lister(vec![Url::parse(approved_domain).unwrap()]);
+
+        assert!(uut.is_cors_allowed(approved_domain));
+    }
+
+    #[test]
+    fn forbidden_domain_is_not_allowed() {
+        let approved_domain = "http://domain.example/path";
+        let uut = inject::cors_lister(vec![Url::parse(approved_domain).unwrap()]);
+
+        assert!(!uut.is_cors_allowed("http://forbidden.example/path"));
+    }
+}
