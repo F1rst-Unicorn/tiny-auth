@@ -22,6 +22,7 @@ use std::sync::Arc;
 use test_log::test;
 use tiny_auth_business::authenticator::Error::PasswordStoreError;
 use tiny_auth_business::authenticator::{inject, Authenticator, Error};
+use tiny_auth_business::clock::Clock;
 use tiny_auth_business::data::password;
 use tiny_auth_business::data::password::inject::dispatching_password_store;
 use tiny_auth_business::data::password::Password;
@@ -36,6 +37,29 @@ use tiny_auth_test_fixtures::data::user::USER_1;
 use tiny_auth_test_fixtures::store::password_store::FailingPasswordStore;
 use tiny_auth_test_fixtures::store::user_store::{build_test_user_store, TestUserStore, USER};
 use tiny_auth_test_fixtures::token::build_test_rate_limiter;
+
+#[test(tokio::test)]
+async fn successful_authentication_works() {
+    let uut = authenticator();
+    let user = build_test_user_store().get(USER).await.unwrap();
+
+    let actual = uut
+        .authenticate_user_and_forget(&user.name, &user.name)
+        .await;
+
+    assert!(actual.is_ok());
+    assert_eq!(clock().now(), actual.unwrap());
+}
+
+#[test(tokio::test)]
+async fn failing_authentication_is_rejected() {
+    let uut = authenticator();
+    let user = build_test_user_store().get(USER).await.unwrap();
+
+    let actual = uut.authenticate_user_and_forget(&user.name, "wrong").await;
+
+    assert!(matches!(actual, Err(Error::WrongCredentials)));
+}
 
 #[test(tokio::test)]
 async fn own_constructed_password_is_verifiable() {
