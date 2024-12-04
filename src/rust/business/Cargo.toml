@@ -31,6 +31,7 @@ lazy_static.workspace = true
 pretty_assertions.workspace = true
 rstest.workspace = true
 test-log.workspace = true
+mockall.workspace = true
 tiny_auth_test_fixtures = { path = "../test-fixtures" }
 
 [lints]
