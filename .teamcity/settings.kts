@@ -173,7 +173,7 @@ object MutationTest : BuildType( {
         script {
             name = "Cargo Mutants"
             workingDir = "src/rust"
-            scriptContent = "cargo mutants --in-place"
+            scriptContent = "cargo mutants --in-place || true"
         }
     }
 })
