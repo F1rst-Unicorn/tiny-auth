@@ -43,3 +43,39 @@ impl IssuerConfiguration {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::issuer_configuration::*;
+    use test_log::test;
+
+    #[test]
+    fn token_url_is_formed() {
+        let uut = IssuerConfiguration {
+            issuer_url: String::from("http://localhost/path"),
+            algorithm: Algorithm::PS512,
+        };
+
+        assert_eq!(format!("{}{}", uut.issuer_url, "/token"), uut.token());
+    }
+
+    #[test]
+    fn rsa_algorithm_is_mapped() {
+        let uut = IssuerConfiguration {
+            issuer_url: String::from("http://localhost/path"),
+            algorithm: Algorithm::PS512,
+        };
+
+        assert_eq!("RSA", uut.get_key_type());
+    }
+
+    #[test]
+    fn ec_algorithm_is_mapped() {
+        let uut = IssuerConfiguration {
+            issuer_url: String::from("http://localhost/path"),
+            algorithm: Algorithm::ES384,
+        };
+
+        assert_eq!("EC", uut.get_key_type());
+    }
+}
