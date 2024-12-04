@@ -448,8 +448,8 @@ fn build_issuer_config(issuer_url: String, algorithm: Algorithm) -> IssuerConfig
     }
 }
 
-pub fn build_rate_limiter(config: &Config) -> Arc<RateLimiter> {
-    Arc::new(RateLimiter::new(
+pub fn build_rate_limiter(config: &Config) -> Arc<dyn RateLimiter> {
+    Arc::new(tiny_auth_business::rate_limiter::inject::rate_limiter(
         config.rate_limit.events,
         Duration::seconds(config.rate_limit.period_in_seconds),
     ))
@@ -699,7 +699,7 @@ async fn build_stores(
 
 pub fn build_authenticator(
     user_store: Arc<dyn UserStore>,
-    rate_limiter: Arc<RateLimiter>,
+    rate_limiter: Arc<dyn RateLimiter>,
     password_store: Arc<DispatchingPasswordStore>,
     clock: impl Clock,
 ) -> Arc<impl Authenticator> {
@@ -974,10 +974,6 @@ pub mod tests {
 
     pub fn build_test_auth_code_store() -> Data<Arc<dyn AuthorizationCodeStore>> {
         Data::new(tiny_auth_test_fixtures::store::auth_code_store::build_test_auth_code_store())
-    }
-
-    pub fn build_test_rate_limiter() -> RateLimiter {
-        RateLimiter::new(3, Duration::minutes(5))
     }
 
     pub fn build_test_decoding_key() -> DecodingKey {

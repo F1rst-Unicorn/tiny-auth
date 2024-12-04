@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Local;
@@ -25,8 +26,21 @@ use tokio::sync::RwLock;
 use tracing::instrument;
 use tracing::Level;
 
+#[async_trait]
+pub trait RateLimiter: Send + Sync {
+    async fn record_event(&self, rate_name: &str, event_time: DateTime<Local>);
+
+    async fn remove_event(&self, rate_name: &str, event_time: DateTime<Local>);
+
+    async fn is_rate_below_maximum(&self, rate_name: &str, now: DateTime<Local>) -> bool;
+
+    async fn is_rate_above_maximum(&self, rate_name: &str, now: DateTime<Local>) -> bool {
+        !self.is_rate_below_maximum(rate_name, now).await
+    }
+}
+
 #[derive(Clone)]
-pub struct RateLimiter {
+pub struct RateLimiterImpl {
     maximum_events: usize,
 
     duration: Duration,
@@ -34,17 +48,10 @@ pub struct RateLimiter {
     rates: Arc<RwLock<BTreeMap<String, BTreeSet<DateTime<Local>>>>>,
 }
 
-impl RateLimiter {
-    pub fn new(maximum_events: usize, duration: Duration) -> Self {
-        Self {
-            maximum_events,
-            duration,
-            rates: Default::default(),
-        }
-    }
-
+#[async_trait]
+impl RateLimiter for RateLimiterImpl {
     #[instrument(level = Level::DEBUG, skip(self, rate_name))]
-    pub async fn record_event(&self, rate_name: &str, event_time: DateTime<Local>) {
+    async fn record_event(&self, rate_name: &str, event_time: DateTime<Local>) {
         let mut rates = self.rates.write().await;
         match rates.get_mut(rate_name) {
             None => {
@@ -59,18 +66,14 @@ impl RateLimiter {
     }
 
     #[instrument(level = Level::DEBUG, skip(self, rate_name))]
-    pub async fn remove_event(&self, rate_name: &str, event_time: DateTime<Local>) {
+    async fn remove_event(&self, rate_name: &str, event_time: DateTime<Local>) {
         let mut rates = self.rates.write().await;
         if let Some(events) = rates.get_mut(rate_name) {
             events.remove(&event_time);
         }
     }
 
-    pub async fn is_rate_above_maximum(&self, rate_name: &str, now: DateTime<Local>) -> bool {
-        !self.is_rate_below_maximum(rate_name, now).await
-    }
-
-    pub async fn is_rate_below_maximum(&self, rate_name: &str, now: DateTime<Local>) -> bool {
+    async fn is_rate_below_maximum(&self, rate_name: &str, now: DateTime<Local>) -> bool {
         let mut rates = self.rates.write().await;
         match rates.get_mut(rate_name) {
             None => return true,
@@ -88,6 +91,19 @@ impl RateLimiter {
     }
 }
 
+pub mod inject {
+    use crate::rate_limiter::{RateLimiter, RateLimiterImpl};
+    use chrono::Duration;
+
+    pub fn rate_limiter(maximum_events: usize, duration: Duration) -> impl RateLimiter {
+        RateLimiterImpl {
+            maximum_events,
+            duration,
+            rates: Default::default(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -98,7 +114,7 @@ mod tests {
 
     #[rstest]
     #[test(tokio::test)]
-    async fn empty_rate_is_ok(now: DateTime<Local>, rate_name: &str, uut: RateLimiter) {
+    async fn empty_rate_is_ok(now: DateTime<Local>, rate_name: &str, uut: RateLimiterImpl) {
         assert!(uut.is_rate_below_maximum(rate_name, now).await);
         assert!(!uut.is_rate_above_maximum(rate_name, now).await);
     }
@@ -110,7 +126,7 @@ mod tests {
         events: usize,
         now: DateTime<Local>,
         rate_name: &str,
-        uut: RateLimiter,
+        uut: RateLimiterImpl,
     ) {
         for i in 0..events {
             uut.record_event(
@@ -132,7 +148,7 @@ mod tests {
         events: usize,
         now: DateTime<Local>,
         rate_name: &str,
-        uut: RateLimiter,
+        uut: RateLimiterImpl,
     ) {
         for i in 0..(events + 1) {
             uut.record_event(
@@ -157,7 +173,7 @@ mod tests {
         events: usize,
         now: DateTime<Local>,
         rate_name: &str,
-        uut: RateLimiter,
+        uut: RateLimiterImpl,
     ) {
         for i in 0..(events + 1) {
             uut.record_event(
@@ -176,8 +192,12 @@ mod tests {
     }
 
     #[fixture]
-    fn uut(events: usize, duration: Duration) -> RateLimiter {
-        RateLimiter::new(events, duration)
+    fn uut(events: usize, duration: Duration) -> RateLimiterImpl {
+        RateLimiterImpl {
+            maximum_events: events,
+            duration,
+            rates: Arc::new(Default::default()),
+        }
     }
 
     #[fixture]

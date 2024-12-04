@@ -58,7 +58,7 @@ pub struct AuthenticatorImpl<Clock> {
 
     password_store: Arc<DispatchingPasswordStore>,
 
-    rate_limiter: Arc<RateLimiter>,
+    rate_limiter: Arc<dyn RateLimiter>,
 
     clock: Clock,
 }
@@ -146,7 +146,7 @@ pub mod inject {
 
     pub fn authenticator<C>(
         user_store: Arc<dyn UserStore>,
-        rate_limiter: Arc<RateLimiter>,
+        rate_limiter: Arc<dyn RateLimiter>,
         password_store: Arc<DispatchingPasswordStore>,
         clock: C,
     ) -> impl Authenticator

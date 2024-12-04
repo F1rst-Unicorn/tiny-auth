@@ -60,8 +60,8 @@ fn build_test_encoding_key() -> EncodingKey {
     EncodingKey::from_secret("secret".as_bytes())
 }
 
-pub fn build_test_rate_limiter() -> RateLimiter {
-    RateLimiter::new(3, Duration::minutes(5))
+pub fn build_test_rate_limiter() -> impl RateLimiter {
+    tiny_auth_business::rate_limiter::inject::rate_limiter(3, Duration::minutes(5))
 }
 
 pub fn build_test_decoding_key() -> DecodingKey {
