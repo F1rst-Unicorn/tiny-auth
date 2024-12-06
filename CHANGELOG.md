@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [2.1.0]
+
 ### Added
 
 * SQLite can now be used as a store, see [doc](doc/store.md)
