@@ -49,7 +49,7 @@ impl<'a> Templater<WebappRootContext<'a>> for WebappRootTemplater {
     }
 }
 
-impl<'a> WebTemplater<WebappRootContext<'a>> for WebappRootTemplater {
+impl WebTemplater<WebappRootContext<'_>> for WebappRootTemplater {
     fn instantiate_error_page(&self, error: ErrorPage) -> InstantiatedTemplate {
         render_error_page(&self.0, error)
     }
@@ -173,7 +173,7 @@ fn translator(args: &HashMap<String, Value>) -> TeraResult<Value> {
     }
 }
 
-#[allow(clippy::type_complexity)]
+#[expect(clippy::type_complexity)] // tera needs this API
 fn make_static_mapper(
     http_path: String,
 ) -> Box<dyn Fn(&HashMap<String, Value>) -> TeraResult<Value> + Sync + Send> {

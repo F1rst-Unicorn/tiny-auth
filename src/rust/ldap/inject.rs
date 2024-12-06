@@ -29,10 +29,10 @@ use moka::future::Cache;
 use moka::policy::EvictionPolicy;
 use std::sync::Arc;
 use std::time::Duration;
-use tiny_auth_business::client::Client;
+use tiny_auth_business::data::client::Client;
+use tiny_auth_business::data::user::User;
 use tiny_auth_business::health::HealthCheckCommand;
 use tiny_auth_business::template::{bind_dn::BindDnContext, Templater};
-use tiny_auth_business::user::User;
 use url::Url;
 
 pub fn connector(urls: &[Url], connect_timeout: Duration, starttls: bool) -> Connector {

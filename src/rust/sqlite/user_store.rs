@@ -20,9 +20,9 @@ use crate::store::SqliteStore;
 use async_trait::async_trait;
 use sqlx::Row;
 use std::collections::{BTreeMap, BTreeSet};
+use tiny_auth_business::data::user::User;
+use tiny_auth_business::store::user_store::Error as UserError;
 use tiny_auth_business::store::UserStore;
-use tiny_auth_business::user::Error as UserError;
-use tiny_auth_business::user::User;
 use tiny_auth_business::util::wrap_err;
 use tracing::instrument;
 

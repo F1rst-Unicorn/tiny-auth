@@ -15,12 +15,13 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::{error_with_code, return_rendered_template, server_error};
+use super::{error_with_code, return_rendered_template, server_error, REDIRECT_QUERY_PARAM_CODE};
 use crate::endpoints::authenticate;
 use crate::endpoints::authorize;
 use crate::endpoints::parse_first_request;
 use crate::endpoints::render_redirect_error;
 use actix_session::Session;
+use actix_web::http::header::LOCATION;
 use actix_web::http::StatusCode;
 use actix_web::web;
 use actix_web::HttpResponse;
@@ -31,12 +32,11 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
-use tiny_auth_business::consent::Error;
-use tiny_auth_business::consent::Handler;
 use tiny_auth_business::consent::Request as BusinessRequest;
+use tiny_auth_business::consent::{Error, Handler};
+use tiny_auth_business::data::scope::ScopeDescription;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
-use tiny_auth_business::scope::ScopeDescription;
 use tiny_auth_business::serde::deserialise_empty_as_none;
 use tiny_auth_business::template::web::ErrorPage::ServerError;
 use tiny_auth_business::template::web::{ConsentContext, ErrorPage, WebTemplater};
@@ -44,11 +44,13 @@ use tracing::{debug, error, instrument};
 use tracing::{span, warn, Instrument, Level};
 use web::Data;
 
+pub const ENDPOINT_NAME: &str = "consent";
+
 #[instrument(skip_all, name = "consent_get")]
 pub async fn get(
     templater: Data<dyn WebTemplater<ConsentContext>>,
     session: Session,
-    handler: Data<Handler>,
+    handler: Data<dyn Handler>,
 ) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
@@ -138,7 +140,7 @@ pub async fn post(
     query: web::Form<Request>,
     session: Session,
     templater: Data<dyn WebTemplater<ConsentContext>>,
-    handler: Data<Handler>,
+    handler: Data<dyn Handler>,
 ) -> HttpResponse {
     if !super::is_csrf_valid(&query.csrftoken, &session) {
         debug!("CSRF protection violation detected");
@@ -171,7 +173,7 @@ async fn process_skipping_csrf(
     scopes: BTreeSet<String>,
     session: Session,
     templater: Data<dyn WebTemplater<ConsentContext>>,
-    handler: Data<Handler>,
+    handler: Data<dyn Handler>,
     first_request: &AuthorizeRequestState,
 ) -> HttpResponse {
     let username = match session.get::<String>(authenticate::SESSION_KEY) {
@@ -197,10 +199,7 @@ async fn process_skipping_csrf(
         }
         Ok(Some(username)) => username,
     };
-    let auth_time = Local
-        .timestamp_opt(auth_time, 0)
-        .single()
-        .unwrap_or(Local::now());
+    let auth_time = Local.timestamp_opt(auth_time, 0).single();
 
     let mut redirect_uri = first_request.redirect_uri.clone();
     let mut response_parameters = HashMap::new();
@@ -230,7 +229,7 @@ async fn process_skipping_csrf(
 
     response
         .code
-        .and_then(|v| response_parameters.insert("code", v));
+        .and_then(|v| response_parameters.insert(REDIRECT_QUERY_PARAM_CODE, v));
     response
         .access_token
         .and_then(|v| response_parameters.insert("access_token", v.into()));
@@ -266,7 +265,7 @@ async fn process_skipping_csrf(
     session.remove(authorize::SESSION_KEY);
 
     HttpResponse::Found()
-        .insert_header(("Location", redirect_uri.as_str()))
+        .insert_header((LOCATION, redirect_uri.as_str()))
         .finish()
 }
 
@@ -309,7 +308,7 @@ fn render_invalid_consent_request(
     )
 }
 
-async fn build_context(session: &Session, handler: Data<Handler>) -> Option<ConsentContext> {
+async fn build_context(session: &Session, handler: Data<dyn Handler>) -> Option<ConsentContext> {
     let first_request = parse_first_request(session)?;
     let username = session.get::<String>(authenticate::SESSION_KEY).ok()??;
     let csrftoken = super::generate_csrf_token();
@@ -337,54 +336,54 @@ mod tests {
     use super::super::generate_csrf_token;
     use super::super::CSRF_SESSION_KEY;
     use super::*;
+    use crate::endpoints::tests::query_parameter_of;
+    use crate::endpoints::{REDIRECT_QUERY_PARAM_CODE, REDIRECT_QUERY_PARAM_STATE};
     use actix_session::SessionExt;
-    use actix_web::http;
+    use actix_web::http::header::LOCATION;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
     use actix_web::web::Form;
     use pretty_assertions::assert_eq;
+    use rstest::{fixture, rstest};
     use std::collections::HashMap;
     use std::sync::Arc;
     use test_log::test;
-    use tiny_auth_business::authorize_endpoint::test_fixtures::test_request;
     use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
-    use tiny_auth_business::consent::test_fixtures::handler;
     use tiny_auth_business::oidc::ResponseType;
-    use tiny_auth_business::store::test_fixtures::PUBLIC_CLIENT;
-    use tiny_auth_business::store::test_fixtures::USER;
-    use tiny_auth_business::template::test_fixtures::TestTemplater;
+    use tiny_auth_test_fixtures::authorize_endpoint::test_request;
+    use tiny_auth_test_fixtures::consent::handler;
+    use tiny_auth_test_fixtures::data::client::PUBLIC_CLIENT;
+    use tiny_auth_test_fixtures::store::user_store::USER;
+    use tiny_auth_test_fixtures::template::TestTemplater;
     use url::Url;
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn empty_session_gives_error() {
-        let req = TestRequest::get().to_http_request();
-        let session = req.get_session();
+    async fn empty_session_gives_error(session: Session) {
+        let resp = get(build_test_templater(), session, build_test_handler()).await;
 
-        let resp = get(build_test_templater(), session, Data::new(handler())).await;
-
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn missing_authentication_gives_error() {
-        let req = TestRequest::get().to_http_request();
-        let session = req.get_session();
+    async fn missing_authentication_gives_error(session: Session) {
         session
             .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
 
-        let resp = get(build_test_templater(), session, Data::new(handler())).await;
+        let resp = get(build_test_templater(), session, build_test_handler()).await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn valid_request_is_rendered() {
-        let req = TestRequest::get().to_http_request();
-        let session = req.get_session();
+    async fn valid_request_is_rendered(session: Session) {
+        let redirect_uri = PUBLIC_CLIENT.redirect_uris[0].clone();
         let first_request = authorize::Request {
-            client_id: Some(PUBLIC_CLIENT.to_owned()),
-            redirect_uri: Some(Url::parse("http://localhost/client").unwrap()),
+            client_id: Some(PUBLIC_CLIENT.client_id.to_owned()),
+            redirect_uri: Some(redirect_uri),
             state: Some("state".to_owned()),
             response_type: Some("code".to_owned()),
             scope: Some("openid".to_owned()),
@@ -394,7 +393,7 @@ mod tests {
             .insert(
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
-                    client_id: PUBLIC_CLIENT.to_owned(),
+                    client_id: PUBLIC_CLIENT.client_id.to_owned(),
                     redirect_uri: first_request.redirect_uri.unwrap().clone(),
                     state: first_request.state.clone(),
                     response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
@@ -406,15 +405,14 @@ mod tests {
 
         session.insert(authenticate::SESSION_KEY, USER).unwrap();
 
-        let resp = get(build_test_templater(), session, Data::new(handler())).await;
+        let resp = get(build_test_templater(), session, build_test_handler()).await;
 
-        assert_eq!(resp.status(), http::StatusCode::OK);
+        assert_eq!(resp.status(), StatusCode::OK);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn wrong_csrf_gives_error() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
+    async fn wrong_csrf_gives_error(session: Session) {
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
@@ -426,17 +424,16 @@ mod tests {
             request,
             session,
             build_test_templater(),
-            Data::new(handler()),
+            build_test_handler(),
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn posting_empty_session_gives_error() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
+    async fn posting_empty_session_gives_error(session: Session) {
         let csrftoken = generate_csrf_token();
         session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
         let request = Form(Request {
@@ -448,17 +445,16 @@ mod tests {
             request,
             session,
             build_test_templater(),
-            Data::new(handler()),
+            build_test_handler(),
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn posting_missing_authentication_gives_error() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
+    async fn posting_missing_authentication_gives_error(session: Session) {
         session
             .insert(authorize::SESSION_KEY, test_request())
             .unwrap();
@@ -476,20 +472,19 @@ mod tests {
             request,
             session,
             build_test_templater(),
-            Data::new(handler()),
+            build_test_handler(),
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn successful_request_is_forwarded() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let redirect_uri = Url::parse("http://localhost/client").unwrap();
+    async fn successful_request_is_forwarded(session: Session) {
+        let redirect_uri = PUBLIC_CLIENT.redirect_uris[0].clone();
         let first_request = authorize::Request {
-            client_id: Some(PUBLIC_CLIENT.to_owned()),
+            client_id: Some(PUBLIC_CLIENT.client_id.to_owned()),
             redirect_uri: Some(redirect_uri.clone()),
             state: Some("state".to_owned()),
             response_type: Some("code".to_owned()),
@@ -500,7 +495,7 @@ mod tests {
             .insert(
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
-                    client_id: PUBLIC_CLIENT.to_owned(),
+                    client_id: PUBLIC_CLIENT.client_id.to_owned(),
                     redirect_uri: first_request.redirect_uri.clone().unwrap(),
                     state: first_request.state.clone(),
                     response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
@@ -524,36 +519,34 @@ mod tests {
             request,
             session,
             build_test_templater(),
-            Data::new(handler()),
+            build_test_handler(),
         )
         .await;
 
-        assert_eq!(resp.status(), http::StatusCode::FOUND);
+        assert_eq!(resp.status(), StatusCode::FOUND);
 
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
+        let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
         let url = Url::parse(url).unwrap();
 
         assert_eq!(redirect_uri.scheme(), url.scheme());
         assert_eq!(redirect_uri.domain(), url.domain());
         assert_eq!(redirect_uri.port(), url.port());
         assert_eq!(redirect_uri.path(), url.path());
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param.0 == *"state" && &param.1 == first_request.state.as_ref().unwrap()));
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param.0 == *"code" && !param.1.is_empty()));
+        assert_eq!(
+            first_request.state.to_owned(),
+            query_parameter_of(&url, REDIRECT_QUERY_PARAM_STATE)
+        );
+        assert!(!query_parameter_of(&url, REDIRECT_QUERY_PARAM_CODE)
+            .unwrap()
+            .is_empty());
     }
 
+    #[rstest]
     #[test(actix_web::test)]
-    async fn successful_request_with_id_token_is_forwarded() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let redirect_uri = Url::parse("http://localhost/client").unwrap();
+    async fn successful_request_with_id_token_is_forwarded(session: Session) {
+        let redirect_uri = PUBLIC_CLIENT.redirect_uris[0].clone();
         let first_request = authorize::Request {
-            client_id: Some(PUBLIC_CLIENT.to_owned()),
+            client_id: Some(PUBLIC_CLIENT.client_id.to_owned()),
             redirect_uri: Some(redirect_uri.clone()),
             state: Some("state".to_owned()),
             response_type: Some("id_token code".to_owned()),
@@ -564,7 +557,7 @@ mod tests {
             .insert(
                 authorize::SESSION_KEY,
                 AuthorizeRequestState {
-                    client_id: PUBLIC_CLIENT.to_owned(),
+                    client_id: PUBLIC_CLIENT.client_id.to_owned(),
                     redirect_uri: first_request.redirect_uri.clone().unwrap(),
                     state: first_request.state.clone(),
                     response_types: vec![
@@ -592,14 +585,14 @@ mod tests {
             request,
             session,
             build_test_templater(),
-            Data::new(handler()),
+            build_test_handler(),
         )
         .await;
 
         assert_eq!(resp.status(), StatusCode::FOUND);
 
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        let url = dbg!(Url::parse(url).unwrap());
+        let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
+        let url = Url::parse(url).unwrap();
 
         assert_eq!(redirect_uri.scheme(), url.scheme());
         assert_eq!(redirect_uri.domain(), url.domain());
@@ -610,9 +603,29 @@ mod tests {
         let response_parameters =
             serde_urlencoded::from_str::<HashMap<String, String>>(fragment).unwrap();
 
-        assert_eq!(Some(&"state".to_owned()), response_parameters.get("state"));
-        assert!(!response_parameters.get("code").unwrap().is_empty());
+        assert_eq!(
+            Some(&REDIRECT_QUERY_PARAM_STATE.to_owned()),
+            response_parameters.get(REDIRECT_QUERY_PARAM_STATE)
+        );
+        assert!(!response_parameters
+            .get(REDIRECT_QUERY_PARAM_CODE)
+            .unwrap()
+            .is_empty());
         assert!(!response_parameters.get("id_token").unwrap().is_empty());
+    }
+
+    #[fixture]
+    fn session() -> Session {
+        let req = TestRequest::post().to_http_request();
+        req.get_session()
+    }
+
+    fn build_test_handler() -> Data<dyn Handler> {
+        Data::from(coerce_to_dyn(handler()))
+    }
+
+    fn coerce_to_dyn(t: impl Handler + 'static) -> Arc<dyn Handler> {
+        Arc::new(t)
     }
 
     fn build_test_templater() -> Data<dyn WebTemplater<ConsentContext>> {

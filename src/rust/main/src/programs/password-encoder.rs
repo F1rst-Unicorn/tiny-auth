@@ -20,7 +20,7 @@ use clap::ArgAction::Count;
 use clap::ArgMatches;
 use clap::Command;
 use serde::Serialize;
-use tiny_auth_business::password::Password;
+use tiny_auth_business::data::password::Password;
 use tiny_auth_main::config::parser::parse_config;
 use tiny_auth_main::logging;
 use tiny_auth_main::logging::initialise_from_verbosity;

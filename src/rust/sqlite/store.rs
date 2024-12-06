@@ -23,7 +23,7 @@ use sqlx::{query_file, SqlitePool};
 use sqlx::{Column, Row, TypeInfo};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tiny_auth_business::password::{InPlacePasswordStore, Password};
+use tiny_auth_business::data::password::{InPlacePasswordStore, Password};
 use tracing::error;
 use tracing::warn;
 

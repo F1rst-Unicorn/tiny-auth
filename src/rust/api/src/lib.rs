@@ -71,7 +71,7 @@ pub trait Constructor<'a> {
     fn tls_key(&self) -> Option<String>;
     fn tls_cert(&self) -> Option<String>;
     fn tls_client_ca(&self) -> Option<String>;
-    fn change_password_handler(&self) -> Handler;
+    fn change_password_handler(&self) -> impl Handler + 'static;
 }
 
 const DEFAULT_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
@@ -89,9 +89,8 @@ const DEFAULT_ALLOW_HEADERS: [&str; 5] = [
 pub async fn start(
     constructor: &impl Constructor<'_>,
 ) -> Result<(Sender<()>, JoinHandle<()>), Error> {
-    let api = TinyAuthApiImpl {
-        change_password: constructor.change_password_handler(),
-    };
+    let change_password = constructor.change_password_handler();
+    let api = TinyAuthApiImpl { change_password };
     let listener = TcpListener::bind(constructor.endpoint()).await?;
     let (tx, rx) = channel::<()>();
 

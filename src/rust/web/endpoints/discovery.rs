@@ -22,8 +22,8 @@ use actix_web::HttpResponse;
 use serde_derive::Serialize;
 use std::sync::Arc;
 use tiny_auth_business::cors::CorsLister;
+use tiny_auth_business::data::jwk::{Jwk, Jwks};
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
-use tiny_auth_business::jwk::{Jwk, Jwks};
 use tiny_auth_business::store::ScopeStore;
 use tracing::{instrument, warn};
 

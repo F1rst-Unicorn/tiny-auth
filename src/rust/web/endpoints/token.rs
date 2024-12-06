@@ -23,16 +23,18 @@ use actix_web::web;
 use actix_web::web::Form;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
+use async_trait::async_trait;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use std::sync::Arc;
+use tiny_auth_business::data::scope::Scope;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oauth2::GrantType;
 use tiny_auth_business::oidc::ProtocolError;
-use tiny_auth_business::scope::Scope;
 use tiny_auth_business::serde::deserialise_empty_as_none;
 use tiny_auth_business::token::{EncodedAccessToken, EncodedIdToken, EncodedRefreshToken};
 use tiny_auth_business::token_endpoint::Error;
+use tiny_auth_business::token_endpoint::Handler as BusinessHandler;
 use tracing::instrument;
 use url::Url;
 
@@ -106,7 +108,7 @@ pub struct Response {
 pub async fn post(
     headers: HttpRequest,
     request: Form<Request>,
-    handler: web::Data<Handler>,
+    handler: web::Data<dyn Handler>,
 ) -> HttpResponse {
     let cors_check_result = handler.check_cors(&headers);
     let grant_type = match &request.grant_type {
@@ -120,8 +122,12 @@ pub async fn post(
         Some(grant_type) => grant_type.to_owned(),
     };
 
+    let basic_authentication = headers
+        .headers()
+        .get("Authorization")
+        .and_then(parse_basic_authorization);
     let (access_token, id_token, refresh_token, scopes) = match handler
-        .grant_tokens(&headers, request, grant_type)
+        .grant_tokens(basic_authentication, request, grant_type)
         .await
         .map_err(|e| match e {
             Error::MissingRefreshToken => render_json_error(
@@ -242,30 +248,58 @@ pub async fn post(
         })
 }
 
+#[async_trait]
+pub trait Handler: Send + Sync {
+    fn check_cors<'a>(&self, request: &'a HttpRequest) -> CorsCheckResult<'a>;
+
+    async fn grant_tokens(
+        &self,
+        basic_authentication: Option<(String, String)>,
+        request: Form<Request>,
+        grant_type: GrantType,
+    ) -> Result<
+        (
+            EncodedAccessToken,
+            EncodedIdToken,
+            Option<EncodedRefreshToken>,
+            Vec<Scope>,
+        ),
+        Error,
+    >;
+}
+
 #[derive(Clone)]
-pub struct Handler {
-    handler: Arc<tiny_auth_business::token_endpoint::Handler>,
+pub struct HandlerImpl<BusinessHandler> {
+    handler: Arc<BusinessHandler>,
     cors_checker: Arc<CorsChecker>,
 }
 
-impl Handler {
-    pub fn new(
-        handler: Arc<tiny_auth_business::token_endpoint::Handler>,
-        cors_checker: Arc<CorsChecker>,
-    ) -> Self {
-        Self {
+pub mod inject {
+    use crate::cors::CorsChecker;
+    use crate::endpoints::token::{Handler, HandlerImpl};
+    use std::sync::Arc;
+    use tiny_auth_business::token_endpoint::Handler as BusinessHandler;
+
+    pub fn handler<A>(handler: Arc<A>, cors_checker: Arc<CorsChecker>) -> impl Handler + 'static
+    where
+        A: BusinessHandler + 'static,
+    {
+        HandlerImpl {
             handler,
             cors_checker,
         }
     }
+}
 
+#[async_trait]
+impl<H: BusinessHandler> Handler for HandlerImpl<H> {
     fn check_cors<'a>(&self, request: &'a HttpRequest) -> CorsCheckResult<'a> {
         self.cors_checker.check(request)
     }
 
     async fn grant_tokens(
         &self,
-        headers: &HttpRequest,
+        basic_authentication: Option<(String, String)>,
         mut request: Form<Request>,
         grant_type: GrantType,
     ) -> Result<
@@ -279,10 +313,7 @@ impl Handler {
     > {
         self.handler
             .grant_tokens(tiny_auth_business::token_endpoint::Request {
-                basic_authentication: headers
-                    .headers()
-                    .get("Authorization")
-                    .and_then(parse_basic_authorization),
+                basic_authentication,
                 grant_type,
                 client_id: request.client_id.take(),
                 client_secret: request.client_secret.take(),
@@ -304,6 +335,7 @@ impl Handler {
 mod tests {
     use super::*;
     use crate::endpoints::tests::read_response;
+    use crate::endpoints::token::inject::handler;
     use crate::endpoints::ErrorResponse;
     use actix_web::http;
     use actix_web::test::TestRequest;
@@ -311,17 +343,19 @@ mod tests {
     use actix_web::web::Form;
     use pretty_assertions::assert_eq;
     use test_log::test;
-    use tiny_auth_business::authenticator::test_fixtures::authenticator;
-    use tiny_auth_business::cors::test_fixtures::cors_lister;
     use tiny_auth_business::oauth2::ProtocolError;
     use tiny_auth_business::oidc::ProtocolError as OidcError;
-    use tiny_auth_business::store::test_fixtures::build_test_auth_code_store;
-    use tiny_auth_business::store::test_fixtures::build_test_client_store;
-    use tiny_auth_business::store::test_fixtures::build_test_scope_store;
-    use tiny_auth_business::store::test_fixtures::build_test_user_store;
-    use tiny_auth_business::test_fixtures::build_test_issuer_config;
-    use tiny_auth_business::test_fixtures::build_test_token_creator;
-    use tiny_auth_business::test_fixtures::build_test_token_validator;
+    use tiny_auth_test_fixtures::authenticator::authenticator;
+    use tiny_auth_test_fixtures::clock::clock;
+    use tiny_auth_test_fixtures::cors::cors_lister;
+    use tiny_auth_test_fixtures::store::auth_code_store::build_test_auth_code_store;
+    use tiny_auth_test_fixtures::store::client_store::build_test_client_store;
+    use tiny_auth_test_fixtures::store::scope_store::build_test_scope_store;
+    use tiny_auth_test_fixtures::store::user_store::build_test_user_store;
+    use tiny_auth_test_fixtures::token::{
+        build_test_issuer_config, build_test_token_creator, build_test_token_validator,
+    };
+
     #[test(actix_web::test)]
     async fn missing_grant_type_is_rejected() {
         let req = TestRequest::post().to_http_request();
@@ -341,20 +375,25 @@ mod tests {
         );
     }
 
-    fn build_test_handler() -> Data<Handler> {
-        let auth_code_store = build_test_auth_code_store();
-        Data::new(Handler {
-            handler: Arc::new(tiny_auth_business::token_endpoint::inject::handler(
+    fn build_test_handler() -> Data<dyn Handler> {
+        let x = coerce_handler_to_dyn(handler(
+            Arc::new(tiny_auth_business::token_endpoint::inject::handler(
                 build_test_client_store(),
                 build_test_user_store(),
-                auth_code_store,
+                build_test_auth_code_store(),
                 build_test_token_creator(),
                 Arc::new(authenticator()),
                 Arc::new(build_test_token_validator()),
                 build_test_scope_store(),
                 build_test_issuer_config(),
+                clock(),
             )),
-            cors_checker: Arc::new(CorsChecker::new(cors_lister())),
-        })
+            Arc::new(CorsChecker::new(cors_lister())),
+        ));
+        Data::<dyn Handler>::from(x)
+    }
+
+    fn coerce_handler_to_dyn(t: impl Handler + 'static) -> Arc<dyn Handler> {
+        Arc::new(t)
     }
 }

@@ -23,13 +23,13 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tiny_auth_business::client;
-use tiny_auth_business::client::Client;
-use tiny_auth_business::scope::Scope;
-use tiny_auth_business::store::ScopeStore;
+use tiny_auth_business::data::client::Client;
+use tiny_auth_business::data::scope::Scope;
+use tiny_auth_business::data::user::User;
+use tiny_auth_business::store::user_store::Error;
 use tiny_auth_business::store::UserStore;
+use tiny_auth_business::store::{client_store, ScopeStore};
 use tiny_auth_business::store::{ClientStore, ScopeStoreError};
-use tiny_auth_business::user::{Error, User};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::RwLock;
@@ -66,13 +66,13 @@ impl UserStore for FileStore<User> {
 #[async_trait]
 impl ClientStore for FileStore<Client> {
     #[instrument(skip_all, fields(store = ?self.base))]
-    async fn get(&self, key: &str) -> Result<Client, client::Error> {
+    async fn get(&self, key: &str) -> Result<Client, client_store::Error> {
         self.data
             .read()
             .await
             .get(key)
             .cloned()
-            .ok_or(client::Error::NotFound)
+            .ok_or(tiny_auth_business::store::client_store::Error::NotFound)
     }
 }
 

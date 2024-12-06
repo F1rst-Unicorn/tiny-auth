@@ -21,8 +21,8 @@ use ldap3::SearchEntry;
 use moka::future::Cache;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tiny_auth_business::password::Password;
-use tiny_auth_business::user::User;
+use tiny_auth_business::data::password::Password;
+use tiny_auth_business::data::user::User;
 use tracing::trace;
 
 pub(crate) type UserCacheEntry = (DistinguishedName, User);

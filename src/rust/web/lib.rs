@@ -56,11 +56,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::authorize_endpoint::Handler as AuthorizeHandler;
+use tiny_auth_business::clock::Clock;
 use tiny_auth_business::consent::Handler as ConsentHandler;
 use tiny_auth_business::cors::CorsLister;
+use tiny_auth_business::data::jwk::Jwks;
 use tiny_auth_business::health::HealthChecker;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
-use tiny_auth_business::jwk::Jwks;
 use tiny_auth_business::template::web::{
     AuthenticateContext, ConsentContext, WebTemplater, WebappRootContext,
 };
@@ -71,10 +72,10 @@ use Error::LoggedBeforeError;
 
 pub trait Constructor<'a> {
     fn authorize_handler(&self) -> Arc<AuthorizeHandler>;
-    fn authenticator(&self) -> Arc<Authenticator>;
-    fn consent_handler(&self) -> Arc<ConsentHandler>;
-    fn token_handler(&self) -> Arc<TokenHandler>;
-    fn user_info_handler(&self) -> Arc<UserInfoHandler>;
+    fn authenticator(&self) -> Arc<dyn Authenticator + 'static>;
+    fn consent_handler(&self) -> Arc<dyn ConsentHandler>;
+    fn token_handler(&self) -> Arc<dyn TokenHandler>;
+    fn user_info_handler(&self) -> Arc<dyn UserInfoHandler>;
     fn discovery_handler(&self) -> Arc<DiscoveryHandler>;
     fn health_checker(&self) -> Arc<HealthChecker>;
     fn webapp_template(&self) -> Arc<dyn for<'b> WebTemplater<WebappRootContext<'b>>>;
@@ -86,6 +87,7 @@ pub trait Constructor<'a> {
     fn get_issuer_config(&self) -> IssuerConfiguration;
     fn build_jwks(&self) -> Jwks;
     fn build_cors_lister(&self) -> Arc<dyn CorsLister>;
+    fn clock(&self) -> Arc<dyn Clock>;
     fn tls_key(&self) -> Option<String>;
     fn tls_cert(&self) -> Option<String>;
     fn tls_client_ca(&self) -> Option<String>;
@@ -150,6 +152,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
     let session_same_site_policy = constructor.session_same_site_policy();
     let public_domain = constructor.public_domain();
     let secret_key = constructor.secret_key();
+    let clock = constructor.clock();
 
     let server = HttpServer::new(move || {
         App::new()
@@ -170,6 +173,7 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             .app_data(Data::from(authorize_templater.clone()))
             .app_data(Data::from(authenticate_templater.clone()))
             .app_data(Data::from(consent_templater.clone()))
+            .app_data(Data::from(clock.clone()))
             .wrap(
                 SessionMiddleware::builder(
                     CookieSessionStore::default(),

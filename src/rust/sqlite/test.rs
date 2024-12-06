@@ -22,14 +22,15 @@ use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use test_log::test;
+use tiny_auth_business::data::client::ClientType;
+use tiny_auth_business::data::password::{InPlacePasswordStore, Password};
+use tiny_auth_business::data::scope::{Destination, Mapping, Type};
 use tiny_auth_business::data_loader::DataLoader;
 use tiny_auth_business::data_loader::Multiplicity::{ToMany, ToOne};
 use tiny_auth_business::health::HealthCheckCommand;
-use tiny_auth_business::oauth2::ClientType;
-use tiny_auth_business::password::{InPlacePasswordStore, Password};
-use tiny_auth_business::scope::{Destination, Mapping, Type};
-use tiny_auth_business::store::{ClientStore, PasswordStore, ScopeStore, UserStore};
-use tiny_auth_business::template::test_fixtures::TestTemplater;
+use tiny_auth_business::store::password_store::PasswordStore;
+use tiny_auth_business::store::{ClientStore, ScopeStore, UserStore};
+use tiny_auth_test_fixtures::template::TestTemplater;
 use url::Url;
 
 #[test(tokio::test)]
@@ -40,7 +41,7 @@ async fn connecting_works() {
 mod auth_code {
     use super::*;
     use crate::store::SqliteStore;
-    use chrono::{Duration, Local, TimeDelta};
+    use chrono::{Duration, Local, TimeDelta, TimeZone};
     use pretty_assertions::assert_eq;
     use std::sync::Arc;
     use test_log::test;
@@ -148,8 +149,8 @@ mod auth_code {
             user: "john",
             redirect_uri,
             scope: "openid",
-            insertion_time: Local::now(),
-            authentication_time: Local::now(),
+            insertion_time: Local.timestamp_opt(0, 0).unwrap(),
+            authentication_time: Local.timestamp_opt(0, 0).unwrap(),
             nonce: Some("nonce".to_owned()),
             pkce_challenge: Some((&("a".repeat(44))).try_into().unwrap()),
         }

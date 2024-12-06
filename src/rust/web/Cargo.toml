@@ -31,11 +31,14 @@ rustls.workspace = true
 rustls-pemfile.workspace = true
 thiserror.workspace = true
 tracing-actix-web.workspace = true
+rstest.workspace = true
+async-trait.workspace = true
 
 [dev-dependencies]
 test-log.workspace = true
 env_logger.workspace = true
 pretty_assertions.workspace = true
+tiny_auth_test_fixtures = { path = "../test-fixtures" }
 
 [lints]
 workspace = true

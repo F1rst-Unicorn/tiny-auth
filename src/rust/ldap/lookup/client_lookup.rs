@@ -20,9 +20,9 @@ use crate::lookup::types::DistinguishedName;
 use ldap3::SearchEntry;
 use moka::future::Cache;
 use std::sync::Arc;
-use tiny_auth_business::client::Client;
-use tiny_auth_business::oauth2::ClientType;
-use tiny_auth_business::password::Password;
+use tiny_auth_business::data::client::Client;
+use tiny_auth_business::data::client::ClientType;
+use tiny_auth_business::data::password::Password;
 use tracing::{error, trace};
 use url::Url;
 

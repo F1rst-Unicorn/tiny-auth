@@ -15,17 +15,18 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::{error_with_code, return_rendered_template, server_error};
+use super::{consent, error_with_code, return_rendered_template, server_error};
 use crate::endpoints::parse_first_request;
 use actix_session::Session;
+use actix_web::http::header::LOCATION;
 use actix_web::http::StatusCode;
 use actix_web::web;
 use actix_web::HttpResponse;
-use chrono::Local;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use tiny_auth_business::authenticator::Authenticator;
 use tiny_auth_business::authenticator::Error;
+use tiny_auth_business::clock::Clock;
 use tiny_auth_business::oauth2;
 use tiny_auth_business::oidc;
 use tiny_auth_business::oidc::Prompt;
@@ -41,6 +42,8 @@ use tracing::{debug, instrument};
 use tracing::{error, span, Level};
 use tracing::{warn, Instrument};
 use web::Data;
+
+pub const ENDPOINT_NAME: &str = "authenticate";
 
 pub const SESSION_KEY: &str = "b";
 pub const AUTH_TIME_SESSION_KEY: &str = "t";
@@ -69,6 +72,7 @@ pub struct Request {
 pub async fn get(
     session: Session,
     templater: Data<dyn WebTemplater<AuthenticateContext>>,
+    clock: Data<dyn Clock>,
 ) -> HttpResponse {
     let first_request = match parse_first_request(&session) {
         None => {
@@ -103,8 +107,7 @@ pub async fn get(
                 }
                 Ok(Some(v)) => v,
             };
-            let now = Local::now();
-            if now.timestamp() - auth_time <= max_age {
+            if clock.now().timestamp() - auth_time <= max_age {
                 debug!("recognised authenticated user and max_age is still ok",);
                 redirect_successfully()
             } else {
@@ -148,7 +151,7 @@ pub async fn post(
     query: web::Form<Request>,
     session: Session,
     templater: Data<dyn WebTemplater<AuthenticateContext>>,
-    authenticator: Data<Authenticator>,
+    authenticator: Data<dyn Authenticator>,
 ) -> HttpResponse {
     session.remove(ERROR_CODE_SESSION_KEY);
 
@@ -205,14 +208,14 @@ pub async fn post(
 
     let _flow_guard = flow.enter();
     match auth_result {
-        Ok(_) => {
+        Ok(auth_time) => {
             session.remove(TRIES_LEFT_SESSION_KEY);
             session.remove(ERROR_CODE_SESSION_KEY);
             if let Err(e) = session.insert(SESSION_KEY, username) {
                 error!(%e, "failed to serialise session");
                 return server_error(templater.instantiate_error_page(ServerError));
             }
-            if let Err(e) = session.insert(AUTH_TIME_SESSION_KEY, Local::now().timestamp()) {
+            if let Err(e) = session.insert(AUTH_TIME_SESSION_KEY, auth_time.timestamp()) {
                 error!(%e, "failed to serialise auth_time");
                 return server_error(templater.instantiate_error_page(ServerError));
             }
@@ -291,7 +294,7 @@ pub async fn select_account(session: Session) -> HttpResponse {
     session.remove(AUTH_TIME_SESSION_KEY);
 
     HttpResponse::SeeOther()
-        .insert_header(("Location", "authenticate"))
+        .insert_header((LOCATION, ENDPOINT_NAME))
         .finish()
 }
 
@@ -351,7 +354,7 @@ fn build_context(session: &Session) -> Option<AuthenticateContext> {
 
 fn redirect_successfully() -> HttpResponse {
     HttpResponse::SeeOther()
-        .insert_header(("Location", "consent"))
+        .insert_header((LOCATION, consent::ENDPOINT_NAME))
         .finish()
 }
 
@@ -374,7 +377,7 @@ fn render_invalid_login_attempt_error(
     }
 
     HttpResponse::SeeOther()
-        .insert_header(("Location", "authenticate"))
+        .insert_header((LOCATION, ENDPOINT_NAME))
         .finish()
 }
 
@@ -389,447 +392,538 @@ fn render_invalid_authentication_request(
 
 #[cfg(test)]
 mod tests {
-    use super::super::generate_csrf_token;
-    use super::super::CSRF_SESSION_KEY;
-    use super::*;
-    use crate::endpoints::authorize;
-    use crate::endpoints::tests::build_test_authenticator;
-    use actix_session::SessionExt;
-    use actix_web::http;
-    use actix_web::test::TestRequest;
-    use actix_web::web::Form;
-    use pretty_assertions::assert_eq;
+    use actix_web::web::Data;
     use std::sync::Arc;
-    use test_log::test;
-    use tiny_auth_business::authorize_endpoint::test_fixtures::test_request;
-    use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
-    use tiny_auth_business::oidc::ResponseType;
-    use tiny_auth_business::store::test_fixtures::UNKNOWN_USER;
-    use tiny_auth_business::store::test_fixtures::USER;
-    use tiny_auth_business::template::test_fixtures::TestTemplater;
-    use url::Url;
+    use tiny_auth_business::authenticator::Authenticator;
+    use tiny_auth_business::template::web::{AuthenticateContext, WebTemplater};
+    use tiny_auth_test_fixtures::template::TestTemplater;
 
-    #[test(actix_web::test)]
-    async fn empty_session_gives_error() {
-        let req = TestRequest::get().to_http_request();
-        let session = req.get_session();
+    mod get {
+        use crate::endpoints::authenticate::tests::build_test_templater;
+        use crate::endpoints::authenticate::{get, AUTH_TIME_SESSION_KEY, SESSION_KEY};
+        use crate::endpoints::tests::query_parameter_of;
+        use crate::endpoints::{authorize, consent, REDIRECT_QUERY_PARAM_ERROR};
+        use actix_session::{Session, SessionExt};
+        use actix_web::http::header::{HeaderValue, LOCATION};
+        use actix_web::http::StatusCode;
+        use actix_web::test::TestRequest;
+        use actix_web::web::Data;
+        use pretty_assertions::assert_eq;
+        use rstest::{fixture, rstest};
+        use std::sync::Arc;
+        use test_log::test;
+        use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
+        use tiny_auth_business::clock::Clock;
+        use tiny_auth_business::oauth2;
+        use tiny_auth_business::oidc::OidcProtocolError::LoginRequired;
+        use tiny_auth_business::oidc::{Prompt, ResponseType};
+        use tiny_auth_test_fixtures::authorize_endpoint::test_request;
+        use url::Url;
 
-        let resp = get(session, build_test_templater()).await;
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn empty_session_gives_error(session: Session, clock: Data<dyn Clock>) {
+            let resp = get(session, build_test_templater(), clock).await;
 
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
-    }
+            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        }
 
-    #[test(actix_web::test)]
-    async fn authorization_in_session_gives_login_form() {
-        let req = TestRequest::get().to_http_request();
-        let session = req.get_session();
-        session
-            .insert(authorize::SESSION_KEY, test_request())
-            .unwrap();
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn authorization_in_session_gives_login_form(
+            session: Session,
+            clock: Data<dyn Clock>,
+        ) {
+            session
+                .insert(authorize::SESSION_KEY, test_request())
+                .unwrap();
 
-        let resp = get(session, build_test_templater()).await;
+            let resp = get(session, build_test_templater(), clock).await;
 
-        assert_eq!(resp.status(), http::StatusCode::OK);
-    }
+            assert_eq!(resp.status(), StatusCode::OK);
+        }
 
-    #[test(actix_web::test)]
-    async fn recognising_user_redirects_to_consent() {
-        let req = TestRequest::get().to_http_request();
-        let session = req.get_session();
-        session
-            .insert(authorize::SESSION_KEY, test_request())
-            .unwrap();
-        session.insert(SESSION_KEY, "dummy").unwrap();
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn recognising_user_redirects_to_consent(session: Session, clock: Data<dyn Clock>) {
+            session
+                .insert(authorize::SESSION_KEY, test_request())
+                .unwrap();
+            session.insert(SESSION_KEY, "dummy").unwrap();
 
-        let resp = get(session, build_test_templater()).await;
+            let resp = get(session, build_test_templater(), clock).await;
 
-        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
-    }
-
-    #[test(actix_web::test)]
-    async fn recognising_user_but_login_demanded_gives_form() {
-        let req = TestRequest::get().to_http_request();
-        let session = req.get_session();
-        session
-            .insert(
-                authorize::SESSION_KEY,
-                AuthorizeRequestState {
-                    prompts: vec![Prompt::Login],
-                    ..test_request()
-                },
+            assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+            assert_eq!(
+                resp.headers()
+                    .get(LOCATION)
+                    .map(HeaderValue::to_str)
+                    .and_then(Result::ok),
+                Some(consent::ENDPOINT_NAME)
             )
-            .unwrap();
-        session.insert(SESSION_KEY, "dummy").unwrap();
+        }
 
-        let resp = get(session, build_test_templater()).await;
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn recognising_user_but_login_demanded_gives_form(
+            session: Session,
+            clock: Data<dyn Clock>,
+        ) {
+            session
+                .insert(
+                    authorize::SESSION_KEY,
+                    AuthorizeRequestState {
+                        prompts: vec![Prompt::Login],
+                        ..test_request()
+                    },
+                )
+                .unwrap();
+            session.insert(SESSION_KEY, "dummy").unwrap();
 
-        assert_eq!(resp.status(), http::StatusCode::OK);
+            let resp = get(session, build_test_templater(), clock).await;
+
+            assert_eq!(resp.status(), StatusCode::OK);
+        }
+
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn recognising_user_but_account_selection_demanded_gives_form(
+            session: Session,
+            clock: Data<dyn Clock>,
+        ) {
+            session
+                .insert(
+                    authorize::SESSION_KEY,
+                    AuthorizeRequestState {
+                        prompts: vec![Prompt::SelectAccount],
+                        ..test_request()
+                    },
+                )
+                .unwrap();
+            session.insert(SESSION_KEY, "dummy").unwrap();
+
+            let resp = get(session, build_test_templater(), clock).await;
+
+            assert_eq!(resp.status(), StatusCode::OK);
+        }
+
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn no_user_recognised_but_no_prompt_demanded_gives_error(
+            session: Session,
+            clock: Data<dyn Clock>,
+        ) {
+            session
+                .insert(
+                    authorize::SESSION_KEY,
+                    AuthorizeRequestState {
+                        prompts: vec![Prompt::None],
+                        response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
+                        ..test_request()
+                    },
+                )
+                .unwrap();
+
+            let resp = get(session, build_test_templater(), clock).await;
+
+            assert_eq!(StatusCode::FOUND, resp.status());
+            let actual_redirect_uri = resp
+                .headers()
+                .get(LOCATION)
+                .map(HeaderValue::to_str)
+                .and_then(Result::ok)
+                .map(Url::parse)
+                .and_then(Result::ok)
+                .unwrap();
+            assert_eq!(
+                Some(LoginRequired.to_string()),
+                query_parameter_of(&actual_redirect_uri, REDIRECT_QUERY_PARAM_ERROR)
+            );
+        }
+
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn user_recognised_but_login_too_old_gives_login_form(
+            session: Session,
+            clock: Data<dyn Clock>,
+        ) {
+            let anchor_time = 0;
+            session
+                .insert(
+                    authorize::SESSION_KEY,
+                    AuthorizeRequestState {
+                        max_age: Some(anchor_time),
+                        ..test_request()
+                    },
+                )
+                .unwrap();
+            session.insert(SESSION_KEY, "dummy").unwrap();
+            session
+                .insert(AUTH_TIME_SESSION_KEY, anchor_time - 1)
+                .unwrap();
+
+            let resp = get(session, build_test_templater(), clock).await;
+
+            assert_eq!(resp.status(), StatusCode::OK);
+        }
+
+        #[fixture]
+        fn session() -> Session {
+            let req = TestRequest::get().to_http_request();
+            req.get_session()
+        }
+
+        #[fixture]
+        fn clock() -> Data<dyn Clock> {
+            Data::from(coerce_to_dyn(tiny_auth_test_fixtures::clock::clock()))
+        }
+
+        fn coerce_to_dyn(t: impl Clock + 'static) -> Arc<dyn Clock> {
+            Arc::new(t)
+        }
     }
 
-    #[test(actix_web::test)]
-    async fn recognising_user_but_account_selection_demanded_gives_form() {
-        let req = TestRequest::get().to_http_request();
-        let session = req.get_session();
-        session
-            .insert(
-                authorize::SESSION_KEY,
-                AuthorizeRequestState {
-                    prompts: vec![Prompt::SelectAccount],
-                    ..test_request()
-                },
+    mod post {
+        use crate::endpoints::authenticate::tests::{
+            build_test_authenticator, build_test_templater,
+        };
+        use crate::endpoints::authenticate::{
+            post, Request, ERROR_CODE_SESSION_KEY, SESSION_KEY, TRIES_LEFT_SESSION_KEY,
+        };
+        use crate::endpoints::tests::query_parameter_of;
+        use crate::endpoints::{
+            authenticate, authorize, consent, generate_csrf_token, CSRF_SESSION_KEY,
+            REDIRECT_QUERY_PARAM_ERROR, REDIRECT_QUERY_PARAM_ERROR_DESCRIPTION,
+        };
+        use actix_session::{Session, SessionExt};
+        use actix_web::http::header::LOCATION;
+        use actix_web::http::StatusCode;
+        use actix_web::test::TestRequest;
+        use actix_web::web::Form;
+        use actix_web::HttpRequest;
+        use rstest::{fixture, rstest};
+        use test_log::test;
+        use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;
+        use tiny_auth_business::oauth2;
+        use tiny_auth_business::oidc::ResponseType;
+        use tiny_auth_test_fixtures::authorize_endpoint::test_request;
+        use tiny_auth_test_fixtures::store::user_store::{UNKNOWN_USER, USER};
+        use url::Url;
+
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn missing_csrf_gives_error(session: Session) {
+            let form = Form(Request {
+                username: Some("user".to_owned()),
+                password: Some("user".to_owned()),
+                csrftoken: None,
+            });
+
+            let resp = post(
+                form,
+                session,
+                build_test_templater(),
+                build_test_authenticator(),
             )
-            .unwrap();
-        session.insert(SESSION_KEY, "dummy").unwrap();
+            .await;
 
-        let resp = get(session, build_test_templater()).await;
+            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        }
 
-        assert_eq!(resp.status(), http::StatusCode::OK);
-    }
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn emtpy_session_login_gives_error(session: Session) {
+            let csrftoken = generate_csrf_token();
+            session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
+            let form = Form(Request {
+                username: Some("user".to_owned()),
+                password: Some("user".to_owned()),
+                csrftoken: Some(csrftoken),
+            });
 
-    #[test(actix_web::test)]
-    async fn no_user_recognised_but_no_prompt_demanded_gives_error() {
-        let req = TestRequest::get().to_http_request();
-        let session = req.get_session();
-        session
-            .insert(
-                authorize::SESSION_KEY,
-                AuthorizeRequestState {
-                    prompts: vec![Prompt::None],
-                    response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
-                    redirect_uri: Url::parse("http://localhost/public").unwrap(),
-                    ..test_request()
-                },
+            let resp = post(
+                form,
+                session,
+                build_test_templater(),
+                build_test_authenticator(),
             )
-            .unwrap();
+            .await;
 
-        let resp = get(session, build_test_templater()).await;
+            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        }
 
-        assert_eq!(resp.status(), http::StatusCode::FOUND);
-    }
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn missing_username_gives_error(req: HttpRequest) {
+            let session = req.get_session();
+            session
+                .insert(authorize::SESSION_KEY, test_request())
+                .unwrap();
+            let csrftoken = generate_csrf_token();
+            session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
-    #[test(actix_web::test)]
-    async fn user_recognised_but_login_too_old_gives_login_form() {
-        let req = TestRequest::get().to_http_request();
-        let session = req.get_session();
-        session
-            .insert(
-                authorize::SESSION_KEY,
-                AuthorizeRequestState {
-                    max_age: Some(0),
-                    ..test_request()
-                },
+            let form = Form(Request {
+                username: None,
+                password: Some("user".to_owned()),
+                csrftoken: Some(csrftoken),
+            });
+
+            let resp = post(
+                form,
+                session,
+                build_test_templater(),
+                build_test_authenticator(),
             )
-            .unwrap();
-        session.insert(SESSION_KEY, "dummy").unwrap();
-        session
-            .insert(AUTH_TIME_SESSION_KEY, Local::now().timestamp() - 1)
-            .unwrap();
+            .await;
+            let session = req.get_session();
 
-        let resp = get(session, build_test_templater()).await;
+            assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+            let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
+            assert_eq!(authenticate::ENDPOINT_NAME, url);
+            assert_eq!(
+                session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
+                1
+            );
+        }
 
-        assert_eq!(resp.status(), http::StatusCode::OK);
-    }
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn missing_password_gives_error(req: HttpRequest) {
+            let session = req.get_session();
+            session
+                .insert(authorize::SESSION_KEY, test_request())
+                .unwrap();
+            let csrftoken = generate_csrf_token();
+            session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
-    #[test(actix_web::test)]
-    async fn missing_csrf_gives_error() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let form = Form(Request {
-            username: Some("user".to_owned()),
-            password: Some("user".to_owned()),
-            csrftoken: None,
-        });
+            let form = Form(Request {
+                username: Some("user".to_owned()),
+                password: None,
+                csrftoken: Some(csrftoken),
+            });
 
-        let resp = post(
-            form,
-            session,
-            build_test_templater(),
-            build_test_authenticator(),
-        )
-        .await;
-
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
-    }
-
-    #[test(actix_web::test)]
-    async fn emtpy_session_login_gives_error() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        let csrftoken = generate_csrf_token();
-        session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
-        let form = Form(Request {
-            username: Some("user".to_owned()),
-            password: Some("user".to_owned()),
-            csrftoken: Some(csrftoken),
-        });
-
-        let resp = post(
-            form,
-            session,
-            build_test_templater(),
-            build_test_authenticator(),
-        )
-        .await;
-
-        assert_eq!(resp.status(), http::StatusCode::BAD_REQUEST);
-    }
-
-    #[test(actix_web::test)]
-    async fn missing_username_gives_error() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        session
-            .insert(authorize::SESSION_KEY, test_request())
-            .unwrap();
-        let csrftoken = generate_csrf_token();
-        session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
-
-        let form = Form(Request {
-            username: None,
-            password: Some("user".to_owned()),
-            csrftoken: Some(csrftoken),
-        });
-
-        let resp = post(
-            form,
-            session,
-            build_test_templater(),
-            build_test_authenticator(),
-        )
-        .await;
-        let session = req.get_session();
-
-        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        assert_eq!("authenticate", url);
-        assert_eq!(
-            session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
-            1
-        );
-    }
-
-    #[test(actix_web::test)]
-    async fn missing_password_gives_error() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        session
-            .insert(authorize::SESSION_KEY, test_request())
-            .unwrap();
-        let csrftoken = generate_csrf_token();
-        session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
-
-        let form = Form(Request {
-            username: Some("user".to_owned()),
-            password: None,
-            csrftoken: Some(csrftoken),
-        });
-
-        let resp = post(
-            form,
-            session,
-            build_test_templater(),
-            build_test_authenticator(),
-        )
-        .await;
-        let session = req.get_session();
-
-        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        assert_eq!("authenticate", url);
-        assert_eq!(
-            session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
-            2
-        );
-    }
-
-    #[test(actix_web::test)]
-    async fn unknown_user_gives_error() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        session
-            .insert(authorize::SESSION_KEY, test_request())
-            .unwrap();
-        let csrftoken = generate_csrf_token();
-        session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
-
-        let form = Form(Request {
-            username: Some(UNKNOWN_USER.to_owned()),
-            password: Some(UNKNOWN_USER.to_owned() + "wrong"),
-            csrftoken: Some(csrftoken),
-        });
-
-        let resp = post(
-            form,
-            session,
-            build_test_templater(),
-            build_test_authenticator(),
-        )
-        .await;
-        let session = req.get_session();
-
-        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        assert_eq!("authenticate", url);
-        assert_eq!(
-            session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
-            3
-        );
-    }
-
-    #[test(actix_web::test)]
-    async fn wrong_password_gives_error() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        session
-            .insert(authorize::SESSION_KEY, test_request())
-            .unwrap();
-        let csrftoken = generate_csrf_token();
-        session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
-
-        let form = Form(Request {
-            username: Some(USER.to_owned()),
-            password: Some(USER.to_owned() + "wrong"),
-            csrftoken: Some(csrftoken),
-        });
-
-        let resp = post(
-            form,
-            session,
-            build_test_templater(),
-            build_test_authenticator(),
-        )
-        .await;
-        let session = req.get_session();
-
-        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        assert_eq!("authenticate", url);
-        assert_eq!(
-            session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
-            3
-        );
-    }
-
-    #[test(actix_web::test)]
-    async fn correct_login_is_reported() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        session
-            .insert(authorize::SESSION_KEY, test_request())
-            .unwrap();
-        let csrftoken = generate_csrf_token();
-        session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
-
-        let form = Form(Request {
-            username: Some(USER.to_owned()),
-            password: Some(USER.to_owned()),
-            csrftoken: Some(csrftoken),
-        });
-
-        let resp = post(
-            form,
-            session,
-            build_test_templater(),
-            build_test_authenticator(),
-        )
-        .await;
-        let session = req.get_session();
-
-        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        assert_eq!("consent", url);
-        assert_eq!(session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap(), None);
-        assert_eq!(session.get::<String>(SESSION_KEY).unwrap().unwrap(), USER);
-    }
-
-    #[test(actix_web::test)]
-    async fn default_try_count_is_two() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        session
-            .insert(authorize::SESSION_KEY, test_request())
-            .unwrap();
-        let csrftoken = generate_csrf_token();
-        session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
-
-        let form = Form(Request {
-            username: Some(UNKNOWN_USER.to_owned()),
-            password: Some(UNKNOWN_USER.to_owned()),
-            csrftoken: Some(csrftoken),
-        });
-
-        let resp = post(
-            form,
-            session,
-            build_test_templater(),
-            build_test_authenticator(),
-        )
-        .await;
-        let session = req.get_session();
-
-        assert_eq!(resp.status(), http::StatusCode::SEE_OTHER);
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        assert_eq!("authenticate", url);
-        assert_eq!(
-            session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
-            3
-        );
-        assert_eq!(
-            session.get::<i32>(TRIES_LEFT_SESSION_KEY).unwrap().unwrap(),
-            2
-        );
-    }
-
-    #[test(actix_web::test)]
-    async fn no_tries_left_will_redirect_to_client() {
-        let req = TestRequest::post().to_http_request();
-        let session = req.get_session();
-        session
-            .insert(
-                authorize::SESSION_KEY,
-                AuthorizeRequestState {
-                    redirect_uri: Url::parse("http://redirect_uri.example").unwrap(),
-                    response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
-                    ..test_request()
-                },
+            let resp = post(
+                form,
+                session,
+                build_test_templater(),
+                build_test_authenticator(),
             )
-            .unwrap();
-        session.insert(TRIES_LEFT_SESSION_KEY, 1).unwrap();
-        let csrftoken = generate_csrf_token();
-        session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
+            .await;
+            let session = req.get_session();
 
-        let form = Form(Request {
-            username: Some(UNKNOWN_USER.to_owned()),
-            password: Some(UNKNOWN_USER.to_owned()),
-            csrftoken: Some(csrftoken),
-        });
+            assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+            let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
+            assert_eq!(authenticate::ENDPOINT_NAME, url);
+            assert_eq!(
+                session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
+                2
+            );
+        }
 
-        let resp = post(
-            form,
-            session,
-            build_test_templater(),
-            build_test_authenticator(),
-        )
-        .await;
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn unknown_user_gives_error(req: HttpRequest) {
+            let session = req.get_session();
+            session
+                .insert(authorize::SESSION_KEY, test_request())
+                .unwrap();
+            let csrftoken = generate_csrf_token();
+            session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
 
-        assert_eq!(resp.status(), http::StatusCode::FOUND);
-        let url = resp.headers().get("Location").unwrap().to_str().unwrap();
-        let url = Url::parse(url).unwrap();
-        assert!(url
-            .query_pairs()
-            .into_owned()
-            .any(|param| param.0 == *"error"
-                && param.1
-                    == format!(
-                        "{}",
-                        oidc::ProtocolError::OAuth2(oauth2::ProtocolError::AccessDenied)
-                    )));
-        assert!(url.query_pairs().into_owned().any(
-            |param| param.0 == *"error_description" && param.1 == "user failed to authenticate"
-        ));
+            let form = Form(Request {
+                username: Some(UNKNOWN_USER.to_owned()),
+                password: Some(UNKNOWN_USER.to_owned() + "wrong"),
+                csrftoken: Some(csrftoken),
+            });
+
+            let resp = post(
+                form,
+                session,
+                build_test_templater(),
+                build_test_authenticator(),
+            )
+            .await;
+            let session = req.get_session();
+
+            assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+            let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
+            assert_eq!(authenticate::ENDPOINT_NAME, url);
+            assert_eq!(
+                session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
+                3
+            );
+        }
+
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn wrong_password_gives_error(req: HttpRequest) {
+            let session = req.get_session();
+            session
+                .insert(authorize::SESSION_KEY, test_request())
+                .unwrap();
+            let csrftoken = generate_csrf_token();
+            session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
+
+            let form = Form(Request {
+                username: Some(USER.to_owned()),
+                password: Some(USER.to_owned() + "wrong"),
+                csrftoken: Some(csrftoken),
+            });
+
+            let resp = post(
+                form,
+                session,
+                build_test_templater(),
+                build_test_authenticator(),
+            )
+            .await;
+            let session = req.get_session();
+
+            assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+            let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
+            assert_eq!(authenticate::ENDPOINT_NAME, url);
+            assert_eq!(
+                session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
+                3
+            );
+        }
+
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn correct_login_is_reported(req: HttpRequest) {
+            let session = req.get_session();
+            session
+                .insert(authorize::SESSION_KEY, test_request())
+                .unwrap();
+            let csrftoken = generate_csrf_token();
+            session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
+
+            let form = Form(Request {
+                username: Some(USER.to_owned()),
+                password: Some(USER.to_owned()),
+                csrftoken: Some(csrftoken),
+            });
+
+            let resp = post(
+                form,
+                session,
+                build_test_templater(),
+                build_test_authenticator(),
+            )
+            .await;
+            let session = req.get_session();
+
+            assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+            let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
+            assert_eq!(consent::ENDPOINT_NAME, url);
+            assert_eq!(session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap(), None);
+            assert_eq!(session.get::<String>(SESSION_KEY).unwrap().unwrap(), USER);
+        }
+
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn default_try_count_is_two(req: HttpRequest) {
+            let session = req.get_session();
+            session
+                .insert(authorize::SESSION_KEY, test_request())
+                .unwrap();
+            let csrftoken = generate_csrf_token();
+            session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
+
+            let form = Form(Request {
+                username: Some(UNKNOWN_USER.to_owned()),
+                password: Some(UNKNOWN_USER.to_owned()),
+                csrftoken: Some(csrftoken),
+            });
+
+            let resp = post(
+                form,
+                session,
+                build_test_templater(),
+                build_test_authenticator(),
+            )
+            .await;
+            let session = req.get_session();
+
+            assert_eq!(resp.status(), StatusCode::SEE_OTHER);
+            let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
+            assert_eq!(authenticate::ENDPOINT_NAME, url);
+            assert_eq!(
+                session.get::<i32>(ERROR_CODE_SESSION_KEY).unwrap().unwrap(),
+                3
+            );
+            assert_eq!(
+                session.get::<i32>(TRIES_LEFT_SESSION_KEY).unwrap().unwrap(),
+                2
+            );
+        }
+
+        #[rstest]
+        #[test(actix_web::test)]
+        async fn no_tries_left_will_redirect_to_client(session: Session) {
+            session
+                .insert(
+                    authorize::SESSION_KEY,
+                    AuthorizeRequestState {
+                        redirect_uri: Url::parse("http://redirect_uri.example").unwrap(),
+                        response_types: vec![ResponseType::OAuth2(oauth2::ResponseType::Code)],
+                        ..test_request()
+                    },
+                )
+                .unwrap();
+            session.insert(TRIES_LEFT_SESSION_KEY, 1).unwrap();
+            let csrftoken = generate_csrf_token();
+            session.insert(CSRF_SESSION_KEY, &csrftoken).unwrap();
+
+            let form = Form(Request {
+                username: Some(UNKNOWN_USER.to_owned()),
+                password: Some(UNKNOWN_USER.to_owned()),
+                csrftoken: Some(csrftoken),
+            });
+
+            let resp = post(
+                form,
+                session,
+                build_test_templater(),
+                build_test_authenticator(),
+            )
+            .await;
+
+            assert_eq!(resp.status(), StatusCode::FOUND);
+            let url = resp.headers().get(LOCATION).unwrap().to_str().unwrap();
+            let url = Url::parse(url).unwrap();
+            assert_eq!(
+                Some(oauth2::ProtocolError::AccessDenied.to_string()),
+                query_parameter_of(&url, REDIRECT_QUERY_PARAM_ERROR)
+            );
+            assert_eq!(
+                Some("user failed to authenticate".to_owned()),
+                query_parameter_of(&url, REDIRECT_QUERY_PARAM_ERROR_DESCRIPTION)
+            );
+        }
+
+        #[fixture]
+        fn req() -> HttpRequest {
+            TestRequest::post().to_http_request()
+        }
+
+        #[fixture]
+        fn session() -> Session {
+            let req = TestRequest::post().to_http_request();
+            req.get_session()
+        }
     }
 
     fn build_test_templater() -> Data<dyn WebTemplater<AuthenticateContext>> {
         Data::from(Arc::new(TestTemplater) as Arc<dyn WebTemplater<_>>)
+    }
+
+    pub fn build_test_authenticator() -> Data<dyn Authenticator> {
+        let x = coerce_to_dyn(tiny_auth_test_fixtures::authenticator::authenticator());
+        Data::<dyn Authenticator>::from(x)
+    }
+
+    fn coerce_to_dyn(t: impl Authenticator + 'static) -> Arc<dyn Authenticator> {
+        Arc::new(t)
     }
 }
