@@ -72,16 +72,9 @@ check() {
             cargo clippy --all-targets
     cargo sqlx prepare --workspace --check
 
-    cd "$srcdir/src/sql"
-    local db_name=unittests
-    rm -f sqlite/build/$db_name.sqlite*
-    ./gradlew :sqlite:update                                                   \
-            -PdbName=$db_name                                                  \
-            -PliquibaseLabels=schema,reference,$(echo                          \
-                    ${versions_with_migrations[*]} | sed 's/ /,/g')
     cd "$srcdir/src/rust"
     DATABASE_URL=sqlite://$srcdir/src/sql/sqlite/build/$db_name.sqlite         \
-            cargo test -- --test-threads 1
+            cargo nextest run
 
     cd "$srcdir/src/typescript"
     npx prettier . --check
