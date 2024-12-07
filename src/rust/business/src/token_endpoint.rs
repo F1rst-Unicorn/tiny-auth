@@ -45,7 +45,8 @@ use jsonwebtoken::DecodingKey;
 use jsonwebtoken::TokenData;
 use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
-use std::collections::BTreeSet;
+use serde_json::Value;
+use std::collections::{BTreeSet, HashMap};
 use std::convert::TryInto;
 use std::iter::FromIterator;
 use std::sync::Arc;
@@ -59,27 +60,35 @@ const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type
 #[derive(Deserialize)]
 struct ClientAssertion {
     #[serde(rename = "iss")]
-    #[expect(dead_code)] // read by crate jsonwebtoken
+    #[expect(dead_code, reason = "read by crate jsonwebtoken")]
     issuer: String,
 
     #[serde(rename = "sub")]
     subject: String,
 
     #[serde(rename = "aud")]
-    #[expect(dead_code)] // read by crate jsonwebtoken
+    #[expect(dead_code, reason = "read by crate jsonwebtoken")]
     audience: String,
 
-    #[serde(rename = "jti")]
-    #[expect(dead_code)]
-    id: String,
-
     #[serde(rename = "exp")]
-    #[expect(dead_code)] // read by crate jsonwebtoken
+    #[expect(dead_code, reason = "read by crate jsonwebtoken")]
     expiration_time: i64,
 
+    #[serde(rename = "nbf")]
+    #[expect(dead_code, reason = "optional as of the spec")]
+    not_before: Option<i64>,
+
     #[serde(rename = "iat")]
-    #[expect(dead_code)]
-    issuance_time: i64,
+    #[expect(dead_code, reason = "optional as of the spec")]
+    issuance_time: Option<i64>,
+
+    #[serde(rename = "jti")]
+    #[expect(dead_code, reason = "optional as of the spec")]
+    id: Option<String>,
+
+    #[serde(flatten)]
+    #[expect(dead_code, reason = "optional as of the spec")]
+    other: HashMap<String, Value>,
 }
 
 #[derive(Default)]

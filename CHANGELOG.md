@@ -11,6 +11,9 @@ This project adheres to [Semantic Versioning](http://semver.org/).
   codes, the auth code could not be saved. This limitation is now removed
   ([#109](https://veenj.de/git/veenj/tiny-auth/issues/109)).
 
+* The token endpoint accepts all correctly passed client assertions 
+  ([#108](https://veenj.de/git/veenj/tiny-auth/issues/108)).
+
 ## [2.1.0]
 
 ### Added
