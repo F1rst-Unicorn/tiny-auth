@@ -23,4 +23,5 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
 
     <include file="0001-schema.xml" relativeToChangelogFile="true" labels="2.1.0,dev,unittests,build"/>
+    <include file="0002-auth-codes-isolation.xml" relativeToChangelogFile="true" labels="2.1.1,dev,unittests,build"/>
 </databaseChangeLog>

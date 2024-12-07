@@ -163,7 +163,7 @@ impl AuthorizationCodeStore for SqliteStore {
         Ok(AuthorizationCodeResponse {
             redirect_uri,
             stored_duration: request.validation_time - (insertion_time),
-            username: record.name,
+            username: record.user,
             scopes: record.scope,
             authentication_time,
             nonce: record.nonce,

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "insert into tiny_auth_authorization_code (\n    client_id,\n    user,\n    redirect_uri,\n    scope,\n    code,\n    insertion_time,\n    authentication_time,\n    nonce,\n    pkce_challenge,\n    pkce_challenge_method)\nselect\n    ?1,\n    ?2,\n    ?3,\n    ?4,\n    ?5,\n    ?8,\n    ?6,\n    ?7,\n    ?9,\n    ?10\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "960bd7d2618579c50f82f9e81448cd10ddb15bfe4f36cd93ad419fbcdd1e317e"
+}

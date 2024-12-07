@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "select\n    c.id,\n    r.redirect_uri,\n    c.insertion_time,\n    u.name,\n    c.scope,\n    c.authentication_time,\n    c.nonce,\n    c.pkce_challenge,\n    c.pkce_challenge_method\nfrom tiny_auth_authorization_code c\n         join tiny_auth_user u on u.id = c.user\n         join tiny_auth_redirect_uri r on r.id = c.redirect_uri\nwhere c.code = ?1\n  and c.client = (\n    select client.id\n    from tiny_auth_client client\n    where client.client_id = ?2\n    )\n",
+  "query": "select\n    c.id,\n    c.redirect_uri,\n    c.insertion_time,\n    c.user,\n    c.scope,\n    c.authentication_time,\n    c.nonce,\n    c.pkce_challenge,\n    c.pkce_challenge_method\nfrom tiny_auth_authorization_code c\nwhere c.code = ?1\nand c.client_id =  ?2\n",
   "describe": {
     "columns": [
       {
@@ -19,7 +19,7 @@
         "type_info": "Text"
       },
       {
-        "name": "name",
+        "name": "user",
         "ordinal": 3,
         "type_info": "Text"
       },
@@ -64,5 +64,5 @@
       true
     ]
   },
-  "hash": "9d51960c3d9717dbded71121b7360c74bc047aa96f5c903b762d5e67221f4e5f"
+  "hash": "9176bbe573ace7af3815dfef0753a8e0574e64c1c11be6512098cf7fe822d95a"
 }

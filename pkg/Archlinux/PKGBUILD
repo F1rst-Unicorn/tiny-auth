@@ -16,7 +16,7 @@ backup=("etc/${pkgname}/config.yml"
         "etc/${pkgname}/store/scopes/phone.yml"
         "etc/${pkgname}/store/scopes/profile.yml")
 
-versions_with_migrations=(2.1.0)
+versions_with_migrations=(2.1.0, 2.1.1)
 
 build() {
     cd "$srcdir"
