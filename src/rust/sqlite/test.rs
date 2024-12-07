@@ -73,6 +73,29 @@ mod auth_code {
     }
 
     #[test(tokio::test)]
+    async fn auth_code_storing_of_client_and_user_from_other_store_works() {
+        let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
+        let mut request = auth_code_request(&redirect_uri);
+        request.user = "user_not_in_db";
+        request.client_id = "client_not_in_db";
+        let uut = store().await;
+        let code = uut.get_authorization_code(request.clone()).await.unwrap();
+        let delta = Duration::minutes(1);
+
+        let response = get_validation_result(&request, uut.clone(), &code, delta).await;
+
+        assert!(response.is_ok());
+        let response = response.unwrap();
+        assert_eq!(request.redirect_uri, &response.redirect_uri);
+        assert_eq!(delta, response.stored_duration);
+        assert_eq!(request.user, response.username);
+        assert_eq!(request.scope, response.scopes);
+        assert_eq!(request.authentication_time, response.authentication_time);
+        assert_eq!(request.nonce, response.nonce);
+        assert_eq!(request.pkce_challenge, response.pkce_challenge);
+    }
+
+    #[test(tokio::test)]
     async fn auth_code_can_be_used_only_once() {
         let redirect_uri = Url::parse("http://localhost:8088/oidc-login-redirect").unwrap();
         let request = auth_code_request(&redirect_uri);

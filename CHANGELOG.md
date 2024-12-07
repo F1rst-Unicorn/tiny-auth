@@ -5,6 +5,12 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+* If a user or client was not present in the sqlite store responsible for auth
+  codes, the auth code could not be saved. This limitation is now removed
+  ([#109](https://veenj.de/git/veenj/tiny-auth/issues/109)).
+
 ## [2.1.0]
 
 ### Added

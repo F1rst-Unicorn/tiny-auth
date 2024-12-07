@@ -1,3 +1,14 @@
+# Release
+
+* If the release contains DB migrations, the version must be named in
+  `PKGBUILD`.
+
+Adapt the version in the following files:
+
+* `CHANGELOG.md`
+* `src/rust/Cargo.toml` and run `cargo check` to update `src/rust/Cargo.lock`
+* `src/typescript/package.json`
+
 # Tests
 
 Always use `test_log`. Nest tokio or actix if needed. Add `rstest` if needed

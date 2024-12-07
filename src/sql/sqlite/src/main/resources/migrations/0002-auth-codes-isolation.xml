@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    tiny-auth: Tiny OIDC Provider
+    Copyright (C) 2019 The tiny-auth developers
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+            http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd"
+        context="production">
+
+    <changeSet id="1" author="admin" labels="schema,dev,unittests,build">
+        <sql endDelimiter=";;">
+            alter table tiny_auth_authorization_code rename to tiny_auth_authorization_code_old;;
+            drop index tiny_auth_authorization_code_code;;
+
+            create table tiny_auth_authorization_code (
+                id integer primary key not null,
+                client_id text not null,
+                user text not null,
+                redirect_uri text not null,
+                scope text not null,
+                code text not null,
+                insertion_time text not null,
+                authentication_time text not null,
+                nonce text null,
+                pkce_challenge text null,
+                pkce_challenge_method text null,
+                check (pkce_challenge_method in ('plain', 'S256'))
+            ) strict;;
+
+            create unique index tiny_auth_authorization_code_code on tiny_auth_authorization_code (code, client_id);;
+
+            insert into tiny_auth_authorization_code
+            select
+                a.id,
+                c.client_id,
+                u.name,
+                uri.redirect_uri,
+                a.scope,
+                a.code,
+                a.insertion_time,
+                a.authentication_time,
+                a.nonce,
+                a.pkce_challenge,
+                a.pkce_challenge_method
+            from tiny_auth_authorization_code_old a
+            join tiny_auth_user u on u.id = a.user
+            join tiny_auth_client c on c.id = a.client
+            join tiny_auth_redirect_uri uri on uri.id = a.redirect_uri;;
+
+            drop table tiny_auth_authorization_code_old;;
+        </sql>
+        <rollback>
+            <sql endDelimiter=";;">
+                alter table tiny_auth_authorization_code rename to tiny_auth_authorization_code_old;;
+                drop index tiny_auth_authorization_code_code;;
+
+                create table tiny_auth_authorization_code (
+                    id integer primary key not null,
+                    client integer not null,
+                    user integer not null,
+                    redirect_uri integer not null,
+                    scope text not null,
+                    code text not null,
+                    insertion_time text not null,
+                    authentication_time text not null,
+                    nonce text null,
+                    pkce_challenge text null,
+                    pkce_challenge_method text null,
+                    foreign key (client) references tiny_auth_client(id)
+                      on update cascade on delete cascade deferrable initially deferred,
+                    foreign key ("user") references tiny_auth_user(id)
+                      on update cascade on delete cascade deferrable initially deferred,
+                    foreign key (redirect_uri) references tiny_auth_redirect_uri(id)
+                      on update cascade on delete restrict deferrable initially deferred,
+                    check (pkce_challenge_method in ('plain', 'S256'))
+                );;
+
+                create unique index tiny_auth_authorization_code_code on tiny_auth_authorization_code (code, client);;
+
+                insert into tiny_auth_authorization_code
+                select
+                    a.id,
+                    c.id,
+                    u.id,
+                    uri.id,
+                    a.scope,
+                    a.code,
+                    a.insertion_time,
+                    a.authentication_time,
+                    a.nonce,
+                    a.pkce_challenge,
+                    a.pkce_challenge_method
+                from tiny_auth_authorization_code_old a
+                join tiny_auth_user u on u.user = a.user
+                join tiny_auth_client c on c.client_id = a.client
+                join tiny_auth_redirect_uri uri on uri.redirect_uri = a.redirect_uri;;
+
+                drop table tiny_auth_authorization_code_old;;
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
