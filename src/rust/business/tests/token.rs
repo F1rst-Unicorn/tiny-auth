@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#![expect(clippy::unwrap_used)] // this is test code
+#![expect(clippy::unwrap_used, reason = "this is test code")]
 
 use pretty_assertions::assert_eq;
 use serde_json::from_str;

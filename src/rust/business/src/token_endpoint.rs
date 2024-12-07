@@ -197,7 +197,7 @@ impl<A: Authenticator, C: Clock, T: TokenCreator> Handler for HandlerImpl<A, C, 
 }
 
 impl<A: Authenticator, C: Clock, T: TokenCreator> HandlerImpl<A, C, T> {
-    #[expect(clippy::type_complexity)] // debatable
+    #[expect(clippy::type_complexity, reason = "debatable")]
     #[instrument(level = Level::DEBUG, skip_all, name = "cid", fields(user))]
     async fn grant_token(
         &self,
@@ -736,7 +736,7 @@ pub mod inject {
     use crate::token::{TokenCreator, TokenValidator};
     use std::sync::Arc;
 
-    #[expect(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments, reason = "unfortunate")]
     pub fn handler<A, C, T>(
         client_store: Arc<dyn ClientStore>,
         user_store: Arc<dyn UserStore>,

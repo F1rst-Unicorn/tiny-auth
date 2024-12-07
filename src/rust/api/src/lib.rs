@@ -46,9 +46,15 @@ use tracing::warn;
 use tracing::{error, instrument, trace};
 
 pub(crate) mod tiny_auth_proto {
-    // https://github.com/hyperium/tonic/issues/1056
-    #![allow(clippy::derive_partial_eq_without_eq)]
-    #![allow(clippy::unwrap_used)]
+    #![allow(
+        clippy::derive_partial_eq_without_eq,
+        reason = "https://github.com/hyperium/tonic/issues/1056"
+    )]
+    #![allow(clippy::unwrap_used, reason = "used in generated code")]
+    #![allow(
+        clippy::allow_attributes_without_reason,
+        reason = "generated code has no reasons"
+    )]
     tonic::include_proto!("api");
 
     pub(crate) const FILE_DESCRIPTOR_SET: &[u8] =

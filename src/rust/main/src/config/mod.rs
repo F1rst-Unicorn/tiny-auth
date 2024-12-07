@@ -277,22 +277,22 @@ pub struct Web {
     pub secret_key: String,
 }
 
-#[expect(clippy::unnecessary_wraps)] // serde needs this API
+#[expect(clippy::unnecessary_wraps, reason = "serde needs this API")]
 fn default_path() -> Option<String> {
     Some("".to_owned())
 }
 
-#[expect(clippy::unnecessary_wraps)] // serde needs this API
+#[expect(clippy::unnecessary_wraps, reason = "serde needs this API")]
 fn default_session_timeout() -> Option<i64> {
     Some(3600)
 }
 
-#[expect(clippy::unnecessary_wraps)] // serde needs this API
+#[expect(clippy::unnecessary_wraps, reason = "serde needs this API")]
 fn default_token_timeout_in_seconds() -> Option<i64> {
     Some(60)
 }
 
-#[expect(clippy::unnecessary_wraps)] // serde needs this API
+#[expect(clippy::unnecessary_wraps, reason = "serde needs this API")]
 fn default_refresh_token_timeout_in_seconds() -> Option<i64> {
     Some(180)
 }

@@ -142,7 +142,7 @@ impl AsRef<str> for EncodedIdToken {
     }
 }
 
-#[expect(clippy::trivially_copy_pass_by_ref)] // serde needs this API
+#[expect(clippy::trivially_copy_pass_by_ref, reason = "serde needs this API")]
 fn is_zero(n: &i64) -> bool {
     *n == 0
 }
