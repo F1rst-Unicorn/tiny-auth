@@ -5,6 +5,8 @@ This project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+## [2.1.1]
+
 ### Fixed
 
 * If a user or client was not present in the sqlite store responsible for auth

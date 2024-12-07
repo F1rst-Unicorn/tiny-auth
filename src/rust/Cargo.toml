@@ -3,7 +3,7 @@ members = ["main", "business", "web", "api", "ldap", "template", "sqlite", "test
 resolver = "2"
 
 [workspace.package]
-version = "2.1.0"
+version = "2.1.1"
 authors = ["Jan Veen <jan.veen@posteo.de>"]
 description = "Tiny OIDC Provider"
 homepage = "https://veenj.de/git/veenj/tiny-auth/src/branch/master/README.md"
