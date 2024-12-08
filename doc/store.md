@@ -378,11 +378,21 @@ To delegate password authentication to LDAP, use this structure:
 
 ```yaml
 password:
-  LDAP:
+  ldap:
     name: my-ldap
 ```
 
 `my-ldap` is the name you chose in `store.ldap.name` above.
+
+To delegate password authentication to SQLite, use this structure:
+
+```yaml
+password:
+  sqlite:
+    name: my-sqlite
+```
+
+`my-sqlite` is the name you chose in `store.sqlite.name` above.
 
 #### allowed_scopes
 
