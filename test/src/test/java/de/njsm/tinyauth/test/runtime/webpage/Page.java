@@ -21,6 +21,8 @@ import org.openqa.selenium.remote.RemoteWebDriver;
 import org.openqa.selenium.support.ui.ExpectedCondition;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
+import java.time.Duration;
+
 public abstract class Page {
 
     RemoteWebDriver driver;
@@ -36,6 +38,6 @@ public abstract class Page {
     void assertDriverIsOnThisPage() {}
 
     <T> T waitUntil(ExpectedCondition<T> condition) {
-        return new WebDriverWait(driver, 10).until(condition);
+        return new WebDriverWait(driver, Duration.ofSeconds(10)).until(condition);
     }
 }

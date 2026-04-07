@@ -71,7 +71,7 @@ public class SeleniumLifecycleManager extends TypeBasedParameterResolver<Browser
         profile.setPreference("intl.accept_languages", "de");
         profile.setPreference("security.default_personal_cert", "Select Automatically");
         FirefoxOptions options = new FirefoxOptions();
-        options.setHeadless(true);
+        options.addArguments("-headless");
         options.setProfile(profile);
         seleniumContainer = new BrowserWebDriverContainer<>()
                 .withNetworkAliases("browser")
