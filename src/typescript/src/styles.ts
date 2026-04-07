@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { GlobalStylesProps as StyledGlobalStylesProps } from "@mui/system/GlobalStyles/GlobalStyles";
+import { GlobalStylesProps as StyledGlobalStylesProps } from "@mui/system";
 import { Theme } from "@mui/material/styles";
 
 export const styles: StyledGlobalStylesProps<Theme>["styles"] = {

@@ -20,7 +20,7 @@ import React from "react";
 import { useAuth } from "react-oidc-context";
 import Login from "./components/Login.tsx";
 import MainMenu from "./components/pages/MainMenu.tsx";
-import { CircularProgress, Grid } from "@mui/material";
+import { CircularProgress, Stack } from "@mui/material";
 
 export default function App() {
   const auth = useAuth();
@@ -79,17 +79,16 @@ export default function App() {
 
   if (auth.isLoading) {
     return (
-      <Grid
-        container
+      <Stack
         spacing={2}
         direction={"column"}
-        justifyContent={"center"}
-        alignItems={"center"}
+        sx={{
+          justifyContent: "center",
+          alignItems: "center",
+        }}
       >
-        <Grid item>
-          <CircularProgress size={75} sx={{ padding: 5 }} />
-        </Grid>
-      </Grid>
+        <CircularProgress size={75} sx={{ padding: 5 }} />
+      </Stack>
     );
   }
 

@@ -63,7 +63,7 @@ export default function TopAppBar() {
         <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
           <NavLink to={webBase}>tiny-auth</NavLink>
         </Typography>
-        <Typography variant="h6" component="div" px={2}>
+        <Typography variant="h6" component="div">
           {buildUserName(auth.user)}
         </Typography>
         <IconButton

@@ -18,13 +18,13 @@
 
 import {
   Box,
-  Grid,
   TextField,
   Typography,
   Button,
   Card,
   Alert,
   CircularProgress,
+  Stack,
 } from "@mui/material";
 import { useAuth } from "react-oidc-context";
 import { useFetcher } from "react-router-dom";
@@ -90,7 +90,7 @@ export default function Profile() {
   }
 
   return (
-    <Box p={2}>
+    <Box sx={{ padding: 2 }}>
       <Typography variant={"h4"} component={"h1"}>
         {buildUserName(auth.user)}
       </Typography>
@@ -106,8 +106,8 @@ export default function Profile() {
         </Typography>
         {resultAlert}
         <fetcher.Form method="post" action="../api/changePassword">
-          <Grid container spacing={2} direction="column">
-            <Grid item>
+          <Stack spacing={2}>
+            <Box>
               <TextField
                 required
                 name={CURRENT}
@@ -115,8 +115,8 @@ export default function Profile() {
                 type="password"
                 autoComplete="current-password"
               />
-            </Grid>
-            <Grid item>
+            </Box>
+            <Box>
               <TextField
                 required
                 name={NEW}
@@ -126,8 +126,8 @@ export default function Profile() {
                   setNewPassword(event.target.value);
                 }}
               />
-            </Grid>
-            <Grid item>
+            </Box>
+            <Box>
               <TextField
                 error={newPassword !== newRepeatedPassword}
                 required
@@ -146,9 +146,9 @@ export default function Profile() {
                   paddingBottom: 2,
                 }}
               />
-            </Grid>
-            <Grid item>{submitButton}</Grid>
-          </Grid>
+            </Box>
+            <Box>{submitButton}</Box>
+          </Stack>
         </fetcher.Form>
       </Card>
     </Box>

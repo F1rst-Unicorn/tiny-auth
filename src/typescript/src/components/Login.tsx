@@ -18,7 +18,7 @@
 
 import { useAuth } from "react-oidc-context";
 import Button from "@mui/material/Button";
-import { Box, Grid, Typography } from "@mui/material";
+import { Box, Stack, Typography } from "@mui/material";
 import favicon from "../assets/favicon.svg";
 
 export default function Login(props: {
@@ -28,17 +28,18 @@ export default function Login(props: {
   const auth = useAuth();
 
   return (
-    <Grid
-      container
+    <Stack
       spacing={2}
       direction={"column"}
-      justifyContent={"center"}
-      alignItems={"center"}
+      sx={{
+        justifyContent: "center",
+        alignItems: "center",
+      }}
     >
-      <Grid item>
+      <Box>
         <Box height={250} component="img" src={favicon} alt="tiny-auth Logo" />
-      </Grid>
-      <Grid item>
+      </Box>
+      <Box>
         <Button
           variant="contained"
           onClick={() =>
@@ -49,14 +50,14 @@ export default function Login(props: {
         >
           Log in to tiny-auth
         </Button>
-      </Grid>
-      <Grid item>
+      </Box>
+      <Box>
         <Typography color="error">{props.errorMessage}</Typography>
-      </Grid>
-      <Grid item>
+      </Box>
+      <Box>
         <Typography>{props.infoMessage}</Typography>
-      </Grid>
-    </Grid>
+      </Box>
+    </Stack>
   );
 }
 

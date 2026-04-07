@@ -16,21 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { Box, Grid } from "@mui/material";
+import { Box, Stack } from "@mui/material";
 import favicon from "../assets/favicon.svg";
 
 export default function Index() {
   return (
-    <Grid
-      container
+    <Stack
       spacing={2}
-      direction={"column"}
-      justifyContent={"center"}
-      alignItems={"center"}
+      sx={{
+        justifyContent: "center",
+        alignItems: "center",
+      }}
     >
-      <Grid item>
-        <Box height={250} component="img" src={favicon} alt="tiny-auth Logo" />
-      </Grid>
-    </Grid>
+      <Box height={250} component="img" src={favicon} alt="tiny-auth Logo" />
+    </Stack>
   );
 }
