@@ -135,7 +135,10 @@ async fn config_refresher(
 
     let config_path_buf = PathBuf::from(config_path.clone());
     let config_parent = match config_path_buf.parent() {
-        None => return,
+        None => {
+            warn!("config path has no parent, hot reloading deactivated");
+            return;
+        }
         Some(v) => v,
     };
     if let Err(e) = watcher.watch(config_parent, RecursiveMode::Recursive) {
@@ -197,7 +200,7 @@ async fn config_refresher(
 }
 
 fn async_watcher() -> notify::Result<(RecommendedWatcher, MpscReceiver<notify::Result<Event>>)> {
-    let (tx, rx) = channel(1);
+    let (tx, rx) = channel(8);
 
     let watcher = RecommendedWatcher::new(
         move |event| {
