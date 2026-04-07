@@ -20,7 +20,7 @@ use tiny_auth_business::template::data_loader::DataLoaderContext;
 use tiny_auth_business::template::ldap_search::LdapSearchContext;
 use tiny_auth_business::template::scope::ScopeContext;
 use tiny_auth_business::template::{
-    bind_dn::BindDnContext, InstantiatedTemplate, Template, TemplateError, Templater,
+    InstantiatedTemplate, Template, TemplateError, Templater, bind_dn::BindDnContext,
 };
 use tracing::error;
 

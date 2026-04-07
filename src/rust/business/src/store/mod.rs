@@ -30,7 +30,7 @@ use futures_util::future::join_all;
 use std::error::Error as StdError;
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{instrument, Level};
+use tracing::{Level, instrument};
 use url::Url;
 
 pub use client_store::ClientStore;

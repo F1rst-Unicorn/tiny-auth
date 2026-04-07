@@ -16,7 +16,7 @@
  */
 
 use crate::data::client::{Client, ClientType};
-use crate::data::password::{pick_password_by_priority, Password};
+use crate::data::password::{Password, pick_password_by_priority};
 use crate::data::scope::merge_attributes;
 use serde::Deserialize;
 use serde::Serialize;

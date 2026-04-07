@@ -25,22 +25,22 @@ use test_log::test;
 use tiny_auth_business::clock::Clock;
 use tiny_auth_business::oauth2::GrantType;
 use tiny_auth_business::store::{
-    AuthorizationCodeRequest, AuthorizationCodeStore, AUTH_CODE_LIFE_TIME,
+    AUTH_CODE_LIFE_TIME, AuthorizationCodeRequest, AuthorizationCodeStore,
 };
 use tiny_auth_business::token::EncodedRefreshToken;
 use tiny_auth_business::token::TokenCreator;
-use tiny_auth_business::token_endpoint::{inject, Handler};
 use tiny_auth_business::token_endpoint::{Error, Request};
+use tiny_auth_business::token_endpoint::{Handler, inject};
 use tiny_auth_test_fixtures::authenticator::authenticator;
 use tiny_auth_test_fixtures::clock::system_time_clock;
 use tiny_auth_test_fixtures::data::client::CONFIDENTIAL_CLIENT;
 use tiny_auth_test_fixtures::data::client::PUBLIC_CLIENT;
 use tiny_auth_test_fixtures::store::auth_code_store::build_test_auth_code_store;
-use tiny_auth_test_fixtures::store::client_store::build_test_client_store;
 use tiny_auth_test_fixtures::store::client_store::UNKNOWN_CLIENT_ID;
+use tiny_auth_test_fixtures::store::client_store::build_test_client_store;
 use tiny_auth_test_fixtures::store::scope_store::build_test_scope_store;
-use tiny_auth_test_fixtures::store::user_store::build_test_user_store;
 use tiny_auth_test_fixtures::store::user_store::USER;
+use tiny_auth_test_fixtures::store::user_store::build_test_user_store;
 use tiny_auth_test_fixtures::token::build_test_issuer_config;
 use tiny_auth_test_fixtures::token::build_test_token_creator;
 use tiny_auth_test_fixtures::token::build_test_token_validator;
@@ -312,9 +312,11 @@ async fn confidential_client_gets_access_token_for_itself() {
     assert!(validator.validate_access_token(response.0).is_some());
     assert!(validator.validate_id_token(response.1).is_some());
     assert!(response.2.is_some());
-    assert!(validator
-        .validate_refresh_token(response.2.unwrap())
-        .is_some());
+    assert!(
+        validator
+            .validate_refresh_token(response.2.unwrap())
+            .is_some()
+    );
 }
 
 #[test(tokio::test)]
@@ -390,9 +392,11 @@ async fn confidential_client_can_use_password_grant() {
     assert!(validator.validate_access_token(response.0).is_some());
     assert!(validator.validate_id_token(response.1).is_some());
     assert!(response.2.is_some());
-    assert!(validator
-        .validate_refresh_token(response.2.unwrap())
-        .is_some());
+    assert!(
+        validator
+            .validate_refresh_token(response.2.unwrap())
+            .is_some()
+    );
 }
 
 #[test(tokio::test)]
@@ -471,9 +475,11 @@ async fn successful_refresh_token_authentication() {
     assert!(validator.validate_access_token(response.0).is_some());
     assert!(validator.validate_id_token(response.1).is_some());
     assert!(response.2.is_some());
-    assert!(validator
-        .validate_refresh_token(response.2.unwrap())
-        .is_some());
+    assert!(
+        validator
+            .validate_refresh_token(response.2.unwrap())
+            .is_some()
+    );
 }
 
 #[test(tokio::test)]
@@ -494,9 +500,11 @@ async fn successful_authentication_with_secret_as_post_parameter() {
     assert!(validator.validate_access_token(response.0).is_some());
     assert!(validator.validate_id_token(response.1).is_some());
     assert!(response.2.is_some());
-    assert!(validator
-        .validate_refresh_token(response.2.unwrap())
-        .is_some());
+    assert!(
+        validator
+            .validate_refresh_token(response.2.unwrap())
+            .is_some()
+    );
 }
 
 #[fixture]

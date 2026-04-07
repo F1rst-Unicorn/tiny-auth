@@ -20,7 +20,7 @@ use crate::data::password::Password;
 use crate::token::{Access, Token, TokenValidator};
 use async_trait::async_trait;
 use std::sync::Arc;
-use tracing::{span, Instrument, Level};
+use tracing::{Instrument, Level, span};
 
 #[async_trait]
 pub trait Handler: Send + Sync {

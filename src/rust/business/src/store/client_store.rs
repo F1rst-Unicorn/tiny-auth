@@ -22,7 +22,7 @@ use futures_util::future::join_all;
 use serde::de::StdError;
 use std::sync::Arc;
 use thiserror::Error;
-use tracing::{debug, instrument, Level};
+use tracing::{Level, debug, instrument};
 
 #[derive(Error, Debug, Clone)]
 pub enum Error {

@@ -17,14 +17,14 @@
 
 use std::sync::Arc;
 use test_log::test;
-use tiny_auth_business::consent::{inject, Handler};
+use tiny_auth_business::consent::{Handler, inject};
 use tiny_auth_business::data::client::Client;
 use tiny_auth_business::data::user::User;
 use tiny_auth_test_fixtures::clock::clock;
 use tiny_auth_test_fixtures::data::client::ClientExt;
 use tiny_auth_test_fixtures::data::client::DEFAULT_CLIENT;
-use tiny_auth_test_fixtures::data::user::UserExt;
 use tiny_auth_test_fixtures::data::user::DEFAULT_USER;
+use tiny_auth_test_fixtures::data::user::UserExt;
 use tiny_auth_test_fixtures::store::auth_code_store::build_test_auth_code_store;
 use tiny_auth_test_fixtures::store::client_store::TestClientStore;
 use tiny_auth_test_fixtures::store::scope_store::build_test_scope_store;

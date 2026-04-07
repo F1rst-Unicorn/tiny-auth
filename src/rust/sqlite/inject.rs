@@ -30,8 +30,8 @@ use std::time::Duration;
 use tiny_auth_business::data::password::InPlacePasswordStore;
 use tiny_auth_business::data_loader::DataLoader;
 use tiny_auth_business::health::HealthCheckCommand;
-use tiny_auth_business::template::data_loader::DataLoaderContext;
 use tiny_auth_business::template::Templater;
+use tiny_auth_business::template::data_loader::DataLoaderContext;
 use tracing::log::LevelFilter;
 
 pub async fn sqlite_store(
@@ -40,7 +40,7 @@ pub async fn sqlite_store(
     in_place_password_store: Arc<InPlacePasswordStore>,
     user_data_assembler: DataAssembler,
     client_data_assembler: DataAssembler,
-) -> Result<(Arc<SqliteStore>, impl HealthCheckCommand), SqliteError> {
+) -> Result<(Arc<SqliteStore>, impl HealthCheckCommand + use<>), SqliteError> {
     let options = SqliteConnectOptions::from_str(url)?
         .read_only(true)
         .journal_mode(Wal)

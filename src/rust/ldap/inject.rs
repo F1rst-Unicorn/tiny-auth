@@ -18,12 +18,12 @@
 use crate::authenticate::{LdapSearch, SearchBind, SimpleBind};
 use crate::connect::Connector;
 use crate::health::LdapHealth;
+use crate::lookup::AttributeMapping;
 use crate::lookup::client_lookup::{
     ClientAllowedScopesMapping, ClientCacheEntry, ClientLookup, ClientPasswordMapping,
     ClientPublicKeyMapping, ClientRedirectUriMapping, ClientTypeMapping,
 };
 use crate::lookup::user_lookup::{UserAllowedScopesMapping, UserCacheEntry, UserLookup};
-use crate::lookup::AttributeMapping;
 use crate::store::LdapStore;
 use moka::future::Cache;
 use moka::policy::EvictionPolicy;
@@ -32,7 +32,7 @@ use std::time::Duration;
 use tiny_auth_business::data::client::Client;
 use tiny_auth_business::data::user::User;
 use tiny_auth_business::health::HealthCheckCommand;
-use tiny_auth_business::template::{bind_dn::BindDnContext, Templater};
+use tiny_auth_business::template::{Templater, bind_dn::BindDnContext};
 use url::Url;
 
 pub fn connector(urls: &[Url], connect_timeout: Duration, starttls: bool) -> Connector {
@@ -147,7 +147,7 @@ pub fn search_bind_check(
     connector: Connector,
     bind_dn: &str,
     bind_dn_password: &str,
-) -> impl HealthCheckCommand {
+) -> impl HealthCheckCommand + use<> {
     LdapHealth {
         connector,
         authenticator: SearchBind {

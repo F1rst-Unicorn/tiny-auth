@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 use crate::error::LdapError;
-use ldap3::{drive, Ldap, LdapConnAsync, LdapConnSettings};
+use ldap3::{Ldap, LdapConnAsync, LdapConnSettings, drive};
 use std::time::Duration;
 use tracing::{debug, warn};
 use url::Url;

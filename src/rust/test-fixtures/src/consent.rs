@@ -20,7 +20,7 @@ use crate::store::client_store::build_test_client_store;
 use crate::store::scope_store::build_test_scope_store;
 use crate::store::user_store::build_test_user_store;
 use crate::token::build_test_token_creator;
-use tiny_auth_business::consent::{inject, Handler};
+use tiny_auth_business::consent::{Handler, inject};
 
 pub fn handler() -> impl Handler + 'static {
     inject::handler(

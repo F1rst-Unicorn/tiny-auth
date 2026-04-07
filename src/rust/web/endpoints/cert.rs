@@ -15,13 +15,13 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::cors::render_invalid_request;
 use crate::cors::CorsCheckResult;
 use crate::cors::CorsChecker;
-use actix_web::web::Data;
-use actix_web::web::Path;
+use crate::cors::render_invalid_request;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
+use actix_web::web::Data;
+use actix_web::web::Path;
 use serde_derive::Deserialize;
 use std::sync::Arc;
 use tiny_auth_business::cors::CorsLister;

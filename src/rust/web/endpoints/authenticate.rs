@@ -18,10 +18,10 @@
 use super::{consent, error_with_code, return_rendered_template, server_error};
 use crate::endpoints::parse_first_request;
 use actix_session::Session;
-use actix_web::http::header::LOCATION;
-use actix_web::http::StatusCode;
-use actix_web::web;
 use actix_web::HttpResponse;
+use actix_web::http::StatusCode;
+use actix_web::http::header::LOCATION;
+use actix_web::web;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use tiny_auth_business::authenticator::Authenticator;
@@ -38,9 +38,9 @@ use tiny_auth_business::template::web::ErrorPage::ServerError;
 use tiny_auth_business::template::web::{
     AuthenticateContext, AuthenticateError, ErrorPage, WebTemplater,
 };
+use tracing::{Instrument, warn};
+use tracing::{Level, error, span};
 use tracing::{debug, instrument};
-use tracing::{error, span, Level};
-use tracing::{warn, Instrument};
 use web::Data;
 
 pub const ENDPOINT_NAME: &str = "authenticate";
@@ -88,47 +88,54 @@ pub async fn get(
     )
     .entered();
 
-    if let Ok(Some(username)) = session.get::<String>(SESSION_KEY) {
-        let _cid_guard = span!(Level::DEBUG, "cid", user = username).entered();
-        if first_request.prompts.contains(&Prompt::Login)
-            || first_request.prompts.contains(&Prompt::SelectAccount)
-        {
-            debug!("recognised user but client demands login");
-            render_login_form(session, templater)
-        } else if let Some(max_age) = first_request.max_age {
-            let auth_time = match session.get::<i64>(AUTH_TIME_SESSION_KEY) {
-                Err(e) => {
-                    debug!(%e, "unsolicited authentication request, missing auth_time but username was present");
-                    return render_invalid_authentication_request(templater);
+    match session.get::<String>(SESSION_KEY) {
+        Ok(Some(username)) => {
+            let _cid_guard = span!(Level::DEBUG, "cid", user = username).entered();
+            if first_request.prompts.contains(&Prompt::Login)
+                || first_request.prompts.contains(&Prompt::SelectAccount)
+            {
+                debug!("recognised user but client demands login");
+                render_login_form(session, templater)
+            } else if let Some(max_age) = first_request.max_age {
+                let auth_time = match session.get::<i64>(AUTH_TIME_SESSION_KEY) {
+                    Err(e) => {
+                        debug!(%e, "unsolicited authentication request, missing auth_time but username was present");
+                        return render_invalid_authentication_request(templater);
+                    }
+                    Ok(None) => {
+                        debug!(
+                            "unsolicited authentication request, missing auth_time but username was present"
+                        );
+                        return render_invalid_authentication_request(templater);
+                    }
+                    Ok(Some(v)) => v,
+                };
+                if clock.now().timestamp() - auth_time <= max_age {
+                    debug!("recognised authenticated user and max_age is still ok",);
+                    redirect_successfully()
+                } else {
+                    debug!("recognised authenticated user but client demands more recent login",);
+                    render_login_form(session, templater)
                 }
-                Ok(None) => {
-                    debug!("unsolicited authentication request, missing auth_time but username was present");
-                    return render_invalid_authentication_request(templater);
-                }
-                Ok(Some(v)) => v,
-            };
-            if clock.now().timestamp() - auth_time <= max_age {
-                debug!("recognised authenticated user and max_age is still ok",);
-                redirect_successfully()
             } else {
-                debug!("recognised authenticated user but client demands more recent login",);
+                debug!("recognised authenticated user",);
+                redirect_successfully()
+            }
+        }
+        _ => {
+            if first_request.prompts.contains(&Prompt::None) {
+                debug!("no user recognised but client demands no interaction");
+                render_redirect_error(
+                    session,
+                    templater,
+                    oidc::ProtocolError::Oidc(oidc::OidcProtocolError::LoginRequired),
+                    "No username found",
+                    first_request.encode_redirect_to_fragment,
+                )
+            } else {
                 render_login_form(session, templater)
             }
-        } else {
-            debug!("recognised authenticated user",);
-            redirect_successfully()
         }
-    } else if first_request.prompts.contains(&Prompt::None) {
-        debug!("no user recognised but client demands no interaction");
-        render_redirect_error(
-            session,
-            templater,
-            oidc::ProtocolError::Oidc(oidc::OidcProtocolError::LoginRequired),
-            "No username found",
-            first_request.encode_redirect_to_fragment,
-        )
-    } else {
-        render_login_form(session, templater)
     }
 }
 
@@ -369,11 +376,11 @@ fn render_invalid_login_attempt_error(
         return server_error(templater.instantiate_error_page(ServerError));
     }
 
-    if let Some(tries_left) = tries_left {
-        if let Err(e) = session.insert(TRIES_LEFT_SESSION_KEY, tries_left) {
-            error!(%e, "failed to serialise session");
-            return server_error(templater.instantiate_error_page(ServerError));
-        }
+    if let Some(tries_left) = tries_left
+        && let Err(e) = session.insert(TRIES_LEFT_SESSION_KEY, tries_left)
+    {
+        error!(%e, "failed to serialise session");
+        return server_error(templater.instantiate_error_page(ServerError));
     }
 
     HttpResponse::SeeOther()
@@ -400,12 +407,12 @@ mod tests {
 
     mod get {
         use crate::endpoints::authenticate::tests::build_test_templater;
-        use crate::endpoints::authenticate::{get, AUTH_TIME_SESSION_KEY, SESSION_KEY};
+        use crate::endpoints::authenticate::{AUTH_TIME_SESSION_KEY, SESSION_KEY, get};
         use crate::endpoints::tests::query_parameter_of;
-        use crate::endpoints::{authorize, consent, REDIRECT_QUERY_PARAM_ERROR};
+        use crate::endpoints::{REDIRECT_QUERY_PARAM_ERROR, authorize, consent};
         use actix_session::{Session, SessionExt};
-        use actix_web::http::header::{HeaderValue, LOCATION};
         use actix_web::http::StatusCode;
+        use actix_web::http::header::{HeaderValue, LOCATION};
         use actix_web::test::TestRequest;
         use actix_web::web::Data;
         use pretty_assertions::assert_eq;
@@ -588,19 +595,19 @@ mod tests {
             build_test_authenticator, build_test_templater,
         };
         use crate::endpoints::authenticate::{
-            post, Request, ERROR_CODE_SESSION_KEY, SESSION_KEY, TRIES_LEFT_SESSION_KEY,
+            ERROR_CODE_SESSION_KEY, Request, SESSION_KEY, TRIES_LEFT_SESSION_KEY, post,
         };
         use crate::endpoints::tests::query_parameter_of;
         use crate::endpoints::{
-            authenticate, authorize, consent, generate_csrf_token, CSRF_SESSION_KEY,
-            REDIRECT_QUERY_PARAM_ERROR, REDIRECT_QUERY_PARAM_ERROR_DESCRIPTION,
+            CSRF_SESSION_KEY, REDIRECT_QUERY_PARAM_ERROR, REDIRECT_QUERY_PARAM_ERROR_DESCRIPTION,
+            authenticate, authorize, consent, generate_csrf_token,
         };
         use actix_session::{Session, SessionExt};
-        use actix_web::http::header::LOCATION;
+        use actix_web::HttpRequest;
         use actix_web::http::StatusCode;
+        use actix_web::http::header::LOCATION;
         use actix_web::test::TestRequest;
         use actix_web::web::Form;
-        use actix_web::HttpRequest;
         use rstest::{fixture, rstest};
         use test_log::test;
         use tiny_auth_business::authorize_endpoint::AuthorizeRequestState;

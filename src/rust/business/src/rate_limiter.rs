@@ -23,8 +23,8 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::instrument;
 use tracing::Level;
+use tracing::instrument;
 
 #[async_trait]
 pub trait RateLimiter: Send + Sync {

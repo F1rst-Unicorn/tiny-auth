@@ -20,7 +20,7 @@ use crate::store::scope_store::build_test_scope_store;
 use crate::store::user_store::build_test_user_store;
 use crate::token::{build_test_token_creator, build_test_token_validator};
 use std::sync::Arc;
-use tiny_auth_business::userinfo_endpoint::{inject, Handler};
+use tiny_auth_business::userinfo_endpoint::{Handler, inject};
 
 pub fn build_test_userinfo_handler() -> impl Handler {
     inject::handler(

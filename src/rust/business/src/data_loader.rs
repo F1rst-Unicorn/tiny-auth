@@ -18,7 +18,7 @@ use crate::data_loader::Multiplicity::ToOne;
 use crate::json_pointer::{ArrayAccess, JsonPointer, PastLastArrayElement};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
-use tracing::{debug, error, instrument, Level};
+use tracing::{Level, debug, error, instrument};
 use tracing::{span, warn};
 
 #[derive(PartialEq, Eq, Clone, Copy)]

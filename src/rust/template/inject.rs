@@ -27,7 +27,7 @@ use tiny_auth_business::template::scope::ScopeContext;
 use tiny_auth_business::template::web::{
     AuthenticateContext, ConsentContext, WebTemplater, WebappRootContext,
 };
-use tiny_auth_business::template::{bind_dn::BindDnContext, Templater};
+use tiny_auth_business::template::{Templater, bind_dn::BindDnContext};
 
 pub fn bind_dn_templater(template: &str) -> Arc<dyn for<'a> Templater<BindDnContext<'a>>> {
     Arc::new(BindDnTemplater(template.to_owned().into()))

@@ -18,17 +18,17 @@
 use crate::tera::{map_err, render_tera_error};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tera::to_value;
 use tera::Result as TeraResult;
 use tera::Tera;
 use tera::Value;
-use tera::{from_value, Context};
+use tera::to_value;
+use tera::{Context, from_value};
 use tiny_auth_business::template::web::{
     AuthenticateContext, AuthenticateError, ConsentContext, ErrorPage, WebTemplater,
     WebappRootContext,
 };
 use tiny_auth_business::template::{InstantiatedTemplate, TemplateError, Templater};
-use tracing::{error, instrument, span, trace, warn, Level};
+use tracing::{Level, error, instrument, span, trace, warn};
 
 pub(crate) struct WebappRootTemplater(pub(crate) Arc<Tera>);
 

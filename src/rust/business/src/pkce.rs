@@ -17,11 +17,11 @@
 
 //! [RFC](https://www.rfc-editor.org/rfc/rfc7636)
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use regex::Regex;
-use ring::digest::digest;
 use ring::digest::SHA256;
+use ring::digest::digest;
 use serde_derive::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};

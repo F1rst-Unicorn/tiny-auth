@@ -20,13 +20,13 @@ use crate::data::client::Client;
 use crate::data::password::{DispatchingPasswordStore, Password};
 use crate::data::user::User;
 use crate::rate_limiter::RateLimiter;
-use crate::store::password_store::{PasswordConstructionError, PasswordStore};
 use crate::store::UserStore;
+use crate::store::password_store::{PasswordConstructionError, PasswordStore};
 use async_trait::async_trait;
 use chrono::{DateTime, Local};
 use std::sync::Arc;
 use tracing::warn;
-use tracing::{debug, instrument, Level};
+use tracing::{Level, debug, instrument};
 
 #[async_trait]
 pub trait Authenticator: Send + Sync {

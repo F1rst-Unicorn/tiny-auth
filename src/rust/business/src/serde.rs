@@ -15,9 +15,9 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use serde::Deserializer;
 use serde::de::Deserialize as _;
 use serde::de::Visitor;
-use serde::Deserializer;
 
 pub fn deserialise_empty_as_none<'de, D: Deserializer<'de>>(
     value: D,
@@ -71,10 +71,10 @@ pub fn deserialise_empty_as_none<'de, D: Deserializer<'de>>(
         })
         .ok()
         .flatten();
-    if let Some(ref content) = result {
-        if content.is_empty() {
-            result = None;
-        }
+    if let Some(ref content) = result
+        && content.is_empty()
+    {
+        result = None;
     }
     Ok(result)
 }

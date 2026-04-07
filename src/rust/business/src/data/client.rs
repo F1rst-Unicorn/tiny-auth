@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::data::password::{pick_password_by_priority, Password};
+use crate::data::password::{Password, pick_password_by_priority};
 use crate::data::scope::merge_attributes;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;

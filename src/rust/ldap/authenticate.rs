@@ -24,9 +24,9 @@ use std::sync::Arc;
 use tiny_auth_business::data::password::Error as PasswordError;
 use tiny_auth_business::store::user_store::Error as UserError;
 use tiny_auth_business::template::ldap_search::LdapSearchContext;
-use tiny_auth_business::template::{bind_dn::BindDnContext, Templater};
+use tiny_auth_business::template::{Templater, bind_dn::BindDnContext};
 use tiny_auth_business::util::wrap_err;
-use tracing::{debug, instrument, warn, Level};
+use tracing::{Level, debug, instrument, warn};
 
 #[enum_dispatch(Authenticator)]
 pub(crate) enum AuthenticatorDispatcher {

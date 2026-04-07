@@ -15,18 +15,18 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::{error_with_code, return_rendered_template, server_error, REDIRECT_QUERY_PARAM_CODE};
+use super::{REDIRECT_QUERY_PARAM_CODE, error_with_code, return_rendered_template, server_error};
 use crate::endpoints::authenticate;
 use crate::endpoints::authorize;
 use crate::endpoints::parse_first_request;
 use crate::endpoints::render_redirect_error;
 use actix_session::Session;
-use actix_web::http::header::LOCATION;
-use actix_web::http::StatusCode;
-use actix_web::web;
 use actix_web::HttpResponse;
-use chrono::offset::Local;
+use actix_web::http::StatusCode;
+use actix_web::http::header::LOCATION;
+use actix_web::web;
 use chrono::TimeZone;
+use chrono::offset::Local;
 use serde_derive::Deserialize;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -40,8 +40,8 @@ use tiny_auth_business::oidc;
 use tiny_auth_business::serde::deserialise_empty_as_none;
 use tiny_auth_business::template::web::ErrorPage::ServerError;
 use tiny_auth_business::template::web::{ConsentContext, ErrorPage, WebTemplater};
+use tracing::{Instrument, Level, span, warn};
 use tracing::{debug, error, instrument};
-use tracing::{span, warn, Instrument, Level};
 use web::Data;
 
 pub const ENDPOINT_NAME: &str = "consent";
@@ -223,7 +223,7 @@ async fn process_skipping_csrf(
             return render_invalid_consent_request(templater);
         }
         Err(Error::TokenEncodingError) | Err(Error::AuthCodeNotGenerated) => {
-            return server_error(templater.instantiate_error_page(ServerError))
+            return server_error(templater.instantiate_error_page(ServerError));
         }
     };
 
@@ -333,8 +333,8 @@ async fn build_context(session: &Session, handler: Data<dyn Handler>) -> Option<
 
 #[cfg(test)]
 mod tests {
-    use super::super::generate_csrf_token;
     use super::super::CSRF_SESSION_KEY;
+    use super::super::generate_csrf_token;
     use super::*;
     use crate::endpoints::tests::query_parameter_of;
     use crate::endpoints::{REDIRECT_QUERY_PARAM_CODE, REDIRECT_QUERY_PARAM_STATE};
@@ -536,9 +536,11 @@ mod tests {
             first_request.state.to_owned(),
             query_parameter_of(&url, REDIRECT_QUERY_PARAM_STATE)
         );
-        assert!(!query_parameter_of(&url, REDIRECT_QUERY_PARAM_CODE)
-            .unwrap()
-            .is_empty());
+        assert!(
+            !query_parameter_of(&url, REDIRECT_QUERY_PARAM_CODE)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[rstest]
@@ -607,10 +609,12 @@ mod tests {
             Some(&REDIRECT_QUERY_PARAM_STATE.to_owned()),
             response_parameters.get(REDIRECT_QUERY_PARAM_STATE)
         );
-        assert!(!response_parameters
-            .get(REDIRECT_QUERY_PARAM_CODE)
-            .unwrap()
-            .is_empty());
+        assert!(
+            !response_parameters
+                .get(REDIRECT_QUERY_PARAM_CODE)
+                .unwrap()
+                .is_empty()
+        );
         assert!(!response_parameters.get("id_token").unwrap().is_empty());
     }
 

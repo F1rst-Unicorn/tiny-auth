@@ -16,13 +16,13 @@
  */
 
 use super::parse_bearer_authorization;
-use crate::cors::render_invalid_request;
 use crate::cors::CorsCheckResult;
 use crate::cors::CorsChecker;
-use actix_web::web::Data;
-use actix_web::web::Form;
+use crate::cors::render_invalid_request;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
+use actix_web::web::Data;
+use actix_web::web::Form;
 use async_trait::async_trait;
 use serde_derive::Deserialize;
 use std::sync::Arc;
@@ -190,7 +190,7 @@ mod tests {
     use tiny_auth_test_fixtures::cors::cors_lister;
     use tiny_auth_test_fixtures::data::client::PUBLIC_CLIENT;
     use tiny_auth_test_fixtures::store::client_store::build_test_client_store;
-    use tiny_auth_test_fixtures::store::user_store::{build_test_user_store, USER};
+    use tiny_auth_test_fixtures::store::user_store::{USER, build_test_user_store};
     use tiny_auth_test_fixtures::token::build_test_token_creator;
     use tiny_auth_test_fixtures::userinfo_endpoint::build_test_userinfo_handler;
 

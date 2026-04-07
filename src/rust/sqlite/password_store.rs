@@ -17,11 +17,11 @@
 use crate::begin_immediate::SqliteConnectionExt;
 use crate::store::SqliteStore;
 use async_trait::async_trait;
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use sqlx::{query_file, query_file_scalar};
 use std::num::{NonZeroI64, NonZeroU32};
-use tiny_auth_business::data::password::{Error as PasswordError, Password, HASH_ITERATIONS};
+use tiny_auth_business::data::password::{Error as PasswordError, HASH_ITERATIONS, Password};
 use tiny_auth_business::data::user::User;
 use tiny_auth_business::store::password_store::PasswordConstructionError::BackendError;
 use tiny_auth_business::store::password_store::{

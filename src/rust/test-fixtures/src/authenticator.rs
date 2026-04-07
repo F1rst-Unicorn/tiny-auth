@@ -19,7 +19,7 @@ use crate::data::password::PEPPER;
 use crate::store::user_store::build_test_user_store;
 use crate::token::build_test_rate_limiter;
 use std::sync::Arc;
-use tiny_auth_business::authenticator::{inject, Authenticator};
+use tiny_auth_business::authenticator::{Authenticator, inject};
 use tiny_auth_business::data::password::inject::{
     dispatching_password_store, in_place_password_store,
 };

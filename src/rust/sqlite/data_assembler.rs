@@ -23,10 +23,10 @@ use sqlx::{Column, Row, TypeInfo};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use tiny_auth_business::data_loader::{
-    load_client, load_user, DataLoader, LoadedData, Multiplicity,
+    DataLoader, LoadedData, Multiplicity, load_client, load_user,
 };
-use tiny_auth_business::template::data_loader::DataLoaderContext;
 use tiny_auth_business::template::Templater;
+use tiny_auth_business::template::data_loader::DataLoaderContext;
 use tracing::{error, instrument, warn};
 
 const ID_COLUMN_NAME: &str = "tiny_auth_id";
@@ -307,11 +307,11 @@ pub mod tests {
     use crate::begin_immediate::SqliteConnectionExt;
     use pretty_assertions::assert_eq;
     use rstest::{fixture, rstest};
+    use sqlx::ConnectOptions;
     use sqlx::pool::PoolOptions;
     use sqlx::sqlite::SqliteConnectOptions;
     use sqlx::sqlite::SqliteJournalMode::Wal;
     use sqlx::sqlite::SqliteSynchronous::Normal;
-    use sqlx::ConnectOptions;
     use sqlx::{Pool, Sqlite};
     use std::str::FromStr;
     use std::time::Duration;

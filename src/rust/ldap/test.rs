@@ -16,7 +16,7 @@
  */
 
 use super::*;
-use crate::inject::{connector, ClientConfig, UserConfig};
+use crate::inject::{ClientConfig, UserConfig, connector};
 use crate::store::LdapStore;
 use pretty_assertions::assert_eq;
 use rstest::fixture;
@@ -32,9 +32,9 @@ use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 use tiny_auth_business::data::client::ClientType;
 use tiny_auth_business::data::password::{Error, Password};
-use tiny_auth_business::store::password_store::PasswordStore;
 use tiny_auth_business::store::ClientStore;
 use tiny_auth_business::store::UserStore;
+use tiny_auth_business::store::password_store::PasswordStore;
 use tiny_auth_template::inject::{bind_dn_templater, ldap_search_templater};
 use url::Url;
 

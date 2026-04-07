@@ -17,7 +17,7 @@
 use crate::config::{Fields, Format, Log, Time};
 use std::env;
 use std::str::FromStr;
-use tracing::{debug, error, info, Subscriber};
+use tracing::{Subscriber, debug, error, info};
 use tracing_log::LogTracer;
 use tracing_subscriber::fmt::format;
 use tracing_subscriber::fmt::format::{FmtSpan, JsonFields};
@@ -27,7 +27,7 @@ use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::reload::Handle;
 use tracing_subscriber::reload::Layer as ReloadLayer;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{fmt, EnvFilter, Layer, Registry};
+use tracing_subscriber::{EnvFilter, Layer, Registry, fmt};
 
 pub fn initialise_from_verbosity(verbosity_level: u8) -> (FilterHandle, FormatHandle) {
     let filter = match verbosity_level {

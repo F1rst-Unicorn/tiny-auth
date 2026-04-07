@@ -15,7 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 use crate::store::client_store::build_test_client_store;
-use tiny_auth_business::authorize_endpoint::{inject, AuthorizeRequestState, Handler};
+use tiny_auth_business::authorize_endpoint::{AuthorizeRequestState, Handler, inject};
 use url::Url;
 
 pub fn handler() -> Handler {

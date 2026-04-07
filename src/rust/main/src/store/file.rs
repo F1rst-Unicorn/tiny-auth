@@ -26,14 +26,14 @@ use std::sync::Arc;
 use tiny_auth_business::data::client::Client;
 use tiny_auth_business::data::scope::Scope;
 use tiny_auth_business::data::user::User;
-use tiny_auth_business::store::user_store::Error;
 use tiny_auth_business::store::UserStore;
-use tiny_auth_business::store::{client_store, ScopeStore};
+use tiny_auth_business::store::user_store::Error;
 use tiny_auth_business::store::{ClientStore, ScopeStoreError};
-use tokio::sync::broadcast::error::RecvError;
-use tokio::sync::broadcast::Receiver;
+use tiny_auth_business::store::{ScopeStore, client_store};
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, instrument, span, trace, warn, Level};
+use tokio::sync::broadcast::Receiver;
+use tokio::sync::broadcast::error::RecvError;
+use tracing::{Level, debug, error, info, instrument, span, trace, warn};
 
 pub struct FileStore<T> {
     base: PathBuf,

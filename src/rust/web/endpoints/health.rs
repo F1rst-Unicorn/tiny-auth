@@ -16,9 +16,9 @@
  */
 
 use crate::endpoints::render_cors_result;
-use actix_web::web::Data;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
+use actix_web::web::Data;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;

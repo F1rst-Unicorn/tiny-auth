@@ -21,7 +21,7 @@ use crate::lookup::client_lookup::{ClientLookup, ClientRepresentation};
 use crate::lookup::user_lookup::{UserLookup, UserRepresentation};
 use async_trait::async_trait;
 use futures::future::OptionFuture;
-use ldap3::{ldap_escape, Ldap};
+use ldap3::{Ldap, ldap_escape};
 use tiny_auth_business::data::client::Client;
 use tiny_auth_business::data::password::Error as PasswordError;
 use tiny_auth_business::data::password::Password;

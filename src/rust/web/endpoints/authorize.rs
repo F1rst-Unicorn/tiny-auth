@@ -18,10 +18,10 @@
 use super::{authenticate, error_with_code, server_error};
 use crate::session::AuthorizeSession;
 use actix_session::Session;
-use actix_web::http::header::LOCATION;
-use actix_web::http::StatusCode;
-use actix_web::web;
 use actix_web::HttpResponse;
+use actix_web::http::StatusCode;
+use actix_web::http::header::LOCATION;
+use actix_web::web;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use tiny_auth_business::authorize_endpoint::{Error, Handler};
@@ -31,8 +31,8 @@ use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::oidc::ResponseType;
 use tiny_auth_business::serde::deserialise_empty_as_none;
 use tiny_auth_business::template::web::{ErrorPage, WebTemplater};
-use tracing::instrument;
 use tracing::Level;
+use tracing::instrument;
 use url::Url;
 use web::Data;
 
@@ -250,13 +250,13 @@ mod tests {
     use super::*;
     use crate::endpoints::tests::query_parameter_of;
     use crate::endpoints::{
-        parse_first_request, REDIRECT_QUERY_PARAM_ERROR, REDIRECT_QUERY_PARAM_STATE,
+        REDIRECT_QUERY_PARAM_ERROR, REDIRECT_QUERY_PARAM_STATE, parse_first_request,
     };
     use actix_session::SessionExt;
+    use actix_web::HttpRequest;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;
     use actix_web::web::Query;
-    use actix_web::HttpRequest;
     use pretty_assertions::assert_eq;
     use rstest::{fixture, rstest};
     use std::sync::Arc;

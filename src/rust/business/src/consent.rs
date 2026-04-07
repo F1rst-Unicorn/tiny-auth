@@ -33,7 +33,7 @@ use chrono::{DateTime, Duration, Local};
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
-use tracing::{debug, instrument, warn, Level};
+use tracing::{Level, debug, instrument, warn};
 use url::Url;
 
 pub struct Request<'a> {

@@ -14,7 +14,7 @@
  *  You should have received a copy of the GNU General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use tiny_auth_business::data::scope::template;
 use tiny_auth_test_fixtures::data::client::CONFIDENTIAL_CLIENT;

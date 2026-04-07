@@ -9,7 +9,7 @@ description = "Tiny OIDC Provider"
 homepage = "https://veenj.de/git/veenj/tiny-auth/src/branch/master/README.md"
 
 license = "GPL-3.0-or-later"
-edition = "2021"
+edition = "2024"
 
 [profile.release]
 lto = true

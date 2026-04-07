@@ -26,12 +26,12 @@ use tiny_auth_business::data::scope::{Destination, Mapping, Scope, Type};
 use tiny_auth_business::json_pointer::JsonPointer;
 use tiny_auth_business::store::{ScopeStore, ScopeStoreError};
 use tiny_auth_business::util::wrap_err;
-use tracing::{error, span, Level};
+use tracing::{Level, error, span};
 use tracing::{instrument, warn};
 
 #[macro_export]
 macro_rules! chunked_query {
-    ($query:literal, $keys:expr, $index_by:ident, $id_to_collect:ident, $transaction:ident) => {{
+    ($query:literal, $keys:expr_2021, $index_by:ident, $id_to_collect:ident, $transaction:ident) => {{
         let mut objects: BTreeMap<i64, Vec<_>> = BTreeMap::default();
         let mut ids = BTreeSet::default();
         if $keys.len() != 0 {

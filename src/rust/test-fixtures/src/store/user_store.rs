@@ -22,8 +22,8 @@ use std::iter::FromIterator;
 use std::sync::Arc;
 use tiny_auth_business::data::password::Password;
 use tiny_auth_business::data::user::User;
-use tiny_auth_business::store::user_store::Error;
 use tiny_auth_business::store::UserStore;
+use tiny_auth_business::store::user_store::Error;
 use tokio::sync::RwLock;
 
 pub struct TestUserStore {

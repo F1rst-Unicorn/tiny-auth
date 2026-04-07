@@ -24,9 +24,9 @@ use crate::store::file::*;
 use crate::util::inject::clock;
 use crate::util::read_file;
 use actix_web::cookie::SameSite;
+use base64::engine::Engine;
 use base64::engine::general_purpose;
 use base64::engine::general_purpose::STANDARD;
-use base64::engine::Engine;
 use chrono::Duration;
 use jsonwebtoken::Algorithm;
 use jsonwebtoken::DecodingKey;
@@ -43,20 +43,20 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tera::Tera;
-use tiny_auth_business::authenticator::inject::authenticator;
 use tiny_auth_business::authenticator::Authenticator;
+use tiny_auth_business::authenticator::inject::authenticator;
 use tiny_auth_business::authorize_endpoint::Handler as AuthorizeHandler;
-use tiny_auth_business::change_password::{inject, Handler};
+use tiny_auth_business::change_password::{Handler, inject};
 use tiny_auth_business::clock::Clock;
 use tiny_auth_business::consent::Handler as ConsentHandler;
-use tiny_auth_business::cors::inject::cors_lister;
 use tiny_auth_business::cors::CorsLister;
+use tiny_auth_business::cors::inject::cors_lister;
 use tiny_auth_business::data::jwk::Jwk;
 use tiny_auth_business::data::jwk::Jwks;
+use tiny_auth_business::data::password::DispatchingPasswordStore;
 use tiny_auth_business::data::password::inject::{
     dispatching_password_store, in_place_password_store,
 };
-use tiny_auth_business::data::password::DispatchingPasswordStore;
 use tiny_auth_business::health::inject::health_check;
 use tiny_auth_business::health::{HealthCheck, HealthCheckCommand, HealthChecker};
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
@@ -69,25 +69,25 @@ use tiny_auth_business::store::*;
 use tiny_auth_business::template::web::{
     AuthenticateContext, ConsentContext, WebTemplater, WebappRootContext,
 };
-use tiny_auth_business::token::inject::token_creator;
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
+use tiny_auth_business::token::inject::token_creator;
 use tiny_auth_business::userinfo_endpoint;
 use tiny_auth_ldap::inject::{
-    connector, search_bind_check, simple_bind_check, ClientConfig, UserConfig,
+    ClientConfig, UserConfig, connector, search_bind_check, simple_bind_check,
 };
 use tiny_auth_template::inject::{
     bind_dn_templater, data_loader_templater, ldap_search_templater, scope_templater,
 };
 use tiny_auth_template::web::load_template_engine;
+use tiny_auth_web::ApiUrl;
 use tiny_auth_web::cors::CorsChecker;
 use tiny_auth_web::endpoints::cert::TokenCertificate;
 use tiny_auth_web::endpoints::discovery::Handler as DiscoveryHandler;
 use tiny_auth_web::endpoints::token::Handler as TokenHandler;
 use tiny_auth_web::endpoints::userinfo::Handler as UserInfoHandler;
-use tiny_auth_web::ApiUrl;
-use tokio::sync::broadcast::{channel, Sender};
-use tracing::{debug, error, span, warn, Level};
+use tokio::sync::broadcast::{Sender, channel};
+use tracing::{Level, debug, error, span, warn};
 
 pub struct Constructor<'a, Authenticator> {
     config: &'a Config,
@@ -129,7 +129,7 @@ pub struct Constructor<'a, Authenticator> {
     client_ca: Option<String>,
 }
 
-pub async fn new(config: &Config) -> Result<Constructor<'_, impl Authenticator>, Error> {
+pub async fn new(config: &Config) -> Result<Constructor<'_, impl Authenticator + use < >>, Error> {
     let (
         user_store,
         password_store,
@@ -237,7 +237,7 @@ impl<A: Authenticator + 'static> Constructor<'_, A> {
         self.user_store.clone()
     }
 
-    pub fn build_token_creator(&self) -> impl TokenCreator {
+    pub fn build_token_creator(&self) -> impl TokenCreator + use < A > {
         token_creator(
             self.encoding_key.clone(),
             self.issuer_configuration.clone(),
@@ -290,13 +290,11 @@ fn build_issuer_url(config: &Config) -> String {
         token_issuer += ":";
         token_issuer += port;
     }
-    if let Some(path) = &config.web.path {
-        if !path.is_empty() {
-            if !path.starts_with('/') {
-                token_issuer += "/";
-            }
-            token_issuer += path;
+    if let Some(path) = &config.web.path && !path.is_empty() {
+        if !path.starts_with('/') {
+            token_issuer += "/";
         }
+        token_issuer += path;
     }
 
     while token_issuer.ends_with('/') {
@@ -387,51 +385,64 @@ pub fn build_own_token_validator(
 fn build_jwk(public_key: &str, issuer_url: &str, public_key_index: usize) -> Result<Jwk, Error> {
     let key = public_key.as_bytes();
     let url = format!("{issuer_url}/cert/{public_key_index}").to_owned();
-    let jwk = if let Ok(key) = Rsa::public_key_from_pem_pkcs1(key) {
-        let n = encode_bignum(key.n());
-        let e = encode_bignum(key.e());
+    let jwk = match Rsa::public_key_from_pem_pkcs1(key) {
+        Ok(key) => {
+            let n = encode_bignum(key.n());
+            let e = encode_bignum(key.e());
 
-        let mut hasher = Hasher::new(MessageDigest::sha1())?;
-        hasher.update(&key.n().to_vec())?;
-        hasher.update(&key.e().to_vec())?;
-        let id = STANDARD.encode(hasher.finish()?);
-        Jwk::new_rsa(id, url, n, e)
-    } else if let Ok(key) = Rsa::public_key_from_pem(key) {
-        let n = encode_bignum(key.n());
-        let e = encode_bignum(key.e());
-        let mut hasher = Hasher::new(MessageDigest::sha1())?;
-        hasher.update(&key.n().to_vec())?;
-        hasher.update(&key.e().to_vec())?;
-        let id = STANDARD.encode(hasher.finish()?);
-        Jwk::new_rsa(id, url, n, e)
-    } else if let Ok(key) = EcKey::public_key_from_pem(key) {
-        let crv = match key.group().curve_name() {
-            Some(openssl::nid::Nid::SECP384R1) => "P-384".to_owned(),
-            Some(_) | None => {
-                error!("unsupported curve in token key");
-                return Err(LoggedBeforeError);
+            let mut hasher = Hasher::new(MessageDigest::sha1())?;
+            hasher.update(&key.n().to_vec())?;
+            hasher.update(&key.e().to_vec())?;
+            let id = STANDARD.encode(hasher.finish()?);
+            Jwk::new_rsa(id, url, n, e)
+        }
+        _ => match Rsa::public_key_from_pem(key) {
+            Ok(key) => {
+                let n = encode_bignum(key.n());
+                let e = encode_bignum(key.e());
+                let mut hasher = Hasher::new(MessageDigest::sha1())?;
+                hasher.update(&key.n().to_vec())?;
+                hasher.update(&key.e().to_vec())?;
+                let id = STANDARD.encode(hasher.finish()?);
+                Jwk::new_rsa(id, url, n, e)
             }
-        };
+            _ => match EcKey::public_key_from_pem(key) {
+                Ok(key) => {
+                    let crv = match key.group().curve_name() {
+                        Some(openssl::nid::Nid::SECP384R1) => "P-384".to_owned(),
+                        Some(_) | None => {
+                            error!("unsupported curve in token key");
+                            return Err(LoggedBeforeError);
+                        }
+                    };
 
-        let mut context = BigNumContext::new()?;
-        let mut x = BigNum::new()?;
-        let mut y = BigNum::new()?;
+                    let mut context = BigNumContext::new()?;
+                    let mut x = BigNum::new()?;
+                    let mut y = BigNum::new()?;
 
-        key.public_key()
-            .affine_coordinates_gfp(key.group(), &mut x, &mut y, &mut context)?;
+                    key.public_key().affine_coordinates_gfp(
+                        key.group(),
+                        &mut x,
+                        &mut y,
+                        &mut context,
+                    )?;
 
-        let mut hasher = Hasher::new(MessageDigest::sha1())?;
-        hasher.update(&x.to_vec())?;
-        hasher.update(&y.to_vec())?;
-        hasher.update(crv.as_bytes())?;
+                    let mut hasher = Hasher::new(MessageDigest::sha1())?;
+                    hasher.update(&x.to_vec())?;
+                    hasher.update(&y.to_vec())?;
+                    hasher.update(crv.as_bytes())?;
 
-        let x = encode_bignum(&x);
-        let y = encode_bignum(&y);
-        let id = STANDARD.encode(hasher.finish()?);
-        Jwk::new_ecdsa(id, url, crv, x, y)
-    } else {
-        error!("token key has unknown type, tried RSA and ECDSA");
-        return Err(LoggedBeforeError);
+                    let x = encode_bignum(&x);
+                    let y = encode_bignum(&y);
+                    let id = STANDARD.encode(hasher.finish()?);
+                    Jwk::new_ecdsa(id, url, crv, x, y)
+                }
+                _ => {
+                    error!("token key has unknown type, tried RSA and ECDSA");
+                    return Err(LoggedBeforeError);
+                }
+            },
+        },
     };
 
     Ok(jwk)
@@ -530,12 +541,12 @@ async fn build_stores(
                 name,
                 urls,
                 mode:
-                    LdapMode::SearchBind {
-                        bind_dn,
-                        bind_dn_password,
-                        searches,
-                        use_for,
-                    },
+                LdapMode::SearchBind {
+                    bind_dn,
+                    bind_dn_password,
+                    searches,
+                    use_for,
+                },
                 connect_timeout_in_seconds,
                 starttls,
             } => {
@@ -552,13 +563,13 @@ async fn build_stores(
                     Some(LdapUsageUsers { attributes: None }) => UserConfig {
                         allowed_scopes_attribute: None,
                     }
-                    .into(),
+                        .into(),
                     Some(LdapUsageUsers {
-                        attributes: Some(UserAttributes { allowed_scopes }),
-                    }) => UserConfig {
+                             attributes: Some(UserAttributes { allowed_scopes }),
+                         }) => UserConfig {
                         allowed_scopes_attribute: allowed_scopes.clone(),
                     }
-                    .into(),
+                        .into(),
                 };
 
                 let client_config = match &use_for.clients {
@@ -570,24 +581,24 @@ async fn build_stores(
                         public_key_attribute: None,
                         redirect_uri_attribute: None,
                     }
-                    .into(),
+                        .into(),
                     Some(LdapUsageClients {
-                        attributes:
-                            Some(ClientAttributes {
-                                client_type,
-                                redirect_uri,
-                                password,
-                                public_key,
-                                allowed_scopes,
-                            }),
-                    }) => ClientConfig {
+                             attributes:
+                             Some(ClientAttributes {
+                                      client_type,
+                                      redirect_uri,
+                                      password,
+                                      public_key,
+                                      allowed_scopes,
+                                  }),
+                         }) => ClientConfig {
                         client_type_attribute: client_type.clone(),
                         allowed_scopes_attribute: allowed_scopes.clone(),
                         password_attribute: password.clone(),
                         public_key_attribute: public_key.clone(),
                         redirect_uri_attribute: redirect_uri.clone(),
                     }
-                    .into(),
+                        .into(),
                 };
 
                 let name = "ldap ".to_owned() + name;
@@ -647,7 +658,7 @@ async fn build_stores(
                     user_loaders,
                     client_loaders,
                 )
-                .await
+                    .await
                 {
                     Err(e) => {
                         error!(%e, %name, "failed to create sqlite store");
@@ -886,16 +897,16 @@ impl<'a, A: Authenticator + 'static> tiny_auth_web::Constructor<'a> for Construc
             } else {
                 "http://"
             }
-            .to_owned()
+                .to_owned()
                 + &self.config.api.public_host.domain
                 + &self
-                    .config
-                    .api
-                    .public_host
-                    .port
-                    .as_ref()
-                    .map(|v| ":".to_owned() + v)
-                    .unwrap_or("".to_owned())
+                .config
+                .api
+                .public_host
+                .port
+                .as_ref()
+                .map(|v| ":".to_owned() + v)
+                .unwrap_or("".to_owned())
                 + self.config.api.public_path.as_deref().unwrap_or_default(),
         )
     }
@@ -964,7 +975,7 @@ pub mod tests {
                 &(env!("CARGO_MANIFEST_DIR").to_owned() + "/../../static/"),
                 "",
             )
-            .unwrap(),
+                .unwrap(),
         )
     }
 

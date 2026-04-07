@@ -21,21 +21,21 @@ use mockall::mock;
 use std::sync::Arc;
 use test_log::test;
 use tiny_auth_business::authenticator::Error::PasswordStoreError;
-use tiny_auth_business::authenticator::{inject, Authenticator, Error};
+use tiny_auth_business::authenticator::{Authenticator, Error, inject};
 use tiny_auth_business::clock::Clock;
 use tiny_auth_business::data::password;
-use tiny_auth_business::data::password::inject::dispatching_password_store;
 use tiny_auth_business::data::password::Password;
+use tiny_auth_business::data::password::inject::dispatching_password_store;
 use tiny_auth_business::rate_limiter::RateLimiter;
-use tiny_auth_business::store::password_store::PasswordStore;
 use tiny_auth_business::store::UserStore;
+use tiny_auth_business::store::password_store::PasswordStore;
 use tiny_auth_test_fixtures::authenticator::authenticator;
 use tiny_auth_test_fixtures::clock::clock;
 use tiny_auth_test_fixtures::data::client::CONFIDENTIAL_CLIENT;
-use tiny_auth_test_fixtures::data::password::{in_place_password_store, PEPPER};
+use tiny_auth_test_fixtures::data::password::{PEPPER, in_place_password_store};
 use tiny_auth_test_fixtures::data::user::USER_1;
 use tiny_auth_test_fixtures::store::password_store::FailingPasswordStore;
-use tiny_auth_test_fixtures::store::user_store::{build_test_user_store, TestUserStore, USER};
+use tiny_auth_test_fixtures::store::user_store::{TestUserStore, USER, build_test_user_store};
 use tiny_auth_test_fixtures::token::build_test_rate_limiter;
 
 #[test(tokio::test)]
@@ -72,10 +72,12 @@ async fn own_constructed_password_is_verifiable() {
         .await
         .unwrap();
 
-    assert!(in_place_password_store()
-        .verify(user.name.as_str(), &actual, new_password)
-        .await
-        .unwrap_or(false));
+    assert!(
+        in_place_password_store()
+            .verify(user.name.as_str(), &actual, new_password)
+            .await
+            .unwrap_or(false)
+    );
 }
 
 #[test(tokio::test)]

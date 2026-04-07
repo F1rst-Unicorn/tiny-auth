@@ -20,7 +20,7 @@ pub mod loading {
     use crate::data_loader::*;
     use lazy_static::lazy_static;
     use pretty_assertions::assert_eq;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use test_log::test;
 
     lazy_static! {
@@ -168,7 +168,7 @@ pub mod nesting {
     use crate::data_loader::*;
     use lazy_static::lazy_static;
     use pretty_assertions::assert_eq;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use test_log::test;
 
     lazy_static! {

@@ -21,8 +21,8 @@ use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use std::sync::Arc;
 use tiny_auth_business::data::client::Client;
-use tiny_auth_business::store::client_store::Error;
 use tiny_auth_business::store::ClientStore;
+use tiny_auth_business::store::client_store::Error;
 use tokio::sync::RwLock;
 
 pub const UNKNOWN_CLIENT_ID: &str = "unknown_client";

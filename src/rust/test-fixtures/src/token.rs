@@ -25,9 +25,9 @@ use std::sync::Arc;
 use tiny_auth_business::data::jwk::Jwk;
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;
 use tiny_auth_business::rate_limiter::RateLimiter;
-use tiny_auth_business::token::inject::token_creator;
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::TokenValidator;
+use tiny_auth_business::token::inject::token_creator;
 
 pub fn build_test_token_creator() -> impl TokenCreator {
     token_creator(

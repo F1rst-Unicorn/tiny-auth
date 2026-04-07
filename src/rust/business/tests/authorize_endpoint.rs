@@ -48,11 +48,13 @@ async fn forbidden_scope_is_pruned() {
         .await;
 
     assert_eq!(Ok(()), actual);
-    let expected = vec![CONFIDENTIAL_CLIENT
-        .allowed_scopes
-        .first()
-        .unwrap()
-        .to_owned()];
+    let expected = vec![
+        CONFIDENTIAL_CLIENT
+            .allowed_scopes
+            .first()
+            .unwrap()
+            .to_owned(),
+    ];
     let actual = <Option<AuthorizeRequestState> as Clone>::clone(&session.0.write().unwrap())
         .unwrap()
         .scopes;

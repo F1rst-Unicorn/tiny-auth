@@ -22,33 +22,34 @@ pub mod session;
 use crate::cors::cors_options_preflight;
 use crate::endpoints::cert::TokenCertificate;
 use crate::endpoints::discovery::Handler as DiscoveryHandler;
+use Error::LoggedBeforeError;
+use actix_session::SessionMiddleware;
 use actix_session::config::CookieContentSecurity;
 use actix_session::config::PersistentSession;
 use actix_session::storage::CookieSessionStore;
-use actix_session::SessionMiddleware;
+use actix_web::App;
+use actix_web::HttpServer;
 use actix_web::cookie::time::Duration;
 use actix_web::cookie::{Key, SameSite};
 use actix_web::dev::Server;
 use actix_web::http::KeepAlive;
 use actix_web::http::Method;
 use actix_web::middleware::DefaultHeaders;
+use actix_web::web::Data;
 use actix_web::web::get;
 use actix_web::web::method;
 use actix_web::web::post;
 use actix_web::web::route as all;
 use actix_web::web::scope;
 use actix_web::web::to;
-use actix_web::web::Data;
-use actix_web::App;
-use actix_web::HttpServer;
 use endpoints::token::Handler as TokenHandler;
 use endpoints::userinfo::Handler as UserInfoHandler;
-use rustls::pki_types::PrivatePkcs8KeyDer;
-use rustls::server::danger::ClientCertVerifier;
-use rustls::server::NoClientAuth;
-use rustls::server::WebPkiClientVerifier;
 use rustls::RootCertStore;
 use rustls::ServerConfig;
+use rustls::pki_types::PrivatePkcs8KeyDer;
+use rustls::server::NoClientAuth;
+use rustls::server::WebPkiClientVerifier;
+use rustls::server::danger::ClientCertVerifier;
 use rustls_pemfile::certs;
 use rustls_pemfile::pkcs8_private_keys;
 use std::io::BufReader;
@@ -68,7 +69,6 @@ use tiny_auth_business::template::web::{
 use tracing::error;
 use tracing::warn;
 use tracing_actix_web::TracingLogger;
-use Error::LoggedBeforeError;
 
 pub trait Constructor<'a> {
     fn authorize_handler(&self) -> Arc<AuthorizeHandler>;
@@ -179,17 +179,17 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
                     CookieSessionStore::default(),
                     Key::from(secret_key.as_bytes()),
                 )
-                .cookie_domain(Some(public_domain.clone()))
-                .cookie_name("session".to_owned())
-                .cookie_path(web_path.clone())
-                .cookie_secure(tls_enabled)
-                .cookie_http_only(true)
-                .cookie_same_site(session_same_site_policy)
-                .session_lifecycle(
-                    PersistentSession::default().session_ttl(Duration::seconds(session_timeout)),
-                )
-                .cookie_content_security(CookieContentSecurity::Signed)
-                .build(),
+                    .cookie_domain(Some(public_domain.clone()))
+                    .cookie_name("session".to_owned())
+                    .cookie_path(web_path.clone())
+                    .cookie_secure(tls_enabled)
+                    .cookie_http_only(true)
+                    .cookie_same_site(session_same_site_policy)
+                    .session_lifecycle(
+                        PersistentSession::default().session_ttl(Duration::seconds(session_timeout)),
+                    )
+                    .cookie_content_security(CookieContentSecurity::Signed)
+                    .build(),
             )
             .wrap(DefaultHeaders::new().add(("Cache-Control", "no-store")))
             .wrap(DefaultHeaders::new().add(("Pragma", "no-cache")))
@@ -275,9 +275,9 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             )
             .default_service(to(endpoints::webapp_root::redirect))
     })
-    .disable_signals()
-    .keep_alive(KeepAlive::Timeout(core::time::Duration::from_secs(60)))
-    .shutdown_timeout(constructor.shutdown_timeout());
+        .disable_signals()
+        .keep_alive(KeepAlive::Timeout(core::time::Duration::from_secs(60)))
+        .shutdown_timeout(constructor.shutdown_timeout());
 
     let server = if tls_enabled {
         let tls_config = configure_tls(constructor)?;
@@ -357,10 +357,8 @@ fn build_client_verifier<'a>(
             })
             .filter(|(_, result)| result.is_ok())
             .for_each(|(index, result)| {
-                if let Ok(cert) = result {
-                    if let Err(e) = ca_store.add(cert) {
-                        error!(%e, index, "failed to add certificate to store");
-                    }
+                if let Ok(cert) = result && let Err(e) = ca_store.add(cert) {
+                    error!(%e, index, "failed to add certificate to store");
                 }
             });
         if ca_store.is_empty() {

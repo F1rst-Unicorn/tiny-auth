@@ -24,8 +24,8 @@ use crate::store::ClientStore;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use tracing::{Level, instrument};
 use tracing::{debug, enabled, info};
-use tracing::{instrument, Level};
 use url::Url;
 
 #[derive(Default)]

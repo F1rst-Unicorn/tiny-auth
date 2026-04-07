@@ -16,7 +16,7 @@
  */
 
 use tonic::metadata::MetadataMap;
-use tracing::{debug, instrument, Level};
+use tracing::{Level, debug, instrument};
 
 pub const AUTHORIZATION_HEADER_KEY: &str = "x-authorization";
 const AUTHORIZATION_HEADER_BEARER_VALUE: &str = "Bearer ";

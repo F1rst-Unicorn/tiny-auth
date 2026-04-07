@@ -25,16 +25,16 @@ pub mod token;
 pub mod userinfo;
 pub mod webapp_root;
 
-use crate::cors::render_invalid_request;
 use crate::cors::CorsCheckResult;
 use crate::cors::CorsChecker;
+use crate::cors::render_invalid_request;
 use actix_session::Session;
-use actix_web::http::header::{HeaderValue, LOCATION};
-use actix_web::http::StatusCode;
 use actix_web::HttpResponseBuilder;
+use actix_web::http::StatusCode;
+use actix_web::http::header::{HeaderValue, LOCATION};
 use actix_web::{HttpRequest, HttpResponse};
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use serde::Serialize as BaseSerialize;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
@@ -46,7 +46,7 @@ use tiny_auth_business::oauth2::ProtocolError as OAuthError;
 use tiny_auth_business::oidc::ProtocolError;
 use tiny_auth_business::store::memory::generate_random_string;
 use tiny_auth_business::template::{InstantiatedTemplate, TemplateError};
-use tracing::{debug, instrument, Level};
+use tracing::{Level, debug, instrument};
 use tracing::{error, warn};
 use url::Url;
 
@@ -282,10 +282,10 @@ mod tests {
 
     use super::*;
     use actix_session::SessionExt;
+    use actix_web::HttpResponse;
     use actix_web::body::to_bytes;
     use actix_web::test::TestRequest;
     use actix_web::web::BytesMut;
-    use actix_web::HttpResponse;
     use pretty_assertions::assert_eq;
     use serde::de::DeserializeOwned;
     use serde_derive::Deserialize;

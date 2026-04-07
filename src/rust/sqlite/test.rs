@@ -18,7 +18,7 @@ use crate::inject;
 use crate::inject::sqlite_store;
 use crate::store::SqliteStore;
 use pretty_assertions::assert_eq;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use test_log::test;

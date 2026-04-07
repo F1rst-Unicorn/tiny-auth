@@ -15,15 +15,15 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use actix_web::http::header::HeaderValue;
-use actix_web::http::header::ACCESS_CONTROL_ALLOW_METHODS;
-use actix_web::http::header::ACCESS_CONTROL_ALLOW_ORIGIN;
-use actix_web::http::header::ACCESS_CONTROL_MAX_AGE;
-use actix_web::http::header::ORIGIN;
-use actix_web::web;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
 use actix_web::HttpResponseBuilder;
+use actix_web::http::header::ACCESS_CONTROL_ALLOW_METHODS;
+use actix_web::http::header::ACCESS_CONTROL_ALLOW_ORIGIN;
+use actix_web::http::header::ACCESS_CONTROL_MAX_AGE;
+use actix_web::http::header::HeaderValue;
+use actix_web::http::header::ORIGIN;
+use actix_web::web;
 use std::sync::Arc;
 use tiny_auth_business::cors::CorsLister;
 

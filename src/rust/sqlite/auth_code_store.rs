@@ -27,7 +27,7 @@ use tiny_auth_business::store::{
     AuthorizationCodeStore, ValidationRequest,
 };
 use tiny_auth_business::util::wrap_err;
-use tracing::{debug, error, Level};
+use tracing::{Level, debug, error};
 use tracing::{instrument, warn};
 use url::Url;
 

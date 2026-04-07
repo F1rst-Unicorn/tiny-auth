@@ -23,7 +23,7 @@ use serde_derive::Deserialize;
 use serde_derive::Serialize;
 use serde_json::Map;
 use serde_json::Value;
-use std::any::{type_name, TypeId};
+use std::any::{TypeId, type_name};
 use std::cmp::Ord;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
@@ -273,7 +273,9 @@ fn insert_value(structure: Value, value: Value) -> Result<Value, Error> {
         Value::Null => Ok(value),
         Value::Object(mut map) => {
             if map.len() != 1 {
-                error!("Exactly one attribute is allowed in selectors. Use 'null' to terminate your selector");
+                error!(
+                    "Exactly one attribute is allowed in selectors. Use 'null' to terminate your selector"
+                );
                 return Err(Error::AttributeSelectionError);
             }
             let key = map
@@ -308,7 +310,9 @@ fn copy_values(value: Value, selector: Value, path: &mut Vec<String>) -> Result<
     match (value, selector) {
         (Value::Object(mut value), Value::Object(map)) => {
             if map.len() != 1 {
-                error!("Exactly one attribute is allowed in selectors. Use 'null' to terminate your selector");
+                error!(
+                    "Exactly one attribute is allowed in selectors. Use 'null' to terminate your selector"
+                );
                 return Err(Error::AttributeSelectionError);
             }
             let (k, v) = map
@@ -336,7 +340,9 @@ fn copy_values(value: Value, selector: Value, path: &mut Vec<String>) -> Result<
                     Ok(result_value)
                 }
                 _ => {
-                    error!("Use 'null' to terminate your selector. Only dict keys are allowed in selectors");
+                    error!(
+                        "Use 'null' to terminate your selector. Only dict keys are allowed in selectors"
+                    );
                     Err(Error::AttributeSelectionError)
                 }
             }

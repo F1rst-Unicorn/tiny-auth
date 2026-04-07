@@ -19,10 +19,10 @@ use super::parse_basic_authorization;
 use crate::cors::CorsCheckResult;
 use crate::cors::CorsChecker;
 use crate::endpoints::render_json_error;
-use actix_web::web;
-use actix_web::web::Form;
 use actix_web::HttpRequest;
 use actix_web::HttpResponse;
+use actix_web::web;
+use actix_web::web::Form;
 use async_trait::async_trait;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
@@ -334,9 +334,9 @@ impl<H: BusinessHandler> Handler for HandlerImpl<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::endpoints::ErrorResponse;
     use crate::endpoints::tests::read_response;
     use crate::endpoints::token::inject::handler;
-    use crate::endpoints::ErrorResponse;
     use actix_web::http;
     use actix_web::test::TestRequest;
     use actix_web::web::Data;

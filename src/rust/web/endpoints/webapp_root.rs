@@ -17,8 +17,8 @@
 
 use crate::endpoints::return_rendered_template;
 use crate::{ApiUrl, WebBasePath};
-use actix_web::http::header::LOCATION;
 use actix_web::http::StatusCode;
+use actix_web::http::header::LOCATION;
 use actix_web::web::Data;
 use actix_web::{HttpRequest, HttpResponse};
 use tiny_auth_business::issuer_configuration::IssuerConfiguration;

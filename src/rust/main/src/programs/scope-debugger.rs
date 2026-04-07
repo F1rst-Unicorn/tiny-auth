@@ -15,11 +15,11 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use clap::builder::{PossibleValuesParser, TypedValueParser};
 use clap::Arg;
 use clap::ArgAction::Count;
 use clap::ArgMatches;
 use clap::Command;
+use clap::builder::{PossibleValuesParser, TypedValueParser};
 use tiny_auth_business::data::scope::Destination;
 use tiny_auth_business::token::TokenCreator;
 use tiny_auth_business::token::{Access, Id, Userinfo};
