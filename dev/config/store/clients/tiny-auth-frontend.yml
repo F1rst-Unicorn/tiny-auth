@@ -24,6 +24,7 @@ client_type: public
 redirect_uris:
   - http://localhost:5173/oidc-login-redirect
   - http://localhost:5173/oidc-login-redirect-silent
+  - http://localhost:34344/oidc-login-redirect
   - http://localhost:34344/oidc/oidc-login-redirect
   - http://localhost:34344/oidc/oidc-login-redirect-silent
   - https://localhost:34344/oidc/oidc-login-redirect
