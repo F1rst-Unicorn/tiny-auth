@@ -179,17 +179,17 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
                     CookieSessionStore::default(),
                     Key::from(secret_key.as_bytes()),
                 )
-                    .cookie_domain(Some(public_domain.clone()))
-                    .cookie_name("session".to_owned())
-                    .cookie_path(web_path.clone())
-                    .cookie_secure(tls_enabled)
-                    .cookie_http_only(true)
-                    .cookie_same_site(session_same_site_policy)
-                    .session_lifecycle(
-                        PersistentSession::default().session_ttl(Duration::seconds(session_timeout)),
-                    )
-                    .cookie_content_security(CookieContentSecurity::Signed)
-                    .build(),
+                .cookie_domain(Some(public_domain.clone()))
+                .cookie_name("session".to_owned())
+                .cookie_path(web_path.clone())
+                .cookie_secure(tls_enabled)
+                .cookie_http_only(true)
+                .cookie_same_site(session_same_site_policy)
+                .session_lifecycle(
+                    PersistentSession::default().session_ttl(Duration::seconds(session_timeout)),
+                )
+                .cookie_content_security(CookieContentSecurity::Signed)
+                .build(),
             )
             .wrap(DefaultHeaders::new().add(("Cache-Control", "no-store")))
             .wrap(DefaultHeaders::new().add(("Pragma", "no-cache")))
@@ -275,9 +275,9 @@ pub fn build<'a>(constructor: &impl Constructor<'a>) -> Result<Server, Error> {
             )
             .default_service(to(endpoints::webapp_root::redirect))
     })
-        .disable_signals()
-        .keep_alive(KeepAlive::Timeout(core::time::Duration::from_secs(60)))
-        .shutdown_timeout(constructor.shutdown_timeout());
+    .disable_signals()
+    .keep_alive(KeepAlive::Timeout(core::time::Duration::from_secs(60)))
+    .shutdown_timeout(constructor.shutdown_timeout());
 
     let server = if tls_enabled {
         let tls_config = configure_tls(constructor)?;
@@ -357,7 +357,9 @@ fn build_client_verifier<'a>(
             })
             .filter(|(_, result)| result.is_ok())
             .for_each(|(index, result)| {
-                if let Ok(cert) = result && let Err(e) = ca_store.add(cert) {
+                if let Ok(cert) = result
+                    && let Err(e) = ca_store.add(cert)
+                {
                     error!(%e, index, "failed to add certificate to store");
                 }
             });

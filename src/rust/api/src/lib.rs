@@ -38,6 +38,7 @@ use tonic::transport::Certificate;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
+use tonic_web::GrpcWebLayer;
 use tower::{Layer, Service};
 use tower_http::cors::AllowOrigin;
 use tower_http::cors::CorsLayer;
@@ -117,7 +118,7 @@ pub async fn start(
 
     let reflection_service = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(tiny_auth_proto::FILE_DESCRIPTOR_SET)
-        .build()?;
+        .build_v1()?;
 
     let join_handle = tokio::spawn(async move {
         let server = server
@@ -143,8 +144,9 @@ pub async fn start(
                             .collect::<Vec<HeaderName>>(),
                     ),
             )
-            .add_service(tonic_web::enable(reflection_service))
-            .add_service(tonic_web::enable(TinyAuthApiServer::new(api)))
+            .layer(GrpcWebLayer::new())
+            .add_service(reflection_service)
+            .add_service(TinyAuthApiServer::new(api))
             .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async move {
                 match rx.await {
                     Err(e) => warn!(%e, "terminating due to error"),

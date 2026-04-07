@@ -129,7 +129,7 @@ pub struct Constructor<'a, Authenticator> {
     client_ca: Option<String>,
 }
 
-pub async fn new(config: &Config) -> Result<Constructor<'_, impl Authenticator + use < >>, Error> {
+pub async fn new(config: &Config) -> Result<Constructor<'_, impl Authenticator + use<>>, Error> {
     let (
         user_store,
         password_store,
@@ -237,7 +237,7 @@ impl<A: Authenticator + 'static> Constructor<'_, A> {
         self.user_store.clone()
     }
 
-    pub fn build_token_creator(&self) -> impl TokenCreator + use < A > {
+    pub fn build_token_creator(&self) -> impl TokenCreator + use<A> {
         token_creator(
             self.encoding_key.clone(),
             self.issuer_configuration.clone(),
@@ -290,7 +290,9 @@ fn build_issuer_url(config: &Config) -> String {
         token_issuer += ":";
         token_issuer += port;
     }
-    if let Some(path) = &config.web.path && !path.is_empty() {
+    if let Some(path) = &config.web.path
+        && !path.is_empty()
+    {
         if !path.starts_with('/') {
             token_issuer += "/";
         }
@@ -541,12 +543,12 @@ async fn build_stores(
                 name,
                 urls,
                 mode:
-                LdapMode::SearchBind {
-                    bind_dn,
-                    bind_dn_password,
-                    searches,
-                    use_for,
-                },
+                    LdapMode::SearchBind {
+                        bind_dn,
+                        bind_dn_password,
+                        searches,
+                        use_for,
+                    },
                 connect_timeout_in_seconds,
                 starttls,
             } => {
@@ -563,13 +565,13 @@ async fn build_stores(
                     Some(LdapUsageUsers { attributes: None }) => UserConfig {
                         allowed_scopes_attribute: None,
                     }
-                        .into(),
+                    .into(),
                     Some(LdapUsageUsers {
-                             attributes: Some(UserAttributes { allowed_scopes }),
-                         }) => UserConfig {
+                        attributes: Some(UserAttributes { allowed_scopes }),
+                    }) => UserConfig {
                         allowed_scopes_attribute: allowed_scopes.clone(),
                     }
-                        .into(),
+                    .into(),
                 };
 
                 let client_config = match &use_for.clients {
@@ -581,24 +583,24 @@ async fn build_stores(
                         public_key_attribute: None,
                         redirect_uri_attribute: None,
                     }
-                        .into(),
+                    .into(),
                     Some(LdapUsageClients {
-                             attributes:
-                             Some(ClientAttributes {
-                                      client_type,
-                                      redirect_uri,
-                                      password,
-                                      public_key,
-                                      allowed_scopes,
-                                  }),
-                         }) => ClientConfig {
+                        attributes:
+                            Some(ClientAttributes {
+                                client_type,
+                                redirect_uri,
+                                password,
+                                public_key,
+                                allowed_scopes,
+                            }),
+                    }) => ClientConfig {
                         client_type_attribute: client_type.clone(),
                         allowed_scopes_attribute: allowed_scopes.clone(),
                         password_attribute: password.clone(),
                         public_key_attribute: public_key.clone(),
                         redirect_uri_attribute: redirect_uri.clone(),
                     }
-                        .into(),
+                    .into(),
                 };
 
                 let name = "ldap ".to_owned() + name;
@@ -658,7 +660,7 @@ async fn build_stores(
                     user_loaders,
                     client_loaders,
                 )
-                    .await
+                .await
                 {
                     Err(e) => {
                         error!(%e, %name, "failed to create sqlite store");
@@ -897,16 +899,16 @@ impl<'a, A: Authenticator + 'static> tiny_auth_web::Constructor<'a> for Construc
             } else {
                 "http://"
             }
-                .to_owned()
+            .to_owned()
                 + &self.config.api.public_host.domain
                 + &self
-                .config
-                .api
-                .public_host
-                .port
-                .as_ref()
-                .map(|v| ":".to_owned() + v)
-                .unwrap_or("".to_owned())
+                    .config
+                    .api
+                    .public_host
+                    .port
+                    .as_ref()
+                    .map(|v| ":".to_owned() + v)
+                    .unwrap_or("".to_owned())
                 + self.config.api.public_path.as_deref().unwrap_or_default(),
         )
     }
@@ -975,7 +977,7 @@ pub mod tests {
                 &(env!("CARGO_MANIFEST_DIR").to_owned() + "/../../static/"),
                 "",
             )
-                .unwrap(),
+            .unwrap(),
         )
     }
 

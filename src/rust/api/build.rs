@@ -19,12 +19,12 @@ use std::{env, path::PathBuf};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let out_dir = PathBuf::from(env::var("OUT_DIR")?);
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .file_descriptor_set_path(out_dir.join("tiny_auth_descriptor.bin"))
         .build_server(true)
         .build_client(false)
         .build_transport(true)
-        .compile(
+        .compile_protos(
             &["../../proto/tiny-auth/tiny-auth.proto"],
             &["../../proto/tiny-auth"],
         )?;
