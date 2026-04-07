@@ -31,8 +31,6 @@ pub fn parse_arguments() -> ArgMatches {
             env!("CARGO_PKG_VERSION"),
             " ",
             env!("VERGEN_GIT_SHA"),
-            " ",
-            env!("VERGEN_BUILD_TIMESTAMP"),
         ))
         .about(env!("CARGO_PKG_DESCRIPTION"))
         .arg(

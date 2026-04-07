@@ -68,6 +68,6 @@ grpcurl \
 # LDAP
 
 ```bash
-docker run --rm --tty --interactive -p 1389:1389 --mount type=bind,src=dev/ldif,target=/ldifs docker.io/bitnami/openldap
+docker run --rm --tty --interactive -p 1389:1389 --mount type=bind,src=dev/ldif,target=/ldifs public.ecr.aws/bitnami/openldap:latest
 ldapsearch -D cn=user01,ou=users,dc=example,dc=org -w bitnami1 -x -b dc=example,dc=org -H ldap://localhost:1389
 ```

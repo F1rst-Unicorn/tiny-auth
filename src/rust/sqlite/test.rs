@@ -166,7 +166,7 @@ mod auth_code {
         assert!(response.is_ok());
     }
 
-    fn auth_code_request(redirect_uri: &Url) -> AuthorizationCodeRequest {
+    fn auth_code_request(redirect_uri: &Url) -> AuthorizationCodeRequest<'_> {
         AuthorizationCodeRequest {
             client_id: "tiny-auth-frontend",
             user: "john",

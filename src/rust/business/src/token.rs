@@ -446,6 +446,7 @@ impl TokenValidator {
         validation.leeway = 5;
         validation.validate_exp = true;
         validation.validate_nbf = false;
+        validation.validate_aud = false;
         validation.set_issuer(&[issuer]);
         Self { key, validation }
     }

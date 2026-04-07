@@ -28,6 +28,7 @@ use url::Url;
 
 pub(crate) type ClientCacheEntry = (DistinguishedName, Client);
 
+#[expect(clippy::large_enum_variant, reason = "Good enough")]
 pub enum ClientRepresentation {
     Name,
     Missing,
@@ -192,7 +193,7 @@ impl AttributeMapping<Client> for ClientPasswordMapping {
                     attribute = self.attribute,
                     "not mapping multiple password attributes"
                 );
-            } else if let ClientType::Confidential {
+            } else if let &mut ClientType::Confidential {
                 ref mut password, ..
             } = &mut entity.client_type
             {
@@ -220,7 +221,7 @@ impl AttributeMapping<Client> for ClientPublicKeyMapping {
                     attribute = self.attribute,
                     "not mapping multiple public key attributes"
                 );
-            } else if let ClientType::Confidential {
+            } else if let &mut ClientType::Confidential {
                 ref mut public_key, ..
             } = &mut entity.client_type
             {

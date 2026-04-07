@@ -24,11 +24,11 @@ use std::future::Future;
 use std::ops::{Deref, DerefMut};
 
 pub(crate) trait SqliteConnectionExt {
-    fn begin_immediate(&mut self) -> impl Future<Output = sqlx::Result<Transaction>>;
+    fn begin_immediate(&mut self) -> impl Future<Output = sqlx::Result<Transaction<'_>>>;
 }
 
 impl SqliteConnectionExt for SqliteConnection {
-    async fn begin_immediate(&mut self) -> sqlx::Result<Transaction> {
+    async fn begin_immediate(&mut self) -> sqlx::Result<Transaction<'_>> {
         let conn = &mut *self;
 
         conn.execute("begin immediate;").await?;

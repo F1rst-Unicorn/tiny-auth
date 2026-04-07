@@ -324,7 +324,7 @@ fn user_searches() -> Vec<LdapSearch> {
 
 #[fixture]
 async fn container() -> ContainerAsync<GenericImage> {
-    GenericImage::new("docker.io/bitnami/openldap", "latest")
+    GenericImage::new("public.ecr.aws/bitnami/openldap", "latest")
         .with_exposed_port(CONTAINER_PORT.tcp())
         .with_wait_for(WaitFor::message_on_stderr("slapd starting"))
         .with_mount(Mount::bind_mount(

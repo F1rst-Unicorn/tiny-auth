@@ -192,18 +192,13 @@ impl TryFrom<&QueryLoader> for tiny_auth_sqlite::QueryLoader {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Default)]
 pub enum Multiplicity {
     #[serde(rename = "to one")]
     ToOne,
     #[serde(rename = "to many")]
+    #[default]
     ToMany,
-}
-
-impl Default for Multiplicity {
-    fn default() -> Self {
-        Self::ToMany
-    }
 }
 
 impl From<Multiplicity> for tiny_auth_business::data_loader::Multiplicity {

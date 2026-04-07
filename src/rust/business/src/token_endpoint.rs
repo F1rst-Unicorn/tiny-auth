@@ -40,8 +40,6 @@ use crate::token::{Token, TokenCreator};
 use async_trait::async_trait;
 use chrono::Duration;
 use futures_util::future::join_all;
-use jsonwebtoken::Algorithm;
-use jsonwebtoken::DecodingKey;
 use jsonwebtoken::TokenData;
 use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
@@ -645,39 +643,13 @@ impl<A: Authenticator, C: Clock, T: TokenCreator> HandlerImpl<A, C, T> {
         &self,
         token: &str,
     ) -> Result<TokenData<Token>, ()> {
-        let mut error = None;
-        for algorithm in &[
-            Algorithm::HS256,
-            Algorithm::HS384,
-            Algorithm::HS512,
-            Algorithm::ES256,
-            Algorithm::ES384,
-            Algorithm::RS256,
-            Algorithm::RS384,
-            Algorithm::RS512,
-            Algorithm::PS256,
-            Algorithm::PS384,
-            Algorithm::PS512,
-            Algorithm::EdDSA,
-        ] {
-            let mut validation = jsonwebtoken::Validation::new(*algorithm);
-            validation.leeway = 5;
-            validation.validate_exp = true;
-            validation.validate_nbf = false;
-            validation.insecure_disable_signature_validation();
-
-            match jsonwebtoken::decode::<Token>(token, &DecodingKey::from_secret(&[]), &validation)
-            {
-                Err(e) => {
-                    error = Some(e);
-                }
-                Ok(v) => {
-                    return Ok(v);
-                }
+        match jsonwebtoken::dangerous::insecure_decode::<Token>(token) {
+            Err(e) => {
+                debug!(%e, "token invalid");
             }
-        }
-        if let Some(e) = error {
-            debug!(%e, "token invalid");
+            Ok(v) => {
+                return Ok(v);
+            }
         }
         Err(())
     }

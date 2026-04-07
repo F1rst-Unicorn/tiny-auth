@@ -63,7 +63,7 @@ pretty_assertions.workspace = true
 tiny_auth_test_fixtures = { path = "../test-fixtures" }
 
 [build-dependencies]
-vergen.workspace = true
+vergen-git2.workspace = true
 
 [lints]
 workspace = true

@@ -300,7 +300,7 @@ mod tests {
         Url::parse("http://localhost/client").unwrap()
     }
 
-    fn auth_code_request(now: DateTime<Local>, redirect_uri: &Url) -> AuthorizationCodeRequest {
+    fn auth_code_request(now: DateTime<Local>, redirect_uri: &Url) -> AuthorizationCodeRequest<'_> {
         AuthorizationCodeRequest {
             client_id: "client",
             user: "user",

@@ -32,7 +32,7 @@ use std::sync::Arc;
 use thiserror::Error;
 use tracing::{debug, error};
 
-pub const HASH_ITERATIONS: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(100_000u32) };
+pub const HASH_ITERATIONS: NonZeroU32 = NonZeroU32::new(100_000u32).unwrap();
 
 #[derive(Error, Debug)]
 pub enum Error {

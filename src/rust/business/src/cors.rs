@@ -32,7 +32,7 @@ impl CorsLister for CorsListerImpl {
             return false;
         };
         debug!(%domain, "cors check");
-        self.approved_domains.iter().any(|v| *v == domain)
+        self.approved_domains.contains(&domain)
     }
 }
 

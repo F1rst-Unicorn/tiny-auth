@@ -129,7 +129,7 @@ pub struct Constructor<'a, Authenticator> {
     client_ca: Option<String>,
 }
 
-pub async fn new(config: &Config) -> Result<Constructor<impl Authenticator>, Error> {
+pub async fn new(config: &Config) -> Result<Constructor<'_, impl Authenticator>, Error> {
     let (
         user_store,
         password_store,
